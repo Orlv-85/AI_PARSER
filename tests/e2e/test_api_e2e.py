@@ -1,13 +1,13 @@
 import time
 from datetime import UTC, datetime
 from importlib import import_module
-from pathlib import Path
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import get_settings
+from app.config.sources import SourceConfig
 from app.core.models import Article
 from app.storage.models_sql import Base
 from app.web.app import create_app
@@ -15,22 +15,18 @@ from app.web.app import create_app
 
 def test_api_e2e_update_and_read_news(monkeypatch, tmp_path) -> None:
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("AINEWS_SOURCES_PATH", str(tmp_path / "sources.yaml"))
+    monkeypatch.setenv("AINEWS_DATABASE_URL", f"sqlite:///{tmp_path}/e2e.db")
     get_settings.cache_clear()
 
-    Path("sources.yaml").write_text(
-        """
-version: 1
-sources:
-  - id: e2e_rss
-    name: E2E RSS
-    type: rss
-    url: https://example.com/feed.xml
-    enabled: true
-    fetch_interval_minutes: 30
-    source_weight: 1.0
-""".strip()
-        + "\n",
-        encoding="utf-8",
+    source_config = SourceConfig(
+        id="e2e_rss",
+        name="E2E RSS",
+        type="rss",
+        url="https://example.com/feed.xml",
+        enabled=True,
+        fetch_interval_minutes=30,
+        source_weight=1.0,
     )
 
     def _fake_fetch_rss(_source_key: str, *_args, **_kwargs):
@@ -46,6 +42,7 @@ sources:
         ]
 
     monkeypatch.setattr("app.core.pipeline.fetch_rss", _fake_fetch_rss)
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: [source_config])
 
     engine = create_engine(f"sqlite:///{tmp_path}/e2e.db", future=True)
     session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)

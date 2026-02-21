@@ -14,10 +14,20 @@ def test_web_app_pages_and_update_flow(monkeypatch, tmp_path) -> None:
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()
 
+    class _ArticleRepo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def list_for_view(self, **_kwargs):
+            return []
+
     monkeypatch.setattr(
         "app.web.service.run_fetch_cycle",
         lambda **kwargs: SimpleNamespace(fetched=3, new=2, duplicates=1, errors=0),
     )
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(web_app_module, "ArticleRepo", _ArticleRepo)
 
     app = create_app()
     client = TestClient(app)

@@ -6,21 +6,17 @@ on:
       - "**"
 
 jobs:
-  test:
+  docker-test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - name: Build runtime image (Python 3.14)
+        run: docker build --target runtime --build-arg PYTHON_IMAGE=python:3.14-slim -t ai-news-runtime:${{ github.sha }} .
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+      - name: Build test image (Python 3.14)
+        run: docker build --target test --build-arg PYTHON_IMAGE=python:3.14-slim -t ai-news-test:${{ github.sha }} .
 
-      - name: Run tests with coverage
-        run: ./scripts/run_tests_with_coverage.sh
+      - name: Run tests in Docker with coverage
+        run: docker run --rm ai-news-test:${{ github.sha }}
