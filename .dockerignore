@@ -1,0 +1,15 @@
+.git
+.gitignore
+.idea
+.venv
+venv
+venv1
+__pycache__
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+*.db
+data
+tmp
+.DS_Store
