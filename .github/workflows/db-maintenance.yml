@@ -13,12 +13,12 @@ jobs:
         run: |
           test -n "${{ vars.DEPLOY_HOST }}"
           test -n "${{ vars.DEPLOY_USER }}"
-          test -n "${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}"
+          test -n "${{ secrets.SERVER_PASSWORD }}"
 
-      - name: Setup SSH key
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+      - name: Install sshpass
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass
 
       - name: Trust server host key
         run: |
@@ -30,5 +30,6 @@ jobs:
           DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
           DEPLOY_USER: ${{ vars.DEPLOY_USER }}
           DEPLOY_APP_DIR: ${{ vars.DEPLOY_APP_DIR || '/opt/ai-news' }}
+          SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
         run: |
-          ssh "${DEPLOY_USER}@${DEPLOY_HOST}" "cd '${DEPLOY_APP_DIR}' && ./scripts/db_maintenance.sh && ./scripts/db_backup.sh"
+          sshpass -p "${SERVER_PASSWORD}" ssh "${DEPLOY_USER}@${DEPLOY_HOST}" "cd '${DEPLOY_APP_DIR}' && ./scripts/db_maintenance.sh && ./scripts/db_backup.sh"

@@ -81,7 +81,14 @@ Create repository variables/secrets:
 - `DEPLOY_HOST` (repo variable)
 - `DEPLOY_USER` (repo variable)
 - `DEPLOY_APP_DIR` (repo variable, optional, default `/opt/ai-news`)
-- `DEPLOY_SSH_PRIVATE_KEY` (repo secret)
+- `SERVER_PASSWORD` (repo secret)
+- `AINEWS_AUTH_PASSWORD_HASH` (repo secret)
+- `AINEWS_AUTH_SECRET` (repo secret)
+
+Notes:
+- Deploy workflow authenticates by server password (`SERVER_PASSWORD`) via `sshpass`.
+- Deploy workflow updates auth keys in server-side `.env` at `${DEPLOY_APP_DIR}` from secrets.
+- Keep DB secrets (for example `POSTGRES_PASSWORD`) in server-side `.env`.
 
 Then push a tag from `master`:
 
@@ -92,6 +99,11 @@ git push origin v0.1.0
 
 Workflow `.github/workflows/deploy-release.yml` will SSH to server and run deploy.
 
+Rollback / manual deploy by tag:
+- Use workflow `.github/workflows/deploy-by-tag.yml` (`Run workflow` in GitHub UI).
+- Provide `deploy_tag` input (for example `v0.1.0` or `v0.2.3-rollback`).
+- Workflow deploys exactly that tag to server.
+
 ### 4) Maintenance and backups
 
 Retention + VACUUM:
@@ -99,6 +111,11 @@ Retention + VACUUM:
 ```bash
 ./scripts/db_maintenance.sh
 ```
+
+Size guardrails in `db_maintenance.sh`:
+- if DB reaches `DB_MAX_SIZE_GB` (default `5`)
+- retention is tightened in steps (`DB_RETENTION_STEP_DAYS`, default `7`)
+- until DB is below `DB_TARGET_SIZE_GB` (default `4`) or retention reaches 1 day
 
 Backup:
 

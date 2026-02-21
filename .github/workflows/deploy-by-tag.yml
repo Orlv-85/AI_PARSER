@@ -1,0 +1,61 @@
+name: deploy-by-tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_tag:
+        description: "Git tag to deploy (for release or rollback)"
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate deploy config
+        run: |
+          test -n "${{ github.event.inputs.deploy_tag }}"
+          test -n "${{ vars.DEPLOY_HOST }}"
+          test -n "${{ vars.DEPLOY_USER }}"
+          test -n "${{ secrets.SERVER_PASSWORD }}"
+          test -n "${{ secrets.AINEWS_AUTH_PASSWORD_HASH }}"
+          test -n "${{ secrets.AINEWS_AUTH_SECRET }}"
+
+      - name: Install sshpass
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass
+
+      - name: Trust server host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${{ vars.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Prepare auth env payload
+        env:
+          AINEWS_AUTH_PASSWORD_HASH: ${{ secrets.AINEWS_AUTH_PASSWORD_HASH }}
+          AINEWS_AUTH_SECRET: ${{ secrets.AINEWS_AUTH_SECRET }}
+          AINEWS_AUTH_USERNAME: ${{ vars.AINEWS_AUTH_USERNAME || 'operator' }}
+          AINEWS_AUTH_ENABLED: ${{ vars.AINEWS_AUTH_ENABLED || 'true' }}
+          AINEWS_AUTH_SESSION_TTL_SECONDS: ${{ vars.AINEWS_AUTH_SESSION_TTL_SECONDS || '3600' }}
+          AINEWS_AUTH_COOKIE_SECURE: ${{ vars.AINEWS_AUTH_COOKIE_SECURE || 'true' }}
+        run: |
+          cat > /tmp/ai_news_auth.env <<EOF
+AINEWS_AUTH_ENABLED=${AINEWS_AUTH_ENABLED}
+AINEWS_AUTH_USERNAME=${AINEWS_AUTH_USERNAME}
+AINEWS_AUTH_PASSWORD_HASH=${AINEWS_AUTH_PASSWORD_HASH}
+AINEWS_AUTH_SECRET=${AINEWS_AUTH_SECRET}
+AINEWS_AUTH_SESSION_TTL_SECONDS=${AINEWS_AUTH_SESSION_TTL_SECONDS}
+AINEWS_AUTH_COOKIE_SECURE=${AINEWS_AUTH_COOKIE_SECURE}
+EOF
+
+      - name: Deploy selected tag
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_APP_DIR: ${{ vars.DEPLOY_APP_DIR || '/opt/ai-news' }}
+          DEPLOY_TAG: ${{ github.event.inputs.deploy_tag }}
+          SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
+        run: |
+          sshpass -p "${SERVER_PASSWORD}" scp /tmp/ai_news_auth.env "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/ai_news_auth.env"
+          sshpass -p "${SERVER_PASSWORD}" ssh "${DEPLOY_USER}@${DEPLOY_HOST}" "cd '${DEPLOY_APP_DIR}' && git fetch --tags origin && git rev-parse --verify --quiet 'refs/tags/${DEPLOY_TAG}' >/dev/null || { echo 'Tag not found: ${DEPLOY_TAG}' >&2; exit 1; } && touch .env && grep -vE '^(AINEWS_AUTH_ENABLED|AINEWS_AUTH_USERNAME|AINEWS_AUTH_PASSWORD_HASH|AINEWS_AUTH_SECRET|AINEWS_AUTH_SESSION_TTL_SECONDS|AINEWS_AUTH_COOKIE_SECURE)=' .env > .env.next || true && cat /tmp/ai_news_auth.env >> .env.next && mv .env.next .env && rm -f /tmp/ai_news_auth.env && git checkout --force '${DEPLOY_TAG}' && ./scripts/deploy_prod.sh '${DEPLOY_TAG}'"
