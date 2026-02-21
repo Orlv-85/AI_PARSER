@@ -47,7 +47,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-"app.web" = ["index.html"]
+"app.web" = ["index.html", "login.html"]
 
 [tool.ruff]
 target-version = "py312"
