@@ -64,11 +64,13 @@ Repository Variables:
 - `AINEWS_AUTH_ENABLED` (optional, default `true`)
 - `AINEWS_AUTH_SESSION_TTL_SECONDS` (optional, default `3600`)
 - `AINEWS_AUTH_COOKIE_SECURE` (optional, default `true`)
+- `AINEWS_MCP_AUTH_ENABLED` (optional, default `false`)
 
 Repository Secrets:
 - `SERVER_PASSWORD`
 - `AINEWS_AUTH_PASSWORD_HASH`
 - `AINEWS_AUTH_SECRET`
+- `AINEWS_MCP_AUTH_TOKEN` (required if `AINEWS_MCP_AUTH_ENABLED=true`)
 
 ### 1) Prepare server once
 
@@ -123,6 +125,7 @@ Create repository variables/secrets:
 - `SERVER_PASSWORD` (repo secret)
 - `AINEWS_AUTH_PASSWORD_HASH` (repo secret)
 - `AINEWS_AUTH_SECRET` (repo secret)
+- `AINEWS_MCP_AUTH_TOKEN` (repo secret, required only when MCP auth enabled)
 
 Notes:
 - Deploy workflow authenticates by server password (`SERVER_PASSWORD`) via `sshpass`.
@@ -263,11 +266,36 @@ ai-news search --query "gpt" --days 7
 ai-news mcp-serve
 ```
 
+MCP authentication configuration:
+- `AINEWS_MCP_AUTH_ENABLED=false` (default, backward-compatible local mode)
+- `AINEWS_MCP_AUTH_ENABLED=true` (enforce token on all MCP tools)
+- `AINEWS_MCP_AUTH_TOKEN=<strong-random-token>` (required when auth is enabled)
+
+Recommended secure startup:
+
+```bash
+export AINEWS_MCP_AUTH_ENABLED=true
+export AINEWS_MCP_AUTH_TOKEN="replace-with-long-random-token"
+ai-news mcp-serve
+```
+
+If auth is enabled and token is missing/blank, startup fails fast.
+
 Available MCP tools:
 - `news.update`
 - `news.update_status`
 - `news.list`
 - `news.get`
+
+When MCP auth is enabled, pass `auth_token` in each tool call:
+- `news.update(..., auth_token="...")`
+- `news.update_status(auth_token="...")`
+- `news.list(..., auth_token="...")`
+- `news.get(article_id=..., auth_token="...")`
+
+Auth audit logging:
+- `mcp_auth_success` and `mcp_auth_failed` events are emitted.
+- Raw tokens are never written to logs.
 
 Typical agent flow:
 1. Call `news.update` (`wait=false` for async or `wait=true` for blocking mode).

@@ -1,10 +1,13 @@
 import logging
+import secrets
 from datetime import datetime
 from time import sleep
 from typing import Any
 
 from pydantic import BaseModel, Field, ValidationError
 
+from app.config.settings import get_settings
+from app.observability.logging import log_mcp_auth_event
 from app.storage import SessionLocal, create_all
 from app.storage.repos import ArticleRepo
 from app.web.models import WebUpdateSettings
@@ -13,7 +16,7 @@ from app.web.service import UpdateRunService
 try:
     from fastmcp import FastMCP  # pylint: disable=import-error
 except Exception:  # pragma: no cover - optional at runtime.
-    FastMCP = None  # type: ignore[assignment]
+    FastMCP = None  # type: ignore[misc,assignment]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,6 +53,45 @@ class MCPNewsService:
         self._create_all = create_all_fn
 
     @staticmethod
+    def _mcp_auth_error_payload() -> dict[str, Any]:
+        return {"ok": False, "error_type": "auth_error", "detail": "unauthorized"}
+
+    def _require_mcp_auth(self, *, tool: str, auth_token: str | None) -> dict[str, Any] | None:
+        settings = get_settings()
+        if not getattr(settings, "mcp_auth_enabled", False):
+            return None
+
+        expected_token = getattr(settings, "mcp_auth_token", None)
+        expected_token_str = expected_token if isinstance(expected_token, str) else ""
+        provided_token = auth_token if isinstance(auth_token, str) else ""
+        if not provided_token:
+            log_mcp_auth_event(
+                _LOGGER,
+                event="mcp_auth_failed",
+                outcome="denied",
+                tool=tool,
+            )
+            return self._mcp_auth_error_payload()
+
+        if not expected_token_str or not secrets.compare_digest(provided_token, expected_token_str):
+            log_mcp_auth_event(
+                _LOGGER,
+                event="mcp_auth_failed",
+                outcome="denied",
+                tool=tool,
+            )
+            return self._mcp_auth_error_payload()
+
+        log_mcp_auth_event(
+            _LOGGER,
+            event="mcp_auth_success",
+            outcome="allowed",
+            tool=tool,
+            subject="token_client",
+        )
+        return None
+
+    @staticmethod
     def _status_to_dict(status: Any) -> dict[str, Any]:
         return {
             "run_id": status.run_id,
@@ -64,6 +106,10 @@ class MCPNewsService:
         }
 
     def news_update(self, **kwargs: Any) -> dict[str, Any]:
+        auth_token = kwargs.pop("auth_token", None)
+        auth_error = self._require_mcp_auth(tool="news.update", auth_token=auth_token)
+        if auth_error:
+            return auth_error
         try:
             params = _UpdateParams.model_validate(kwargs)
         except ValidationError as exc:
@@ -128,7 +174,10 @@ class MCPNewsService:
             "status": self._status_to_dict(self._update_service.current_status()),
         }
 
-    def news_update_status(self) -> dict[str, Any]:
+    def news_update_status(self, *, auth_token: str | None = None) -> dict[str, Any]:
+        auth_error = self._require_mcp_auth(tool="news.update_status", auth_token=auth_token)
+        if auth_error:
+            return auth_error
         status = self._update_service.current_status()
         _LOGGER.info(
             "event=news.update_status outcome=ok run_id=%s status=%s",
@@ -138,6 +187,10 @@ class MCPNewsService:
         return {"ok": True, "status": self._status_to_dict(status)}
 
     def news_list(self, **kwargs: Any) -> dict[str, Any]:
+        auth_token = kwargs.pop("auth_token", None)
+        auth_error = self._require_mcp_auth(tool="news.list", auth_token=auth_token)
+        if auth_error:
+            return auth_error
         try:
             params = _ListParams.model_validate(kwargs)
         except ValidationError as exc:
@@ -179,7 +232,10 @@ class MCPNewsService:
         )
         return {"ok": True, "items": items, "count": len(items)}
 
-    def news_get(self, *, article_id: int) -> dict[str, Any]:
+    def news_get(self, *, article_id: int, auth_token: str | None = None) -> dict[str, Any]:
+        auth_error = self._require_mcp_auth(tool="news.get", auth_token=auth_token)
+        if auth_error:
+            return auth_error
         if article_id <= 0:
             _LOGGER.info(
                 "event=news.get outcome=validation_error article_id=%s",
@@ -225,6 +281,10 @@ def build_mcp_server() -> Any:
             "fastmcp is not installed. Install project dependencies to run MCP server."
         )
 
+    settings = get_settings()
+    if settings.mcp_auth_enabled and not (settings.mcp_auth_token or "").strip():
+        raise RuntimeError("mcp auth is enabled but AINEWS_MCP_AUTH_TOKEN is missing")
+
     service = MCPNewsService()
     mcp = FastMCP("ai-news-collector")
 
@@ -238,6 +298,7 @@ def build_mcp_server() -> Any:
         max_retries: int | None = None,
         per_source_min_interval_seconds: float | None = None,
         concurrency_limit: int | None = None,
+        auth_token: str | None = None,
     ) -> dict[str, Any]:
         return service.news_update(
             wait=wait,
@@ -247,11 +308,12 @@ def build_mcp_server() -> Any:
             max_retries=max_retries,
             per_source_min_interval_seconds=per_source_min_interval_seconds,
             concurrency_limit=concurrency_limit,
+            auth_token=auth_token,
         )
 
     @mcp.tool(name="news.update_status")
-    def news_update_status() -> dict[str, Any]:  # type: ignore[misc]
-        return service.news_update_status()
+    def news_update_status(auth_token: str | None = None) -> dict[str, Any]:  # type: ignore[misc]
+        return service.news_update_status(auth_token=auth_token)
 
     @mcp.tool(name="news.list")
     # pylint: disable=too-many-positional-arguments
@@ -262,6 +324,7 @@ def build_mcp_server() -> Any:
         query: str | None = None,
         days: int = 7,
         sort: str = "rank",
+        auth_token: str | None = None,
     ) -> dict[str, Any]:
         return service.news_list(
             hours=hours,
@@ -270,11 +333,12 @@ def build_mcp_server() -> Any:
             query=query,
             days=days,
             sort=sort,
+            auth_token=auth_token,
         )
 
     @mcp.tool(name="news.get")
-    def news_get(article_id: int) -> dict[str, Any]:  # type: ignore[misc]
-        return service.news_get(article_id=article_id)
+    def news_get(article_id: int, auth_token: str | None = None) -> dict[str, Any]:  # type: ignore[misc]
+        return service.news_get(article_id=article_id, auth_token=auth_token)
 
     return mcp
 

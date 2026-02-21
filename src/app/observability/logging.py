@@ -44,3 +44,31 @@ def log_event(
     **event_fields: object,
 ) -> None:
     logger.log(level, event, extra={"event_fields": event_fields})
+
+
+def log_mcp_auth_event(
+    logger: logging.Logger,
+    *,
+    event: str,
+    outcome: str,
+    tool: str,
+    auth_mode: str = "token",
+    subject: str | None = None,
+) -> None:
+    if subject:
+        log_event(
+            logger,
+            event=event,
+            outcome=outcome,
+            tool=tool,
+            auth_mode=auth_mode,
+            subject=subject,
+        )
+        return
+    log_event(
+        logger,
+        event=event,
+        outcome=outcome,
+        tool=tool,
+        auth_mode=auth_mode,
+    )

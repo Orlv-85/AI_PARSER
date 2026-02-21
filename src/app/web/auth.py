@@ -8,11 +8,13 @@ import secrets
 from datetime import UTC, datetime
 from typing import Any, cast
 
+PasswordHasher: Any
 try:
     from argon2 import PasswordHasher
 except ImportError:  # pragma: no cover - optional dependency
     PasswordHasher = None
 
+bcrypt: Any
 try:
     import bcrypt
 except ImportError:  # pragma: no cover - optional dependency

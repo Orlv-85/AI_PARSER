@@ -55,6 +55,11 @@ def serve(
 
 @app.command()
 def mcp_serve() -> None:
+    settings = get_settings()
+    if settings.mcp_auth_enabled and not (settings.mcp_auth_token or "").strip():
+        raise typer.BadParameter(
+            "mcp auth is enabled but AINEWS_MCP_AUTH_TOKEN is missing"
+        )
     run_mcp_server()
 
 
