@@ -16,6 +16,71 @@ source venv1/bin/activate
 pip install -e ".[dev]"
 ```
 
+## Run In Docker
+
+### Build image
+
+```bash
+docker build -t ai-news-collector:latest .
+```
+
+### Run container
+
+```bash
+mkdir -p data
+docker run -d \
+  --name ai-news \
+  -p 8010:8010 \
+  -e AINEWS_DATABASE_URL="sqlite:///./data/ai_news.db" \
+  -e AINEWS_SOURCES_PATH="/app/sources.yaml" \
+  -v "$(pwd)/data:/app/data" \
+  -v "$(pwd)/sources.yaml:/app/sources.yaml:ro" \
+  ai-news-collector:latest
+```
+
+### Run with Docker Compose
+
+```bash
+mkdir -p data
+docker compose up -d --build
+```
+
+### Healthcheck
+
+```bash
+curl -fsS http://127.0.0.1:8010/health
+docker ps --filter name=ai-news
+```
+
+### Auto-start on reboot (systemd)
+
+1. Copy project to server, for example into `/opt/ai-news`.
+2. Install unit file:
+
+```bash
+sudo cp deploy/ai-news.service /etc/systemd/system/ai-news.service
+```
+
+3. If your path is not `/opt/ai-news`, update `WorkingDirectory`:
+
+```bash
+sudo systemctl edit --full ai-news.service
+```
+
+4. Enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now ai-news.service
+```
+
+5. Check status/logs:
+
+```bash
+sudo systemctl status ai-news.service
+docker compose -f /opt/ai-news/docker-compose.yml logs -f
+```
+
 ## Configuration
 
 ### 1) Environment variables
