@@ -9,7 +9,7 @@ COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 RETENTION_DAYS="${RETENTION_DAYS:-100}"
 DEPLOY_TAG="${1:-}"
 FORCE_BUILD="${FORCE_BUILD:-0}"
-PREVIOUS_COMMIT="$(git rev-parse --verify HEAD 2>/dev/null || true)"
+LAST_DEPLOY_FILE="${LAST_DEPLOY_FILE:-.last_deploy_commit}"
 
 if [ -n "$DEPLOY_TAG" ]; then
   echo "Checking out tag: $DEPLOY_TAG"
@@ -18,17 +18,23 @@ if [ -n "$DEPLOY_TAG" ]; then
 fi
 
 CURRENT_COMMIT="$(git rev-parse --verify HEAD)"
+LAST_DEPLOY_COMMIT=""
+if [ -f "$LAST_DEPLOY_FILE" ]; then
+  LAST_DEPLOY_COMMIT="$(head -n 1 "$LAST_DEPLOY_FILE" | tr -d '[:space:]')"
+fi
 
 should_build=0
 build_reason=""
 if [ "$FORCE_BUILD" = "1" ]; then
   should_build=1
   build_reason="FORCE_BUILD=1"
-elif [ -z "$PREVIOUS_COMMIT" ] || [ "$PREVIOUS_COMMIT" = "$CURRENT_COMMIT" ]; then
+elif [ -z "$LAST_DEPLOY_COMMIT" ]; then
   should_build=1
-  build_reason="initial deploy or unknown previous commit"
+  build_reason="initial deploy (no last deploy marker)"
+elif [ "$LAST_DEPLOY_COMMIT" = "$CURRENT_COMMIT" ]; then
+  should_build=0
 else
-  changed_files="$(git diff --name-only "$PREVIOUS_COMMIT" "$CURRENT_COMMIT" || true)"
+  changed_files="$(git diff --name-only "$LAST_DEPLOY_COMMIT" "$CURRENT_COMMIT" || true)"
   if echo "$changed_files" | grep -Eq '^(build/Dockerfile|Dockerfile|requirements[^/]*\.txt|requirements/|pyproject\.toml|poetry\.lock)'; then
     should_build=1
     build_reason="image build inputs changed"
@@ -53,10 +59,10 @@ done
 
 if [ "$should_build" -eq 1 ]; then
   echo "Building and starting app (${build_reason})..."
-  docker compose -f "$COMPOSE_FILE" up -d --build app
+  docker compose -f "$COMPOSE_FILE" up -d --build app caddy
 else
   echo "Starting app without rebuild (no build input changes detected)..."
-  docker compose -f "$COMPOSE_FILE" up -d app
+  docker compose -f "$COMPOSE_FILE" up -d app caddy
 fi
 
 echo "Running migrations..."
@@ -66,7 +72,7 @@ echo "Applying retention policy..."
 docker compose -f "$COMPOSE_FILE" run --rm app ai-news prune --older-than-days "$RETENTION_DAYS"
 
 echo "Restarting app..."
-docker compose -f "$COMPOSE_FILE" up -d app
+docker compose -f "$COMPOSE_FILE" up -d app caddy
 
 echo "Checking app health..."
 attempt=0
@@ -78,5 +84,7 @@ until docker compose -f "$COMPOSE_FILE" exec -T app python -c "import urllib.req
   fi
   sleep 2
 done
+
+printf '%s\n' "$CURRENT_COMMIT" > "$LAST_DEPLOY_FILE"
 
 echo "Deployment completed successfully."

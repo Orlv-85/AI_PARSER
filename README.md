@@ -47,6 +47,29 @@ docker compose up -d --build
 
 ## Production Deploy (PostgreSQL + Git Tags)
 
+### CI/CD trigger matrix
+
+- push to any branch: `.github/workflows/tests.yml` (tests only, no deploy)
+- push tag `v*`: `.github/workflows/deploy-release.yml` (tests, then deploy only on green)
+- manual rollback/deploy by tag: `.github/workflows/deploy-by-tag.yml` (`workflow_dispatch`, input `deploy_tag`)
+- nightly maintenance: `.github/workflows/db-maintenance.yml` (DB maintenance + backup over SSH)
+
+### Required GitHub repo configuration
+
+Repository Variables:
+- `DEPLOY_HOST` (example: `5kzt.l.time4vps.cloud`)
+- `DEPLOY_USER` (example: `root`)
+- `DEPLOY_APP_DIR` (optional, default `/opt/ai-news`)
+- `AINEWS_AUTH_USERNAME` (optional, default `operator`)
+- `AINEWS_AUTH_ENABLED` (optional, default `true`)
+- `AINEWS_AUTH_SESSION_TTL_SECONDS` (optional, default `3600`)
+- `AINEWS_AUTH_COOKIE_SECURE` (optional, default `true`)
+
+Repository Secrets:
+- `SERVER_PASSWORD`
+- `AINEWS_AUTH_PASSWORD_HASH`
+- `AINEWS_AUTH_SECRET`
+
 ### 1) Prepare server once
 
 ```bash
@@ -58,6 +81,14 @@ cp deploy/.env.prod.example .env
 ```
 
 Edit `.env` and set strong `POSTGRES_PASSWORD`.
+Set `CADDY_SITE_ADDRESS` to your public domain/host (for example `5kzt.l.time4vps.cloud`).
+
+Server prerequisites (once):
+- Docker Engine + Docker Compose v2 installed and working for deploy user
+- `git` installed
+- outbound access to GitHub from server
+- repository cloned into `${DEPLOY_APP_DIR}` (default `/opt/ai-news`)
+- inbound ports `80/tcp` and `443/tcp` open in firewall/security group
 
 ### 2) Manual deploy command on server
 
@@ -69,9 +100,9 @@ cd /opt/ai-news
 What this does:
 - starts/updates PostgreSQL container
 - runs `alembic upgrade head`
-- starts/updates app container
+- starts/updates app container + Caddy reverse proxy (HTTPS)
   - rebuilds image only when build inputs changed (`build/Dockerfile`, `Dockerfile`, `requirements*.txt`, `pyproject.toml`, `poetry.lock`)
-  - otherwise runs `docker compose up -d app` without rebuild
+  - otherwise runs `docker compose up -d app caddy` without rebuild
 - runs retention cleanup (`ai-news prune --older-than-days 100` by default)
 - verifies app health
 
@@ -139,6 +170,7 @@ Nightly maintenance workflow:
 
 ```bash
 curl -fsS http://127.0.0.1:8010/health
+curl -I https://<your-domain>/health
 docker ps --filter name=ai-news
 ```
 

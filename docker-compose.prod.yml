@@ -33,11 +33,34 @@ services:
       AINEWS_MAX_RETRIES: ${AINEWS_MAX_RETRIES:-3}
       AINEWS_PER_SOURCE_MIN_INTERVAL_SECONDS: ${AINEWS_PER_SOURCE_MIN_INTERVAL_SECONDS:-1.0}
       AINEWS_RESPECT_ROBOTS_TXT: ${AINEWS_RESPECT_ROBOTS_TXT:-true}
-    ports:
-      - "${WEB_PORT:-8010}:8010"
+      AINEWS_AUTH_ENABLED: ${AINEWS_AUTH_ENABLED:-false}
+      AINEWS_AUTH_USERNAME: ${AINEWS_AUTH_USERNAME:-}
+      AINEWS_AUTH_PASSWORD_HASH: ${AINEWS_AUTH_PASSWORD_HASH:-}
+      AINEWS_AUTH_SECRET: ${AINEWS_AUTH_SECRET:-}
+      AINEWS_AUTH_SESSION_TTL_SECONDS: ${AINEWS_AUTH_SESSION_TTL_SECONDS:-3600}
+      AINEWS_AUTH_COOKIE_SECURE: ${AINEWS_AUTH_COOKIE_SECURE:-true}
+    expose:
+      - "8010"
     volumes:
       - ./data:/app/data
       - ./sources.yaml:/app/sources.yaml:ro
 
+  caddy:
+    image: caddy:2-alpine
+    container_name: ai-news-caddy
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_started
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
 volumes:
   pgdata:
+  caddy_data:
+  caddy_config:

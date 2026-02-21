@@ -40,11 +40,13 @@ jobs:
           AINEWS_AUTH_SESSION_TTL_SECONDS: ${{ vars.AINEWS_AUTH_SESSION_TTL_SECONDS || '3600' }}
           AINEWS_AUTH_COOKIE_SECURE: ${{ vars.AINEWS_AUTH_COOKIE_SECURE || 'true' }}
         run: |
+          AINEWS_AUTH_PASSWORD_HASH_ESCAPED="$(printf '%s' "${AINEWS_AUTH_PASSWORD_HASH}" | sed 's/[$]/$$/g')"
+          AINEWS_AUTH_SECRET_ESCAPED="$(printf '%s' "${AINEWS_AUTH_SECRET}" | sed 's/[$]/$$/g')"
           {
             printf 'AINEWS_AUTH_ENABLED=%s\n' "${AINEWS_AUTH_ENABLED}"
             printf 'AINEWS_AUTH_USERNAME=%s\n' "${AINEWS_AUTH_USERNAME}"
-            printf 'AINEWS_AUTH_PASSWORD_HASH=%s\n' "${AINEWS_AUTH_PASSWORD_HASH}"
-            printf 'AINEWS_AUTH_SECRET=%s\n' "${AINEWS_AUTH_SECRET}"
+            printf 'AINEWS_AUTH_PASSWORD_HASH=%s\n' "${AINEWS_AUTH_PASSWORD_HASH_ESCAPED}"
+            printf 'AINEWS_AUTH_SECRET=%s\n' "${AINEWS_AUTH_SECRET_ESCAPED}"
             printf 'AINEWS_AUTH_SESSION_TTL_SECONDS=%s\n' "${AINEWS_AUTH_SESSION_TTL_SECONDS}"
             printf 'AINEWS_AUTH_COOKIE_SECURE=%s\n' "${AINEWS_AUTH_COOKIE_SECURE}"
           } > /tmp/ai_news_auth.env
