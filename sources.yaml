@@ -32,7 +32,7 @@ sources:
   - id: intel_ai_blog
     name: Intel AI Blog
     type: rss
-    url: https://ai.intel.com/blog/feed
+    url: https://community.intel.com/t5/Blogs/Tech-Innovation/Artificial-Intelligence-AI/rss/board-id/Blogs-Artificial-Intelligence
     fetch_interval_minutes: 180
     source_weight: 1.1
 
@@ -66,7 +66,7 @@ sources:
   - id: nvidia_blog_rss
     name: NVIDIA Blog (RSS)
     type: rss
-    url: https://blogs.nvidia.com/blog/feed/
+    url: https://blogs.nvidia.com/feed/
     fetch_interval_minutes: 60
     source_weight: 1.2
 
@@ -95,7 +95,7 @@ sources:
   - id: fastai
     name: fast.ai
     type: rss
-    url: http://www.fast.ai/atom.xml?format=xml
+    url: https://www.fast.ai/index.xml
     fetch_interval_minutes: 720
     source_weight: 1.0
 
@@ -160,21 +160,24 @@ sources:
   - id: machinelearnings_co
     name: Machine Learnings (newsletter/feed)
     type: rss
-    url: https://machinelearnings.co/feed
+    url: https://machinelearnings.substack.com/feed
     fetch_interval_minutes: 240
     source_weight: 0.9
 
   - id: inbenta_blog
-    name: Inbenta Blog (AI/NLP/chatbots)
-    type: rss
-    url: https://www.inbenta.com/en/blog/feed
+    name: Inbenta Resource Center
+    type: html
+    url: https://www.inbenta.com/
     fetch_interval_minutes: 360
     source_weight: 0.8
+    html:
+      link_selector: a[href^="/articles/"], a[href^="/ai-this-week/"]
+      extraction_strategy: readability
 
   - id: clarifai_blog
     name: Clarifai Blog
     type: rss
-    url: http://blog.clarifai.com/feed
+    url: https://www.clarifai.com/blog/rss.xml
     fetch_interval_minutes: 360
     source_weight: 0.8
 
@@ -244,7 +247,7 @@ sources:
   - id: wildml
     name: WildML
     type: rss
-    url: http://www.wildml.com/feed/?x=1
+    url: https://dennybritz.com/index.xml
     fetch_interval_minutes: 720
     source_weight: 0.8
 
@@ -277,30 +280,36 @@ sources:
     source_weight: 0.6
 
   - id: brighterion
-    name: Brighterion Blog
+    name: Brighterion Blog (FICO fallback)
     type: rss
-    url: http://brighterion.com/feed
+    url: https://www.fico.com/en/blogs/rss.xml
     fetch_interval_minutes: 720
     source_weight: 0.6
 
   - id: paralleldots
-    name: ParallelDots Blog
-    type: rss
-    url: https://blog.paralleldots.com/feed
+    name: ParallelDots Resources
+    type: html
+    url: https://www.paralleldots.com/
     fetch_interval_minutes: 720
     source_weight: 0.6
+    html:
+      link_selector: a[href^="/resources/"]
+      extraction_strategy: readability
 
   - id: aylien_nlp
-    name: AYLIEN NLP Blog
-    type: rss
-    url: http://blog.aylien.com/rss
+    name: AYLIEN NLP (Quantexa Blog)
+    type: html
+    url: https://www.quantexa.com/blog/
     fetch_interval_minutes: 720
     source_weight: 0.6
+    html:
+      link_selector: a[href*="/blog/"]:not([href="/blog/"])
+      extraction_strategy: readability
 
   - id: meaningcloud
-    name: MeaningCloud Blog
+    name: MeaningCloud Blog (fallback)
     type: rss
-    url: https://www.meaningcloud.com/blog/feed
+    url: https://provalisresearch.com/feed
     fetch_interval_minutes: 720
     source_weight: 0.6
 
@@ -314,7 +323,7 @@ sources:
   - id: bitext
     name: Bitext Blog
     type: rss
-    url: https://blog.bitext.com/rss.xml
+    url: https://www.bitext.com/feed/
     fetch_interval_minutes: 720
     source_weight: 0.6
 
@@ -328,21 +337,24 @@ sources:
   - id: searchblox
     name: SearchBlox Blog
     type: rss
-    url: https://www.searchblox.com/blog/feed
+    url: https://searchblox.com/feed/
     fetch_interval_minutes: 720
     source_weight: 0.5
 
   - id: linguamatics
-    name: Linguamatics Blog
-    type: rss
-    url: https://www.linguamatics.com/blog/rss-feed
+    name: IQVIA Newsroom (Linguamatics)
+    type: html
+    url: https://www.iqvia.com/newsroom
     fetch_interval_minutes: 720
     source_weight: 0.5
+    html:
+      link_selector: a[href^="/newsroom/"]
+      extraction_strategy: readability
 
   - id: nactem
     name: NaCTeM Featured RSS
     type: rss
-    url: http://www.nactem.ac.uk/rss_featured.php
+    url: https://www.nactem.ac.uk/?feed=rss2
     fetch_interval_minutes: 720
     source_weight: 0.5
 
@@ -356,7 +368,7 @@ sources:
   - id: keatext
     name: Keatext Insights
     type: rss
-    url: https://www.keatext.ai/customer-experience-insights/feed
+    url: https://www.keatext.ai/blog/feed/
     fetch_interval_minutes: 720
     source_weight: 0.5
 
@@ -386,21 +398,21 @@ sources:
   - id: expertsystem
     name: Expert System Blog
     type: rss
-    url: http://www.expertsystem.com/blog/feed
+    url: https://www.expert.ai/feed/
     fetch_interval_minutes: 720
     source_weight: 0.5
 
   - id: fusemachines
     name: Fusemachines Blog
     type: rss
-    url: http://blog.fusemachines.com/feed
+    url: https://fusemachines.com/blog/feed/
     fetch_interval_minutes: 720
     source_weight: 0.4
 
   - id: marek_rosa
     name: Marek Rosa Dev Blog
     type: rss
-    url: http://blog.marekrosa.org/feeds/posts/default
+    url: https://www.marekrosa.org/feed/
     fetch_interval_minutes: 720
     source_weight: 0.4
 
@@ -414,7 +426,7 @@ sources:
   - id: extremetech_neural_networks
     name: ExtremeTech — neural networks tag
     type: rss
-    url: https://www.extremetech.com/tag/neural-networks/feed
+    url: https://www.extremetech.com/feed
     fetch_interval_minutes: 360
     source_weight: 0.4
 
@@ -426,8 +438,11 @@ sources:
     source_weight: 0.4
 
   - id: hackerearth_ml
-    name: HackerEarth — Machine Learning
-    type: rss
-    url: http://blog.hackerearth.com/machine-learning/feed
+    name: HackerEarth Blog
+    type: html
+    url: https://www.hackerearth.com/blog
     fetch_interval_minutes: 720
     source_weight: 0.4
+    html:
+      link_selector: a[href^="/blog/"]
+      extraction_strategy: readability
