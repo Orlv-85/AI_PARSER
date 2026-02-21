@@ -70,10 +70,18 @@ What this does:
 - starts/updates PostgreSQL container
 - runs `alembic upgrade head`
 - starts/updates app container
+  - rebuilds image only when build inputs changed (`build/Dockerfile`, `Dockerfile`, `requirements*.txt`, `pyproject.toml`, `poetry.lock`)
+  - otherwise runs `docker compose up -d app` without rebuild
 - runs retention cleanup (`ai-news prune --older-than-days 100` by default)
 - verifies app health
 
 If schema didn't change, migration step is a no-op.
+
+To force rebuild regardless of file changes:
+
+```bash
+FORCE_BUILD=1 ./scripts/deploy_prod.sh
+```
 
 ### 3) Deploy via GitHub Action on tag
 

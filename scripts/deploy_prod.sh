@@ -8,11 +8,31 @@ cd "$ROOT_DIR"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 RETENTION_DAYS="${RETENTION_DAYS:-100}"
 DEPLOY_TAG="${1:-}"
+FORCE_BUILD="${FORCE_BUILD:-0}"
+PREVIOUS_COMMIT="$(git rev-parse --verify HEAD 2>/dev/null || true)"
 
 if [ -n "$DEPLOY_TAG" ]; then
   echo "Checking out tag: $DEPLOY_TAG"
   git fetch --tags origin
   git checkout --force "$DEPLOY_TAG"
+fi
+
+CURRENT_COMMIT="$(git rev-parse --verify HEAD)"
+
+should_build=0
+build_reason=""
+if [ "$FORCE_BUILD" = "1" ]; then
+  should_build=1
+  build_reason="FORCE_BUILD=1"
+elif [ -z "$PREVIOUS_COMMIT" ] || [ "$PREVIOUS_COMMIT" = "$CURRENT_COMMIT" ]; then
+  should_build=1
+  build_reason="initial deploy or unknown previous commit"
+else
+  changed_files="$(git diff --name-only "$PREVIOUS_COMMIT" "$CURRENT_COMMIT" || true)"
+  if echo "$changed_files" | grep -Eq '^(build/Dockerfile|Dockerfile|requirements[^/]*\.txt|requirements/|pyproject\.toml|poetry\.lock)'; then
+    should_build=1
+    build_reason="image build inputs changed"
+  fi
 fi
 
 mkdir -p data backups
@@ -31,8 +51,13 @@ until docker compose -f "$COMPOSE_FILE" exec -T db sh -lc 'pg_isready -U "$POSTG
   sleep 2
 done
 
-echo "Building and starting app..."
-docker compose -f "$COMPOSE_FILE" up -d --build app
+if [ "$should_build" -eq 1 ]; then
+  echo "Building and starting app (${build_reason})..."
+  docker compose -f "$COMPOSE_FILE" up -d --build app
+else
+  echo "Starting app without rebuild (no build input changes detected)..."
+  docker compose -f "$COMPOSE_FILE" up -d app
+fi
 
 echo "Running migrations..."
 docker compose -f "$COMPOSE_FILE" run --rm app alembic upgrade head
