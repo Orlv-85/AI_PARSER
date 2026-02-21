@@ -1,0 +1,35 @@
+name: deploy-release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate deploy config
+        run: |
+          test -n "${{ vars.DEPLOY_HOST }}"
+          test -n "${{ vars.DEPLOY_USER }}"
+          test -n "${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}"
+
+      - name: Setup SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+
+      - name: Trust server host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${{ vars.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy tagged release
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_APP_DIR: ${{ vars.DEPLOY_APP_DIR || '/opt/ai-news' }}
+          DEPLOY_TAG: ${{ github.ref_name }}
+        run: |
+          ssh "${DEPLOY_USER}@${DEPLOY_HOST}" "cd '${DEPLOY_APP_DIR}' && git fetch --tags origin && git checkout --force '${DEPLOY_TAG}' && ./scripts/deploy_prod.sh '${DEPLOY_TAG}'"

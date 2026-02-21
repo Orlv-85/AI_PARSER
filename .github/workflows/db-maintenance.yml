@@ -1,0 +1,34 @@
+name: db-maintenance
+
+on:
+  schedule:
+    - cron: "20 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  maintenance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate deploy config
+        run: |
+          test -n "${{ vars.DEPLOY_HOST }}"
+          test -n "${{ vars.DEPLOY_USER }}"
+          test -n "${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}"
+
+      - name: Setup SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+
+      - name: Trust server host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${{ vars.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Run maintenance and backup
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_APP_DIR: ${{ vars.DEPLOY_APP_DIR || '/opt/ai-news' }}
+        run: |
+          ssh "${DEPLOY_USER}@${DEPLOY_HOST}" "cd '${DEPLOY_APP_DIR}' && ./scripts/db_maintenance.sh && ./scripts/db_backup.sh"

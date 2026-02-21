@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import Select, desc, select
+from sqlalchemy import Select, delete, desc, select
 from sqlalchemy.orm import Session
 
 from app.config.sources import SourceConfig
@@ -200,3 +200,22 @@ class ArticleRepo:
             (row[0], row[1], row[2])
             for row in self.session.execute(base_stmt).all()
         ]
+
+    def count_older_than(self, *, older_than_days: int) -> int:
+        cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
+        stmt = select(Article.id).where(Article.published_at < cutoff)
+        return len(self.session.scalars(stmt).all())
+
+    def prune_older_than(self, *, older_than_days: int) -> tuple[int, int]:
+        cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
+        old_article_ids = select(Article.id).where(Article.published_at < cutoff)
+
+        deleted_aliases_stmt = select(ArticleAlias.id).where(
+            ArticleAlias.article_id.in_(old_article_ids)
+        )
+        deleted_aliases = len(self.session.scalars(deleted_aliases_stmt).all())
+        deleted_articles = self.count_older_than(older_than_days=older_than_days)
+
+        self.session.execute(delete(ArticleAlias).where(ArticleAlias.article_id.in_(old_article_ids)))
+        self.session.execute(delete(Article).where(Article.published_at < cutoff))
+        return deleted_articles, deleted_aliases

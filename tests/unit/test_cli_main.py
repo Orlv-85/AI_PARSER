@@ -37,6 +37,14 @@ class _ArticleRepo:
             )
         ]
 
+    def count_older_than(self, *, older_than_days: int) -> int:
+        _ = older_than_days
+        return 7
+
+    def prune_older_than(self, *, older_than_days: int) -> tuple[int, int]:
+        _ = older_than_days
+        return (7, 2)
+
 
 def test_main_callback_noop() -> None:
     assert cli_main.main() is None
@@ -135,3 +143,30 @@ def test_serve_command(monkeypatch) -> None:
     cli_main.serve(host="0.0.0.0", port=9000)
 
     assert captured == {"app": "app.web.app:app", "host": "0.0.0.0", "port": 9000}
+
+
+def test_prune_command_dry_run_and_apply(monkeypatch) -> None:
+    emitted: list[str] = []
+    commits: list[str] = []
+
+    class _SessionCM:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def commit(self) -> None:
+            commits.append("commit")
+
+    monkeypatch.setattr(cli_main.typer, "echo", emitted.append)
+    monkeypatch.setattr(cli_main, "create_all", lambda: None)
+    monkeypatch.setattr(cli_main, "SessionLocal", _SessionCM)
+    monkeypatch.setattr(cli_main, "ArticleRepo", _ArticleRepo)
+
+    cli_main.prune(older_than_days=100, dry_run=True)
+    cli_main.prune(older_than_days=100, dry_run=False)
+
+    assert "prune dry-run:" in emitted[0]
+    assert "prune complete:" in emitted[1]
+    assert len(commits) == 1
