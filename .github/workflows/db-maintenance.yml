@@ -23,7 +23,10 @@ jobs:
       - name: Trust server host key
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan -H "${{ vars.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+          for i in 1 2 3; do
+            ssh-keyscan -T 5 -H "${{ vars.DEPLOY_HOST }}" >> ~/.ssh/known_hosts && break
+            sleep 2
+          done
 
       - name: Run maintenance and backup
         env:
@@ -32,4 +35,4 @@ jobs:
           DEPLOY_APP_DIR: ${{ vars.DEPLOY_APP_DIR || '/opt/ai-news' }}
           SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
         run: |
-          sshpass -p "${SERVER_PASSWORD}" ssh "${DEPLOY_USER}@${DEPLOY_HOST}" "cd '${DEPLOY_APP_DIR}' && ./scripts/db_maintenance.sh && ./scripts/db_backup.sh"
+          sshpass -p "${SERVER_PASSWORD}" ssh -o StrictHostKeyChecking=accept-new "${DEPLOY_USER}@${DEPLOY_HOST}" "cd '${DEPLOY_APP_DIR}' && ./scripts/db_maintenance.sh && ./scripts/db_backup.sh"
