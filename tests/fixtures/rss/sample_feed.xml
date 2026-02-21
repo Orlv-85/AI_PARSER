@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Sample AI Feed</title>
+    <link>https://example.com</link>
+    <description>Sample feed for tests</description>
+    <item>
+      <title>New AI model release</title>
+      <link>https://example.com/posts/model-release</link>
+      <pubDate>Sat, 21 Feb 2026 10:00:00 GMT</pubDate>
+      <description>Model release details.</description>
+    </item>
+    <item>
+      <title>AI policy update</title>
+      <link>https://example.com/posts/policy-update</link>
+      <pubDate>Sat, 21 Feb 2026 09:00:00 GMT</pubDate>
+      <description>Policy update details.</description>
+    </item>
+  </channel>
+</rss>
+

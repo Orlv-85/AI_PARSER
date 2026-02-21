@@ -1,0 +1,433 @@
+version: 1
+defaults:
+  language: en
+  enabled: true
+  fetch_interval_minutes: 60
+  respect_robots: true
+  source_weight: 1.0
+
+sources:
+  # --- Frontier labs / big tech AI blogs ---
+  - id: openai_news
+    name: OpenAI News (official RSS)
+    type: rss
+    url: https://openai.com/news/rss.xml
+    fetch_interval_minutes: 30
+    source_weight: 1.4
+
+  - id: deepmind_blog
+    name: Google DeepMind Blog
+    type: rss
+    url: https://deepmind.com/blog/feed/basic
+    fetch_interval_minutes: 60
+    source_weight: 1.3
+
+  - id: aws_ai_blog
+    name: AWS Machine Learning Blog
+    type: rss
+    url: https://aws.amazon.com/blogs/machine-learning/feed/
+    fetch_interval_minutes: 60
+    source_weight: 1.2
+
+  - id: intel_ai_blog
+    name: Intel AI Blog
+    type: rss
+    url: https://ai.intel.com/blog/feed
+    fetch_interval_minutes: 180
+    source_weight: 1.1
+
+  - id: microsoft_ai_blog
+    name: Microsoft AI Blog
+    type: rss
+    url: https://blogs.microsoft.com/ai/feed/
+    fetch_interval_minutes: 120
+    source_weight: 1.2
+
+  # Anthropic often has no official RSS; ingest as HTML
+  - id: anthropic_news
+    name: Anthropic Newsroom
+    type: html
+    url: https://www.anthropic.com/news
+    fetch_interval_minutes: 60
+    source_weight: 1.3
+    parser_options:
+      list_mode: generic
+      article_mode: readability
+      respect_robots: true
+
+  # --- Hardware / infra with strong AI coverage ---
+  - id: nvidia_press_room_rss
+    name: NVIDIA Press Room (RSS)
+    type: rss
+    url: https://nvidianews.nvidia.com/rss
+    fetch_interval_minutes: 60
+    source_weight: 1.2
+
+  - id: nvidia_blog_rss
+    name: NVIDIA Blog (RSS)
+    type: rss
+    url: https://blogs.nvidia.com/blog/feed/
+    fetch_interval_minutes: 60
+    source_weight: 1.2
+
+  - id: nvidia_developer_blog_rss
+    name: NVIDIA Developer Blog (RSS)
+    type: rss
+    url: https://developer.nvidia.com/blog/feed/
+    fetch_interval_minutes: 120
+    source_weight: 1.1
+
+  # --- Top science / research-ish news streams ---
+  - id: mit_ai_topic
+    name: MIT News — Artificial Intelligence (topic RSS)
+    type: rss
+    url: https://news.mit.edu/rss/topic/artificial-intelligence2
+    fetch_interval_minutes: 120
+    source_weight: 1.2
+
+  - id: distill
+    name: Distill (ML articles)
+    type: rss
+    url: https://distill.pub/rss.xml
+    fetch_interval_minutes: 720
+    source_weight: 1.0
+
+  - id: fastai
+    name: fast.ai
+    type: rss
+    url: http://www.fast.ai/atom.xml?format=xml
+    fetch_interval_minutes: 720
+    source_weight: 1.0
+
+  - id: bair
+    name: Berkeley AI Research (BAIR) Blog
+    type: rss
+    url: http://bair.berkeley.edu/blog/feed.xml
+    fetch_interval_minutes: 360
+    source_weight: 1.1
+
+  # --- Major tech/business outlets (filter by AI relevance in your scorer) ---
+  - id: techcrunch_main
+    name: TechCrunch (main feed)
+    type: rss
+    url: https://techcrunch.com/feed/
+    fetch_interval_minutes: 30
+    source_weight: 1.0
+
+  - id: venturebeat_main
+    name: VentureBeat (main feed)
+    type: rss
+    url: https://venturebeat.com/feed/
+    fetch_interval_minutes: 30
+    source_weight: 1.0
+
+  - id: the_verge_main
+    name: The Verge (main feed)
+    type: rss
+    url: https://www.theverge.com/rss/index.xml
+    fetch_interval_minutes: 60
+    source_weight: 0.9
+
+  - id: ars_technica
+    name: Ars Technica
+    type: rss
+    url: https://feeds.arstechnica.com/arstechnica/index/
+    fetch_interval_minutes: 60
+    source_weight: 0.9
+
+  - id: wired
+    name: WIRED
+    type: rss
+    url: https://www.wired.com/feed/rss
+    fetch_interval_minutes: 120
+    source_weight: 0.9
+
+  # --- Curated AI/ML specific feeds (from awesome-AI-feeds) ---
+  - id: machine_learning_mastery
+    name: Machine Learning Mastery
+    type: rss
+    url: http://machinelearningmastery.com/blog/feed
+    fetch_interval_minutes: 240
+    source_weight: 0.9
+
+  - id: ai_in_the_news_aitopics
+    name: AITopics — AI in the News (FeedBurner)
+    type: rss
+    url: http://feeds.feedburner.com/AIInTheNews
+    fetch_interval_minutes: 180
+    source_weight: 0.9
+
+  - id: machinelearnings_co
+    name: Machine Learnings (newsletter/feed)
+    type: rss
+    url: https://machinelearnings.co/feed
+    fetch_interval_minutes: 240
+    source_weight: 0.9
+
+  - id: inbenta_blog
+    name: Inbenta Blog (AI/NLP/chatbots)
+    type: rss
+    url: https://www.inbenta.com/en/blog/feed
+    fetch_interval_minutes: 360
+    source_weight: 0.8
+
+  - id: clarifai_blog
+    name: Clarifai Blog
+    type: rss
+    url: http://blog.clarifai.com/feed
+    fetch_interval_minutes: 360
+    source_weight: 0.8
+
+  - id: datarobot_blog
+    name: DataRobot Blog
+    type: rss
+    url: https://www.datarobot.com/blog/feed
+    fetch_interval_minutes: 360
+    source_weight: 0.8
+
+  - id: miri_blog
+    name: Machine Intelligence Research Institute (MIRI)
+    type: rss
+    url: https://intelligence.org/blog/feed
+    fetch_interval_minutes: 720
+    source_weight: 0.9
+
+  - id: iris_ai
+    name: Iris.ai Blog
+    type: rss
+    url: https://iris.ai/feed
+    fetch_interval_minutes: 720
+    source_weight: 0.7
+
+  - id: datumbox
+    name: DatumBox (ML/Stats/Software)
+    type: rss
+    url: http://blog.datumbox.com/feed
+    fetch_interval_minutes: 720
+    source_weight: 0.7
+
+  - id: aiweekly
+    name: AI Weekly (issues RSS)
+    type: rss
+    url: http://aiweekly.co/issues.rss
+    fetch_interval_minutes: 240
+    source_weight: 0.8
+
+  - id: aiweirdness
+    name: AI Weirdness
+    type: rss
+    url: http://aiweirdness.com/rss
+    fetch_interval_minutes: 720
+    source_weight: 0.6
+
+  - id: becominghuman
+    name: Becoming Human (AI magazine)
+    type: rss
+    url: https://becominghuman.ai/feed
+    fetch_interval_minutes: 720
+    source_weight: 0.6
+
+  - id: kdnuggets_rnn_tag
+    name: KDnuggets — Recurrent Neural Networks tag
+    type: rss
+    url: https://www.kdnuggets.com/tag/recurrent-neural-networks/feed
+    fetch_interval_minutes: 360
+    source_weight: 0.6
+
+  - id: paperspace_blog
+    name: Paperspace Blog
+    type: rss
+    url: https://blog.paperspace.com/feed
+    fetch_interval_minutes: 360
+    source_weight: 0.7
+
+  - id: wildml
+    name: WildML
+    type: rss
+    url: http://www.wildml.com/feed/?x=1
+    fetch_interval_minutes: 720
+    source_weight: 0.8
+
+  - id: machinethink
+    name: Machine, Think!
+    type: rss
+    url: http://machinethink.net/blog/index.xml
+    fetch_interval_minutes: 720
+    source_weight: 0.7
+
+  - id: marketing_ai_institute
+    name: Marketing AI Institute
+    type: rss
+    url: http://www.marketingaiinstitute.com/blog/rss.xml
+    fetch_interval_minutes: 360
+    source_weight: 0.6
+
+  - id: yseop
+    name: Yseop Blog
+    type: rss
+    url: https://yseop.com/feed
+    fetch_interval_minutes: 720
+    source_weight: 0.6
+
+  - id: rainbird
+    name: Rainbird AI Blog
+    type: rss
+    url: http://rainbird.ai/blog/feed
+    fetch_interval_minutes: 720
+    source_weight: 0.6
+
+  - id: brighterion
+    name: Brighterion Blog
+    type: rss
+    url: http://brighterion.com/feed
+    fetch_interval_minutes: 720
+    source_weight: 0.6
+
+  - id: paralleldots
+    name: ParallelDots Blog
+    type: rss
+    url: https://blog.paralleldots.com/feed
+    fetch_interval_minutes: 720
+    source_weight: 0.6
+
+  - id: aylien_nlp
+    name: AYLIEN NLP Blog
+    type: rss
+    url: http://blog.aylien.com/rss
+    fetch_interval_minutes: 720
+    source_weight: 0.6
+
+  - id: meaningcloud
+    name: MeaningCloud Blog
+    type: rss
+    url: https://www.meaningcloud.com/blog/feed
+    fetch_interval_minutes: 720
+    source_weight: 0.6
+
+  - id: lexalytics
+    name: Lexalytics Blog
+    type: rss
+    url: https://www.lexalytics.com/lexablog/feed
+    fetch_interval_minutes: 720
+    source_weight: 0.6
+
+  - id: bitext
+    name: Bitext Blog
+    type: rss
+    url: https://blog.bitext.com/rss.xml
+    fetch_interval_minutes: 720
+    source_weight: 0.6
+
+  - id: scibite
+    name: SciBite Blog
+    type: rss
+    url: https://www.scibite.com/feed
+    fetch_interval_minutes: 720
+    source_weight: 0.6
+
+  - id: searchblox
+    name: SearchBlox Blog
+    type: rss
+    url: https://www.searchblox.com/blog/feed
+    fetch_interval_minutes: 720
+    source_weight: 0.5
+
+  - id: linguamatics
+    name: Linguamatics Blog
+    type: rss
+    url: https://www.linguamatics.com/blog/rss-feed
+    fetch_interval_minutes: 720
+    source_weight: 0.5
+
+  - id: nactem
+    name: NaCTeM Featured RSS
+    type: rss
+    url: http://www.nactem.ac.uk/rss_featured.php
+    fetch_interval_minutes: 720
+    source_weight: 0.5
+
+  - id: odintext
+    name: OdinText Blog
+    type: rss
+    url: http://odintext.com/blog/feed
+    fetch_interval_minutes: 720
+    source_weight: 0.5
+
+  - id: keatext
+    name: Keatext Insights
+    type: rss
+    url: https://www.keatext.ai/customer-experience-insights/feed
+    fetch_interval_minutes: 720
+    source_weight: 0.5
+
+  - id: paulhcleverley
+    name: Paul H. Cleverley (enterprise search/ML)
+    type: rss
+    url: https://paulhcleverley.com/feed
+    fetch_interval_minutes: 720
+    source_weight: 0.5
+
+  # --- Medium feeds (optional; can be noisy) ---
+  - id: ai_roadmap_institute_medium
+    name: AI Roadmap Institute (Medium)
+    type: rss
+    url: https://medium.com/feed/ai-roadmap-institute
+    fetch_interval_minutes: 360
+    source_weight: 0.5
+
+  - id: archieai_medium
+    name: Archie.AI (Medium)
+    type: rss
+    url: https://medium.com/feed/archieai
+    fetch_interval_minutes: 360
+    source_weight: 0.4
+
+  # --- Additional “general ML/AI vendors & blogs” ---
+  - id: expertsystem
+    name: Expert System Blog
+    type: rss
+    url: http://www.expertsystem.com/blog/feed
+    fetch_interval_minutes: 720
+    source_weight: 0.5
+
+  - id: fusemachines
+    name: Fusemachines Blog
+    type: rss
+    url: http://blog.fusemachines.com/feed
+    fetch_interval_minutes: 720
+    source_weight: 0.4
+
+  - id: marek_rosa
+    name: Marek Rosa Dev Blog
+    type: rss
+    url: http://blog.marekrosa.org/feeds/posts/default
+    fetch_interval_minutes: 720
+    source_weight: 0.4
+
+  - id: datascience_fair_ml
+    name: DataFlair — Machine Learning category
+    type: rss
+    url: https://data-flair.training/blogs/category/machine-learning/feed
+    fetch_interval_minutes: 720
+    source_weight: 0.4
+
+  - id: extremetech_neural_networks
+    name: ExtremeTech — neural networks tag
+    type: rss
+    url: https://www.extremetech.com/tag/neural-networks/feed
+    fetch_interval_minutes: 360
+    source_weight: 0.4
+
+  - id: hackaday_neural_network
+    name: Hackaday — neural-network tag
+    type: rss
+    url: https://hackaday.com/tag/neural-network/feed
+    fetch_interval_minutes: 360
+    source_weight: 0.4
+
+  - id: hackerearth_ml
+    name: HackerEarth — Machine Learning
+    type: rss
+    url: http://blog.hackerearth.com/machine-learning/feed
+    fetch_interval_minutes: 720
+    source_weight: 0.4

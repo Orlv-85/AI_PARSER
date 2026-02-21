@@ -1,0 +1,17 @@
+README.md
+pyproject.toml
+src/ai_news_collector.egg-info/PKG-INFO
+src/ai_news_collector.egg-info/SOURCES.txt
+src/ai_news_collector.egg-info/dependency_links.txt
+src/ai_news_collector.egg-info/entry_points.txt
+src/ai_news_collector.egg-info/requires.txt
+src/ai_news_collector.egg-info/top_level.txt
+src/app/__init__.py
+src/app/cli/__init__.py
+src/app/cli/main.py
+src/app/config/__init__.py
+src/app/config/settings.py
+src/app/config/sources.py
+src/app/core/__init__.py
+src/app/ingest/__init__.py
+src/app/storage/__init__.py

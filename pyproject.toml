@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-news-collector"
+version = "0.1.0"
+description = "Spec-driven AI news collector MVP"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "alembic>=1.16.0",
+  "feedparser>=6.0.11",
+  "httpx>=0.28.1",
+  "pydantic>=2.11.0",
+  "pydantic-settings>=2.10.0",
+  "pyyaml>=6.0.2",
+  "readability-lxml>=0.8.4.1",
+  "sqlalchemy>=2.0.44",
+  "trafilatura>=2.0.0",
+  "typer>=0.16.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.4.0",
+  "ruff>=0.12.0",
+]
+
+[project.scripts]
+ai-news = "app.cli.main:app"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-q"

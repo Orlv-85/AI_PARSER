@@ -1,0 +1,2 @@
+[console_scripts]
+ai-news = app.cli.main:app

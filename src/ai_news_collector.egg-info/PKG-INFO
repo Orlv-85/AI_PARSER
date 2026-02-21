@@ -1,0 +1,77 @@
+Metadata-Version: 2.4
+Name: ai-news-collector
+Version: 0.1.0
+Summary: Spec-driven AI news collector MVP
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: alembic>=1.16.0
+Requires-Dist: feedparser>=6.0.11
+Requires-Dist: httpx>=0.28.1
+Requires-Dist: pydantic>=2.11.0
+Requires-Dist: pydantic-settings>=2.10.0
+Requires-Dist: pyyaml>=6.0.2
+Requires-Dist: readability-lxml>=0.8.4.1
+Requires-Dist: sqlalchemy>=2.0.44
+Requires-Dist: trafilatura>=2.0.0
+Requires-Dist: typer>=0.16.1
+Provides-Extra: dev
+Requires-Dist: pytest>=8.4.0; extra == "dev"
+Requires-Dist: ruff>=0.12.0; extra == "dev"
+
+# AI News Collector
+
+Spec-driven Python application for collecting fresh English-language AI news.
+
+## Status
+
+Bootstrap phase completed (T1). Implementation tasks follow Spec Kit artifacts in `.specify/`.
+
+## Requirements
+
+- Python 3.12+
+- `uv` (recommended) or `pip`
+
+## Quick Start
+
+```bash
+uv venv
+source .venv/bin/activate
+uv pip install -e ".[dev]"
+```
+
+## Project Layout
+
+```text
+src/app/
+  cli/
+  config/
+  core/
+  ingest/
+  storage/
+tests/
+  unit/
+  integration/
+.specify/
+```
+
+## Spec Artifacts
+
+- `.specify/memory/constitution.md`
+- `.specify/specs/001-ai-news-collector/spec.md`
+- `.specify/specs/001-ai-news-collector/plan.md`
+- `.specify/specs/001-ai-news-collector/tasks.md`
+
+## Planned CLI Commands
+
+- `ai-news fetch --once`
+- `ai-news top --hours 24 --limit 30`
+- `ai-news search --query "..." --days 7`
+- `ai-news sources`
+
+## Development
+
+```bash
+ruff check .
+pytest
+```
+
