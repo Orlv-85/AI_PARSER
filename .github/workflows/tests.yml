@@ -12,11 +12,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build runtime image (Python 3.14)
-        run: docker build --target runtime --build-arg PYTHON_IMAGE=python:3.14-slim -t ai-news-runtime:${{ github.sha }} .
-
       - name: Build test image (Python 3.14)
-        run: docker build --target test --build-arg PYTHON_IMAGE=python:3.14-slim -t ai-news-test:${{ github.sha }} .
+        run: docker build -f build/Dockerfile --target test --build-arg PYTHON_IMAGE=python:3.14-slim -t ai-news-test:${{ github.sha }} .
 
       - name: Run tests in Docker with coverage
         run: docker run --rm ai-news-test:${{ github.sha }}
