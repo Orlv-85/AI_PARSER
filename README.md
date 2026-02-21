@@ -21,7 +21,7 @@ pip install -e ".[dev]"
 ### Build image
 
 ```bash
-docker build -t ai-news-collector:latest .
+docker build -f build/Dockerfile -t ai-news-collector:latest .
 ```
 
 ### Run container

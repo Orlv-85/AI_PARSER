@@ -1,4 +1,5 @@
 alembic>=1.16.0
+fastapi>=0.116.0
 feedparser>=6.0.11
 httpx>=0.28.1
 pydantic>=2.11.0
@@ -8,6 +9,7 @@ readability-lxml>=0.8.4.1
 sqlalchemy>=2.0.44
 trafilatura>=2.0.0
 typer>=0.16.1
+uvicorn>=0.35.0
 
 [dev]
 coverage>=7.10.0

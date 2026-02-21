@@ -15,6 +15,8 @@ RUN apt-get update \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+COPY build/requirements.txt ./build/requirements.txt
+COPY build/requirements-dev.txt ./build/requirements-dev.txt
 COPY pyproject.toml README.md alembic.ini ./
 COPY src ./src
 COPY sources.yaml ./sources.yaml
@@ -23,7 +25,8 @@ COPY run_web.sh ./run_web.sh
 
 FROM base AS runtime
 
-RUN pip install .
+RUN pip install -r ./build/requirements.txt \
+    && pip install --no-deps .
 
 RUN mkdir -p /app/data
 
@@ -38,7 +41,8 @@ FROM base AS test
 
 COPY tests ./tests
 
-RUN pip install -e ".[dev]"
+RUN pip install -r ./build/requirements-dev.txt \
+    && pip install --no-deps -e .
 
 CMD ["./scripts/run_tests_with_coverage.sh"]
 

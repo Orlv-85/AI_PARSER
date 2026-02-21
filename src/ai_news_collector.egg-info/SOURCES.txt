@@ -16,6 +16,7 @@ src/app/core/__init__.py
 src/app/core/canonicalize.py
 src/app/core/dedup.py
 src/app/core/models.py
+src/app/core/pipeline.py
 src/app/core/scoring.py
 src/app/ingest/__init__.py
 src/app/ingest/fetcher.py
@@ -29,3 +30,9 @@ src/app/storage/models_sql.py
 src/app/storage/repos.py
 src/app/storage/migrations/env.py
 src/app/storage/migrations/versions/d5686ed0fc60_create_initial_tables.py
+src/app/web/__init__.py
+src/app/web/app.py
+src/app/web/index.html
+src/app/web/models.py
+src/app/web/service.py
+src/app/web/settings_store.py

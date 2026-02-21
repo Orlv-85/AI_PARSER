@@ -5,6 +5,7 @@ Summary: Spec-driven AI news collector MVP
 Requires-Python: >=3.12
 Description-Content-Type: text/markdown
 Requires-Dist: alembic>=1.16.0
+Requires-Dist: fastapi>=0.116.0
 Requires-Dist: feedparser>=6.0.11
 Requires-Dist: httpx>=0.28.1
 Requires-Dist: pydantic>=2.11.0
@@ -14,6 +15,7 @@ Requires-Dist: readability-lxml>=0.8.4.1
 Requires-Dist: sqlalchemy>=2.0.44
 Requires-Dist: trafilatura>=2.0.0
 Requires-Dist: typer>=0.16.1
+Requires-Dist: uvicorn>=0.35.0
 Provides-Extra: dev
 Requires-Dist: coverage>=7.10.0; extra == "dev"
 Requires-Dist: mypy>=1.18.0; extra == "dev"
@@ -39,6 +41,71 @@ Spec-driven Python application for collecting fresh English-language AI news fro
 python -m venv venv1
 source venv1/bin/activate
 pip install -e ".[dev]"
+```
+
+## Run In Docker
+
+### Build image
+
+```bash
+docker build -f build/Dockerfile -t ai-news-collector:latest .
+```
+
+### Run container
+
+```bash
+mkdir -p data
+docker run -d \
+  --name ai-news \
+  -p 8010:8010 \
+  -e AINEWS_DATABASE_URL="sqlite:///./data/ai_news.db" \
+  -e AINEWS_SOURCES_PATH="/app/sources.yaml" \
+  -v "$(pwd)/data:/app/data" \
+  -v "$(pwd)/sources.yaml:/app/sources.yaml:ro" \
+  ai-news-collector:latest
+```
+
+### Run with Docker Compose
+
+```bash
+mkdir -p data
+docker compose up -d --build
+```
+
+### Healthcheck
+
+```bash
+curl -fsS http://127.0.0.1:8010/health
+docker ps --filter name=ai-news
+```
+
+### Auto-start on reboot (systemd)
+
+1. Copy project to server, for example into `/opt/ai-news`.
+2. Install unit file:
+
+```bash
+sudo cp deploy/ai-news.service /etc/systemd/system/ai-news.service
+```
+
+3. If your path is not `/opt/ai-news`, update `WorkingDirectory`:
+
+```bash
+sudo systemctl edit --full ai-news.service
+```
+
+4. Enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now ai-news.service
+```
+
+5. Check status/logs:
+
+```bash
+sudo systemctl status ai-news.service
+docker compose -f /opt/ai-news/docker-compose.yml logs -f
 ```
 
 ## Configuration
