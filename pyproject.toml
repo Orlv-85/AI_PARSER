@@ -23,8 +23,13 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "coverage>=7.10.0",
+  "mypy>=1.18.0",
+  "pylint>=3.3.0",
   "pytest>=8.4.0",
+  "pytest-cov>=7.0.0",
   "ruff>=0.12.0",
+  "types-PyYAML>=6.0.12.20250915",
 ]
 
 [project.scripts]
@@ -48,3 +53,44 @@ select = ["E", "F", "I", "UP", "B"]
 minversion = "8.0"
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.coverage.run]
+branch = true
+source = ["src/app"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+namespace_packages = true
+explicit_package_bases = true
+files = ["src", "tests"]
+
+[tool.pylint.main]
+py-version = "3.12"
+jobs = 1
+ignore-paths = ["^src/app/storage/migrations/"]
+
+[tool.pylint.format]
+max-line-length = 100
+
+[tool.pylint.messages_control]
+disable = [
+  "missing-module-docstring",
+  "missing-class-docstring",
+  "missing-function-docstring",
+  "too-few-public-methods",
+  "duplicate-code",
+  "trailing-newlines",
+  "line-too-long",
+  "too-many-locals",
+  "broad-exception-caught",
+  "logging-too-many-args",
+  "invalid-name",
+  "too-many-arguments",
+]

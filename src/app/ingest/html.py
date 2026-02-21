@@ -1,3 +1,4 @@
+from typing import cast
 from urllib.parse import urljoin
 
 import httpx
@@ -50,7 +51,7 @@ def extract_article_text(html_content: str, url: str, strategy: str | None = Non
             summary = Document(html_content).summary(html_partial=True)
             cleaned = lxml_html.fromstring(summary).text_content().strip()
             if cleaned:
-                return cleaned
+                return cast(str, cleaned)
 
     if strategy not in {"trafilatura", "readability"}:
         fallback = trafilatura.extract(html_content, url=url)
@@ -59,7 +60,7 @@ def extract_article_text(html_content: str, url: str, strategy: str | None = Non
         summary = Document(html_content).summary(html_partial=True)
         cleaned = lxml_html.fromstring(summary).text_content().strip()
         if cleaned:
-            return cleaned
+            return cast(str, cleaned)
     return None
 
 
@@ -80,7 +81,7 @@ def fetch_html(
             link_selector=source.html.link_selector,
         )
 
-        items: list[Article] = []
+        html_items: list[Article] = []
         for link in links:
             try:
                 article_html = fetcher.fetch_text(source_id=source.id, url=link)
@@ -91,7 +92,7 @@ def fetch_html(
                     url=link,
                     strategy=source.html.extraction_strategy,
                 )
-                items.append(
+                html_items.append(
                     Article(
                         source_key=source.id,
                         title=title,
@@ -104,7 +105,7 @@ def fetch_html(
             except Exception:
                 # Fail-soft: keep processing remaining links.
                 continue
-        return items
+        return html_items
 
     with httpx.Client(timeout=timeout_seconds, follow_redirects=True) as client:
         list_response = client.get(str(source.url))

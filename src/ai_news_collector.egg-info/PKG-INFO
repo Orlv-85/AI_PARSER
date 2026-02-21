@@ -15,58 +15,94 @@ Requires-Dist: sqlalchemy>=2.0.44
 Requires-Dist: trafilatura>=2.0.0
 Requires-Dist: typer>=0.16.1
 Provides-Extra: dev
+Requires-Dist: coverage>=7.10.0; extra == "dev"
+Requires-Dist: mypy>=1.18.0; extra == "dev"
+Requires-Dist: pylint>=3.3.0; extra == "dev"
 Requires-Dist: pytest>=8.4.0; extra == "dev"
+Requires-Dist: pytest-cov>=7.0.0; extra == "dev"
 Requires-Dist: ruff>=0.12.0; extra == "dev"
+Requires-Dist: types-PyYAML>=6.0.12.20250915; extra == "dev"
 
 # AI News Collector
 
-Spec-driven Python application for collecting fresh English-language AI news.
-
-## Status
-
-Bootstrap phase completed (T1). Implementation tasks follow Spec Kit artifacts in `.specify/`.
+Spec-driven Python application for collecting fresh English-language AI news from configured RSS/HTML sources.
 
 ## Requirements
 
 - Python 3.12+
-- `uv` (recommended) or `pip`
+- SQLite (bundled with Python)
+- `pip` or `uv`
 
-## Quick Start
+## Installation
 
 ```bash
-uv venv
-source .venv/bin/activate
-uv pip install -e ".[dev]"
+python -m venv venv1
+source venv1/bin/activate
+pip install -e ".[dev]"
 ```
 
-## Project Layout
+## Configuration
 
-```text
-src/app/
-  cli/
-  config/
-  core/
-  ingest/
-  storage/
-tests/
-  unit/
-  integration/
-.specify/
+### 1) Environment variables
+
+```bash
+export AINEWS_DATABASE_URL="sqlite:///./data/ai_news.db"
+export AINEWS_SOURCES_PATH="sources.yaml"
+export AINEWS_REQUEST_TIMEOUT_SECONDS="15"
+export AINEWS_MAX_RETRIES="3"
+export AINEWS_PER_SOURCE_MIN_INTERVAL_SECONDS="1.0"
+export AINEWS_RESPECT_ROBOTS_TXT="true"
 ```
 
-## Spec Artifacts
+### 2) Source list (`sources.yaml`)
 
-- `.specify/memory/constitution.md`
-- `.specify/specs/001-ai-news-collector/spec.md`
-- `.specify/specs/001-ai-news-collector/plan.md`
-- `.specify/specs/001-ai-news-collector/tasks.md`
+Project includes a starter `sources.yaml` with RSS + HTML sources.
 
-## Planned CLI Commands
+Source schema:
 
-- `ai-news fetch --once`
-- `ai-news top --hours 24 --limit 30`
-- `ai-news search --query "..." --days 7`
-- `ai-news sources`
+- `id`
+- `name`
+- `type`: `rss` or `html`
+- `url`
+- `enabled`
+- `fetch_interval_minutes`
+- `source_weight`
+- `html` (required for `type: html`)
+
+## CLI Usage
+
+### Show configured sources
+
+```bash
+ai-news sources
+```
+
+### Fetch once
+
+```bash
+ai-news fetch --once
+```
+
+### Top news
+
+```bash
+ai-news top --hours 24 --limit 30
+```
+
+### Search
+
+```bash
+ai-news search --query "gpt" --days 7
+```
+
+## What the MVP does
+
+- Ingests RSS and HTML sources.
+- Normalizes content into a unified article model.
+- Canonicalizes URLs and prevents duplicate inserts by canonical hash.
+- Scores articles with freshness + AI relevance heuristics.
+- Stores data in SQLite via SQLAlchemy and Alembic migrations.
+- Emits structured JSON logs for fetch runs.
 
 ## Development
 
@@ -75,3 +111,16 @@ ruff check .
 pytest
 ```
 
+## Troubleshooting
+
+- `ModuleNotFoundError`: activate `venv1` and reinstall with `pip install -e ".[dev]"`.
+- `sqlite3.OperationalError: unable to open database file`: create `data/` directory or fix `AINEWS_DATABASE_URL`.
+- Empty `top` results: run `ai-news fetch --once` first and verify enabled sources in `sources.yaml`.
+- Source fetch errors: check network access and source availability; fetch run logs include `source_id`, `stage`, `error_type`.
+
+## Spec Artifacts
+
+- `.specify/memory/constitution.md`
+- `.specify/specs/001-ai-news-collector/spec.md`
+- `.specify/specs/001-ai-news-collector/plan.md`
+- `.specify/specs/001-ai-news-collector/tasks.md`

@@ -16,7 +16,7 @@ from app.storage.repos import ArticleRepo, SourceRepo
 
 def _build_test_articles() -> list[Article]:
     rss_fixture = Path("tests/fixtures/rss/sample_feed.xml").read_bytes()
-    rss_items = parse_rss(source_key="rss_source", content=rss_fixture)
+    rss_items: list[Article] = parse_rss(source_key="rss_source", content=rss_fixture)
 
     list_html = Path("tests/fixtures/html/list_page.html").read_text(encoding="utf-8")
     article_html = Path("tests/fixtures/html/article_page.html").read_text(encoding="utf-8")

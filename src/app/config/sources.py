@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field, HttpUrl, ValidationError, field_validator, model_validator
@@ -66,13 +66,14 @@ def load_sources(path: Path) -> list[SourceConfig]:
     if raw is None:
         return []
 
+    payload: dict[str, Any]
     if isinstance(raw, list):
         payload = {"sources": raw}
     elif isinstance(raw, dict):
         defaults = SourceDefaults.model_validate(raw.get("defaults", {}))
-        merged_sources = []
+        merged_sources: list[dict[str, Any]] = []
         for source in raw.get("sources", []):
-            merged = {
+            merged: dict[str, Any] = {
                 "language": defaults.language,
                 "enabled": defaults.enabled,
                 "fetch_interval_minutes": defaults.fetch_interval_minutes,
