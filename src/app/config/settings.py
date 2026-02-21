@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     max_retries: int = 3
     concurrency_limit: int = 8
     per_source_min_interval_seconds: float = 1.0
+    rss_extract_full_text: bool = True
+    rss_full_text_max_items_per_source: int = 20
     respect_robots_txt: bool = True
     auth_enabled: bool = False
     auth_username: str | None = None

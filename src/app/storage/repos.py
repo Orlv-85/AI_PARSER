@@ -201,6 +201,38 @@ class ArticleRepo:
             for row in self.session.execute(base_stmt).all()
         ]
 
+    def list_for_agent(
+        self,
+        *,
+        hours: int,
+        limit: int,
+        query: str | None,
+        days: int,
+        sort: str,
+        min_ai_relevance: float = 0.0,
+    ) -> list[tuple[Article, str | None, str | None]]:
+        return self.list_for_view(
+            hours=hours,
+            limit=limit,
+            query=query,
+            days=days,
+            sort=sort,
+            min_ai_relevance=min_ai_relevance,
+        )
+
+    def get_article_for_agent(
+        self, *, article_id: int
+    ) -> tuple[Article, str | None, str | None] | None:
+        stmt = (
+            select(Article, Source.source_key, Source.name)
+            .outerjoin(Source, Article.source_id == Source.id)
+            .where(Article.id == article_id)
+        )
+        row = self.session.execute(stmt).one_or_none()
+        if row is None:
+            return None
+        return row[0], row[1], row[2]
+
     def count_older_than(self, *, older_than_days: int) -> int:
         cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
         stmt = select(Article.id).where(Article.published_at < cutoff)

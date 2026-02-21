@@ -145,6 +145,19 @@ def test_serve_command(monkeypatch) -> None:
     assert captured == {"app": "app.web.app:app", "host": "0.0.0.0", "port": 9000}
 
 
+def test_mcp_serve_command_invokes_mcp_server_runner(monkeypatch) -> None:
+    calls = {"count": 0}
+
+    def _run_mcp_server() -> None:
+        calls["count"] += 1
+
+    monkeypatch.setattr(cli_main, "run_mcp_server", _run_mcp_server, raising=False)
+
+    cli_main.mcp_serve()
+
+    assert calls["count"] == 1
+
+
 def test_prune_command_dry_run_and_apply(monkeypatch) -> None:
     emitted: list[str] = []
     commits: list[str] = []

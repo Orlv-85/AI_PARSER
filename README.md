@@ -257,6 +257,24 @@ ai-news top --hours 24 --limit 30
 ai-news search --query "gpt" --days 7
 ```
 
+### Run MCP server (for agent clients)
+
+```bash
+ai-news mcp-serve
+```
+
+Available MCP tools:
+- `news.update`
+- `news.update_status`
+- `news.list`
+- `news.get`
+
+Typical agent flow:
+1. Call `news.update` (`wait=false` for async or `wait=true` for blocking mode).
+2. Poll `news.update_status` until `finished`/`failed`.
+3. Call `news.list` to get dataset slice.
+4. Call `news.get` for full plain-text article content.
+
 ### Prune old news
 
 ```bash
@@ -273,6 +291,7 @@ ai-news prune --older-than-days 100 --dry-run
 - Stores data in SQLite via SQLAlchemy and Alembic migrations.
 - Supports PostgreSQL in production with Alembic migrations.
 - Emits structured JSON logs for fetch runs.
+- Exposes MCP tools for agent-driven update and analysis workflows.
 
 ## Development
 
@@ -294,3 +313,17 @@ pytest
 - `.specify/specs/001-ai-news-collector/spec.md`
 - `.specify/specs/001-ai-news-collector/plan.md`
 - `.specify/specs/001-ai-news-collector/tasks.md`
+
+## Agent Architecture Notes
+
+You do not need a separate repository for the agent that uses MCP.
+
+Recommended setup:
+- Keep parser + MCP server in this project/repo.
+- Run analyst agent as a separate process/client (it connects to MCP and reads prepared article text).
+- Share the same database/storage backend.
+
+Create a separate project for the analyst only if you need:
+- independent release cycle,
+- different runtime/dependency stack,
+- stricter security/isolation boundaries.

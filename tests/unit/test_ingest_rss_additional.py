@@ -1,5 +1,7 @@
+import logging
 from time import struct_time
 
+from app.core.models import Article
 from app.ingest.rss import _to_datetime, fetch_rss, parse_rss
 
 
@@ -80,3 +82,97 @@ def test_fetch_rss_uses_fetcher_and_httpx_branches(monkeypatch) -> None:
 
     assert via_fetcher == ["ok"]
     assert via_httpx == ["ok"]
+
+
+def test_fetch_rss_extract_full_text_enriches_only_first_n(monkeypatch) -> None:
+    items = [
+        Article(source_key="s", title="A", url="https://example.com/a"),
+        Article(source_key="s", title="B", url="https://example.com/b"),
+        Article(source_key="s", title="C", url="https://example.com/c"),
+    ]
+    monkeypatch.setattr("app.ingest.rss.parse_rss", lambda source_key, content: items)
+    calls: list[str] = []
+
+    def _fake_extract_linked_article_text(**kwargs):
+        calls.append(kwargs["link"])
+        return f"text for {kwargs['link']}"
+
+    monkeypatch.setattr(
+        "app.ingest.rss._extract_linked_article_text",
+        _fake_extract_linked_article_text,
+    )
+
+    result = fetch_rss(
+        "s",
+        "https://example.com/feed",
+        fetcher=_Fetcher(b"<rss></rss>"),
+        extract_full_text=True,
+        full_text_max_items=2,
+    )
+
+    assert len(result) == 3
+    assert result[0].content == "text for https://example.com/a"
+    assert result[1].content == "text for https://example.com/b"
+    assert result[2].content is None
+    assert calls == ["https://example.com/a", "https://example.com/b"]
+
+
+def test_fetch_rss_extract_full_text_fail_soft_logs_and_continues(monkeypatch, caplog) -> None:
+    items = [
+        Article(source_key="s", title="A", url="https://example.com/a"),
+        Article(source_key="s", title="B", url="https://example.com/b"),
+    ]
+    monkeypatch.setattr("app.ingest.rss.parse_rss", lambda source_key, content: items)
+
+    calls: list[str] = []
+
+    def _fake_extract_linked_article_text(**kwargs):
+        calls.append(kwargs["link"])
+        if kwargs["link"].endswith("/a"):
+            raise RuntimeError("extract failed")
+        return "ok text"
+
+    monkeypatch.setattr(
+        "app.ingest.rss._extract_linked_article_text",
+        _fake_extract_linked_article_text,
+    )
+    caplog.set_level(logging.WARNING, logger="app.ingest.rss")
+
+    result = fetch_rss(
+        "s",
+        "https://example.com/feed",
+        fetcher=_Fetcher(b"<rss></rss>"),
+        extract_full_text=True,
+    )
+
+    assert result[0].content is None
+    assert result[1].content == "ok text"
+    assert calls == ["https://example.com/a", "https://example.com/b"]
+    assert "extract" in caplog.text.lower()
+    assert "https://example.com/a" in caplog.text
+
+
+def test_fetch_rss_extract_full_text_disabled(monkeypatch) -> None:
+    items = [Article(source_key="s", title="A", url="https://example.com/a")]
+    monkeypatch.setattr("app.ingest.rss.parse_rss", lambda source_key, content: items)
+    called = {"value": False}
+
+    def _fake_extract_linked_article_text(**kwargs):
+        _ = kwargs
+        called["value"] = True
+        return "text"
+
+    monkeypatch.setattr(
+        "app.ingest.rss._extract_linked_article_text",
+        _fake_extract_linked_article_text,
+    )
+
+    result = fetch_rss(
+        "s",
+        "https://example.com/feed",
+        fetcher=_Fetcher(b"<rss></rss>"),
+        extract_full_text=False,
+    )
+
+    assert result[0].content is None
+    assert called["value"] is False

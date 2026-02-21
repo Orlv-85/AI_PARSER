@@ -4,6 +4,7 @@ import uvicorn
 from app.config.settings import get_settings
 from app.config.sources import load_sources
 from app.core.pipeline import run_fetch_cycle
+from app.mcp.server import run_mcp_server
 from app.observability import setup_json_logging
 from app.storage import SessionLocal, create_all
 from app.storage.repos import ArticleRepo
@@ -50,6 +51,11 @@ def serve(
     port: int = typer.Option(8000, "--port", min=1, max=65535),
 ) -> None:
     uvicorn.run("app.web.app:app", host=host, port=port)
+
+
+@app.command()
+def mcp_serve() -> None:
+    run_mcp_server()
 
 
 @app.command()

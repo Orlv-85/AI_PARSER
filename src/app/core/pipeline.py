@@ -62,6 +62,8 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                         str(config.url),
                         settings.request_timeout_seconds,
                         fetcher=fetcher,
+                        extract_full_text=settings.rss_extract_full_text,
+                        full_text_max_items=settings.rss_full_text_max_items_per_source,
                     )
                 else:
                     items = fetch_html(
