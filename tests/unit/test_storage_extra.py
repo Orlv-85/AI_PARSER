@@ -153,3 +153,56 @@ def test_source_repo_and_article_repo_paths() -> None:
 
     found = article_repo.search(query="leg", days=30, limit=10)
     assert [row.title for row in found] == ["Old"]
+
+
+def test_list_for_view_applies_sort_with_query() -> None:
+    session = _session()
+    article_repo = ArticleRepo(session)
+    now = datetime.now(UTC)
+
+    article_repo.insert_article(
+        source_id=None,
+        title="AI Recent Lower Rank",
+        url="https://example.com/recent",
+        url_canonical="https://example.com/recent",
+        url_canonical_hash="q1",
+        published_at=now - timedelta(hours=1),
+        summary="ai summary",
+        content="ai content",
+        rank_score=0.2,
+    )
+    article_repo.insert_article(
+        source_id=None,
+        title="AI Older Higher Rank",
+        url="https://example.com/older",
+        url_canonical="https://example.com/older",
+        url_canonical_hash="q2",
+        published_at=now - timedelta(hours=2),
+        summary="ai summary",
+        content="ai content",
+        rank_score=0.9,
+    )
+
+    by_rank = article_repo.list_for_view(
+        hours=24,
+        limit=10,
+        query="ai",
+        days=7,
+        sort="rank",
+    )
+    by_published = article_repo.list_for_view(
+        hours=24,
+        limit=10,
+        query="ai",
+        days=7,
+        sort="published",
+    )
+
+    assert [row[0].title for row in by_rank] == [
+        "AI Older Higher Rank",
+        "AI Recent Lower Rank",
+    ]
+    assert [row[0].title for row in by_published] == [
+        "AI Recent Lower Rank",
+        "AI Older Higher Rank",
+    ]

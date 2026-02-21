@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, desc, select
 from sqlalchemy.orm import Session
 
 from app.config.sources import SourceConfig
@@ -135,3 +135,56 @@ class ArticleRepo:
             .limit(limit)
         )
         return list(self.session.scalars(stmt).all())
+
+    def list_for_view(
+        self,
+        *,
+        hours: int,
+        limit: int,
+        query: str | None,
+        days: int,
+        sort: str,
+    ) -> list[tuple[Article, str | None, str | None]]:
+        base_stmt = (
+            select(Article, Source.source_key, Source.name)
+            .outerjoin(Source, Article.source_id == Source.id)
+            .limit(limit)
+        )
+        if query:
+            window_start = datetime.now(UTC) - timedelta(days=days)
+            ilike = f"%{query}%"
+            base_stmt = (
+                base_stmt.where(Article.published_at >= window_start)
+                .where(
+                    Article.title.ilike(ilike)
+                    | Article.summary.ilike(ilike)
+                    | Article.content.ilike(ilike)
+                )
+            )
+            if sort == "published":
+                base_stmt = base_stmt.order_by(
+                    Article.published_at.desc(),
+                    desc(Article.rank_score),
+                )
+            else:
+                base_stmt = base_stmt.order_by(
+                    Article.rank_score.desc(),
+                    Article.published_at.desc(),
+                )
+        else:
+            window_start = datetime.now(UTC) - timedelta(hours=hours)
+            base_stmt = base_stmt.where(Article.published_at >= window_start)
+            if sort == "published":
+                base_stmt = base_stmt.order_by(
+                    Article.published_at.desc(),
+                    desc(Article.rank_score),
+                )
+            else:
+                base_stmt = base_stmt.order_by(
+                    Article.rank_score.desc(),
+                    Article.published_at.desc(),
+                )
+        return [
+            (row[0], row[1], row[2])
+            for row in self.session.execute(base_stmt).all()
+        ]
