@@ -11,3 +11,5 @@ tmp/
 *.db
 .coverage
 *.egg-info/
+.codex/skills/multi-agent-orchestration-universal/
+.env
