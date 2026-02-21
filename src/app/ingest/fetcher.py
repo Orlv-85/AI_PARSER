@@ -4,12 +4,19 @@ from dataclasses import dataclass, field
 
 import httpx
 
+DEFAULT_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/122.0.0.0 Safari/537.36"
+)
+
 
 @dataclass
 class Fetcher:
     timeout_seconds: float = 15.0
     max_retries: int = 3
     per_source_min_interval_seconds: float = 1.0
+    user_agent: str = DEFAULT_USER_AGENT
     _next_allowed_time: dict[str, float] = field(default_factory=dict)
 
     def _respect_rate_limit(self, source_id: str) -> None:
@@ -22,7 +29,11 @@ class Fetcher:
     def request(self, *, source_id: str, url: str) -> httpx.Response:
         self._respect_rate_limit(source_id)
         last_error: Exception | None = None
-        with httpx.Client(timeout=self.timeout_seconds, follow_redirects=True) as client:
+        with httpx.Client(
+            timeout=self.timeout_seconds,
+            follow_redirects=True,
+            headers={"User-Agent": self.user_agent},
+        ) as client:
             for attempt in range(self.max_retries + 1):
                 try:
                     response = client.get(url)
@@ -49,4 +60,3 @@ class Fetcher:
 
     def fetch_bytes(self, *, source_id: str, url: str) -> bytes:
         return self.request(source_id=source_id, url=url).content
-

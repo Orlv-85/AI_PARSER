@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI News Collector</title>
+    <style>
+      :root {
+        --bg: #f4f6f8;
+        --panel: #132238;
+        --panel-accent: #1d3656;
+        --text: #0f172a;
+        --muted: #64748b;
+        --surface: #ffffff;
+        --border: #dbe3ec;
+        --primary: #0d9488;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        color: var(--text);
+        background: linear-gradient(135deg, #eef3f8, #f9fbfc);
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 240px 1fr;
+        min-height: 100vh;
+      }
+      .sidebar {
+        background: linear-gradient(180deg, var(--panel), #0f1c2f);
+        color: #e2e8f0;
+        padding: 24px 16px;
+      }
+      .brand {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 24px;
+      }
+      .nav-btn {
+        width: 100%;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        background: transparent;
+        color: #cbd5e1;
+        padding: 12px;
+        margin: 0 0 10px;
+        text-align: left;
+        cursor: pointer;
+      }
+      .nav-btn.active {
+        background: var(--panel-accent);
+        color: #f8fafc;
+        border-color: #27486f;
+      }
+      .content {
+        padding: 20px;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 16px;
+        margin-bottom: 16px;
+      }
+      .hidden { display: none; }
+      .row {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .field label {
+        font-size: 13px;
+        color: var(--muted);
+        display: block;
+        margin-bottom: 6px;
+      }
+      .field input {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px;
+      }
+      .btn {
+        border: none;
+        border-radius: 10px;
+        padding: 10px 14px;
+        cursor: pointer;
+        margin-right: 10px;
+      }
+      .btn-primary { background: var(--primary); color: #fff; }
+      .btn-secondary { background: #e2e8f0; color: #1e293b; }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      th, td {
+        text-align: left;
+        padding: 10px 8px;
+        border-bottom: 1px solid var(--border);
+      }
+      .status { color: var(--muted); font-size: 14px; }
+      .status.error { color: #b91c1c; }
+      .status.success { color: #047857; }
+      .status-box {
+        margin-top: 12px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px;
+        background: #f8fafc;
+      }
+      .field small {
+        display: block;
+        margin-top: 6px;
+        min-height: 18px;
+        color: #b91c1c;
+      }
+      .empty {
+        padding: 12px;
+        border-radius: 10px;
+        border: 1px dashed var(--border);
+        color: var(--muted);
+        margin-top: 12px;
+      }
+      @media (max-width: 900px) {
+        .layout { grid-template-columns: 1fr; }
+        .sidebar { padding: 12px; }
+        .row { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand">AI News Collector</div>
+        <button class="nav-btn active" id="btn-update">Update</button>
+        <button class="nav-btn" id="btn-view">View</button>
+      </aside>
+      <main class="content">
+        <section id="page-update">
+          <div class="card">
+            <h2>Update Sources</h2>
+            <p class="status" id="run-status">Status: idle</p>
+            <p class="status" id="run-error"></p>
+            <button class="btn btn-primary" id="run-update">Run update</button>
+            <button class="btn btn-secondary" id="refresh-status">Refresh status</button>
+            <div class="status-box" id="run-details">
+              <div>Run ID: <span id="run-id">-</span></div>
+              <div>Started: <span id="run-started">-</span></div>
+              <div>Finished: <span id="run-finished">-</span></div>
+              <div>
+                Counters:
+                fetched=<span id="run-fetched">0</span>,
+                new=<span id="run-new">0</span>,
+                duplicates=<span id="run-duplicates">0</span>,
+                errors=<span id="run-errors">0</span>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Update Parameters</h3>
+            <p class="status" id="settings-status"></p>
+            <div class="row">
+              <div class="field">
+                <label>Request timeout (s)</label>
+                <input id="request_timeout_seconds" type="number" step="0.1" />
+                <small id="err-request_timeout_seconds"></small>
+              </div>
+              <div class="field">
+                <label>Max retries</label>
+                <input id="max_retries" type="number" />
+                <small id="err-max_retries"></small>
+              </div>
+              <div class="field">
+                <label>Min interval per source (s)</label>
+                <input id="per_source_min_interval_seconds" type="number" step="0.1" />
+                <small id="err-per_source_min_interval_seconds"></small>
+              </div>
+              <div class="field">
+                <label>Concurrency limit</label>
+                <input id="concurrency_limit" type="number" />
+                <small id="err-concurrency_limit"></small>
+              </div>
+            </div>
+            <div style="margin-top: 12px">
+              <button class="btn btn-primary" id="save-settings">Save settings</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="page-view" class="hidden">
+          <div class="card">
+            <h2>Parsed News</h2>
+            <div class="row">
+              <div class="field">
+                <label>Hours</label>
+                <input id="hours" type="number" value="24" />
+              </div>
+              <div class="field">
+                <label>Limit</label>
+                <input id="limit" type="number" value="30" />
+              </div>
+              <div class="field">
+                <label>Search query (optional)</label>
+                <input id="query" type="text" placeholder="ai" />
+              </div>
+              <div class="field">
+                <label>Query recency days</label>
+                <input id="days" type="number" value="7" />
+              </div>
+              <div class="field">
+                <label>Sort</label>
+                <select id="sort">
+                  <option value="rank">Rank</option>
+                  <option value="published">Published</option>
+                </select>
+              </div>
+            </div>
+            <div style="margin-top: 12px">
+              <button class="btn btn-primary" id="load-news">Load news</button>
+            </div>
+            <p class="status" id="news-status"></p>
+            <div class="empty hidden" id="news-empty">No articles found for selected filters.</div>
+            <table id="news-table">
+              <thead>
+                <tr>
+                  <th>Published</th>
+                  <th>Rank</th>
+                  <th>Source</th>
+                  <th>Title</th>
+                  <th>URL</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const updateBtn = $("btn-update");
+      const viewBtn = $("btn-view");
+      const pageUpdate = $("page-update");
+      const pageView = $("page-view");
+      let pollTimer = null;
+
+      function setStatus(id, text, level = "") {
+        const el = $(id);
+        el.textContent = text;
+        el.classList.remove("error", "success");
+        if (level) {
+          el.classList.add(level);
+        }
+      }
+
+      function showPage(name) {
+        const update = name === "update";
+        pageUpdate.classList.toggle("hidden", !update);
+        pageView.classList.toggle("hidden", update);
+        updateBtn.classList.toggle("active", update);
+        viewBtn.classList.toggle("active", !update);
+      }
+
+      updateBtn.addEventListener("click", () => showPage("update"));
+      viewBtn.addEventListener("click", () => showPage("view"));
+
+      function clearSettingErrors() {
+        for (const field of [
+          "request_timeout_seconds",
+          "max_retries",
+          "per_source_min_interval_seconds",
+          "concurrency_limit",
+        ]) {
+          $(`err-${field}`).textContent = "";
+        }
+      }
+
+      function validateSettings(payload) {
+        const errors = {};
+        if (!(payload.request_timeout_seconds > 0 && payload.request_timeout_seconds <= 120)) {
+          errors.request_timeout_seconds = "Must be > 0 and <= 120";
+        }
+        if (!(payload.max_retries >= 0 && payload.max_retries <= 10)) {
+          errors.max_retries = "Must be between 0 and 10";
+        }
+        if (!(payload.per_source_min_interval_seconds >= 0 && payload.per_source_min_interval_seconds <= 60)) {
+          errors.per_source_min_interval_seconds = "Must be between 0 and 60";
+        }
+        if (!(payload.concurrency_limit >= 1 && payload.concurrency_limit <= 64)) {
+          errors.concurrency_limit = "Must be between 1 and 64";
+        }
+        return errors;
+      }
+
+      async function loadSettings() {
+        setStatus("settings-status", "");
+        try {
+          const response = await fetch("/api/update/settings");
+          const settings = await response.json();
+          $("request_timeout_seconds").value = settings.request_timeout_seconds;
+          $("max_retries").value = settings.max_retries;
+          $("per_source_min_interval_seconds").value = settings.per_source_min_interval_seconds;
+          $("concurrency_limit").value = settings.concurrency_limit;
+        } catch (error) {
+          setStatus("settings-status", `Failed to load settings: ${error}`, "error");
+        }
+      }
+
+      async function saveSettings() {
+        clearSettingErrors();
+        const payload = {
+          request_timeout_seconds: Number($("request_timeout_seconds").value),
+          max_retries: Number($("max_retries").value),
+          per_source_min_interval_seconds: Number($("per_source_min_interval_seconds").value),
+          concurrency_limit: Number($("concurrency_limit").value),
+        };
+        const localErrors = validateSettings(payload);
+        if (Object.keys(localErrors).length > 0) {
+          for (const [field, message] of Object.entries(localErrors)) {
+            $(`err-${field}`).textContent = message;
+          }
+          setStatus("settings-status", "Validation failed. Fix highlighted fields.", "error");
+          return;
+        }
+        const response = await fetch("/api/update/settings", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+          let detail = "Failed to save settings";
+          try {
+            const errorBody = await response.json();
+            if (Array.isArray(errorBody.detail)) {
+              for (const item of errorBody.detail) {
+                const field = item.loc[item.loc.length - 1];
+                if ($(`err-${field}`)) {
+                  $(`err-${field}`).textContent = item.msg;
+                }
+              }
+              detail = "Validation failed. Fix highlighted fields.";
+            } else if (typeof errorBody.detail === "string") {
+              detail = errorBody.detail;
+            }
+          } catch (_ignored) {}
+          setStatus("settings-status", detail, "error");
+          return;
+        }
+        setStatus("settings-status", "Settings saved.", "success");
+      }
+
+      async function runUpdate() {
+        setStatus("run-error", "");
+        const response = await fetch("/api/update/run", { method: "POST" });
+        if (response.status === 409) {
+          setStatus("run-error", "Update is already running.", "error");
+          return;
+        }
+        if (!response.ok) {
+          setStatus("run-error", "Failed to start update.", "error");
+          return;
+        }
+        await refreshStatus();
+      }
+
+      function renderRunStatus(status) {
+        $("run-id").textContent = status.run_id || "-";
+        $("run-started").textContent = status.started_at || "-";
+        $("run-finished").textContent = status.finished_at || "-";
+        $("run-fetched").textContent = status.fetched;
+        $("run-new").textContent = status.new;
+        $("run-duplicates").textContent = status.duplicates;
+        $("run-errors").textContent = status.errors;
+        const line = `Status: ${status.status}`;
+        if (status.status === "failed" && status.error_message) {
+          setStatus("run-status", `${line}; ${status.error_message}`, "error");
+        } else {
+          setStatus("run-status", line, status.status === "finished" ? "success" : "");
+        }
+      }
+
+      function syncPolling(status) {
+        if (status === "running" && pollTimer === null) {
+          pollTimer = setInterval(refreshStatus, 1500);
+        }
+        if (status !== "running" && pollTimer !== null) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+        }
+      }
+
+      async function refreshStatus() {
+        try {
+          const response = await fetch("/api/update/status");
+          if (!response.ok) {
+            setStatus("run-error", "Unable to read update status.", "error");
+            return;
+          }
+          const status = await response.json();
+          renderRunStatus(status);
+          syncPolling(status.status);
+        } catch (error) {
+          setStatus("run-error", `Unable to read update status: ${error}`, "error");
+        }
+      }
+
+      async function loadNews() {
+        const hours = Number($("hours").value);
+        const limit = Number($("limit").value);
+        const query = $("query").value.trim();
+        const days = Number($("days").value);
+        const sort = $("sort").value;
+        const params = new URLSearchParams({ hours: String(hours), limit: String(limit), days: String(days), sort });
+        if (query) params.set("query", query);
+
+        setStatus("news-status", "");
+        $("news-empty").classList.add("hidden");
+        const tbody = document.querySelector("#news-table tbody");
+        tbody.innerHTML = "";
+        try {
+          const response = await fetch(`/api/news?${params.toString()}`);
+          if (!response.ok) {
+            let detail = "Failed to load news.";
+            try {
+              const body = await response.json();
+              if (typeof body.detail === "string") detail = body.detail;
+            } catch (_ignored) {}
+            setStatus("news-status", detail, "error");
+            return;
+          }
+          const items = await response.json();
+          if (items.length === 0) {
+            $("news-empty").classList.remove("hidden");
+            return;
+          }
+          for (const item of items) {
+            const row = document.createElement("tr");
+            const sourceLabel = item.source_name || item.source_key || (item.source_id !== null ? `#${item.source_id}` : "n/a");
+
+            const publishedCell = document.createElement("td");
+            publishedCell.textContent = item.published_at;
+            row.appendChild(publishedCell);
+
+            const rankCell = document.createElement("td");
+            rankCell.textContent = Number(item.rank_score).toFixed(3);
+            row.appendChild(rankCell);
+
+            const sourceCell = document.createElement("td");
+            sourceCell.textContent = sourceLabel;
+            row.appendChild(sourceCell);
+
+            const titleCell = document.createElement("td");
+            titleCell.textContent = item.title;
+            row.appendChild(titleCell);
+
+            const urlCell = document.createElement("td");
+            const link = document.createElement("a");
+            link.textContent = "link";
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            try {
+              link.href = new URL(item.url_canonical, window.location.origin).toString();
+            } catch (_ignored) {
+              link.removeAttribute("href");
+            }
+            urlCell.appendChild(link);
+            row.appendChild(urlCell);
+
+            tbody.appendChild(row);
+          }
+        } catch (_error) {
+          setStatus(
+            "news-status",
+            "Unable to load news due to a network error. Please retry.",
+            "error",
+          );
+        }
+      }
+
+      $("save-settings").addEventListener("click", saveSettings);
+      $("run-update").addEventListener("click", runUpdate);
+      $("refresh-status").addEventListener("click", refreshStatus);
+      $("load-news").addEventListener("click", loadNews);
+
+      loadSettings();
+      refreshStatus();
+      loadNews();
+    </script>
+  </body>
+</html>
