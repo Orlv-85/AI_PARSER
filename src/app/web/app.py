@@ -29,6 +29,10 @@ def create_app() -> FastAPI:
     def index() -> str:
         return _render_index()
 
+    @api.get("/health")
+    def health() -> dict[str, str]:
+        return {"status": "ok"}
+
     @api.get("/api/update/settings", response_model=WebUpdateSettings)
     def get_update_settings() -> WebUpdateSettings:
         return settings_store.load()
