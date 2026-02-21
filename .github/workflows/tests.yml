@@ -1,0 +1,19 @@
+name: tests
+
+on:
+  push:
+    branches:
+      - "**"
+
+jobs:
+  docker-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build test image (Python 3.14)
+        run: docker build -f build/Dockerfile --target test --build-arg PYTHON_IMAGE=python:3.14-slim -t ai-news-test:${{ github.sha }} .
+
+      - name: Run tests in Docker with coverage
+        run: docker run --rm ai-news-test:${{ github.sha }}

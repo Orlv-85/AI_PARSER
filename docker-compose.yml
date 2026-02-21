@@ -2,7 +2,7 @@ services:
   ai-news:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: build/Dockerfile
     container_name: ai-news
     restart: unless-stopped
     environment:

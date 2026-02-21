@@ -79,3 +79,32 @@ def search(
         articles = repo.search(query=query, days=days)
         for article in articles:
             typer.echo(f"{article.published_at.isoformat()}\t{article.title}\t{article.url_canonical}")
+
+
+@app.command()
+def prune(
+    older_than_days: int = typer.Option(100, "--older-than-days", min=1),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Only show how many rows would be deleted.",
+    ),
+) -> None:
+    create_all()
+    with SessionLocal() as session:
+        repo = ArticleRepo(session)
+        if dry_run:
+            old_articles = repo.count_older_than(older_than_days=older_than_days)
+            typer.echo(
+                "prune dry-run: "
+                f"older_than_days={older_than_days} "
+                f"articles_to_delete={old_articles}"
+            )
+            return
+
+        deleted_articles, deleted_aliases = repo.prune_older_than(older_than_days=older_than_days)
+        session.commit()
+        typer.echo(
+            f"prune complete: older_than_days={older_than_days} "
+            f"deleted_articles={deleted_articles} deleted_aliases={deleted_aliases}"
+        )

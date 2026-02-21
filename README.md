@@ -21,7 +21,7 @@ pip install -e ".[dev]"
 ### Build image
 
 ```bash
-docker build -t ai-news-collector:latest .
+docker build -f build/Dockerfile -t ai-news-collector:latest .
 ```
 
 ### Run container
@@ -44,6 +44,71 @@ docker run -d \
 mkdir -p data
 docker compose up -d --build
 ```
+
+## Production Deploy (PostgreSQL + Git Tags)
+
+### 1) Prepare server once
+
+```bash
+sudo mkdir -p /opt/ai-news
+sudo chown "$USER":"$USER" /opt/ai-news
+git clone https://github.com/Orlv-85/AI_PARSER.git /opt/ai-news
+cd /opt/ai-news
+cp deploy/.env.prod.example .env
+```
+
+Edit `.env` and set strong `POSTGRES_PASSWORD`.
+
+### 2) Manual deploy command on server
+
+```bash
+cd /opt/ai-news
+./scripts/deploy_prod.sh
+```
+
+What this does:
+- starts/updates PostgreSQL container
+- runs `alembic upgrade head`
+- starts/updates app container
+- runs retention cleanup (`ai-news prune --older-than-days 100` by default)
+- verifies app health
+
+If schema didn't change, migration step is a no-op.
+
+### 3) Deploy via GitHub Action on tag
+
+Create repository variables/secrets:
+- `DEPLOY_HOST` (repo variable)
+- `DEPLOY_USER` (repo variable)
+- `DEPLOY_APP_DIR` (repo variable, optional, default `/opt/ai-news`)
+- `DEPLOY_SSH_PRIVATE_KEY` (repo secret)
+
+Then push a tag from `master`:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Workflow `.github/workflows/deploy-release.yml` will SSH to server and run deploy.
+
+### 4) Maintenance and backups
+
+Retention + VACUUM:
+
+```bash
+./scripts/db_maintenance.sh
+```
+
+Backup:
+
+```bash
+./scripts/db_backup.sh
+```
+
+Nightly maintenance workflow:
+- `.github/workflows/db-maintenance.yml`
+- runs DB maintenance and backup over SSH (same deploy credentials)
 
 ### Healthcheck
 
@@ -135,6 +200,13 @@ ai-news top --hours 24 --limit 30
 ai-news search --query "gpt" --days 7
 ```
 
+### Prune old news
+
+```bash
+ai-news prune --older-than-days 100
+ai-news prune --older-than-days 100 --dry-run
+```
+
 ## What the MVP does
 
 - Ingests RSS and HTML sources.
@@ -142,6 +214,7 @@ ai-news search --query "gpt" --days 7
 - Canonicalizes URLs and prevents duplicate inserts by canonical hash.
 - Scores articles with freshness + AI relevance heuristics.
 - Stores data in SQLite via SQLAlchemy and Alembic migrations.
+- Supports PostgreSQL in production with Alembic migrations.
 - Emits structured JSON logs for fetch runs.
 
 ## Development

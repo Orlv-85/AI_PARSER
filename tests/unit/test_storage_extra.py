@@ -282,3 +282,53 @@ def test_list_for_view_applies_rank_sort_without_query() -> None:
         "Older High Rank 2",
         "Recent Low Rank 2",
     ]
+
+
+def test_prune_older_than_and_count() -> None:
+    session = _session()
+    source_repo = SourceRepo(session)
+    article_repo = ArticleRepo(session)
+    now = datetime.now(UTC)
+    source = source_repo.upsert_source(
+        SourceConfig(
+            id="prune_source",
+            name="Prune Source",
+            type="rss",
+            url="https://example.com/prune-feed",
+            enabled=True,
+        )
+    )
+
+    recent, _ = article_repo.insert_article(
+        source_id=None,
+        title="Recent",
+        url="https://example.com/recent-prune",
+        url_canonical="https://example.com/recent-prune",
+        url_canonical_hash="pr1",
+        published_at=now - timedelta(days=5),
+    )
+    old, _ = article_repo.insert_article(
+        source_id=None,
+        title="Old",
+        url="https://example.com/old-prune",
+        url_canonical="https://example.com/old-prune",
+        url_canonical_hash="pr2",
+        published_at=now - timedelta(days=150),
+    )
+    article_repo.add_alias(
+        article_id=old.id,
+        source_id=source.id,
+        url="https://example.com/old-prune/alias",
+    )
+    session.commit()
+
+    assert article_repo.count_older_than(older_than_days=100) == 1
+    deleted_articles, deleted_aliases = article_repo.prune_older_than(older_than_days=100)
+    session.commit()
+
+    assert deleted_articles == 1
+    assert deleted_aliases == 1
+    assert article_repo.count_older_than(older_than_days=100) == 0
+
+    remaining = article_repo.search(query="Recent", days=365, limit=10)
+    assert [row.id for row in remaining] == [recent.id]

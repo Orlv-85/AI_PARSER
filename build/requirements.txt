@@ -1,0 +1,13 @@
+alembic==1.18.4
+fastapi==0.129.1
+feedparser==6.0.12
+httpx==0.28.1
+pydantic==2.12.5
+pydantic-settings==2.13.1
+psycopg[binary]==3.2.12
+pyyaml==6.0.3
+readability-lxml==0.8.4.1
+sqlalchemy==2.0.46
+trafilatura==2.0.0
+typer==0.24.0
+uvicorn==0.41.0
