@@ -87,6 +87,7 @@ def fetch(once: bool = typer.Option(True, "--once", help="Run a single fetch cyc
                     )
             except Exception as exc:
                 error_count += 1
+                cause = exc.__cause__
                 logger.error(
                     "source_fetch_failed",
                     {
@@ -95,6 +96,9 @@ def fetch(once: bool = typer.Option(True, "--once", help="Run a single fetch cyc
                         "stage": "fetch",
                         "url": str(config.url),
                         "error_type": type(exc).__name__,
+                        "error_message": str(exc),
+                        "cause_type": type(cause).__name__ if cause else None,
+                        "cause_message": str(cause) if cause else None,
                     },
                 )
                 continue
