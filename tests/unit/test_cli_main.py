@@ -33,11 +33,12 @@ class _ArticleRepo:
         self.session = session
         self._insert_calls = 0
 
-    def insert_article(self, **kwargs):
+    def insert_article(self, **_kwargs):
         self._insert_calls += 1
         return SimpleNamespace(id=self._insert_calls), self._insert_calls == 1
 
     def query_top(self, *, hours: int, limit: int):
+        _ = (hours, limit)
         return [
             SimpleNamespace(
                 rank_score=0.9,
@@ -48,6 +49,7 @@ class _ArticleRepo:
         ]
 
     def search(self, *, query: str, days: int):
+        _ = days
         return [
             SimpleNamespace(
                 published_at=datetime(2026, 2, 21, 11, 0, tzinfo=UTC),
@@ -77,8 +79,12 @@ def test_main_callback_noop() -> None:
 
 def test_sources_command_outputs_rows(monkeypatch) -> None:
     emitted: list[str] = []
-    monkeypatch.setattr(cli_main.typer, "echo", lambda msg: emitted.append(msg))
-    monkeypatch.setattr(cli_main, "get_settings", lambda: SimpleNamespace(sources_path="sources.yaml"))
+    monkeypatch.setattr(cli_main.typer, "echo", emitted.append)
+    monkeypatch.setattr(
+        cli_main,
+        "get_settings",
+        lambda: SimpleNamespace(sources_path="sources.yaml"),
+    )
     monkeypatch.setattr(
         cli_main,
         "load_sources",
@@ -113,7 +119,13 @@ def test_fetch_command_handles_success_duplicates_and_errors(monkeypatch) -> Non
         per_source_min_interval_seconds=0.0,
     )
     sources = [
-        SourceConfig(id="disabled", name="D", type="rss", url="https://example.com/d", enabled=False),
+        SourceConfig(
+            id="disabled",
+            name="D",
+            type="rss",
+            url="https://example.com/d",
+            enabled=False,
+        ),
         SourceConfig(id="rss_ok", name="R", type="rss", url="https://example.com/r", enabled=True),
         SourceConfig(
             id="html_fail",
@@ -130,7 +142,7 @@ def test_fetch_command_handles_success_duplicates_and_errors(monkeypatch) -> Non
         Article(source_key="rss_ok", title="t2", url="https://example.com/2", published_at=None),
     ]
 
-    monkeypatch.setattr(cli_main.typer, "echo", lambda msg: emitted.append(msg))
+    monkeypatch.setattr(cli_main.typer, "echo", emitted.append)
     monkeypatch.setattr(cli_main, "get_settings", lambda: settings)
     monkeypatch.setattr(cli_main, "setup_json_logging", lambda: logger)
     monkeypatch.setattr(cli_main, "load_sources", lambda path: sources)
@@ -166,9 +178,13 @@ def test_fetch_command_rejects_non_once_mode() -> None:
 
 def test_top_and_search_commands(monkeypatch) -> None:
     emitted: list[str] = []
-    monkeypatch.setattr(cli_main.typer, "echo", lambda msg: emitted.append(msg))
+
+    def _build_session() -> _SessionCM:
+        return _SessionCM()
+
+    monkeypatch.setattr(cli_main.typer, "echo", emitted.append)
     monkeypatch.setattr(cli_main, "create_all", lambda: None)
-    monkeypatch.setattr(cli_main, "SessionLocal", lambda: _SessionCM())
+    monkeypatch.setattr(cli_main, "SessionLocal", _build_session)
     monkeypatch.setattr(cli_main, "ArticleRepo", _ArticleRepo)
 
     cli_main.top(hours=48, limit=5)

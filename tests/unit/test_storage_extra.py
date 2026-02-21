@@ -26,7 +26,10 @@ def test_build_engine_uses_settings_database_url(monkeypatch) -> None:
         captured["future"] = future
         return "engine"
 
-    monkeypatch.setattr("app.storage.db.get_settings", lambda: _Settings())
+    def _fake_get_settings():
+        return _Settings()
+
+    monkeypatch.setattr("app.storage.db.get_settings", _fake_get_settings)
     monkeypatch.setattr("app.storage.db.create_engine", _fake_create_engine)
 
     assert db.build_engine() == "engine"

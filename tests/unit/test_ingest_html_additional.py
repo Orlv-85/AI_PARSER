@@ -9,6 +9,7 @@ class _StaticFetcher:
         self.mapping = mapping
 
     def fetch_text(self, *, source_id: str, url: str) -> str:
+        _ = source_id
         value = self.mapping[url]
         if value == "__error__":
             raise RuntimeError("fetch failed")
@@ -72,6 +73,7 @@ def test_extract_article_text_uses_readability_when_trafilatura_empty(monkeypatc
             self.html = html
 
         def summary(self, html_partial: bool = True) -> str:
+            _ = html_partial
             return "<div>Readable</div>"
 
     monkeypatch.setattr("app.ingest.html.trafilatura.extract", lambda html, url: "")
@@ -87,12 +89,16 @@ def test_extract_article_text_returns_none_when_extractors_fail(monkeypatch) -> 
             self.html = html
 
         def summary(self, html_partial: bool = True) -> str:
+            _ = html_partial
             return "<div>   </div>"
 
     monkeypatch.setattr("app.ingest.html.trafilatura.extract", lambda html, url: None)
     monkeypatch.setattr("app.ingest.html.Document", _Doc)
 
-    assert extract_article_text("<html></html>", "https://example.com", strategy="readability") is None
+    assert (
+        extract_article_text("<html></html>", "https://example.com", strategy="readability")
+        is None
+    )
 
 
 def test_extract_article_text_fallback_readability_for_unknown_strategy(monkeypatch) -> None:
@@ -101,6 +107,7 @@ def test_extract_article_text_fallback_readability_for_unknown_strategy(monkeypa
             self.html = html
 
         def summary(self, html_partial: bool = True) -> str:
+            _ = html_partial
             return "<div>Fallback Readability</div>"
 
     monkeypatch.setattr("app.ingest.html.trafilatura.extract", lambda html, url: None)
@@ -110,12 +117,15 @@ def test_extract_article_text_fallback_readability_for_unknown_strategy(monkeypa
     assert text == "Fallback Readability"
 
 
-def test_extract_article_text_unknown_strategy_returns_none_when_fallback_empty(monkeypatch) -> None:
+def test_extract_article_text_unknown_strategy_returns_none_when_fallback_empty(
+    monkeypatch,
+) -> None:
     class _Doc:
         def __init__(self, html: str) -> None:
             self.html = html
 
         def summary(self, html_partial: bool = True) -> str:
+            _ = html_partial
             return "<div>   </div>"
 
     monkeypatch.setattr("app.ingest.html.trafilatura.extract", lambda html, url: None)
@@ -127,7 +137,7 @@ def test_extract_article_text_unknown_strategy_returns_none_when_fallback_empty(
 
 def test_fetch_html_returns_empty_for_non_html_source() -> None:
     source = SourceConfig(id="rss_source", name="RSS", type="rss", url="https://example.com/feed")
-    assert fetch_html(source) == []
+    assert not fetch_html(source)
 
 
 def test_fetch_html_uses_fetcher_and_fail_soft(monkeypatch) -> None:

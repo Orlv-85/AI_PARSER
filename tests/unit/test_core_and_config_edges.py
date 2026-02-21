@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 import pytest
 
 from app.config.sources import SourceConfig, load_sources
+from app.core import scoring
 from app.core.canonicalize import canonicalize_url
 from app.core.dedup import simhash64
 from app.core.models import Article
@@ -66,8 +67,6 @@ def test_ai_relevance_uses_content_weight() -> None:
 
 
 def test_ai_relevance_skips_keywords_in_stop_words(monkeypatch) -> None:
-    from app.core import scoring
-
     monkeypatch.setitem(scoring.AI_KEYWORDS, "zzstop", 1.0)
     monkeypatch.setattr(scoring, "STOP_WORDS", scoring.STOP_WORDS | {"zzstop"})
     article = Article(source_key="s", title="zzstop", url="https://example.com")

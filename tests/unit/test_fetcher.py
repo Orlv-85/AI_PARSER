@@ -26,6 +26,7 @@ class _Client:
         return False
 
     def get(self, url: str):
+        _ = url
         outcome = self._outcomes.pop(0)
         if isinstance(outcome, Exception):
             raise outcome
@@ -37,6 +38,7 @@ class _ClientFactory:
         self._outcomes = outcomes
 
     def __call__(self, **kwargs):
+        _ = kwargs
         return _Client(self._outcomes)
 
 
@@ -47,7 +49,10 @@ def test_request_retries_and_returns_response(monkeypatch) -> None:
     monkeypatch.setattr("app.ingest.fetcher.httpx.Client", _ClientFactory([error, response]))
 
     sleeps: list[float] = []
-    monkeypatch.setattr("app.ingest.fetcher.time.sleep", lambda seconds: sleeps.append(seconds))
+    def _record_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr("app.ingest.fetcher.time.sleep", _record_sleep)
 
     fetcher = Fetcher(max_retries=2)
     result = fetcher.request(source_id="s1", url="https://example.com")
@@ -78,9 +83,13 @@ def test_respect_rate_limit_sleeps_until_allowed(monkeypatch) -> None:
     monkeypatch.setattr("app.ingest.fetcher.time.monotonic", lambda: next(timeline))
 
     slept: list[float] = []
-    monkeypatch.setattr("app.ingest.fetcher.time.sleep", lambda seconds: slept.append(seconds))
+    def _record_sleep(seconds: float) -> None:
+        slept.append(seconds)
+
+    monkeypatch.setattr("app.ingest.fetcher.time.sleep", _record_sleep)
 
     fetcher = Fetcher(per_source_min_interval_seconds=2.0)
+    # pylint: disable=protected-access
     fetcher._respect_rate_limit("source")
     fetcher._respect_rate_limit("source")
 

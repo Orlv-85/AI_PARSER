@@ -1,7 +1,5 @@
 from time import struct_time
 
-import httpx
-
 from app.ingest.rss import _to_datetime, fetch_rss, parse_rss
 
 
@@ -10,6 +8,7 @@ class _Fetcher:
         self.content = content
 
     def fetch_bytes(self, *, source_id: str, url: str) -> bytes:
+        _ = (source_id, url)
         return self.content
 
 
@@ -32,6 +31,7 @@ class _Client:
         return False
 
     def get(self, url: str):
+        _ = url
         return _Response(self.content)
 
 

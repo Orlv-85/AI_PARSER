@@ -97,8 +97,8 @@ def fetch(once: bool = typer.Option(True, "--once", help="Run a single fetch cyc
                         "url": str(config.url),
                         "error_type": type(exc).__name__,
                         "error_message": str(exc),
-                        "cause_type": type(cause).__name__ if cause else None,
-                        "cause_message": str(cause) if cause else None,
+                        "cause_type": type(cause).__name__ if cause is not None else None,
+                        "cause_message": str(cause) if cause is not None else None,
                     },
                 )
                 continue
