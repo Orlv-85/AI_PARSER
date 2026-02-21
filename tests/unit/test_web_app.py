@@ -26,6 +26,9 @@ def test_web_app_pages_and_update_flow(monkeypatch, tmp_path) -> None:
     assert page.status_code == 200
     assert "Update" in page.text
     assert "View" in page.text
+    health = client.get("/health")
+    assert health.status_code == 200
+    assert health.json() == {"status": "ok"}
 
     current_settings = client.get("/api/update/settings")
     assert current_settings.status_code == 200
@@ -139,6 +142,7 @@ def test_news_view_filters_and_source_fields(monkeypatch, tmp_path) -> None:
     assert captured == {
         "hours": 12,
         "limit": 15,
+        "min_ai_relevance": 0.2,
         "query": "ai",
         "days": 5,
         "sort": "published",

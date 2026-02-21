@@ -33,3 +33,12 @@ def test_rank_score_combines_signal_weights() -> None:
     assert 0.0 <= score <= 1.0
     assert score > 0.8
 
+
+def test_ai_keyword_uses_word_boundary() -> None:
+    article = Article(
+        source_key="c",
+        title="Paid leave policy update",
+        url="https://example.com/c",
+        summary="General HR news.",
+    )
+    assert ai_relevance_score(article) == 0.0

@@ -35,21 +35,31 @@ def _normalize(text: str | None) -> str:
     return re.sub(r"\s+", " ", text).strip().lower()
 
 
+def _contains_keyword(text: str, keyword: str) -> bool:
+    # Avoid substring false positives like "paid" matching "ai".
+    pattern = rf"(?<!\w){re.escape(keyword)}(?!\w)"
+    return re.search(pattern, text) is not None
+
+
 def ai_relevance_score(article: Article) -> float:
     title = _normalize(article.title)
     summary = _normalize(article.summary)
     content = _normalize(article.content)
 
     score = 0.0
+    title_or_summary_hit = False
     for keyword, weight in AI_KEYWORDS.items():
         if keyword in STOP_WORDS:
             continue
-        if keyword in title:
+        if _contains_keyword(title, keyword):
             score += weight * 1.0
-        if keyword in summary:
+            title_or_summary_hit = True
+        if _contains_keyword(summary, keyword):
             score += weight * 0.6
-        if keyword in content:
-            score += weight * 0.3
+            title_or_summary_hit = True
+        if _contains_keyword(content, keyword):
+            # Content is noisy (boilerplate/navigation text), keep it as a weak signal.
+            score += weight * (0.15 if title_or_summary_hit else 0.03)
 
     return min(score / 5.0, 1.0)
 

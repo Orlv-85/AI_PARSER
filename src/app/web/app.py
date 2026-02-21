@@ -55,8 +55,10 @@ def create_app() -> FastAPI:
 
     @api.get("/api/news", response_model=list[NewsItem])
     def list_news(
+        *,
         hours: int = Query(24, ge=1, le=720),
         limit: int = Query(30, ge=1, le=200),
+        min_ai_relevance: float = Query(0.2, ge=0.0, le=1.0),
         query: str | None = None,
         days: int = Query(7, ge=1, le=365),
         sort: str = Query("rank", pattern="^(rank|published)$"),
@@ -69,6 +71,7 @@ def create_app() -> FastAPI:
                 rows = repo.list_for_view(
                     hours=hours,
                     limit=limit,
+                    min_ai_relevance=min_ai_relevance,
                     query=query,
                     days=days,
                     sort=sort,

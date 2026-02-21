@@ -56,11 +56,12 @@ def serve(
 def top(
     hours: int = typer.Option(24, "--hours", min=1),
     limit: int = typer.Option(30, "--limit", min=1, max=200),
+    min_ai_relevance: float = typer.Option(0.2, "--min-ai-relevance", min=0.0, max=1.0),
 ) -> None:
     create_all()
     with SessionLocal() as session:
         repo = ArticleRepo(session)
-        articles = repo.query_top(hours=hours, limit=limit)
+        articles = repo.query_top(hours=hours, limit=limit, min_ai_relevance=min_ai_relevance)
         for article in articles:
             typer.echo(
                 f"{article.rank_score:.3f}\t{article.published_at.isoformat()}\t{article.title}\t{article.url_canonical}"

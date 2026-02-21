@@ -16,8 +16,8 @@ class _ArticleRepo:
         self._insert_calls += 1
         return SimpleNamespace(id=self._insert_calls), self._insert_calls == 1
 
-    def query_top(self, *, hours: int, limit: int):
-        _ = (hours, limit)
+    def query_top(self, *, hours: int, limit: int, min_ai_relevance: float):
+        _ = (hours, limit, min_ai_relevance)
         return [
             SimpleNamespace(
                 rank_score=0.9,

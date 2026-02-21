@@ -57,6 +57,9 @@ class ArticleRepo:
         )
         existing = self.session.execute(existing_stmt).scalar_one_or_none()
         if existing is not None:
+            existing.ai_relevance_score = ai_relevance_score
+            existing.freshness_score = freshness_score
+            existing.rank_score = rank_score
             return existing, False
 
         article = Article(
@@ -110,11 +113,18 @@ class ArticleRepo:
             discovered_at=discovered_at,
         )
 
-    def query_top(self, *, hours: int = 24, limit: int = 30) -> list[Article]:
+    def query_top(
+        self,
+        *,
+        hours: int = 24,
+        limit: int = 30,
+        min_ai_relevance: float = 0.0,
+    ) -> list[Article]:
         window_start = datetime.now(UTC) - timedelta(hours=hours)
         stmt: Select[tuple[Article]] = (
             select(Article)
             .where(Article.published_at >= window_start)
+            .where(Article.ai_relevance_score >= min_ai_relevance)
             .order_by(Article.rank_score.desc(), Article.published_at.desc())
             .limit(limit)
         )
@@ -144,10 +154,12 @@ class ArticleRepo:
         query: str | None,
         days: int,
         sort: str,
+        min_ai_relevance: float = 0.0,
     ) -> list[tuple[Article, str | None, str | None]]:
         base_stmt = (
             select(Article, Source.source_key, Source.name)
             .outerjoin(Source, Article.source_id == Source.id)
+            .where(Article.ai_relevance_score >= min_ai_relevance)
             .limit(limit)
         )
         if query:

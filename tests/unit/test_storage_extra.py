@@ -206,3 +206,79 @@ def test_list_for_view_applies_sort_with_query() -> None:
         "AI Recent Lower Rank",
         "AI Older Higher Rank",
     ]
+
+
+def test_list_for_view_applies_sort_without_query() -> None:
+    session = _session()
+    article_repo = ArticleRepo(session)
+    now = datetime.now(UTC)
+
+    article_repo.insert_article(
+        source_id=None,
+        title="Recent Low Rank",
+        url="https://example.com/recent-no-query",
+        url_canonical="https://example.com/recent-no-query",
+        url_canonical_hash="nq1",
+        published_at=now - timedelta(hours=1),
+        rank_score=0.1,
+    )
+    article_repo.insert_article(
+        source_id=None,
+        title="Older High Rank",
+        url="https://example.com/older-no-query",
+        url_canonical="https://example.com/older-no-query",
+        url_canonical_hash="nq2",
+        published_at=now - timedelta(hours=2),
+        rank_score=0.9,
+    )
+
+    by_published = article_repo.list_for_view(
+        hours=24,
+        limit=10,
+        query=None,
+        days=7,
+        sort="published",
+    )
+
+    assert [row[0].title for row in by_published] == [
+        "Recent Low Rank",
+        "Older High Rank",
+    ]
+
+
+def test_list_for_view_applies_rank_sort_without_query() -> None:
+    session = _session()
+    article_repo = ArticleRepo(session)
+    now = datetime.now(UTC)
+
+    article_repo.insert_article(
+        source_id=None,
+        title="Recent Low Rank 2",
+        url="https://example.com/recent-no-query-rank",
+        url_canonical="https://example.com/recent-no-query-rank",
+        url_canonical_hash="nq3",
+        published_at=now - timedelta(hours=1),
+        rank_score=0.1,
+    )
+    article_repo.insert_article(
+        source_id=None,
+        title="Older High Rank 2",
+        url="https://example.com/older-no-query-rank",
+        url_canonical="https://example.com/older-no-query-rank",
+        url_canonical_hash="nq4",
+        published_at=now - timedelta(hours=2),
+        rank_score=0.9,
+    )
+
+    by_rank = article_repo.list_for_view(
+        hours=24,
+        limit=10,
+        query=None,
+        days=7,
+        sort="rank",
+    )
+
+    assert [row[0].title for row in by_rank] == [
+        "Older High Rank 2",
+        "Recent Low Rank 2",
+    ]
