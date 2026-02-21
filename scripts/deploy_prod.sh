@@ -85,6 +85,19 @@ until docker compose -f "$COMPOSE_FILE" exec -T app python -c "import urllib.req
   sleep 2
 done
 
+if [ -n "${CADDY_SITE_ADDRESS:-}" ] && [ "${CADDY_SITE_ADDRESS}" != "localhost" ]; then
+  echo "Checking HTTPS endpoint health via Caddy..."
+  attempt=0
+  until curl -fsS "https://${CADDY_SITE_ADDRESS}/health" >/dev/null 2>&1; do
+    attempt=$((attempt + 1))
+    if [ "$attempt" -ge 30 ]; then
+      echo "HTTPS healthcheck via Caddy failed" >&2
+      exit 1
+    fi
+    sleep 2
+  done
+fi
+
 printf '%s\n' "$CURRENT_COMMIT" > "$LAST_DEPLOY_FILE"
 
 echo "Deployment completed successfully."
