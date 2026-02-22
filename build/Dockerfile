@@ -25,7 +25,8 @@ COPY run_web.sh ./run_web.sh
 
 FROM base AS runtime
 
-RUN pip install -r ./build/requirements.txt \
+RUN pip install --upgrade pip \
+    && pip install -r ./build/requirements.txt \
     && pip install --no-deps .
 
 RUN mkdir -p /app/data
@@ -41,7 +42,8 @@ FROM base AS test
 
 COPY tests ./tests
 
-RUN pip install -r ./build/requirements-dev.txt \
+RUN pip install --upgrade pip \
+    && pip install -r ./build/requirements-dev.txt \
     && pip install --no-deps -e .
 
 CMD ["./scripts/run_tests_with_coverage.sh"]
