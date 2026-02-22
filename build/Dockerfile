@@ -18,7 +18,7 @@ RUN apt-get update \
 
 COPY build/requirements.txt ./build/requirements.txt
 COPY build/requirements-dev.txt ./build/requirements-dev.txt
-COPY pyproject.toml README.md alembic.ini ./
+COPY pyproject.toml README.md alembic.ini Makefile ./
 COPY src ./src
 COPY sources.yaml ./sources.yaml
 COPY scripts ./scripts
