@@ -13,6 +13,7 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
+        make \
     && rm -rf /var/lib/apt/lists/*
 
 COPY build/requirements.txt ./build/requirements.txt
