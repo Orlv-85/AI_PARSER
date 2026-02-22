@@ -58,3 +58,12 @@ def test_settings_allow_mcp_without_token_when_auth_disabled() -> None:
         _env_file=None,
     )
     assert settings is not None
+
+
+def test_settings_allow_mcp_with_valid_token_when_enabled() -> None:
+    settings = Settings(
+        mcp_auth_enabled=True,
+        mcp_auth_token="0123456789abcdef",
+        _env_file=None,
+    )
+    assert settings.mcp_auth_enabled is True
