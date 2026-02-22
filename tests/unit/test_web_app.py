@@ -191,6 +191,9 @@ def test_news_article_details_returns_content_and_404_for_missing(
         def __exit__(self, exc_type, exc, tb) -> None:
             return None
 
+    def _session_local():
+        return _DummySession()
+
     class _ArticleRepo:
         def __init__(self, _session) -> None:
             pass
@@ -213,7 +216,7 @@ def test_news_article_details_returns_content_and_404_for_missing(
 
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
-    monkeypatch.setattr(web_app_module, "SessionLocal", lambda: _DummySession())
+    monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
     monkeypatch.setattr(web_app_module, "ArticleRepo", _ArticleRepo)
 
     app = create_app()
@@ -247,6 +250,9 @@ def test_news_export_returns_json_attachment_and_include_content(
         def __exit__(self, exc_type, exc, tb) -> None:
             return None
 
+    def _session_local():
+        return _DummySession()
+
     class _ArticleRepo:
         def __init__(self, _session) -> None:
             pass
@@ -271,7 +277,7 @@ def test_news_export_returns_json_attachment_and_include_content(
 
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
-    monkeypatch.setattr(web_app_module, "SessionLocal", lambda: _DummySession())
+    monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
     monkeypatch.setattr(web_app_module, "ArticleRepo", _ArticleRepo)
 
     app = create_app()

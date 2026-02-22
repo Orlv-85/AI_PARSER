@@ -162,14 +162,14 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
             create_all()
             with SessionLocal() as session:
                 repo = ArticleRepo(session)
-                list_kwargs: dict[str, object] = dict(
-                    hours=hours_filter,
-                    limit=limit,
-                    min_ai_relevance=min_ai_relevance,
-                    query=query,
-                    days=days,
-                    sort=sort,
-                )
+                list_kwargs: dict[str, object] = {
+                    "hours": hours_filter,
+                    "limit": limit,
+                    "min_ai_relevance": min_ai_relevance,
+                    "query": query,
+                    "days": days,
+                    "sort": sort,
+                }
                 if has_date_range:
                     list_kwargs["date_from"] = date_from
                     list_kwargs["date_to"] = date_to
@@ -209,15 +209,15 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
             create_all()
             with SessionLocal() as session:
                 repo = ArticleRepo(session)
-                list_kwargs: dict[str, object] = dict(
-                    hours=hours_filter,
-                    limit=limit,
-                    min_ai_relevance=min_ai_relevance,
-                    query=query,
-                    days=days,
-                    sort=sort,
-                    include_content=include_content,
-                )
+                list_kwargs: dict[str, object] = {
+                    "hours": hours_filter,
+                    "limit": limit,
+                    "min_ai_relevance": min_ai_relevance,
+                    "query": query,
+                    "days": days,
+                    "sort": sort,
+                    "include_content": include_content,
+                }
                 if has_date_range:
                     list_kwargs["date_from"] = date_from
                     list_kwargs["date_to"] = date_to

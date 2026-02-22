@@ -1,4 +1,5 @@
 from datetime import UTC, date, datetime, time, timedelta
+from typing import Any, cast
 
 from sqlalchemy import Select, delete, desc, select
 from sqlalchemy.orm import Session
@@ -227,21 +228,21 @@ class ArticleRepo:
         date_to: date | None = None,
         include_content: bool = False,
     ) -> list[tuple[Article, str | None, str | None]]:
-        kwargs: dict[str, object] = dict(
-            hours=hours,
-            limit=limit,
-            query=query,
-            days=days,
-            sort=sort,
-            min_ai_relevance=min_ai_relevance,
-        )
+        kwargs: dict[str, Any] = {
+            "hours": hours,
+            "limit": limit,
+            "query": query,
+            "days": days,
+            "sort": sort,
+            "min_ai_relevance": min_ai_relevance,
+        }
         if date_from is not None:
             kwargs["date_from"] = date_from
         if date_to is not None:
             kwargs["date_to"] = date_to
         if include_content:
             kwargs["include_content"] = include_content
-        return self.list_for_view(**kwargs)
+        return self.list_for_view(**cast(Any, kwargs))
 
     def get_article_for_agent(
         self, *, article_id: int

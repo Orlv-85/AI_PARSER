@@ -5,7 +5,7 @@ from logging import Logger
 from threading import BoundedSemaphore
 
 from app.config.settings import Settings
-from app.config.sources import load_sources
+from app.config.sources import SourceConfig, load_sources
 from app.core.canonicalize import canonical_url_hash, canonicalize_url
 from app.core.scoring import ai_relevance_score, freshness_score, rank_score
 from app.ingest.fetcher import Fetcher
@@ -42,7 +42,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
     with SessionLocal() as session:
         source_repo = SourceRepo(session)
         article_repo = ArticleRepo(session)
-        enabled_sources: list[tuple[int, object, int]] = []
+        enabled_sources: list[tuple[int, SourceConfig, int]] = []
 
         for idx, config in enumerate(configs):
             db_source = source_repo.upsert_source(config)
@@ -50,7 +50,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                 continue
             enabled_sources.append((idx, config, db_source.id))
 
-        def _fetch_source(config):  # type: ignore[no-untyped-def]
+        def _fetch_source(config: SourceConfig):  # type: ignore[no-untyped-def]
             fetcher = Fetcher(
                 timeout_seconds=settings.request_timeout_seconds,
                 max_retries=settings.max_retries,
@@ -85,7 +85,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
         if enabled_sources:
             max_workers = max(1, min(settings.concurrency_limit, len(enabled_sources)))
             with ThreadPoolExecutor(max_workers=max_workers) as pool:
-                futures: dict[Future, tuple[int, object, int]] = {
+                futures: dict[Future, tuple[int, SourceConfig, int]] = {
                     pool.submit(_fetch_source, config): (idx, config, db_source_id)
                     for idx, config, db_source_id in enabled_sources
                 }
