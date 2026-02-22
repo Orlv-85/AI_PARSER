@@ -8,8 +8,10 @@ cd "$ROOT_DIR"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 RETENTION_DAYS="${RETENTION_DAYS:-100}"
 DEPLOY_TAG="${1:-}"
-FORCE_BUILD="${FORCE_BUILD:-0}"
 LAST_DEPLOY_FILE="${LAST_DEPLOY_FILE:-.last_deploy_commit}"
+LAST_DEPLOY_IMAGE_FILE="${LAST_DEPLOY_IMAGE_FILE:-.last_deploy_image}"
+APP_IMAGE_REPO="${APP_IMAGE_REPO:-ghcr.io/orlv-85/ai-parser}"
+APP_IMAGE="${APP_IMAGE:-}"
 AUTO_UPDATE_ENABLED="${AUTO_UPDATE_ENABLED:-1}"
 AUTO_UPDATE_CRON_SCHEDULE="${AUTO_UPDATE_CRON_SCHEDULE:-*/30 * * * *}"
 AUTO_UPDATE_LOG_PATH="${AUTO_UPDATE_LOG_PATH:-/var/log/ai-news-auto-update.log}"
@@ -22,29 +24,16 @@ if [ -n "$DEPLOY_TAG" ]; then
   git checkout --force "$DEPLOY_TAG"
 fi
 
-CURRENT_COMMIT="$(git rev-parse --verify HEAD)"
-LAST_DEPLOY_COMMIT=""
-if [ -f "$LAST_DEPLOY_FILE" ]; then
-  LAST_DEPLOY_COMMIT="$(head -n 1 "$LAST_DEPLOY_FILE" | tr -d '[:space:]')"
-fi
-
-should_build=0
-build_reason=""
-if [ "$FORCE_BUILD" = "1" ]; then
-  should_build=1
-  build_reason="FORCE_BUILD=1"
-elif [ -z "$LAST_DEPLOY_COMMIT" ]; then
-  should_build=1
-  build_reason="initial deploy (no last deploy marker)"
-elif [ "$LAST_DEPLOY_COMMIT" = "$CURRENT_COMMIT" ]; then
-  should_build=0
-else
-  changed_files="$(git diff --name-only "$LAST_DEPLOY_COMMIT" "$CURRENT_COMMIT" || true)"
-  if echo "$changed_files" | grep -Eq '^(build/Dockerfile|Dockerfile|requirements[^/]*\.txt|requirements/|pyproject\.toml|poetry\.lock)'; then
-    should_build=1
-    build_reason="image build inputs changed"
+if [ -z "$APP_IMAGE" ]; then
+  if [ -n "$DEPLOY_TAG" ]; then
+    APP_IMAGE="${APP_IMAGE_REPO}:${DEPLOY_TAG}"
+  else
+    APP_IMAGE="${APP_IMAGE_REPO}:latest"
   fi
 fi
+export APP_IMAGE
+
+CURRENT_COMMIT="$(git rev-parse --verify HEAD)"
 
 mkdir -p data backups
 
@@ -112,13 +101,12 @@ until docker compose -f "$COMPOSE_FILE" exec -T db sh -lc 'pg_isready -U "$POSTG
   sleep 2
 done
 
-if [ "$should_build" -eq 1 ]; then
-  echo "Building and starting app (${build_reason})..."
-  docker compose -f "$COMPOSE_FILE" up -d --build app caddy
-else
-  echo "Starting app without rebuild (no build input changes detected)..."
-  docker compose -f "$COMPOSE_FILE" up -d app caddy
-fi
+echo "Deploying app image: $APP_IMAGE"
+echo "Pulling app image from registry..."
+docker compose -f "$COMPOSE_FILE" pull app
+
+echo "Starting app and caddy..."
+docker compose -f "$COMPOSE_FILE" up -d app caddy
 
 echo "Running migrations..."
 docker compose -f "$COMPOSE_FILE" run --rm app alembic upgrade head
@@ -156,5 +144,6 @@ fi
 install_auto_update_cron
 
 printf '%s\n' "$CURRENT_COMMIT" > "$LAST_DEPLOY_FILE"
+printf '%s\n' "$APP_IMAGE" > "$LAST_DEPLOY_IMAGE_FILE"
 
 echo "Deployment completed successfully."
