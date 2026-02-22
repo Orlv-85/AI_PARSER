@@ -8,20 +8,20 @@ import secrets
 from datetime import UTC, datetime
 from typing import Any, cast
 
-PasswordHasher: Any
+_Argon2PasswordHasher: Any = None
 try:
-    from argon2 import PasswordHasher
+    from argon2 import PasswordHasher as _Argon2PasswordHasher  # type: ignore[no-redef]
 except ImportError:  # pragma: no cover - optional dependency
-    PasswordHasher = None
+    pass
 
-bcrypt: Any
+_bcrypt: Any = None
 try:
-    import bcrypt
+    import bcrypt as _bcrypt  # type: ignore[no-redef]
 except ImportError:  # pragma: no cover - optional dependency
-    bcrypt = None
+    pass
 
 
-_ARGON2_HASHER = PasswordHasher() if PasswordHasher is not None else None
+_ARGON2_HASHER = _Argon2PasswordHasher() if _Argon2PasswordHasher is not None else None
 
 
 def _b64encode(value: bytes) -> str:
@@ -36,8 +36,8 @@ def _b64decode(value: str) -> bytes:
 def hash_password(password: str) -> str:
     if _ARGON2_HASHER is not None:
         return cast(str, _ARGON2_HASHER.hash(password))
-    if bcrypt is not None:
-        hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
+    if _bcrypt is not None:
+        hashed = _bcrypt.hashpw(password.encode("utf-8"), _bcrypt.gensalt())
         return cast(bytes, hashed).decode("utf-8")
 
     # Fallback for environments without argon2/bcrypt installed.
@@ -76,11 +76,11 @@ def _verify_argon2_password(password: str, password_hash: str) -> bool:
 
 
 def _verify_bcrypt_password(password: str, password_hash: str) -> bool:
-    if bcrypt is None:
+    if _bcrypt is None:
         return False
     try:
         return bool(
-            bcrypt.checkpw(
+            _bcrypt.checkpw(
                 password.encode("utf-8"),
                 password_hash.encode("utf-8"),
             )

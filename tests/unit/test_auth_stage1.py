@@ -240,7 +240,7 @@ def test_hash_password_uses_argon2_when_available(monkeypatch) -> None:
             return "$argon2id$v=19$m=1,t=1,p=1$fake$hash"
 
     monkeypatch.setattr(auth_module, "_ARGON2_HASHER", _FakeArgon2())
-    monkeypatch.setattr(auth_module, "bcrypt", None)
+    monkeypatch.setattr(auth_module, "_bcrypt", None)
 
     assert auth_module.hash_password("s3cret-pass").startswith("$argon2id$")
 
@@ -260,7 +260,7 @@ def test_hash_password_uses_bcrypt_when_argon2_missing(monkeypatch) -> None:
             return b"$2b$12$abcdefghijklmnopqrstuvabcdefghijklmno1234567890"
 
     monkeypatch.setattr(auth_module, "_ARGON2_HASHER", None)
-    monkeypatch.setattr(auth_module, "bcrypt", _FakeBcrypt())
+    monkeypatch.setattr(auth_module, "_bcrypt", _FakeBcrypt())
 
     assert auth_module.hash_password("s3cret-pass").startswith("$2b$")
 
@@ -282,9 +282,9 @@ def test_verify_password_dispatches_and_error_branches(monkeypatch) -> None:
         def checkpw(_password: bytes, _password_hash: bytes) -> bool:
             raise ValueError("bad hash")
 
-    monkeypatch.setattr(auth_module, "bcrypt", None)
+    monkeypatch.setattr(auth_module, "_bcrypt", None)
     assert auth_module.verify_password("x", "$2b$bad") is False
-    monkeypatch.setattr(auth_module, "bcrypt", _FakeBcrypt())
+    monkeypatch.setattr(auth_module, "_bcrypt", _FakeBcrypt())
     assert auth_module.verify_password("x", "$2b$bad") is False
 
 
@@ -298,7 +298,7 @@ def test_verify_scrypt_non_scrypt_and_invalid_format() -> None:
 def test_hash_and_verify_scrypt_roundtrip_when_optional_hashers_missing(monkeypatch) -> None:
     auth_module = import_module("app.web.auth")
     monkeypatch.setattr(auth_module, "_ARGON2_HASHER", None)
-    monkeypatch.setattr(auth_module, "bcrypt", None)
+    monkeypatch.setattr(auth_module, "_bcrypt", None)
 
     password_hash = auth_module.hash_password("s3cret-pass")
 
