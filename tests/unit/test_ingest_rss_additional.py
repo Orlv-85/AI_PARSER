@@ -257,3 +257,34 @@ def test_fetch_rss_extract_full_text_ignores_empty_extracted_text(monkeypatch) -
     )
 
     assert result[0].content is None
+
+
+def test_fetch_rss_extract_full_text_uses_semaphore_acquire_and_release(monkeypatch) -> None:
+    items = [Article(source_key="s", title="A", url="https://example.com/a")]
+    monkeypatch.setattr("app.ingest.rss.parse_rss", lambda source_key, content: items)
+    monkeypatch.setattr("app.ingest.rss._extract_linked_article_text", lambda **kwargs: "ok text")
+
+    class _Semaphore:
+        def __init__(self) -> None:
+            self.acquire_calls = 0
+            self.release_calls = 0
+
+        def acquire(self) -> None:
+            self.acquire_calls += 1
+
+        def release(self) -> None:
+            self.release_calls += 1
+
+    semaphore = _Semaphore()
+
+    result = fetch_rss(
+        "s",
+        "https://example.com/feed",
+        fetcher=_Fetcher(b"<rss></rss>"),
+        extract_full_text=True,
+        full_text_semaphore=semaphore,
+    )
+
+    assert result[0].content == "ok text"
+    assert semaphore.acquire_calls == 1
+    assert semaphore.release_calls == 1
