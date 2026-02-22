@@ -1,9 +1,11 @@
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from logging import Logger
+from threading import BoundedSemaphore
 
 from app.config.settings import Settings
-from app.config.sources import load_sources
+from app.config.sources import SourceConfig, load_sources
 from app.core.canonicalize import canonical_url_hash, canonicalize_url
 from app.core.scoring import ai_relevance_score, freshness_score, rank_score
 from app.ingest.fetcher import Fetcher
@@ -31,60 +33,86 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
     new_count = 0
     duplicate_count = 0
     error_count = 0
-    fetcher = Fetcher(
-        timeout_seconds=settings.request_timeout_seconds,
-        max_retries=settings.max_retries,
-        per_source_min_interval_seconds=settings.per_source_min_interval_seconds,
+    full_text_semaphore = (
+        BoundedSemaphore(settings.rss_full_text_concurrency_limit)
+        if settings.rss_full_text_concurrency_limit
+        and settings.rss_full_text_concurrency_limit > 0
+        else None
     )
-
     with SessionLocal() as session:
         source_repo = SourceRepo(session)
         article_repo = ArticleRepo(session)
+        enabled_sources: list[tuple[int, SourceConfig, int]] = []
 
-        for config in configs:
+        for idx, config in enumerate(configs):
             db_source = source_repo.upsert_source(config)
             if not config.enabled:
                 continue
+            enabled_sources.append((idx, config, db_source.id))
 
-            try:
-                logger.info(
-                    "source_fetch_started",
-                    {
-                        "run_id": run_id,
-                        "source_id": config.id,
-                        "stage": "fetch",
-                        "url": str(config.url),
-                    },
+        def _fetch_source(config: SourceConfig):  # type: ignore[no-untyped-def]
+            fetcher = Fetcher(
+                timeout_seconds=settings.request_timeout_seconds,
+                max_retries=settings.max_retries,
+                per_source_min_interval_seconds=settings.per_source_min_interval_seconds,
+            )
+            logger.info(
+                "source_fetch_started",
+                {
+                    "run_id": run_id,
+                    "source_id": config.id,
+                    "stage": "fetch",
+                    "url": str(config.url),
+                },
+            )
+            if config.type == "rss":
+                return fetch_rss(
+                    config.id,
+                    str(config.url),
+                    settings.request_timeout_seconds,
+                    fetcher=fetcher,
+                    extract_full_text=settings.rss_extract_full_text,
+                    full_text_max_items=settings.rss_full_text_max_items_per_source,
+                    full_text_semaphore=full_text_semaphore,
                 )
-                if config.type == "rss":
-                    items = fetch_rss(
-                        config.id,
-                        str(config.url),
-                        settings.request_timeout_seconds,
-                        fetcher=fetcher,
-                    )
-                else:
-                    items = fetch_html(
-                        config,
-                        settings.request_timeout_seconds,
-                        fetcher=fetcher,
-                    )
-            except Exception as exc:
-                error_count += 1
-                cause = exc.__cause__
-                logger.error(
-                    "source_fetch_failed",
-                    {
-                        "run_id": run_id,
-                        "source_id": config.id,
-                        "stage": "fetch",
-                        "url": str(config.url),
-                        "error_type": type(exc).__name__,
-                        "error_message": str(exc),
-                        "cause_type": type(cause).__name__ if cause is not None else None,
-                        "cause_message": str(cause) if cause is not None else None,
-                    },
-                )
+            return fetch_html(
+                config,
+                settings.request_timeout_seconds,
+                fetcher=fetcher,
+            )
+
+        fetched_by_index: dict[int, list] = {}
+        if enabled_sources:
+            max_workers = max(1, min(settings.concurrency_limit, len(enabled_sources)))
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                futures: dict[Future, tuple[int, SourceConfig, int]] = {
+                    pool.submit(_fetch_source, config): (idx, config, db_source_id)
+                    for idx, config, db_source_id in enabled_sources
+                }
+                for future in as_completed(futures):
+                    idx, config, _db_source_id = futures[future]
+                    try:
+                        fetched_by_index[idx] = future.result()
+                    except Exception as exc:
+                        error_count += 1
+                        cause = exc.__cause__
+                        logger.error(
+                            "source_fetch_failed",
+                            {
+                                "run_id": run_id,
+                                "source_id": config.id,
+                                "stage": "fetch",
+                                "url": str(config.url),
+                                "error_type": type(exc).__name__,
+                                "error_message": str(exc),
+                                "cause_type": type(cause).__name__ if cause is not None else None,
+                                "cause_message": str(cause) if cause is not None else None,
+                            },
+                        )
+
+        for idx, config, db_source_id in enabled_sources:
+            items = fetched_by_index.get(idx)
+            if items is None:
                 continue
 
             fetched_count += len(items)
@@ -99,7 +127,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                     source_weight=config.source_weight,
                 )
                 _, is_new = article_repo.insert_article(
-                    source_id=db_source.id,
+                    source_id=db_source_id,
                     title=item.title,
                     url=str(item.url),
                     url_canonical=canonical,

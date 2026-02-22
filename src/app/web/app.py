@@ -1,7 +1,9 @@
 import logging
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -9,7 +11,7 @@ from app.config.settings import get_settings
 from app.storage import SessionLocal, create_all
 from app.storage.repos import ArticleRepo
 from app.web.auth import SessionSigner, verify_password
-from app.web.models import NewsItem, UpdateStatus, WebUpdateSettings
+from app.web.models import NewsArticleDetail, NewsItem, UpdateStatus, WebUpdateSettings
 from app.web.service import UpdateRunService
 from app.web.settings_store import UpdateSettingsStore
 
@@ -151,19 +153,27 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
         query: str | None = None,
         days: int = Query(7, ge=1, le=365),
         sort: str = Query("rank", pattern="^(rank|published)$"),
+        date_from: date | None = None,
+        date_to: date | None = None,
     ) -> list[NewsItem]:
+        has_date_range = date_from is not None or date_to is not None
+        hours_filter = None if has_date_range else hours
         try:
             create_all()
             with SessionLocal() as session:
                 repo = ArticleRepo(session)
-                rows = repo.list_for_view(
-                    hours=hours,
-                    limit=limit,
-                    min_ai_relevance=min_ai_relevance,
-                    query=query,
-                    days=days,
-                    sort=sort,
-                )
+                list_kwargs: dict[str, object] = {
+                    "hours": hours_filter,
+                    "limit": limit,
+                    "min_ai_relevance": min_ai_relevance,
+                    "query": query,
+                    "days": days,
+                    "sort": sort,
+                }
+                if has_date_range:
+                    list_kwargs["date_from"] = date_from
+                    list_kwargs["date_to"] = date_to
+                rows = repo.list_for_view(**list_kwargs)
         except SQLAlchemyError as exc:
             raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
 
@@ -179,6 +189,93 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
             )
             for article, source_key, source_name in rows
         ]
+
+    @api.get("/api/news/export")
+    def export_news(
+        *,
+        hours: int = Query(24, ge=1, le=720),
+        limit: int = Query(30, ge=1, le=200),
+        min_ai_relevance: float = Query(0.2, ge=0.0, le=1.0),
+        query: str | None = None,
+        days: int = Query(7, ge=1, le=365),
+        sort: str = Query("rank", pattern="^(rank|published)$"),
+        include_content: bool = False,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> JSONResponse:
+        has_date_range = date_from is not None or date_to is not None
+        hours_filter = None if has_date_range else hours
+        try:
+            create_all()
+            with SessionLocal() as session:
+                repo = ArticleRepo(session)
+                list_kwargs: dict[str, object] = {
+                    "hours": hours_filter,
+                    "limit": limit,
+                    "min_ai_relevance": min_ai_relevance,
+                    "query": query,
+                    "days": days,
+                    "sort": sort,
+                    "include_content": include_content,
+                }
+                if has_date_range:
+                    list_kwargs["date_from"] = date_from
+                    list_kwargs["date_to"] = date_to
+                rows = repo.list_for_view(**list_kwargs)
+        except SQLAlchemyError as exc:
+            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+
+        payload: list[dict[str, object | None]] = []
+        for article, source_key, source_name in rows:
+            item: dict[str, object | None] = {
+                "article_id": article.id,
+                "title": article.title,
+                "published_at": article.published_at,
+                "rank_score": article.rank_score,
+                "url_canonical": article.url_canonical,
+                "source_id": article.source_id,
+                "source_key": source_key,
+                "source_name": source_name,
+            }
+            if include_content:
+                item["summary"] = article.summary
+                item["content"] = article.content
+                item["url"] = article.url
+            payload.append(item)
+
+        filename = datetime.now(UTC).strftime("news-export-%Y%m%dT%H%M%SZ.json")
+        return JSONResponse(
+            content=jsonable_encoder(payload),
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    @api.get("/api/news/{article_id}", response_model=NewsArticleDetail)
+    def get_news_article(article_id: int) -> NewsArticleDetail:
+        try:
+            create_all()
+            with SessionLocal() as session:
+                repo = ArticleRepo(session)
+                row = repo.get_article_for_agent(article_id=article_id)
+        except SQLAlchemyError as exc:
+            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+
+        if row is None:
+            raise HTTPException(status_code=404, detail="Article not found")
+
+        article, source_key, source_name = row
+        return NewsArticleDetail(
+            article_id=article.id,
+            title=article.title,
+            summary=article.summary,
+            content=article.content,
+            published_at=article.published_at,
+            rank_score=article.rank_score,
+            url=article.url,
+            url_canonical=article.url_canonical,
+            source_id=article.source_id,
+            source_key=source_key,
+            source_name=source_name,
+        )
 
     return api
 

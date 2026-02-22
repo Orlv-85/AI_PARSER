@@ -1,4 +1,5 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
+from typing import Any, cast
 
 from sqlalchemy import Select, delete, desc, select
 from sqlalchemy.orm import Session
@@ -149,29 +150,40 @@ class ArticleRepo:
     def list_for_view(
         self,
         *,
-        hours: int,
+        hours: int | None,
         limit: int,
         query: str | None,
         days: int,
         sort: str,
         min_ai_relevance: float = 0.0,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        include_content: bool = False,
     ) -> list[tuple[Article, str | None, str | None]]:
+        del include_content
         base_stmt = (
             select(Article, Source.source_key, Source.name)
             .outerjoin(Source, Article.source_id == Source.id)
             .where(Article.ai_relevance_score >= min_ai_relevance)
             .limit(limit)
         )
+        has_date_range = date_from is not None or date_to is not None
+        if has_date_range:
+            if date_from is not None:
+                start_at = datetime.combine(date_from, time.min, tzinfo=UTC)
+                base_stmt = base_stmt.where(Article.published_at >= start_at)
+            if date_to is not None:
+                end_at = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=UTC)
+                base_stmt = base_stmt.where(Article.published_at < end_at)
         if query:
-            window_start = datetime.now(UTC) - timedelta(days=days)
+            if not has_date_range:
+                window_start = datetime.now(UTC) - timedelta(days=days)
+                base_stmt = base_stmt.where(Article.published_at >= window_start)
             ilike = f"%{query}%"
-            base_stmt = (
-                base_stmt.where(Article.published_at >= window_start)
-                .where(
-                    Article.title.ilike(ilike)
-                    | Article.summary.ilike(ilike)
-                    | Article.content.ilike(ilike)
-                )
+            base_stmt = base_stmt.where(
+                Article.title.ilike(ilike)
+                | Article.summary.ilike(ilike)
+                | Article.content.ilike(ilike)
             )
             if sort == "published":
                 base_stmt = base_stmt.order_by(
@@ -184,8 +196,10 @@ class ArticleRepo:
                     Article.published_at.desc(),
                 )
         else:
-            window_start = datetime.now(UTC) - timedelta(hours=hours)
-            base_stmt = base_stmt.where(Article.published_at >= window_start)
+            if not has_date_range:
+                effective_hours = 24 if hours is None else hours
+                window_start = datetime.now(UTC) - timedelta(hours=effective_hours)
+                base_stmt = base_stmt.where(Article.published_at >= window_start)
             if sort == "published":
                 base_stmt = base_stmt.order_by(
                     Article.published_at.desc(),
@@ -200,6 +214,48 @@ class ArticleRepo:
             (row[0], row[1], row[2])
             for row in self.session.execute(base_stmt).all()
         ]
+
+    def list_for_agent(
+        self,
+        *,
+        hours: int | None,
+        limit: int,
+        query: str | None,
+        days: int,
+        sort: str,
+        min_ai_relevance: float = 0.0,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        include_content: bool = False,
+    ) -> list[tuple[Article, str | None, str | None]]:
+        kwargs: dict[str, Any] = {
+            "hours": hours,
+            "limit": limit,
+            "query": query,
+            "days": days,
+            "sort": sort,
+            "min_ai_relevance": min_ai_relevance,
+        }
+        if date_from is not None:
+            kwargs["date_from"] = date_from
+        if date_to is not None:
+            kwargs["date_to"] = date_to
+        if include_content:
+            kwargs["include_content"] = include_content
+        return self.list_for_view(**cast(Any, kwargs))
+
+    def get_article_for_agent(
+        self, *, article_id: int
+    ) -> tuple[Article, str | None, str | None] | None:
+        stmt = (
+            select(Article, Source.source_key, Source.name)
+            .outerjoin(Source, Article.source_id == Source.id)
+            .where(Article.id == article_id)
+        )
+        row = self.session.execute(stmt).one_or_none()
+        if row is None:
+            return None
+        return row[0], row[1], row[2]
 
     def count_older_than(self, *, older_than_days: int) -> int:
         cutoff = datetime.now(UTC) - timedelta(days=older_than_days)

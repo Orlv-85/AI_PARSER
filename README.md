@@ -64,11 +64,13 @@ Repository Variables:
 - `AINEWS_AUTH_ENABLED` (optional, default `true`)
 - `AINEWS_AUTH_SESSION_TTL_SECONDS` (optional, default `3600`)
 - `AINEWS_AUTH_COOKIE_SECURE` (optional, default `true`)
+- `AINEWS_MCP_AUTH_ENABLED` (optional, default `false`)
 
 Repository Secrets:
 - `SERVER_PASSWORD`
 - `AINEWS_AUTH_PASSWORD_HASH`
 - `AINEWS_AUTH_SECRET`
+- `AINEWS_MCP_AUTH_TOKEN` (required if `AINEWS_MCP_AUTH_ENABLED=true`)
 
 ### 1) Prepare server once
 
@@ -123,6 +125,7 @@ Create repository variables/secrets:
 - `SERVER_PASSWORD` (repo secret)
 - `AINEWS_AUTH_PASSWORD_HASH` (repo secret)
 - `AINEWS_AUTH_SECRET` (repo secret)
+- `AINEWS_MCP_AUTH_TOKEN` (repo secret, required only when MCP auth enabled)
 
 Notes:
 - Deploy workflow authenticates by server password (`SERVER_PASSWORD`) via `sshpass`.
@@ -245,6 +248,33 @@ ai-news sources
 ai-news fetch --once
 ```
 
+### Cron-friendly auto-update (every 30 minutes)
+
+Use the helper script for repeated cron runs. It defaults to the tuned settings
+`AINEWS_CONCURRENCY_LIMIT=20` and `AINEWS_RSS_FULL_TEXT_CONCURRENCY_LIMIT=8`,
+and you can override them via environment variables.
+
+```bash
+chmod +x scripts/auto_update_once.sh
+./scripts/auto_update_once.sh
+```
+
+Example `crontab` entry (adjust paths/venv as needed):
+
+```cron
+*/30 * * * * cd /opt/ai-news && \
+  . /opt/ai-news/venv1/bin/activate && \
+  AINEWS_CONCURRENCY_LIMIT=20 \
+  AINEWS_RSS_FULL_TEXT_CONCURRENCY_LIMIT=8 \
+  /opt/ai-news/scripts/auto_update_once.sh >> /var/log/ai-news-auto-update.log 2>&1
+```
+
+Notes:
+- The script writes logs to stdout/stderr (cron-compatible).
+- Overlapping cron runs are not ideal (extra fetch work/load). Article deduplication prevents duplicate rows, but prefer schedules that avoid overlap.
+- `scripts/deploy_prod.sh` can install/update a managed cron entry automatically on the server (default enabled) using Docker Compose + `20/8`.
+- Deploy-time cron knobs: `AUTO_UPDATE_ENABLED`, `AUTO_UPDATE_CRON_SCHEDULE`, `AUTO_UPDATE_LOG_PATH`, `AUTO_UPDATE_CONCURRENCY_LIMIT`, `AUTO_UPDATE_FULLTEXT_CONCURRENCY_LIMIT`.
+
 ### Top news
 
 ```bash
@@ -256,6 +286,49 @@ ai-news top --hours 24 --limit 30
 ```bash
 ai-news search --query "gpt" --days 7
 ```
+
+### Run MCP server (for agent clients)
+
+```bash
+ai-news mcp-serve
+```
+
+MCP authentication configuration:
+- `AINEWS_MCP_AUTH_ENABLED=false` (default, backward-compatible local mode)
+- `AINEWS_MCP_AUTH_ENABLED=true` (enforce token on all MCP tools)
+- `AINEWS_MCP_AUTH_TOKEN=<strong-random-token>` (required when auth is enabled)
+
+Recommended secure startup:
+
+```bash
+export AINEWS_MCP_AUTH_ENABLED=true
+export AINEWS_MCP_AUTH_TOKEN="replace-with-long-random-token"
+ai-news mcp-serve
+```
+
+If auth is enabled and token is missing/blank, startup fails fast.
+
+Available MCP tools:
+- `news.update`
+- `news.update_status`
+- `news.list`
+- `news.get`
+
+When MCP auth is enabled, pass `auth_token` in each tool call:
+- `news.update(..., auth_token="...")`
+- `news.update_status(auth_token="...")`
+- `news.list(..., auth_token="...")`
+- `news.get(article_id=..., auth_token="...")`
+
+Auth audit logging:
+- `mcp_auth_success` and `mcp_auth_failed` events are emitted.
+- Raw tokens are never written to logs.
+
+Typical agent flow:
+1. Call `news.update` (`wait=false` for async or `wait=true` for blocking mode).
+2. Poll `news.update_status` until `finished`/`failed`.
+3. Call `news.list` to get dataset slice.
+4. Call `news.get` for full plain-text article content.
 
 ### Prune old news
 
@@ -273,6 +346,7 @@ ai-news prune --older-than-days 100 --dry-run
 - Stores data in SQLite via SQLAlchemy and Alembic migrations.
 - Supports PostgreSQL in production with Alembic migrations.
 - Emits structured JSON logs for fetch runs.
+- Exposes MCP tools for agent-driven update and analysis workflows.
 
 ## Development
 
@@ -294,3 +368,17 @@ pytest
 - `.specify/specs/001-ai-news-collector/spec.md`
 - `.specify/specs/001-ai-news-collector/plan.md`
 - `.specify/specs/001-ai-news-collector/tasks.md`
+
+## Agent Architecture Notes
+
+You do not need a separate repository for the agent that uses MCP.
+
+Recommended setup:
+- Keep parser + MCP server in this project/repo.
+- Run analyst agent as a separate process/client (it connects to MCP and reads prepared article text).
+- Share the same database/storage backend.
+
+Create a separate project for the analyst only if you need:
+- independent release cycle,
+- different runtime/dependency stack,
+- stricter security/isolation boundaries.

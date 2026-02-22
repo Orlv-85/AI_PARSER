@@ -15,5 +15,8 @@ jobs:
       - name: Build test image (Python 3.14)
         run: docker build -f build/Dockerfile --target test --build-arg PYTHON_IMAGE=python:3.14-slim -t ai-news-test:${{ github.sha }} .
 
+      - name: Run linters in Docker test image
+        run: docker run --rm ai-news-test:${{ github.sha }} make lint PYTHON=python
+
       - name: Run tests in Docker with coverage
         run: docker run --rm ai-news-test:${{ github.sha }}

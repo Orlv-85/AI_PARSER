@@ -332,3 +332,114 @@ def test_prune_older_than_and_count() -> None:
 
     remaining = article_repo.search(query="Recent", days=365, limit=10)
     assert [row.id for row in remaining] == [recent.id]
+
+
+def test_list_for_view_date_range_skips_hours_and_days_windows() -> None:
+    session = _session()
+    article_repo = ArticleRepo(session)
+    now = datetime.now(UTC).replace(hour=12, minute=0, second=0, microsecond=0)
+
+    article_repo.insert_article(
+        source_id=None,
+        title="Inside Day Window",
+        url="https://example.com/date-range-inside",
+        url_canonical="https://example.com/date-range-inside",
+        url_canonical_hash="dr1",
+        published_at=now,
+        summary="match me",
+        content="match me too",
+        rank_score=0.4,
+    )
+    article_repo.insert_article(
+        source_id=None,
+        title="Previous Day",
+        url="https://example.com/date-range-prev",
+        url_canonical="https://example.com/date-range-prev",
+        url_canonical_hash="dr2",
+        published_at=now - timedelta(days=1, hours=1),
+        summary="match me",
+        content="match me too",
+        rank_score=0.9,
+    )
+    article_repo.insert_article(
+        source_id=None,
+        title="Next Day",
+        url="https://example.com/date-range-next",
+        url_canonical="https://example.com/date-range-next",
+        url_canonical_hash="dr3",
+        published_at=now + timedelta(days=1, hours=1),
+        summary="match me",
+        content="match me too",
+        rank_score=0.1,
+    )
+
+    target_day = now.date()
+
+    no_query = article_repo.list_for_view(
+        hours=1,
+        limit=10,
+        query=None,
+        days=1,
+        sort="published",
+        date_from=target_day,
+        date_to=target_day,
+    )
+    with_query = article_repo.list_for_view(
+        hours=1,
+        limit=10,
+        query="match",
+        days=1,
+        sort="rank",
+        date_from=target_day,
+        date_to=target_day,
+    )
+
+    assert [row[0].title for row in no_query] == ["Inside Day Window"]
+    assert [row[0].title for row in with_query] == ["Inside Day Window"]
+
+
+def test_list_for_view_supports_open_ended_date_ranges() -> None:
+    session = _session()
+    article_repo = ArticleRepo(session)
+    now = datetime.now(UTC).replace(hour=12, minute=0, second=0, microsecond=0)
+
+    older = now - timedelta(days=2)
+    middle = now
+    newer = now + timedelta(days=2)
+
+    for title, url_suffix, published_at in [
+        ("Older Open Range", "older-open", older),
+        ("Middle Open Range", "middle-open", middle),
+        ("Newer Open Range", "newer-open", newer),
+    ]:
+        article_repo.insert_article(
+            source_id=None,
+            title=title,
+            url=f"https://example.com/{url_suffix}",
+            url_canonical=f"https://example.com/{url_suffix}",
+            url_canonical_hash=f"open-{url_suffix}",
+            published_at=published_at,
+            rank_score=0.5,
+        )
+
+    only_from = article_repo.list_for_view(
+        hours=1,
+        limit=10,
+        query=None,
+        days=1,
+        sort="published",
+        date_from=middle.date(),
+        date_to=None,
+    )
+    only_to = article_repo.list_for_view(
+        hours=1,
+        limit=10,
+        query=None,
+        days=1,
+        sort="published",
+        date_from=None,
+        date_to=middle.date(),
+    )
+
+    assert [row[0].title for row in only_from] == ["Newer Open Range", "Middle Open Range"]
+    assert [row[0].title for row in only_to] == ["Middle Open Range", "Older Open Range"]

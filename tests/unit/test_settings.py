@@ -33,3 +33,37 @@ def test_settings_validation_rejects_non_positive_ttl() -> None:
             auth_secret="0123456789abcdef0123456789abcdef",
             auth_session_ttl_seconds=0,
         )
+
+
+def test_settings_validation_rejects_missing_mcp_auth_material_when_enabled() -> None:
+    with pytest.raises(ValidationError, match="missing required mcp auth settings"):
+        Settings(
+            mcp_auth_enabled=True,
+            _env_file=None,
+        )
+
+
+def test_settings_validation_rejects_short_mcp_auth_token_when_enabled() -> None:
+    with pytest.raises(ValidationError, match="at least 16 characters long"):
+        Settings(
+            mcp_auth_enabled=True,
+            mcp_auth_token="short-token",
+            _env_file=None,
+        )
+
+
+def test_settings_allow_mcp_without_token_when_auth_disabled() -> None:
+    settings = Settings(
+        mcp_auth_enabled=False,
+        _env_file=None,
+    )
+    assert settings is not None
+
+
+def test_settings_allow_mcp_with_valid_token_when_enabled() -> None:
+    settings = Settings(
+        mcp_auth_enabled=True,
+        mcp_auth_token="0123456789abcdef",
+        _env_file=None,
+    )
+    assert settings.mcp_auth_enabled is True

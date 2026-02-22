@@ -145,6 +145,62 @@ def test_serve_command(monkeypatch) -> None:
     assert captured == {"app": "app.web.app:app", "host": "0.0.0.0", "port": 9000}
 
 
+def test_mcp_serve_command_invokes_mcp_server_runner(monkeypatch) -> None:
+    calls = {"count": 0}
+
+    def _run_mcp_server() -> None:
+        calls["count"] += 1
+
+    monkeypatch.setattr(cli_main, "run_mcp_server", _run_mcp_server, raising=False)
+    monkeypatch.setattr(
+        cli_main,
+        "get_settings",
+        lambda: SimpleNamespace(mcp_auth_enabled=False, mcp_auth_token=None),
+    )
+
+    cli_main.mcp_serve()
+
+    assert calls["count"] == 1
+
+
+def test_mcp_serve_command_rejects_missing_mcp_auth_settings_when_enabled(monkeypatch) -> None:
+    calls = {"count": 0}
+
+    def _run_mcp_server() -> None:
+        calls["count"] += 1
+
+    monkeypatch.setattr(cli_main, "run_mcp_server", _run_mcp_server, raising=False)
+    monkeypatch.setattr(
+        cli_main,
+        "get_settings",
+        lambda: SimpleNamespace(mcp_auth_enabled=True, mcp_auth_token=None),
+    )
+
+    with pytest.raises(cli_main.typer.BadParameter, match="mcp auth"):
+        cli_main.mcp_serve()
+
+    assert calls["count"] == 0
+
+
+def test_mcp_serve_command_rejects_blank_mcp_auth_token_when_enabled(monkeypatch) -> None:
+    calls = {"count": 0}
+
+    def _run_mcp_server() -> None:
+        calls["count"] += 1
+
+    monkeypatch.setattr(cli_main, "run_mcp_server", _run_mcp_server, raising=False)
+    monkeypatch.setattr(
+        cli_main,
+        "get_settings",
+        lambda: SimpleNamespace(mcp_auth_enabled=True, mcp_auth_token="   "),
+    )
+
+    with pytest.raises(cli_main.typer.BadParameter, match="mcp auth"):
+        cli_main.mcp_serve()
+
+    assert calls["count"] == 0
+
+
 def test_prune_command_dry_run_and_apply(monkeypatch) -> None:
     emitted: list[str] = []
     commits: list[str] = []

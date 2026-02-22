@@ -13,11 +13,12 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
+        make \
     && rm -rf /var/lib/apt/lists/*
 
 COPY build/requirements.txt ./build/requirements.txt
 COPY build/requirements-dev.txt ./build/requirements-dev.txt
-COPY pyproject.toml README.md alembic.ini ./
+COPY pyproject.toml README.md alembic.ini Makefile ./
 COPY src ./src
 COPY sources.yaml ./sources.yaml
 COPY scripts ./scripts
@@ -25,7 +26,8 @@ COPY run_web.sh ./run_web.sh
 
 FROM base AS runtime
 
-RUN pip install -r ./build/requirements.txt \
+RUN pip install --upgrade pip \
+    && pip install -r ./build/requirements.txt \
     && pip install --no-deps .
 
 RUN mkdir -p /app/data
@@ -41,7 +43,8 @@ FROM base AS test
 
 COPY tests ./tests
 
-RUN pip install -r ./build/requirements-dev.txt \
+RUN pip install --upgrade pip \
+    && pip install -r ./build/requirements-dev.txt \
     && pip install --no-deps -e .
 
 CMD ["./scripts/run_tests_with_coverage.sh"]
