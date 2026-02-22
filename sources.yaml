@@ -446,3 +446,412 @@ sources:
     html:
       link_selector: a[href^="/blog/"]
       extraction_strategy: readability
+
+  # --- User-curated: AI agents / multi-agent systems / agent tooling ---
+  - id: langchain_blog
+    name: LangChain Blog (LangGraph)
+    type: rss
+    url: https://blog.langchain.com/rss/
+    fetch_interval_minutes: 60
+    source_weight: 1.2
+
+  - id: llamaindex_blog
+    name: LlamaIndex Blog
+    type: html
+    url: https://www.llamaindex.ai/blog
+    fetch_interval_minutes: 120
+    source_weight: 1.1
+    html:
+      link_selector: a[href^="/blog/"]:not([href*="?tag="])
+      extraction_strategy: readability
+
+  - id: vellum_blog
+    name: Vellum AI Blog
+    type: html
+    url: https://www.vellum.ai/blog
+    fetch_interval_minutes: 120
+    source_weight: 1.0
+    html:
+      link_selector: a[href^="/blog/"]:not([href="/blog"])
+      extraction_strategy: readability
+
+  - id: dify_blog
+    name: Dify Blog
+    type: html
+    url: https://dify.ai/blog
+    fetch_interval_minutes: 120
+    source_weight: 1.0
+    html:
+      link_selector: a[href^="./blog/"]:not([href="./blog"])
+      extraction_strategy: readability
+
+  - id: crewai_releases
+    name: CrewAI GitHub Releases (Atom)
+    type: rss
+    url: https://github.com/joaomdmoura/crewAI/releases.atom
+    fetch_interval_minutes: 60
+    source_weight: 1.1
+
+  - id: microsoft_autogen_blog
+    name: Microsoft AutoGen Blog
+    type: html
+    url: https://microsoft.github.io/autogen/0.2/blog/
+    fetch_interval_minutes: 120
+    source_weight: 1.1
+    html:
+      link_selector: a[href^="/autogen/0.2/blog/"]:not([href*="/tags/"])
+      extraction_strategy: readability
+
+  - id: huggingface_blog
+    name: Hugging Face Blog
+    type: rss
+    url: https://huggingface.co/blog/feed.xml
+    fetch_interval_minutes: 60
+    source_weight: 1.2
+
+  - id: emergent_learn
+    name: Emergent Learn
+    type: html
+    url: https://emergent.sh/learn
+    fetch_interval_minutes: 180
+    source_weight: 0.9
+    html:
+      link_selector: a[href^="/learn/"]:not([href="/learn"]):not([href="/learn/"]), a[href^="https://emergent.sh/learn/"]
+      extraction_strategy: readability
+
+  - id: google_developers_ai_blog
+    name: Google Developers Blog (AI tag)
+    type: html
+    url: https://developers.googleblog.com/en/tag/ai/
+    enabled: false
+    fetch_interval_minutes: 120
+    source_weight: 1.0
+    html:
+      # Placeholder selector while disabled; URL currently returns 404 and needs a new stable AI feed/tag path.
+      link_selector: a[href^="/__google_ai_disabled_placeholder__/"]
+      extraction_strategy: readability
+
+  - id: turing_mas_group
+    name: Alan Turing Institute — Multi-Agent Systems Group
+    type: html
+    url: https://www.turing.ac.uk/research/interest-groups/multi-agent-systems
+    enabled: false
+    fetch_interval_minutes: 1440
+    source_weight: 0.7
+    html:
+      # Group page is not a feed; keep selector narrow until a real publications/news listing is chosen.
+      link_selector: a[href^="/__turing_mas_disabled_placeholder__/"]
+      extraction_strategy: readability
+
+  - id: agentops_blog
+    name: AgentOps Blog
+    type: html
+    url: https://www.agentops.ai/blog
+    enabled: false
+    fetch_interval_minutes: 120
+    source_weight: 1.0
+    html:
+      # Disabled pending a stable, validated post-list selector (current page layout is sparse/non-feed-like).
+      link_selector: a[href^="/__agentops_disabled_placeholder__/"]
+      extraction_strategy: readability
+
+  - id: ultravox_blog
+    name: Ultravox Blog (Fixie.ai successor)
+    type: html
+    url: https://ultravox.ai/blog
+    fetch_interval_minutes: 180
+    source_weight: 0.8
+    html:
+      link_selector: a[href^="./blog/"]:not([href="./blog"]), a[href^="/blog/"]:not([href="/blog"]):not([href="/blog/"]), a[href^="https://www.ultravox.ai/blog/"]
+      extraction_strategy: readability
+
+  - id: phind_blog
+    name: Phind Blog
+    type: html
+    url: https://www.phind.com/blog
+    enabled: false
+    fetch_interval_minutes: 120
+    source_weight: 0.9
+    html:
+      # Disabled pending a stable, validated post-list selector (site access/layout behavior varies).
+      link_selector: a[href^="/__phind_disabled_placeholder__/"]
+      extraction_strategy: readability
+
+  - id: skyvern_blog
+    name: Skyvern Blog
+    type: html
+    url: https://www.skyvern.com/blog
+    fetch_interval_minutes: 120
+    source_weight: 0.9
+    html:
+      link_selector: a[href^="/blog/"]:not([href="/blog"]):not([href="/blog/"])
+      extraction_strategy: readability
+
+  - id: theagi_company_blog
+    name: The AGI Company Blog (MultiOn successor site)
+    type: html
+    url: https://www.theagi.company/blog
+    fetch_interval_minutes: 180
+    source_weight: 0.8
+    html:
+      link_selector: a[href^="/blog/"]:not([href="/blog"]):not([href="/blog/"])
+      extraction_strategy: readability
+
+  - id: e2b_blog
+    name: E2B Blog
+    type: html
+    url: https://e2b.dev/blog
+    fetch_interval_minutes: 120
+    source_weight: 1.0
+    html:
+      link_selector: a[href^="/blog/"]:not([href^="/blog/category/"])
+      extraction_strategy: readability
+
+  - id: cognition_blog
+    name: Cognition AI Blog
+    type: html
+    url: https://cognition.ai/blog
+    fetch_interval_minutes: 120
+    source_weight: 1.0
+    html:
+      link_selector: a[href^="/blog/"]:not([href="/blog/1"]):not([href*=" "])
+      extraction_strategy: readability
+
+  - id: glaive_blog
+    name: Glaive AI Blog
+    type: html
+    url: https://glaive.ai/blog
+    enabled: false
+    fetch_interval_minutes: 180
+    source_weight: 0.8
+    html:
+      # Disabled pending a working blog endpoint/selector (current URL behavior is unreliable).
+      link_selector: a[href^="/__glaive_disabled_placeholder__/"]
+      extraction_strategy: readability
+
+  - id: tines_blog
+    name: Tines Blog (AI automation coverage)
+    type: html
+    url: https://www.tines.com/blog
+    fetch_interval_minutes: 180
+    source_weight: 0.8
+    html:
+      link_selector: a[href^="/blog/"]:not([href="/blog/"]):not([href^="/blog/guides/"]):not([href^="/blog/news/"]):not([href^="/blog/tutorials/"]):not([href^="/blog/engineering/"]):not([href^="/blog/product-updates/"]):not([href^="/blog/inside-tines/"]):not([href^="/blog/tines-by-tines/"]):not([href^="/blog/series/"]):not([href^="/blog/articles/"])
+      extraction_strategy: readability
+
+  - id: mind2web_project
+    name: Mind2Web Project Page (OSU NLP)
+    type: html
+    url: https://osu-nlp-group.github.io/Mind2Web/
+    enabled: false
+    fetch_interval_minutes: 10080
+    source_weight: 0.6
+    html:
+      # Static project page (not a blog feed); narrow placeholder while disabled.
+      link_selector: a[href^="/__mind2web_disabled_placeholder__/"]
+      extraction_strategy: readability
+
+  - id: humanloop_blog
+    name: Humanloop Blog
+    type: html
+    url: https://humanloop.com/blog
+    fetch_interval_minutes: 180
+    source_weight: 0.9
+    html:
+      link_selector: a[href^="/blog/"]:not([href="/blog"]):not([href="/blog/"])
+      extraction_strategy: readability
+
+  - id: promptengineering_blog
+    name: Prompt Engineering Institute
+    type: html
+    url: https://promptengineering.org/
+    fetch_interval_minutes: 360
+    source_weight: 0.6
+    html:
+      link_selector: article h2 a[href^="https://promptengineering.org/"], article h3 a[href^="https://promptengineering.org/"]
+      extraction_strategy: readability
+
+  - id: langsmith_changelog
+    name: LangSmith Changelog
+    type: html
+    url: https://docs.langchain.com/langsmith/changelog
+    enabled: false
+    fetch_interval_minutes: 120
+    source_weight: 1.0
+    html:
+      # Disabled until a stable per-entry changelog selector is identified.
+      link_selector: a[href^="/__langsmith_changelog_disabled_placeholder__/"]
+      extraction_strategy: readability
+
+  # --- User-curated: AI-native coding / IDE ---
+  - id: cursor_blog
+    name: Cursor Blog
+    type: html
+    url: https://cursor.com/blog
+    fetch_interval_minutes: 120
+    source_weight: 1.1
+    html:
+      link_selector: a[href^="/blog/"]:not([href="/blog"]):not([href^="/blog/topic/"]):not([href^="/blog/page/"])
+      extraction_strategy: readability
+
+  - id: replit_blog
+    name: Replit Blog
+    type: html
+    url: https://blog.replit.com
+    fetch_interval_minutes: 120
+    source_weight: 1.0
+    html:
+      link_selector: main a[href^="/"]:not([href="/"]):not([href^="/category/"])
+      extraction_strategy: readability
+
+  - id: codeium_blog
+    name: Codeium / Windsurf Blog
+    type: html
+    url: https://windsurf.com/blog
+    fetch_interval_minutes: 120
+    source_weight: 1.0
+    html:
+      link_selector: a[href^="/blog/"]:not([href="/blog"])
+      extraction_strategy: readability
+
+  - id: tabnine_blog
+    name: Tabnine Blog
+    type: html
+    url: https://www.tabnine.com/blog
+    fetch_interval_minutes: 180
+    source_weight: 0.9
+    html:
+      link_selector: a[href*="/blog/"]:not([href="/blog"]):not([href="/blog/"]):not([href^="/blog/category/"])
+      extraction_strategy: readability
+
+  - id: continue_dev_blog
+    name: Continue.dev Blog
+    type: html
+    url: https://blog.continue.dev
+    fetch_interval_minutes: 120
+    source_weight: 1.0
+    html:
+      link_selector: main a[href^="/"]:not([href="/"])
+      extraction_strategy: readability
+
+  - id: sourcegraph_blog
+    name: Sourcegraph Blog (Cody)
+    type: rss
+    url: https://sourcegraph.com/blog/rss.xml
+    fetch_interval_minutes: 60
+    source_weight: 1.0
+
+  - id: mintlify_blog
+    name: Mintlify Blog
+    type: html
+    url: https://mintlify.com/blog
+    fetch_interval_minutes: 180
+    source_weight: 0.8
+    html:
+      link_selector: a[href^="/blog/"]:not([href="/blog"]):not([href="/blog/"])
+      extraction_strategy: readability
+
+  # --- User-curated: Infra / MLOps / model hosting ---
+  - id: wandb_fully_connected
+    name: Weights & Biases — Fully Connected
+    type: html
+    url: https://wandb.ai/fully-connected
+    enabled: false
+    fetch_interval_minutes: 180
+    source_weight: 1.0
+    html:
+      link_selector: a[href]
+      extraction_strategy: readability
+
+  - id: pinecone_blog
+    name: Pinecone Blog
+    type: html
+    url: https://www.pinecone.io/blog/
+    fetch_interval_minutes: 180
+    source_weight: 1.0
+    html:
+      link_selector: a[href^="/blog/"]:not([href="/blog/"])
+      extraction_strategy: readability
+
+  - id: weaviate_blog
+    name: Weaviate Blog
+    type: html
+    url: https://weaviate.io/blog
+    fetch_interval_minutes: 180
+    source_weight: 1.0
+    html:
+      link_selector: a[href^="/blog/"]:not([href="/blog"]):not([href="/blog/"]):not([href^="/blog/tags/"])
+      extraction_strategy: readability
+
+  - id: qdrant_blog
+    name: Qdrant Blog
+    type: html
+    url: https://qdrant.tech/blog/
+    fetch_interval_minutes: 180
+    source_weight: 1.0
+    html:
+      link_selector: a[href^="/blog/"]:not([href="/blog/"]), a[href*="qdrant.tech/blog/"]:not([href$="/blog/"])
+      extraction_strategy: readability
+
+  - id: modal_blog
+    name: Modal Blog
+    type: html
+    url: https://modal.com/blog
+    enabled: false
+    fetch_interval_minutes: 180
+    source_weight: 1.0
+    html:
+      link_selector: a[href^="/blog/"]:not([href="/blog"])
+      extraction_strategy: readability
+
+  - id: baseten_blog
+    name: Baseten Blog
+    type: html
+    url: https://www.baseten.co/blog
+    fetch_interval_minutes: 180
+    source_weight: 0.9
+    html:
+      link_selector: a[href*="/blog/"]:not([href="/blog/"]):not([href^="/blog/category/"]):not([href="https://www.baseten.co/blog/"])
+      extraction_strategy: readability
+
+  - id: together_ai_blog
+    name: Together AI Blog
+    type: html
+    url: https://www.together.ai/blog
+    fetch_interval_minutes: 120
+    source_weight: 1.0
+    html:
+      link_selector: a[href^="/blog/"]:not([href="/blog"]):not([href="/blog/"])
+      extraction_strategy: readability
+
+  - id: anyscale_blog
+    name: Anyscale Blog
+    type: html
+    url: https://www.anyscale.com/blog
+    enabled: false
+    fetch_interval_minutes: 180
+    source_weight: 0.9
+    html:
+      link_selector: a[href*="/blog/"]:not([href="https://www.anyscale.com/blog"])
+      extraction_strategy: readability
+
+  - id: outerbounds_blog
+    name: Outerbounds Blog
+    type: html
+    url: https://outerbounds.com/blog
+    fetch_interval_minutes: 180
+    source_weight: 0.8
+    html:
+      link_selector: a[href^="/blog/"]:not([href="/blog"]):not([href="/blog/"])
+      extraction_strategy: readability
+
+  - id: predibase_blog
+    name: Predibase Blog
+    type: html
+    url: https://predibase.com/blog
+    enabled: false
+    fetch_interval_minutes: 180
+    source_weight: 0.9
+    html:
+      link_selector: a[href^="/blog/"]
+      extraction_strategy: readability
