@@ -23,7 +23,7 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Run linters
-        run: make lint
+        run: make lint PYTHON=python
 
   docker-test:
     needs: lint

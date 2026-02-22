@@ -27,7 +27,7 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Run linters
-        run: make lint
+        run: make lint PYTHON=python
 
       - name: Build test image (Python 3.14)
         run: docker build -f build/Dockerfile --target test --build-arg PYTHON_IMAGE=python:3.14-slim -t ai-news-test:${{ github.sha }} .
