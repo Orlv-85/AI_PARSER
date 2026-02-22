@@ -17,10 +17,7 @@ services:
       - pgdata:/var/lib/postgresql/data
 
   app:
-    build:
-      context: .
-      dockerfile: build/Dockerfile
-      target: runtime
+    image: ${APP_IMAGE:-ghcr.io/orlv-85/ai-parser:latest}
     container_name: ai-news-app
     restart: unless-stopped
     depends_on:
