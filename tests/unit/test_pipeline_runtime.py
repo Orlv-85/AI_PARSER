@@ -136,3 +136,39 @@ def test_run_fetch_cycle_counts_new_duplicates_and_errors(monkeypatch) -> None:
     assert session.committed is True
     assert any(event == "source_fetch_failed" for event, _ in logger.error_calls)
     assert any(event == "fetch_run_finished" for event, _ in logger.info_calls)
+
+
+def test_run_fetch_cycle_handles_no_enabled_sources(monkeypatch) -> None:
+    logger = _Logger()
+    session = _Session()
+
+    configs = [
+        SourceConfig(
+            id="disabled_only",
+            name="Disabled",
+            type="rss",
+            url="https://example.com/disabled.xml",
+            enabled=False,
+        )
+    ]
+
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.pipeline.SessionLocal", lambda: session)
+    monkeypatch.setattr("app.core.pipeline.SourceRepo", _SourceRepo)
+    monkeypatch.setattr("app.core.pipeline.ArticleRepo", _ArticleRepo)
+
+    def _unexpected(*_args, **_kwargs):
+        raise AssertionError("fetcher should not be called when all sources are disabled")
+
+    monkeypatch.setattr("app.core.pipeline.fetch_rss", _unexpected)
+    monkeypatch.setattr("app.core.pipeline.fetch_html", _unexpected)
+
+    settings = Settings(sources_path="sources.yaml")
+    summary = run_fetch_cycle(settings=settings, logger=logger)
+
+    assert summary.fetched == 0
+    assert summary.new == 0
+    assert summary.duplicates == 0
+    assert summary.errors == 0
+    assert session.committed is True

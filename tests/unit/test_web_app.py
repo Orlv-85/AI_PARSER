@@ -306,6 +306,73 @@ def test_news_export_returns_json_attachment_and_include_content(
     assert captured_calls[1]["include_content"] is True
 
 
+def test_news_export_forwards_date_range_and_returns_503_on_db_error(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+
+    captured: dict[str, object] = {}
+
+    class _DummySession:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+    def _session_local():
+        return _DummySession()
+
+    class _ArticleRepo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def list_for_view(self, **kwargs):
+            captured.update(kwargs)
+            return []
+
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
+    monkeypatch.setattr(web_app_module, "ArticleRepo", _ArticleRepo)
+
+    app = create_app()
+    client = TestClient(app)
+
+    ok = client.get("/api/news/export?date_from=2026-02-20&date_to=2026-02-21")
+    assert ok.status_code == 200
+    assert captured["hours"] is None
+    assert captured["date_from"] == date(2026, 2, 20)
+    assert captured["date_to"] == date(2026, 2, 21)
+
+    def _raise_db_error() -> None:
+        raise SQLAlchemyError()
+
+    monkeypatch.setattr(web_app_module, "create_all", _raise_db_error)
+    unavailable = client.get("/api/news/export")
+    assert unavailable.status_code == 503
+
+
+def test_news_article_details_returns_503_when_storage_unavailable(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+    web_app_module = import_module("app.web.app")
+
+    def _raise_db_error() -> None:
+        raise SQLAlchemyError()
+
+    monkeypatch.setattr(web_app_module, "create_all", _raise_db_error)
+
+    app = create_app()
+    client = TestClient(app)
+
+    response = client.get("/api/news/123")
+    assert response.status_code == 503
+
+
 def test_news_api_forwards_date_range_and_overrides_hours_passthrough(
     monkeypatch, tmp_path
 ) -> None:
