@@ -295,6 +295,17 @@ def test_verify_scrypt_non_scrypt_and_invalid_format() -> None:
     assert auth_module.verify_password("pass", "scrypt$missing-parts") is False
 
 
+def test_hash_and_verify_scrypt_roundtrip_when_optional_hashers_missing(monkeypatch) -> None:
+    auth_module = import_module("app.web.auth")
+    monkeypatch.setattr(auth_module, "_ARGON2_HASHER", None)
+    monkeypatch.setattr(auth_module, "bcrypt", None)
+
+    password_hash = auth_module.hash_password("s3cret-pass")
+
+    assert password_hash.startswith("scrypt$")
+    assert auth_module.verify_password("s3cret-pass", password_hash) is True
+
+
 def test_login_page_redirects_when_session_valid(monkeypatch, tmp_path) -> None:
     client = _build_authenticated_client(monkeypatch, tmp_path)
 

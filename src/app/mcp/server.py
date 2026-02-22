@@ -162,8 +162,7 @@ class MCPNewsService:
                     current.status,
                 )
                 return {"ok": True, "status": self._status_to_dict(current)}
-            if params.poll_interval_seconds > 0:
-                sleep(params.poll_interval_seconds)
+            sleep(params.poll_interval_seconds)
         _LOGGER.info(
             "event=news.update outcome=timeout run_id=%s",
             self._update_service.current_status().run_id,

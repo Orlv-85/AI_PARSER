@@ -3,6 +3,7 @@
 import logging
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
@@ -735,3 +736,179 @@ def test_build_mcp_server_rejects_missing_mcp_token_when_auth_enabled(monkeypatc
 
     with pytest.raises(RuntimeError, match="AINEWS_MCP_AUTH_TOKEN is missing"):
         mcp_server_module.build_mcp_server()
+
+
+def test_news_update_wait_returns_terminal_status() -> None:
+    class _PollingUpdateService:
+        def __init__(self) -> None:
+            self._started = UpdateStatus(
+                run_id="run-1",
+                status="running",
+                started_at=datetime(2026, 2, 22, 0, 1, 0, tzinfo=UTC),
+                fetched=0,
+                new=0,
+                duplicates=0,
+                errors=0,
+            )
+            self._current_calls = 0
+
+        def start(self, runtime_settings):
+            _ = runtime_settings
+            return self._started
+
+        def current_status(self) -> UpdateStatus:
+            self._current_calls += 1
+            if self._current_calls >= 2:
+                return UpdateStatus(
+                    run_id="run-1",
+                    status="finished",
+                    started_at=datetime(2026, 2, 22, 0, 1, 0, tzinfo=UTC),
+                    finished_at=datetime(2026, 2, 22, 0, 1, 2, tzinfo=UTC),
+                    fetched=2,
+                    new=1,
+                    duplicates=1,
+                    errors=0,
+                )
+            return self._started
+
+    service = MCPNewsService(
+        update_service=_PollingUpdateService(),
+        session_factory=lambda: None,
+        create_all_fn=lambda: None,
+    )
+
+    payload = service.news_update(wait=True, poll_interval_seconds=0.1, max_wait_seconds=1.0)
+
+    assert payload["ok"] is True
+    assert payload["status"]["status"] == "finished"
+
+
+def test_news_update_wait_timeout_returns_timeout_error() -> None:
+    running = UpdateStatus(
+        run_id="run-timeout",
+        status="running",
+        started_at=datetime(2026, 2, 22, 0, 2, 0, tzinfo=UTC),
+        fetched=0,
+        new=0,
+        duplicates=0,
+        errors=0,
+    )
+    service = MCPNewsService(
+        update_service=_UpdateService(started=running, current=running),
+        session_factory=lambda: None,
+        create_all_fn=lambda: None,
+    )
+
+    payload = service.news_update(wait=True, poll_interval_seconds=0.1, max_wait_seconds=1.0)
+
+    assert payload["ok"] is False
+    assert payload["error_type"] == "timeout"
+    assert payload["status"]["run_id"] == "run-timeout"
+
+
+def test_build_mcp_server_requires_fastmcp_dependency(monkeypatch) -> None:
+    from app.mcp import server as mcp_server_module
+
+    monkeypatch.setattr(mcp_server_module, "FastMCP", None, raising=False)
+
+    with pytest.raises(RuntimeError, match="fastmcp is not installed"):
+        mcp_server_module.build_mcp_server()
+
+
+def test_build_mcp_server_registers_and_delegates_tools(monkeypatch) -> None:
+    from app.mcp import server as mcp_server_module
+
+    calls: dict[str, dict[str, object]] = {}
+
+    class _FakeService:
+        def news_update(self, **kwargs):
+            calls["news.update"] = kwargs
+            return {"ok": True, "tool": "update"}
+
+        def news_update_status(self, **kwargs):
+            calls["news.update_status"] = kwargs
+            return {"ok": True, "tool": "status"}
+
+        def news_list(self, **kwargs):
+            calls["news.list"] = kwargs
+            return {"ok": True, "tool": "list"}
+
+        def news_get(self, **kwargs):
+            calls["news.get"] = kwargs
+            return {"ok": True, "tool": "get"}
+
+    class _FakeMCP:
+        def __init__(self, _name: str) -> None:
+            self.tools: dict[str, object] = {}
+
+        def tool(self, *, name: str):
+            def _decorator(func):
+                self.tools[name] = func
+                return func
+
+            return _decorator
+
+        def run(self) -> None:
+            return None
+
+    monkeypatch.setattr(
+        mcp_server_module,
+        "get_settings",
+        lambda: SimpleNamespace(mcp_auth_enabled=False, mcp_auth_token=None),
+        raising=False,
+    )
+    monkeypatch.setattr(mcp_server_module, "MCPNewsService", _FakeService, raising=False)
+    monkeypatch.setattr(mcp_server_module, "FastMCP", _FakeMCP, raising=False)
+
+    mcp = cast(Any, mcp_server_module.build_mcp_server())
+    tools = mcp.__dict__["tools"]
+    assert set(tools.keys()) == {"news.update", "news.update_status", "news.list", "news.get"}
+
+    update_payload = tools["news.update"](
+        wait=True,
+        poll_interval_seconds=0.5,
+        max_wait_seconds=3.0,
+        request_timeout_seconds=10.0,
+        max_retries=2,
+        per_source_min_interval_seconds=0.1,
+        concurrency_limit=2,
+        auth_token="tok",
+    )
+    status_payload = tools["news.update_status"](auth_token="tok")
+    list_payload = tools["news.list"](
+        hours=2,
+        limit=3,
+        min_ai_relevance=0.4,
+        query="q",
+        days=5,
+        sort="published",
+        auth_token="tok",
+    )
+    get_payload = tools["news.get"](article_id=7, auth_token="tok")
+
+    assert update_payload["tool"] == "update"
+    assert status_payload["tool"] == "status"
+    assert list_payload["tool"] == "list"
+    assert get_payload["tool"] == "get"
+    assert calls["news.update"]["wait"] is True
+    assert calls["news.update_status"]["auth_token"] == "tok"
+    assert calls["news.list"]["sort"] == "published"
+    assert calls["news.get"]["article_id"] == 7
+
+
+def test_run_mcp_server_calls_mcp_run(monkeypatch) -> None:
+    from app.mcp import server as mcp_server_module
+
+    called = {"run": 0}
+
+    class _Runner:
+        def run(self) -> None:
+            called["run"] += 1
+
+    def _build_mcp_server():
+        return _Runner()
+
+    monkeypatch.setattr(mcp_server_module, "build_mcp_server", _build_mcp_server, raising=False)
+
+    mcp_server_module.run_mcp_server()
+    assert called["run"] == 1

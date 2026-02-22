@@ -2,7 +2,13 @@ import logging
 from time import struct_time
 
 from app.core.models import Article
-from app.ingest.rss import _to_datetime, fetch_rss, parse_rss
+from app.ingest.rss import (
+    _extract_linked_article_text,
+    _normalize_plain_text,
+    _to_datetime,
+    fetch_rss,
+    parse_rss,
+)
 
 
 class _Fetcher:
@@ -12,6 +18,10 @@ class _Fetcher:
     def fetch_bytes(self, *, source_id: str, url: str) -> bytes:
         _ = (source_id, url)
         return self.content
+
+    def fetch_text(self, *, source_id: str, url: str) -> str:
+        _ = (source_id, url)
+        return self.content.decode("utf-8")
 
 
 class _Response:
@@ -176,3 +186,74 @@ def test_fetch_rss_extract_full_text_disabled(monkeypatch) -> None:
 
     assert result[0].content is None
     assert called["value"] is False
+
+
+def test_normalize_plain_text_handles_none_and_blank() -> None:
+    assert _normalize_plain_text(None) is None
+    assert _normalize_plain_text(" \n\t ") is None
+    assert _normalize_plain_text(" A \n  B\tC ") == "A B C"
+
+
+def test_extract_linked_article_text_uses_fetcher(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.ingest.rss.extract_article_text",
+        lambda **kwargs: " extracted \n value ",
+    )
+    fetcher = _Fetcher(b"<html>ignored</html>")
+
+    text = _extract_linked_article_text(
+        source_id="src",
+        link="https://example.com/a",
+        timeout_seconds=3.0,
+        fetcher=fetcher,
+    )
+
+    assert text == "extracted value"
+
+
+def test_extract_linked_article_text_uses_httpx_when_fetcher_missing(monkeypatch) -> None:
+    class _HtmlResponse:
+        text = "<html>ok</html>"
+
+        @staticmethod
+        def raise_for_status() -> None:
+            return None
+
+    class _HtmlClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        @staticmethod
+        def get(url: str):
+            _ = url
+            return _HtmlResponse()
+
+    monkeypatch.setattr("app.ingest.rss.httpx.Client", lambda **kwargs: _HtmlClient())
+    monkeypatch.setattr("app.ingest.rss.extract_article_text", lambda **kwargs: "httpx text")
+
+    text = _extract_linked_article_text(
+        source_id="src",
+        link="https://example.com/a",
+        timeout_seconds=1.0,
+        fetcher=None,
+    )
+
+    assert text == "httpx text"
+
+
+def test_fetch_rss_extract_full_text_ignores_empty_extracted_text(monkeypatch) -> None:
+    items = [Article(source_key="s", title="A", url="https://example.com/a")]
+    monkeypatch.setattr("app.ingest.rss.parse_rss", lambda source_key, content: items)
+    monkeypatch.setattr("app.ingest.rss._extract_linked_article_text", lambda **kwargs: None)
+
+    result = fetch_rss(
+        "s",
+        "https://example.com/feed",
+        fetcher=_Fetcher(b"<rss></rss>"),
+        extract_full_text=True,
+    )
+
+    assert result[0].content is None
