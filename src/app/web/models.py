@@ -31,3 +31,17 @@ class NewsItem(BaseModel):
     source_id: int | None = None
     source_key: str | None = None
     source_name: str | None = None
+
+
+class NewsArticleDetail(BaseModel):
+    article_id: int
+    title: str
+    summary: str | None = None
+    content: str | None = None
+    published_at: datetime
+    rank_score: float
+    url: str
+    url_canonical: str
+    source_id: int | None = None
+    source_key: str | None = None
+    source_name: str | None = None

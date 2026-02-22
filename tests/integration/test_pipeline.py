@@ -128,7 +128,8 @@ def test_ingest_persist_query_pipeline_is_deterministic() -> None:
         session.commit()
 
         assert is_new is False
-        top = article_repo.query_top(hours=24, limit=10)
+        # Use a wide window so this deterministic test does not depend on wall-clock date.
+        top = article_repo.query_top(hours=24 * 365, limit=10)
         assert len(top) == len(inserted_ids)
         assert top == sorted(top, key=lambda row: (row.rank_score, row.published_at), reverse=True)
         assert len(top) > 0

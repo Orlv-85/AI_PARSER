@@ -10,6 +10,11 @@ RETENTION_DAYS="${RETENTION_DAYS:-100}"
 DEPLOY_TAG="${1:-}"
 FORCE_BUILD="${FORCE_BUILD:-0}"
 LAST_DEPLOY_FILE="${LAST_DEPLOY_FILE:-.last_deploy_commit}"
+AUTO_UPDATE_ENABLED="${AUTO_UPDATE_ENABLED:-1}"
+AUTO_UPDATE_CRON_SCHEDULE="${AUTO_UPDATE_CRON_SCHEDULE:-*/30 * * * *}"
+AUTO_UPDATE_LOG_PATH="${AUTO_UPDATE_LOG_PATH:-/var/log/ai-news-auto-update.log}"
+AUTO_UPDATE_CONCURRENCY_LIMIT="${AUTO_UPDATE_CONCURRENCY_LIMIT:-20}"
+AUTO_UPDATE_FULLTEXT_CONCURRENCY_LIMIT="${AUTO_UPDATE_FULLTEXT_CONCURRENCY_LIMIT:-8}"
 
 if [ -n "$DEPLOY_TAG" ]; then
   echo "Checking out tag: $DEPLOY_TAG"
@@ -42,6 +47,56 @@ else
 fi
 
 mkdir -p data backups
+
+install_auto_update_cron() {
+  if ! command -v crontab >/dev/null 2>&1; then
+    echo "crontab command not found; skipping auto-update cron installation" >&2
+    return 0
+  fi
+
+  begin_marker="# BEGIN AI_NEWS_AUTO_UPDATE"
+  end_marker="# END AI_NEWS_AUTO_UPDATE"
+  docker_bin="$(command -v docker || printf '%s' docker)"
+  flock_bin=""
+  if command -v flock >/dev/null 2>&1; then
+    flock_bin="$(command -v flock)"
+  fi
+
+  tmp_existing="$(mktemp)"
+  tmp_new="$(mktemp)"
+  cleanup_cron_tmp() {
+    rm -f "$tmp_existing" "$tmp_new"
+  }
+  trap cleanup_cron_tmp EXIT INT TERM
+
+  crontab -l >"$tmp_existing" 2>/dev/null || true
+  sed "/^${begin_marker}\$/,/^${end_marker}\$/d" "$tmp_existing" >"$tmp_new"
+
+  if [ "$AUTO_UPDATE_ENABLED" = "1" ]; then
+    cron_cmd="cd $ROOT_DIR && "
+    if [ -n "$flock_bin" ]; then
+      cron_cmd="${cron_cmd}${flock_bin} -n /tmp/ai-news-auto-update.lock "
+    fi
+    cron_cmd="${cron_cmd}${docker_bin} compose -f $COMPOSE_FILE run --rm"
+    cron_cmd="${cron_cmd} -e AINEWS_CONCURRENCY_LIMIT=$AUTO_UPDATE_CONCURRENCY_LIMIT"
+    cron_cmd="${cron_cmd} -e AINEWS_RSS_FULL_TEXT_CONCURRENCY_LIMIT=$AUTO_UPDATE_FULLTEXT_CONCURRENCY_LIMIT"
+    cron_cmd="${cron_cmd} app ai-news fetch --once >> $AUTO_UPDATE_LOG_PATH 2>&1"
+
+    {
+      printf '\n%s\n' "$begin_marker"
+      printf '# Managed by scripts/deploy_prod.sh\n'
+      printf '%s %s\n' "$AUTO_UPDATE_CRON_SCHEDULE" "$cron_cmd"
+      printf '%s\n' "$end_marker"
+    } >>"$tmp_new"
+    echo "Installed/updated auto-update cron (${AUTO_UPDATE_CRON_SCHEDULE})"
+  else
+    echo "AUTO_UPDATE_ENABLED=0; removed managed auto-update cron block (if present)"
+  fi
+
+  crontab "$tmp_new"
+  trap - EXIT INT TERM
+  cleanup_cron_tmp
+}
 
 echo "Starting PostgreSQL..."
 docker compose -f "$COMPOSE_FILE" up -d db
@@ -97,6 +152,8 @@ if [ -n "${CADDY_SITE_ADDRESS:-}" ] && [ "${CADDY_SITE_ADDRESS}" != "localhost" 
     sleep 2
   done
 fi
+
+install_auto_update_cron
 
 printf '%s\n' "$CURRENT_COMMIT" > "$LAST_DEPLOY_FILE"
 

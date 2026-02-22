@@ -2,6 +2,7 @@ import calendar
 import logging
 import re
 from datetime import UTC, datetime
+from threading import Semaphore
 from time import struct_time
 
 import feedparser
@@ -80,6 +81,7 @@ def fetch_rss(
     fetcher: Fetcher | None = None,
     extract_full_text: bool = False,
     full_text_max_items: int = 20,
+    full_text_semaphore: Semaphore | None = None,
 ) -> list[Article]:
     if fetcher is not None:
         content = fetcher.fetch_bytes(source_id=source_key, url=url)
@@ -95,6 +97,8 @@ def fetch_rss(
 
     for item in items[: max(0, full_text_max_items)]:
         try:
+            if full_text_semaphore is not None:
+                full_text_semaphore.acquire()
             text = _extract_linked_article_text(
                 source_id=source_key,
                 link=str(item.url),
@@ -109,6 +113,9 @@ def fetch_rss(
                 type(exc).__name__,
             )
             continue
+        finally:
+            if full_text_semaphore is not None:
+                full_text_semaphore.release()
         if text:
             item.content = text
     return items

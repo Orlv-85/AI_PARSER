@@ -248,6 +248,33 @@ ai-news sources
 ai-news fetch --once
 ```
 
+### Cron-friendly auto-update (every 30 minutes)
+
+Use the helper script for repeated cron runs. It defaults to the tuned settings
+`AINEWS_CONCURRENCY_LIMIT=20` and `AINEWS_RSS_FULL_TEXT_CONCURRENCY_LIMIT=8`,
+and you can override them via environment variables.
+
+```bash
+chmod +x scripts/auto_update_once.sh
+./scripts/auto_update_once.sh
+```
+
+Example `crontab` entry (adjust paths/venv as needed):
+
+```cron
+*/30 * * * * cd /opt/ai-news && \
+  . /opt/ai-news/venv1/bin/activate && \
+  AINEWS_CONCURRENCY_LIMIT=20 \
+  AINEWS_RSS_FULL_TEXT_CONCURRENCY_LIMIT=8 \
+  /opt/ai-news/scripts/auto_update_once.sh >> /var/log/ai-news-auto-update.log 2>&1
+```
+
+Notes:
+- The script writes logs to stdout/stderr (cron-compatible).
+- Overlapping cron runs are not ideal (extra fetch work/load). Article deduplication prevents duplicate rows, but prefer schedules that avoid overlap.
+- `scripts/deploy_prod.sh` can install/update a managed cron entry automatically on the server (default enabled) using Docker Compose + `20/8`.
+- Deploy-time cron knobs: `AUTO_UPDATE_ENABLED`, `AUTO_UPDATE_CRON_SCHEDULE`, `AUTO_UPDATE_LOG_PATH`, `AUTO_UPDATE_CONCURRENCY_LIMIT`, `AUTO_UPDATE_FULLTEXT_CONCURRENCY_LIMIT`.
+
 ### Top news
 
 ```bash

@@ -14,8 +14,10 @@ Run isolated sub-agents through `codex exec`, then verify outputs from the orche
 Default pattern:
 1. Tester writes tests only.
 2. Generator writes code and runs tests/lint.
-3. Reviewer validates and writes an audit artifact.
-4. Orchestrator performs final independent checks (diff/tests/lint).
+3. Tester strengthens tests (edge cases + coverage closure).
+4. Generator adapts code until strengthened tests stay green.
+5. Reviewer validates and writes an audit artifact.
+6. Orchestrator performs final independent checks (diff/tests/lint/coverage).
 
 ## Preconditions
 
@@ -34,6 +36,8 @@ Default pattern:
   - `tmp/tester_out.md`
   - `tmp/generator_out.md`
   - `tmp/reviewer_out.md`
+- Define a scoped coverage target up front (default: `100%` for touched files / target modules in this task).
+- Define the exact coverage command and report format to avoid ambiguity.
 - Avoid prompts like "fix everything" without scope.
 
 ### 2) Run Tester
@@ -41,6 +45,16 @@ Default pattern:
 ```bash
 /bin/zsh -f -lc 'codex exec -C /ABS/PATH/TO/REPO --sandbox workspace-write "TESTER_TASK. Modify only tests and write tmp/tester_out.md."'
 ```
+
+Tester responsibilities (explicit):
+- Start with failing tests for the requested behavior.
+- After generator reaches green once, add strengthening tests for edge cases and regressions.
+- Drive coverage to the agreed scoped target (default `100%`).
+- Write in `tmp/tester_out.md`:
+  - tests added,
+  - current failing reason(s),
+  - coverage command,
+  - current scoped coverage % and uncovered lines.
 
 ### 3) Run Generator
 
@@ -50,10 +64,42 @@ Constraints:
 - Modify only: source files in allowed scope
 - Do not touch any other files
 - Run test command and make lint before finishing
+- Run full repository test suite (`pytest`) before finishing, unless user explicitly approves scoped-only testing
+- Run the scoped coverage command before finishing
 - Write handoff summary to tmp/generator_out.md
 Output:
 - Apply changes directly
 ```
+
+Generator completion rule (important):
+- Do **not** consider the task done after the first green test run.
+- If tests are green but scoped coverage is below target, hand back to Tester for strengthening tests.
+- After Tester strengthens tests, rerun implementation loop until:
+  - tests are green,
+  - full test suite is green (or an explicit user-approved exception exists),
+  - lint passes (or clearly documented pre-existing unrelated failures),
+  - scoped coverage meets target.
+
+Recommended generator handoff fields in `tmp/generator_out.md`:
+- full test suite command + result
+- test command + result
+- lint command + result
+- coverage command + result
+- explicit note whether coverage target is met
+- any unrelated/pre-existing failures outside scope
+
+### 3.5) Strengthening Trigger (Tester <-> Generator)
+
+Return to Tester for strengthening when any of the following is true:
+- First green run has been reached for the scoped tests.
+- Coverage is below the scoped target.
+- New logic branches/conditions were introduced without direct assertions.
+- Bug fix was implemented without a regression test reproducing the prior failure.
+
+Return to Generator after Tester updates tests and records:
+- what edge cases were added,
+- what lines/branches were previously uncovered,
+- the new expected failing behavior (if any).
 
 ### 4) Run Reviewer
 
@@ -87,12 +133,21 @@ Run independent checks, not just reviewer output:
 git diff -- PATH_A PATH_B
 pytest -q
 make lint
+pytest --cov=MODULE_OR_PATH --cov-report=term-missing --cov-fail-under=100
 cat tmp/agent_audit.txt
 ```
 
 Choose only relevant checks for the task. If checks fail, either:
 - re-run tester/generator with focused fix prompt, or
 - fix directly in orchestrator if faster and safer.
+
+Coverage policy (default):
+- Treat `100%` as a **scoped** requirement unless the user explicitly says repo-wide.
+- Scope must be declared before implementation (examples):
+  - changed files only,
+  - target package/module for the task,
+  - specific endpoint/service file(s).
+- If `100%` is not realistically enforceable (generated code, framework glue, unreachable guards), require explicit exception list in tester/reviewer handoff with justification.
 
 ## Reusable Command Blocks
 
@@ -135,8 +190,9 @@ Choose only relevant checks for the task. If checks fail, either:
 Consider multi-agent task complete only when all are true:
 1. Tester/generator/reviewer handoff artifacts exist in `tmp/` and match scope.
 2. Reviewer produced audit with expected format.
-3. Orchestrator checks passed (tests/lint/diff as applicable).
-4. No out-of-scope files changed.
+3. Orchestrator checks passed (tests/lint/diff/coverage as applicable).
+4. Scoped coverage target is met (default `100%`) or documented exceptions are explicitly approved.
+5. No out-of-scope files changed.
 
 ## Script Helper
 

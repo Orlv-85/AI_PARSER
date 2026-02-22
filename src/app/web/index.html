@@ -210,6 +210,14 @@
                 <input id="days" type="number" value="7" />
               </div>
               <div class="field">
+                <label>Date from (optional)</label>
+                <input id="date_from" type="date" />
+              </div>
+              <div class="field">
+                <label>Date to (optional)</label>
+                <input id="date_to" type="date" />
+              </div>
+              <div class="field">
                 <label>Sort</label>
                 <select id="sort">
                   <option value="rank">Rank</option>
@@ -219,6 +227,7 @@
             </div>
             <div style="margin-top: 12px">
               <button class="btn btn-primary" id="load-news">Load news</button>
+              <button class="btn btn-secondary" id="copy-links" type="button">Copy visible links</button>
             </div>
             <p class="status" id="news-status"></p>
             <div class="empty hidden" id="news-empty">No articles found for selected filters.</div>
@@ -246,6 +255,7 @@
       const pageUpdate = $("page-update");
       const pageView = $("page-view");
       let pollTimer = null;
+      let visibleNewsItems = [];
 
       function setStatus(id, text, level = "") {
         const el = $(id);
@@ -413,13 +423,22 @@
         const query = $("query").value.trim();
         const days = Number($("days").value);
         const sort = $("sort").value;
-        const params = new URLSearchParams({ hours: String(hours), limit: String(limit), days: String(days), sort });
+        const dateFrom = $("date_from").value.trim();
+        const dateTo = $("date_to").value.trim();
+        const params = new URLSearchParams({ limit: String(limit), days: String(days), sort });
+        if (dateFrom || dateTo) {
+          if (dateFrom) params.set("date_from", dateFrom);
+          if (dateTo) params.set("date_to", dateTo);
+        } else {
+          params.set("hours", String(hours));
+        }
         if (query) params.set("query", query);
 
         setStatus("news-status", "");
         $("news-empty").classList.add("hidden");
         const tbody = document.querySelector("#news-table tbody");
         tbody.innerHTML = "";
+        visibleNewsItems = [];
         try {
           const response = await fetch(`/api/news?${params.toString()}`);
           if (!response.ok) {
@@ -432,6 +451,7 @@
             return;
           }
           const items = await response.json();
+          visibleNewsItems = Array.isArray(items) ? items : [];
           if (items.length === 0) {
             $("news-empty").classList.remove("hidden");
             return;
@@ -480,10 +500,32 @@
         }
       }
 
+      async function copyVisibleLinks() {
+        const urls = visibleNewsItems
+          .map((item) => item && item.url_canonical)
+          .filter((url) => typeof url === "string" && url.length > 0);
+        if (urls.length === 0) {
+          setStatus("news-status", "No visible links to copy.", "error");
+          return;
+        }
+        const text = urls.join("\n");
+        if (!navigator.clipboard || typeof navigator.clipboard.writeText !== "function") {
+          setStatus("news-status", "Clipboard API is unavailable in this browser.", "error");
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(text);
+          setStatus("news-status", `Copied ${urls.length} visible links to clipboard.`, "success");
+        } catch (_error) {
+          setStatus("news-status", "Failed to copy visible links to clipboard.", "error");
+        }
+      }
+
       $("save-settings").addEventListener("click", saveSettings);
       $("run-update").addEventListener("click", runUpdate);
       $("refresh-status").addEventListener("click", refreshStatus);
       $("load-news").addEventListener("click", loadNews);
+      $("copy-links").addEventListener("click", copyVisibleLinks);
 
       loadSettings();
       refreshStatus();

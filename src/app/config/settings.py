@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     per_source_min_interval_seconds: float = 1.0
     rss_extract_full_text: bool = True
     rss_full_text_max_items_per_source: int = 20
+    rss_full_text_concurrency_limit: int | None = None
     respect_robots_txt: bool = True
     auth_enabled: bool = False
     auth_username: str | None = None

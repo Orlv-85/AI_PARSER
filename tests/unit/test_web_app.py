@@ -1,5 +1,5 @@
 import time
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from importlib import import_module
 from types import SimpleNamespace
 
@@ -176,6 +176,184 @@ def test_news_storage_unavailable_returns_503(monkeypatch, tmp_path) -> None:
 
     response = client.get("/api/news")
     assert response.status_code == 503
+
+
+def test_news_article_details_returns_content_and_404_for_missing(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+
+    class _DummySession:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+    class _ArticleRepo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def get_article_for_agent(self, *, article_id: int):
+            if article_id == 123:
+                article = SimpleNamespace(
+                    id=123,
+                    title="Detailed article",
+                    summary="Short summary",
+                    content="Full article body",
+                    published_at=datetime(2026, 2, 21, 15, 30, tzinfo=UTC),
+                    rank_score=0.77,
+                    url="https://example.com/full",
+                    url_canonical="https://example.com/full",
+                    source_id=5,
+                )
+                return (article, "src-key", "Source Name")
+            return None
+
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(web_app_module, "SessionLocal", lambda: _DummySession())
+    monkeypatch.setattr(web_app_module, "ArticleRepo", _ArticleRepo)
+
+    app = create_app()
+    client = TestClient(app)
+
+    response = client.get("/api/news/123")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["article_id"] == 123
+    assert payload["summary"] == "Short summary"
+    assert payload["content"] == "Full article body"
+    assert payload["source_key"] == "src-key"
+    assert payload["source_name"] == "Source Name"
+
+    missing = client.get("/api/news/999999")
+    assert missing.status_code == 404
+
+
+def test_news_export_returns_json_attachment_and_include_content(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+
+    captured_calls: list[dict[str, object]] = []
+
+    class _DummySession:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+    class _ArticleRepo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def list_for_view(self, **kwargs):
+            captured_calls.append(dict(kwargs))
+            article = SimpleNamespace(
+                id=7,
+                title="Exported item",
+                summary="Summary text",
+                content="Full content text",
+                published_at=datetime(2026, 2, 21, 10, 0, tzinfo=UTC),
+                rank_score=0.66,
+                url="https://example.com/original",
+                url_canonical="https://example.com/canonical",
+                source_id=4,
+            )
+            return [(article, "src-key", "Source Name")]
+
+        def list_for_agent(self, **kwargs):
+            return self.list_for_view(**kwargs)
+
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(web_app_module, "SessionLocal", lambda: _DummySession())
+    monkeypatch.setattr(web_app_module, "ArticleRepo", _ArticleRepo)
+
+    app = create_app()
+    client = TestClient(app)
+
+    default_resp = client.get("/api/news/export?hours=6&limit=5")
+    assert default_resp.status_code == 200
+    assert default_resp.headers["content-type"].startswith("application/json")
+    content_disposition = default_resp.headers.get("content-disposition", "")
+    assert "attachment;" in content_disposition
+    assert ".json" in content_disposition
+    default_payload = default_resp.json()
+    assert isinstance(default_payload, list)
+    assert "summary" not in default_payload[0]
+    assert "content" not in default_payload[0]
+
+    with_content = client.get("/api/news/export?hours=6&limit=5&include_content=true")
+    assert with_content.status_code == 200
+    payload = with_content.json()
+    assert payload[0]["summary"] == "Summary text"
+    assert payload[0]["content"] == "Full content text"
+    assert payload[0]["url"] == "https://example.com/original"
+
+    assert captured_calls[0]["hours"] == 6
+    assert captured_calls[0]["limit"] == 5
+    assert captured_calls[1]["include_content"] is True
+
+
+def test_news_api_forwards_date_range_and_overrides_hours_passthrough(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+
+    captured: dict[str, object] = {}
+
+    class _ArticleRepo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def list_for_view(self, **kwargs):
+            captured.update(kwargs)
+            row = SimpleNamespace(
+                title="News",
+                published_at=datetime(2026, 2, 21, 12, 0, tzinfo=UTC),
+                rank_score=0.91,
+                url_canonical="https://example.com/news",
+                source_id=11,
+            )
+            return [(row, "src-key", "Source Name")]
+
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(web_app_module, "ArticleRepo", _ArticleRepo)
+
+    app = create_app()
+    client = TestClient(app)
+
+    response = client.get(
+        "/api/news?hours=48&limit=15&date_from=2026-02-20&date_to=2026-02-21&sort=published"
+    )
+    assert response.status_code == 200
+    assert captured["date_from"] == date(2026, 2, 20)
+    assert captured["date_to"] == date(2026, 2, 21)
+    assert captured["hours"] is None
+
+
+def test_news_template_has_date_range_inputs_and_copy_links_markers(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+    app = create_app()
+    client = TestClient(app)
+
+    page = client.get("/")
+    assert page.status_code == 200
+    assert 'id="date_from"' in page.text
+    assert 'id="date_to"' in page.text
+    assert 'id="copy-links"' in page.text
+    assert "navigator.clipboard.writeText" in page.text
+    assert "copy visible links" in page.text.lower()
 
 
 def test_news_template_has_network_error_handling_and_safe_row_rendering(
