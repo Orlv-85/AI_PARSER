@@ -272,7 +272,7 @@ Example `crontab` entry (adjust paths/venv as needed):
 Notes:
 - The script writes logs to stdout/stderr (cron-compatible).
 - Overlapping cron runs are not ideal (extra fetch work/load). Article deduplication prevents duplicate rows, but prefer schedules that avoid overlap.
-- `scripts/deploy_prod.sh` can install/update a managed cron entry automatically on the server (default enabled) using Docker Compose + `20/8`.
+- `scripts/deploy_prod.sh` can install/update a managed cron entry automatically on the server (default enabled) using Docker Compose + `10/4`.
 - Deploy-time cron knobs: `AUTO_UPDATE_ENABLED`, `AUTO_UPDATE_CRON_SCHEDULE`, `AUTO_UPDATE_LOG_PATH`, `AUTO_UPDATE_CONCURRENCY_LIMIT`, `AUTO_UPDATE_FULLTEXT_CONCURRENCY_LIMIT`.
 
 ### Top news
