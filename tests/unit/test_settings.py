@@ -25,6 +25,24 @@ def test_settings_validation_rejects_short_auth_secret() -> None:
         )
 
 
+def test_settings_is_auth_enabled_true_when_all_auth_material_present() -> None:
+    settings = Settings(
+        auth_username="operator",
+        auth_password_hash="hash",
+        auth_secret="0123456789abcdef0123456789abcdef",
+        _env_file=None,
+    )
+    assert settings.is_auth_enabled is True
+
+
+def test_settings_validation_rejects_missing_auth_fields_when_auth_enabled() -> None:
+    with pytest.raises(ValidationError, match="missing required auth settings"):
+        Settings(
+            auth_enabled=True,
+            _env_file=None,
+        )
+
+
 def test_settings_validation_rejects_non_positive_ttl() -> None:
     with pytest.raises(ValidationError, match="must be greater than 0"):
         Settings(

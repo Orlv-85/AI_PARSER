@@ -4,7 +4,7 @@ Spec-driven Python application for collecting fresh English-language AI news fro
 
 ## Requirements
 
-- Python 3.12+
+- Python 3.14.x (project target)
 - SQLite (bundled with Python)
 - `pip` or `uv`
 
@@ -272,8 +272,8 @@ Example `crontab` entry (adjust paths/venv as needed):
 Notes:
 - The script writes logs to stdout/stderr (cron-compatible).
 - Overlapping cron runs are not ideal (extra fetch work/load). Article deduplication prevents duplicate rows, but prefer schedules that avoid overlap.
-- `scripts/deploy_prod.sh` can install/update a managed cron entry automatically on the server (default enabled) using Docker Compose + `10/4`.
-- Deploy-time cron knobs: `AUTO_UPDATE_ENABLED`, `AUTO_UPDATE_CRON_SCHEDULE`, `AUTO_UPDATE_LOG_PATH`, `AUTO_UPDATE_CONCURRENCY_LIMIT`, `AUTO_UPDATE_FULLTEXT_CONCURRENCY_LIMIT`.
+- `scripts/deploy_prod.sh` can install/update a managed cron entry automatically on the server (default disabled) using Docker Compose + `10/4`, with RSS full-text extraction disabled by default for cron (`AUTO_UPDATE_RSS_EXTRACT_FULL_TEXT=0`).
+- Deploy-time cron knobs: `AUTO_UPDATE_ENABLED`, `AUTO_UPDATE_CRON_SCHEDULE`, `AUTO_UPDATE_LOG_PATH`, `AUTO_UPDATE_CONCURRENCY_LIMIT`, `AUTO_UPDATE_FULLTEXT_CONCURRENCY_LIMIT`, `AUTO_UPDATE_RSS_EXTRACT_FULL_TEXT`.
 
 ### Top news
 

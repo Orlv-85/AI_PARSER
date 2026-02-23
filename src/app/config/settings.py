@@ -19,9 +19,10 @@ class Settings(BaseSettings):
     max_retries: int = 3
     concurrency_limit: int = 8
     per_source_min_interval_seconds: float = 1.0
-    rss_extract_full_text: bool = True
+    rss_extract_full_text: bool = False
     rss_full_text_max_items_per_source: int = 20
     rss_full_text_concurrency_limit: int | None = None
+    rss_known_streak_stop: int = 20
     respect_robots_txt: bool = True
     auth_enabled: bool = False
     auth_username: str | None = None
@@ -40,7 +41,7 @@ class Settings(BaseSettings):
         )
 
     @model_validator(mode="after")
-    def validate_auth_config(self) -> "Settings":
+    def validate_auth_config(self) -> Settings:
         has_any_auth_value = bool(self.auth_username or self.auth_password_hash or self.auth_secret)
         if self.auth_enabled or has_any_auth_value:
             missing: list[str] = []
@@ -66,7 +67,7 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def validate_mcp_auth_config(self) -> "Settings":
+    def validate_mcp_auth_config(self) -> Settings:
         if not self.mcp_auth_enabled:
             return self
         if not self.mcp_auth_token or not self.mcp_auth_token.strip():
