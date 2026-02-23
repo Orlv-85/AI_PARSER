@@ -42,6 +42,50 @@ class _ClientFactory:
         return _Client(self._outcomes)
 
 
+class _TrackingClient:
+    def __init__(self, client_id: int, outcomes, events: list[tuple[str, int, str]]) -> None:
+        self.client_id = client_id
+        self._outcomes = list(outcomes)
+        self._events = events
+        self.close_calls = 0
+
+    def __enter__(self):
+        self._events.append(("enter", self.client_id, ""))
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        _ = (exc_type, exc, tb)
+        self.close()
+        return False
+
+    def close(self) -> None:
+        self.close_calls += 1
+        self._events.append(("close", self.client_id, ""))
+
+    def get(self, url: str):
+        self._events.append(("get", self.client_id, url))
+        outcome = self._outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+
+class _TrackingClientFactory:
+    def __init__(self, client_outcomes):
+        self._client_outcomes = [list(outcomes) for outcomes in client_outcomes]
+        self.instances: list[_TrackingClient] = []
+        self.events: list[tuple[str, int, str]] = []
+
+    def __call__(self, **kwargs):
+        _ = kwargs
+        client_id = len(self.instances)
+        outcomes = self._client_outcomes[client_id]
+        client = _TrackingClient(client_id=client_id, outcomes=outcomes, events=self.events)
+        self.instances.append(client)
+        self.events.append(("create", client_id, ""))
+        return client
+
+
 def test_request_retries_and_returns_response(monkeypatch) -> None:
     request = httpx.Request("GET", "https://example.com")
     error = httpx.RequestError("boom", request=request)
@@ -114,3 +158,64 @@ def test_fetch_text_and_fetch_bytes_delegate_to_request(monkeypatch) -> None:
     fetcher = Fetcher()
     assert fetcher.fetch_text(source_id="x", url="https://example.com") == "hello"
     assert fetcher.fetch_bytes(source_id="x", url="https://example.com") == b"world"
+
+
+def test_request_reuses_single_client_across_multiple_calls(monkeypatch) -> None:
+    factory = _TrackingClientFactory(
+        [[_Response(text="one"), _Response(text="two")], [_Response(text="two")]]
+    )
+    monkeypatch.setattr("app.ingest.fetcher.httpx.Client", factory)
+
+    fetcher = Fetcher()
+    first = fetcher.request(source_id="s1", url="https://example.com/1")
+    second = fetcher.request(source_id="s1", url="https://example.com/2")
+
+    assert first.text == "one"
+    assert second.text == "two"
+    assert len(factory.instances) == 1
+    assert [event for event in factory.events if event[0] == "get"] == [
+        ("get", 0, "https://example.com/1"),
+        ("get", 0, "https://example.com/2"),
+    ]
+
+
+def test_retries_within_one_request_use_same_client_instance(monkeypatch) -> None:
+    request = httpx.Request("GET", "https://example.com")
+    error = httpx.RequestError("boom", request=request)
+    factory = _TrackingClientFactory([[error, _Response(text="ok")]])
+    monkeypatch.setattr("app.ingest.fetcher.httpx.Client", factory)
+    monkeypatch.setattr("app.ingest.fetcher.time.sleep", lambda seconds: None)
+
+    fetcher = Fetcher(max_retries=1)
+    result = fetcher.request(source_id="s1", url="https://example.com")
+
+    assert result.text == "ok"
+    assert len(factory.instances) == 1
+    assert [event for event in factory.events if event[0] == "get"] == [
+        ("get", 0, "https://example.com"),
+        ("get", 0, "https://example.com"),
+    ]
+
+
+def test_close_closes_reused_client(monkeypatch) -> None:
+    factory = _TrackingClientFactory([[_Response(text="ok")]])
+    monkeypatch.setattr("app.ingest.fetcher.httpx.Client", factory)
+
+    fetcher = Fetcher()
+    fetcher.request(source_id="s1", url="https://example.com")
+    fetcher.close()
+
+    assert len(factory.instances) == 1
+    assert factory.instances[0].close_calls == 1
+
+
+def test_context_manager_closes_client(monkeypatch) -> None:
+    factory = _TrackingClientFactory([[_Response(text="ok")]])
+    monkeypatch.setattr("app.ingest.fetcher.httpx.Client", factory)
+
+    with Fetcher() as fetcher:
+        result = fetcher.request(source_id="s1", url="https://example.com")
+
+    assert result.text == "ok"
+    assert len(factory.instances) == 1
+    assert factory.instances[0].close_calls == 1
