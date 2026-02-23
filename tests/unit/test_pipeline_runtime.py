@@ -1180,3 +1180,340 @@ def test_run_fetch_cycle_persists_rss_fetch_state_metadata_for_200(monkeypatch) 
     assert payload["last_modified"] == "Mon, 23 Feb 2026 12:00:00 GMT"
     assert payload["last_status_code"] == 200
     assert isinstance(payload["last_checked_at"], datetime)
+
+
+def test_run_fetch_cycle_html_two_stage_skips_known_links_and_respects_max_links(
+    monkeypatch,
+) -> None:
+    logger = _Logger()
+    session = _Session()
+
+    configs = [
+        SourceConfig(
+            id="html_two_stage",
+            name="HTML Two Stage",
+            type="html",
+            url="https://example.com/news",
+            enabled=True,
+            html={"list_selector": "main", "link_selector": "a"},
+        )
+    ]
+
+    class _TrackingArticleRepo:
+        last_instance = None
+
+        def __init__(self, _session) -> None:
+            self.exists_calls: list[str] = []
+            self.insert_calls: list[str] = []
+            self._known = {"h:https://example.com/item-1"}
+            _TrackingArticleRepo.last_instance = self
+
+        def exists_by_canonical_hash(self, canonical_hash: str) -> bool:
+            self.exists_calls.append(canonical_hash)
+            return canonical_hash in self._known
+
+        def insert_article(self, **kwargs):
+            self.insert_calls.append(kwargs["url"])
+            return SimpleNamespace(id=len(self.insert_calls)), True
+
+    link_calls: list[dict[str, object]] = []
+    article_calls: list[str] = []
+
+    def _fake_fetch_html_links(*args, **kwargs):
+        link_calls.append({"args": args, "kwargs": kwargs})
+        return [
+            "https://example.com/item-1",  # known, should skip article fetch
+            "https://example.com/item-2",
+            "https://example.com/item-3",
+            "https://example.com/item-4",  # should be ignored by max-links=3
+        ]
+
+    def _fake_fetch_html_article(*args, **kwargs):
+        link = kwargs.get("url")
+        if not isinstance(link, str) and len(args) >= 2:
+            link = args[1]
+        assert isinstance(link, str)
+        article_calls.append(link)
+        return Article(
+            source_key="html_two_stage",
+            title=f"Title for {link.rsplit('/', maxsplit=1)[-1]}",
+            url=link,
+            published_at=None,
+            summary=None,
+            content="content",
+        )
+
+    def _unexpected_fetch_html(*_args, **_kwargs):
+        raise AssertionError("legacy monolithic fetch_html path should not be used")
+
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.pipeline.SessionLocal", lambda: session)
+    monkeypatch.setattr("app.core.pipeline.SourceRepo", _SourceRepo)
+    monkeypatch.setattr("app.core.pipeline.ArticleRepo", _TrackingArticleRepo)
+    monkeypatch.setattr("app.core.pipeline.fetch_html", _unexpected_fetch_html)
+    monkeypatch.setattr("app.core.pipeline.fetch_rss", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("app.ingest.html.fetch_html_links", _fake_fetch_html_links, raising=False)
+    monkeypatch.setattr(
+        "app.ingest.html.fetch_html_article",
+        _fake_fetch_html_article,
+        raising=False,
+    )
+    monkeypatch.setattr("app.core.pipeline.fetch_html_links", _fake_fetch_html_links, raising=False)
+    monkeypatch.setattr(
+        "app.core.pipeline.fetch_html_article",
+        _fake_fetch_html_article,
+        raising=False,
+    )
+    monkeypatch.setattr("app.core.pipeline.canonicalize_url", lambda u: f"c:{u}")
+    monkeypatch.setattr("app.core.pipeline.canonical_url_hash", lambda u: f"h:{u}")
+    monkeypatch.setattr("app.core.pipeline.ai_relevance_score", lambda _item: 0.5)
+    monkeypatch.setattr("app.core.pipeline.freshness_score", lambda _dt: 0.5)
+    monkeypatch.setattr("app.core.pipeline.rank_score", lambda **_kwargs: 0.5)
+
+    settings = SimpleNamespace(
+        sources_path="sources.yaml",
+        request_timeout_seconds=1.0,
+        max_retries=0,
+        concurrency_limit=1,
+        per_source_min_interval_seconds=0.0,
+        rss_extract_full_text=False,
+        rss_full_text_max_items_per_source=0,
+        rss_full_text_concurrency_limit=None,
+        rss_known_streak_stop=0,
+        html_known_streak_stop=50,
+        html_max_links_per_source=3,
+        fetch_emit_source_metrics=True,
+    )
+
+    summary = run_fetch_cycle(settings=settings, logger=logger)
+    repo = _TrackingArticleRepo.last_instance
+    assert repo is not None
+
+    assert len(link_calls) == 1
+    assert article_calls == [
+        "https://example.com/item-2",
+        "https://example.com/item-3",
+    ]
+    assert repo.insert_calls == article_calls
+    assert summary.errors == 0
+    assert summary.new == 2
+    assert summary.skipped_known_html_links == 1
+    assert summary.early_stop_hits == 0
+
+
+def test_run_fetch_cycle_html_two_stage_stops_after_known_streak(monkeypatch) -> None:
+    logger = _Logger()
+    session = _Session()
+
+    configs = [
+        SourceConfig(
+            id="html_known_streak",
+            name="HTML Known Streak",
+            type="html",
+            url="https://example.com/news",
+            enabled=True,
+            html={"list_selector": "main", "link_selector": "a"},
+        )
+    ]
+
+    class _TrackingArticleRepo:
+        last_instance = None
+
+        def __init__(self, _session) -> None:
+            self.exists_calls: list[str] = []
+            self.insert_calls: list[str] = []
+            self._known = {
+                "h:https://example.com/item-1",
+                "h:https://example.com/item-2",
+            }
+            _TrackingArticleRepo.last_instance = self
+
+        def exists_by_canonical_hash(self, canonical_hash: str) -> bool:
+            self.exists_calls.append(canonical_hash)
+            return canonical_hash in self._known
+
+        def insert_article(self, **kwargs):
+            self.insert_calls.append(kwargs["url"])
+            return SimpleNamespace(id=len(self.insert_calls)), True
+
+    link_calls: list[int] = []
+    article_calls: list[str] = []
+
+    def _fake_fetch_html_links(*_args, **_kwargs):
+        link_calls.append(1)
+        return [
+            "https://example.com/item-1",
+            "https://example.com/item-2",
+            "https://example.com/item-3",  # should not be fetched after streak stop=2
+        ]
+
+    def _fake_fetch_html_article(*args, **kwargs):
+        link = kwargs.get("url")
+        if not isinstance(link, str) and len(args) >= 2:
+            link = args[1]
+        assert isinstance(link, str)
+        article_calls.append(link)
+        return Article(
+            source_key="html_known_streak",
+            title="Should not be reached",
+            url=link,
+            published_at=None,
+            summary=None,
+            content="content",
+        )
+
+    def _unexpected_fetch_html(*_args, **_kwargs):
+        raise AssertionError("legacy monolithic fetch_html path should not be used")
+
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.pipeline.SessionLocal", lambda: session)
+    monkeypatch.setattr("app.core.pipeline.SourceRepo", _SourceRepo)
+    monkeypatch.setattr("app.core.pipeline.ArticleRepo", _TrackingArticleRepo)
+    monkeypatch.setattr("app.core.pipeline.fetch_html", _unexpected_fetch_html)
+    monkeypatch.setattr("app.core.pipeline.fetch_rss", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("app.ingest.html.fetch_html_links", _fake_fetch_html_links, raising=False)
+    monkeypatch.setattr(
+        "app.ingest.html.fetch_html_article",
+        _fake_fetch_html_article,
+        raising=False,
+    )
+    monkeypatch.setattr("app.core.pipeline.fetch_html_links", _fake_fetch_html_links, raising=False)
+    monkeypatch.setattr(
+        "app.core.pipeline.fetch_html_article",
+        _fake_fetch_html_article,
+        raising=False,
+    )
+    monkeypatch.setattr("app.core.pipeline.canonicalize_url", lambda u: f"c:{u}")
+    monkeypatch.setattr("app.core.pipeline.canonical_url_hash", lambda u: f"h:{u}")
+    monkeypatch.setattr("app.core.pipeline.ai_relevance_score", lambda _item: 0.5)
+    monkeypatch.setattr("app.core.pipeline.freshness_score", lambda _dt: 0.5)
+    monkeypatch.setattr("app.core.pipeline.rank_score", lambda **_kwargs: 0.5)
+
+    settings = SimpleNamespace(
+        sources_path="sources.yaml",
+        request_timeout_seconds=1.0,
+        max_retries=0,
+        concurrency_limit=1,
+        per_source_min_interval_seconds=0.0,
+        rss_extract_full_text=False,
+        rss_full_text_max_items_per_source=0,
+        rss_full_text_concurrency_limit=None,
+        rss_known_streak_stop=0,
+        html_known_streak_stop=2,
+        html_max_links_per_source=20,
+        fetch_emit_source_metrics=True,
+    )
+
+    summary = run_fetch_cycle(settings=settings, logger=logger)
+    repo = _TrackingArticleRepo.last_instance
+    assert repo is not None
+
+    assert link_calls == [1]
+    assert not article_calls
+    assert repo.insert_calls == []
+    assert summary.errors == 0
+    assert summary.skipped_known_html_links == 2
+    assert summary.early_stop_hits == 1
+
+
+def test_run_fetch_cycle_html_two_stage_skips_known_links_before_article_fetch_future(
+    monkeypatch,
+) -> None:
+    logger = _Logger()
+    session = _Session()
+
+    configs = [
+        SourceConfig(
+            id="html_future_two_stage",
+            name="HTML Future Two Stage",
+            type="html",
+            url="https://example.com/news",
+            enabled=True,
+            html={"list_selector": "main", "link_selector": "a"},
+        )
+    ]
+
+    class _TrackingArticleRepo:
+        last_instance = None
+
+        def __init__(self, _session) -> None:
+            self.exists_calls: list[str] = []
+            self.insert_calls: list[str] = []
+            _TrackingArticleRepo.last_instance = self
+
+        def exists_by_canonical_hash(self, canonical_hash: str) -> bool:
+            self.exists_calls.append(canonical_hash)
+            return canonical_hash == "h:https://example.com/known"
+
+        def insert_article(self, **kwargs):
+            self.insert_calls.append(kwargs["url"])
+            return SimpleNamespace(id=len(self.insert_calls)), True
+
+    article_calls: list[str] = []
+
+    def _fake_fetch_html_links(*_args, **_kwargs):
+        return [
+            "https://example.com/known",
+            "https://example.com/new",
+        ]
+
+    def _fake_fetch_html_article(*args, **kwargs):
+        url = kwargs.get("url")
+        if not isinstance(url, str) and len(args) >= 2:
+            url = args[1]
+        assert isinstance(url, str)
+        article_calls.append(url)
+        return Article(
+            source_key="html_future_two_stage",
+            title="New item",
+            url=url,
+            published_at=None,
+            summary=None,
+            content="content",
+        )
+
+    def _unexpected_fetch_html(*_args, **_kwargs):
+        raise AssertionError("legacy monolithic fetch_html path should not be used")
+
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.pipeline.SessionLocal", lambda: session)
+    monkeypatch.setattr("app.core.pipeline.SourceRepo", _SourceRepo)
+    monkeypatch.setattr("app.core.pipeline.ArticleRepo", _TrackingArticleRepo)
+    monkeypatch.setattr("app.core.pipeline.fetch_rss", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("app.core.pipeline.fetch_html", _unexpected_fetch_html)
+    monkeypatch.setattr("app.core.pipeline.fetch_html_links", _fake_fetch_html_links)
+    monkeypatch.setattr("app.core.pipeline.fetch_html_article", _fake_fetch_html_article)
+    monkeypatch.setattr("app.core.pipeline.canonicalize_url", lambda u: f"c:{u}")
+    monkeypatch.setattr("app.core.pipeline.canonical_url_hash", lambda u: f"h:{u}")
+    monkeypatch.setattr("app.core.pipeline.ai_relevance_score", lambda _item: 0.5)
+    monkeypatch.setattr("app.core.pipeline.freshness_score", lambda _dt: 0.5)
+    monkeypatch.setattr("app.core.pipeline.rank_score", lambda **_kwargs: 0.5)
+
+    settings = SimpleNamespace(
+        sources_path="sources.yaml",
+        request_timeout_seconds=1.0,
+        max_retries=0,
+        concurrency_limit=1,
+        per_source_min_interval_seconds=0.0,
+        rss_extract_full_text=False,
+        rss_full_text_max_items_per_source=0,
+        rss_full_text_concurrency_limit=None,
+        rss_known_streak_stop=0,
+        html_known_streak_stop=50,
+        html_max_links_per_source=10,
+        fetch_emit_source_metrics=True,
+    )
+
+    summary = run_fetch_cycle(settings=settings, logger=logger)
+    repo = _TrackingArticleRepo.last_instance
+    assert repo is not None
+    assert repo.exists_calls == [
+        "h:https://example.com/known",
+        "h:https://example.com/new",
+    ]
+    assert article_calls == ["https://example.com/new"]
+    assert repo.insert_calls == ["https://example.com/new"]
+    assert summary.skipped_known_html_links == 1

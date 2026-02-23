@@ -9,12 +9,15 @@ from app.config.sources import SourceConfig, load_sources
 from app.core.canonicalize import canonical_url_hash, canonicalize_url
 from app.core.scoring import ai_relevance_score, freshness_score, rank_score
 from app.ingest.fetcher import Fetcher
-from app.ingest.html import fetch_html
+from app.ingest.html import fetch_html, fetch_html_article, fetch_html_links
 from app.ingest.rss import fetch_rss, fetch_rss_with_metadata
 from app.storage import SessionLocal, create_all
 from app.storage.repos import ArticleRepo, SourceRepo
 
 _DEFAULT_FETCH_RSS_WITH_METADATA = fetch_rss_with_metadata
+_DEFAULT_FETCH_HTML = fetch_html
+_DEFAULT_FETCH_HTML_LINKS = fetch_html_links
+_DEFAULT_FETCH_HTML_ARTICLE = fetch_html_article
 
 
 @dataclass(frozen=True)
@@ -27,6 +30,11 @@ class FetchSummary:  # pylint: disable=too-many-instance-attributes
     not_modified_sources: int = 0
     skipped_known_html_links: int = 0
     early_stop_hits: int = 0
+
+
+@dataclass(frozen=True)
+class HtmlLinkFetchResult:
+    links: list[str]
 
 
 @dataclass
@@ -125,6 +133,38 @@ def _fetch_source_items(
             full_text_semaphore=full_text_semaphore,
             if_none_match=if_none_match,
             if_modified_since=if_modified_since,
+        )
+    html_two_stage_supported = (
+        config.type == "html"
+        and all(
+        hasattr(settings, attr)
+        for attr in ("html_known_streak_stop", "html_max_links_per_source")
+        )
+    )
+    if config.type == "html" and html_two_stage_supported and (
+        fetch_html_links is not _DEFAULT_FETCH_HTML_LINKS
+        or fetch_html_article is not _DEFAULT_FETCH_HTML_ARTICLE
+    ):
+        return HtmlLinkFetchResult(
+            fetch_html_links(
+                config,
+                settings.request_timeout_seconds,
+                fetcher=fetcher,
+            )
+        )
+    if config.type == "html" and fetch_html is not _DEFAULT_FETCH_HTML:
+        return fetch_html(
+            config,
+            settings.request_timeout_seconds,
+            fetcher=fetcher,
+        )
+    if html_two_stage_supported:
+        return HtmlLinkFetchResult(
+            fetch_html_links(
+                config,
+                settings.request_timeout_seconds,
+                fetcher=fetcher,
+            )
         )
     return fetch_html(
         config,
@@ -248,6 +288,94 @@ def _fetch_result_items(result: object) -> list:
     if isinstance(result, list):
         return result
     return []
+
+
+def _process_html_links_two_stage(
+    *,
+    links: list[str],
+    config: SourceConfig,
+    db_source_id: int,
+    article_repo: ArticleRepo,
+    settings: Settings,
+) -> tuple[int, int, int, int, bool]:
+    new_count = 0
+    duplicate_count = 0
+    skipped_known_items = 0
+    early_stop_hit = False
+    fetched_articles = 0
+    html_known_streak = 0
+    html_known_streak_stop = int(getattr(settings, "html_known_streak_stop", 0) or 0)
+    html_max_links_per_source = getattr(settings, "html_max_links_per_source", None)
+    exists_by_canonical_hash = getattr(article_repo, "exists_by_canonical_hash", None)
+    exists_by_canonical_hash_fn = (
+        exists_by_canonical_hash if callable(exists_by_canonical_hash) else None
+    )
+    capped_links = links
+    if isinstance(html_max_links_per_source, int) and html_max_links_per_source >= 0:
+        capped_links = links[:html_max_links_per_source]
+    fetcher = Fetcher(
+        timeout_seconds=settings.request_timeout_seconds,
+        max_retries=settings.max_retries,
+        per_source_min_interval_seconds=settings.per_source_min_interval_seconds,
+    )
+
+    try:
+        for link in capped_links:
+            canonical = canonicalize_url(str(link))
+            canonical_hash = canonical_url_hash(str(link))
+            if (
+                exists_by_canonical_hash_fn is not None
+                and exists_by_canonical_hash_fn(canonical_hash)
+            ):
+                duplicate_count += 1
+                skipped_known_items += 1
+                html_known_streak += 1
+                if 0 < html_known_streak_stop <= html_known_streak:
+                    early_stop_hit = True
+                    break
+                continue
+
+            html_known_streak = 0
+            try:
+                item = fetch_html_article(
+                    source=config,
+                    url=str(link),
+                    timeout_seconds=settings.request_timeout_seconds,
+                    fetcher=fetcher,
+                )
+            except Exception:
+                continue
+            if item is None:
+                continue
+            fetched_articles += 1
+
+            relevance = ai_relevance_score(item)
+            freshness = freshness_score(item.published_at)
+            rank = rank_score(
+                relevance=relevance,
+                freshness=freshness,
+                source_weight=config.source_weight,
+            )
+            _, is_new = article_repo.insert_article(
+                source_id=db_source_id,
+                title=item.title,
+                url=str(item.url),
+                url_canonical=canonical,
+                url_canonical_hash=canonical_hash,
+                published_at=item.published_at or datetime.now(UTC),
+                summary=item.summary,
+                content=item.content,
+                ai_relevance_score=relevance,
+                freshness_score=freshness,
+                rank_score=rank,
+            )
+            if is_new:
+                new_count += 1
+            else:
+                duplicate_count += 1
+    finally:
+        fetcher.close()
+    return fetched_articles, new_count, duplicate_count, skipped_known_items, early_stop_hit
 
 
 def _persist_rss_fetch_state_if_present(
@@ -420,6 +548,39 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                         enabled=bool(getattr(settings, "fetch_emit_source_metrics", True)),
                     )
                     continue
+
+            if config.type == "html" and isinstance(fetch_result, HtmlLinkFetchResult):
+                (
+                    source_fetched,
+                    source_new,
+                    source_duplicates,
+                    source_skipped_known,
+                    source_early_stop,
+                ) = _process_html_links_two_stage(
+                    links=fetch_result.links,
+                    config=config,
+                    db_source_id=db_source_id,
+                    article_repo=article_repo,
+                    settings=settings,
+                )
+                fetched_count += source_fetched
+                source_metrics.fetched_items = source_fetched
+                new_count += source_new
+                duplicate_count += source_duplicates
+                source_metrics.new_items = source_new
+                source_metrics.duplicate_items = source_duplicates
+                source_metrics.skipped_known_items = source_skipped_known
+                source_metrics.early_stop_hit = source_early_stop
+                if source_early_stop:
+                    optimization_early_stop_hits += 1
+                optimization_skipped_known_html_links += source_skipped_known
+                _log_source_metrics(
+                    logger=logger,
+                    run_id=run_id,
+                    metrics=source_metrics,
+                    enabled=bool(getattr(settings, "fetch_emit_source_metrics", True)),
+                )
+                continue
 
             items = _fetch_result_items(fetch_result)
             fetched_count += len(items)
