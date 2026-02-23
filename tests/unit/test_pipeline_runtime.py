@@ -1,6 +1,7 @@
+# pylint: disable=too-many-lines
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import Literal
+from typing import Any, ClassVar, Literal
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
@@ -510,3 +511,672 @@ def test_run_fetch_cycle_resets_rss_known_streak_on_new_item(monkeypatch) -> Non
     assert repo.insert_calls == ["h:https://example.com/new-2"]
     assert summary.new == 1
     assert summary.duplicates == 2
+
+
+def test_run_fetch_cycle_rss_304_uses_stored_validators_and_persists_fetch_state(
+    monkeypatch,
+) -> None:
+    logger = _Logger()
+    session = _Session()
+
+    configs = [
+        SourceConfig(
+            id="rss_stateful",
+            name="RSS Stateful",
+            type="rss",
+            url="https://example.com/stateful.xml",
+            enabled=True,
+        )
+    ]
+    source_states = {
+        101: {
+            "etag": '"etag-old"',
+            "last_modified": "Mon, 23 Feb 2026 10:00:00 GMT",
+            "last_checked_at": None,
+            "last_status_code": 200,
+        }
+    }
+    fetch_meta_calls: list[dict[str, object]] = []
+    legacy_fetch_calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
+
+    class _StatefulSourceRepo:
+        last_instance: ClassVar[Any] = None
+
+        def __init__(self, _session) -> None:
+            self.state_updates: list[dict[str, object]] = []
+            _StatefulSourceRepo.last_instance = self
+
+        def upsert_source(self, _config: SourceConfig):
+            return SimpleNamespace(id=101)
+
+        def get_source_fetch_state(self, source_id: int):
+            return dict(source_states[source_id])
+
+        def update_source_fetch_state(
+            self,
+            source_id: int,
+            *,
+            etag,
+            last_modified,
+            last_status_code,
+            last_checked_at,
+        ) -> None:
+            self.state_updates.append(
+                {
+                    "source_id": source_id,
+                    "etag": etag,
+                    "last_modified": last_modified,
+                    "last_status_code": last_status_code,
+                    "last_checked_at": last_checked_at,
+                }
+            )
+
+    class _TrackingArticleRepo:
+        last_instance = None
+
+        def __init__(self, _session) -> None:
+            self.insert_calls: list[dict[str, object]] = []
+            _TrackingArticleRepo.last_instance = self
+
+        def insert_article(self, **kwargs):
+            self.insert_calls.append(kwargs)
+            return SimpleNamespace(id=1), True
+
+    def _fake_fetch_rss_with_metadata(source_key: str, url: str, timeout_seconds: float, **kwargs):
+        fetch_meta_calls.append(
+            {
+                "source_key": source_key,
+                "url": url,
+                "timeout_seconds": timeout_seconds,
+                **kwargs,
+            }
+        )
+        return SimpleNamespace(
+            items=[],
+            not_modified=True,
+            status_code=304,
+            etag='"etag-304"',
+            last_modified="Mon, 23 Feb 2026 12:00:00 GMT",
+        )
+
+    def _legacy_fetch_rss(*args, **kwargs):
+        legacy_fetch_calls.append((args, kwargs))
+        return []
+
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.pipeline.SessionLocal", lambda: session)
+    monkeypatch.setattr("app.core.pipeline.SourceRepo", _StatefulSourceRepo)
+    monkeypatch.setattr("app.core.pipeline.ArticleRepo", _TrackingArticleRepo)
+    monkeypatch.setattr("app.core.pipeline.fetch_rss", _legacy_fetch_rss)
+    monkeypatch.setattr(
+        "app.core.pipeline.fetch_rss_with_metadata",
+        _fake_fetch_rss_with_metadata,
+        raising=False,
+    )
+    monkeypatch.setattr("app.core.pipeline.fetch_html", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("app.core.pipeline.canonicalize_url", lambda u: f"c:{u}")
+    monkeypatch.setattr("app.core.pipeline.canonical_url_hash", lambda u: f"h:{u}")
+    monkeypatch.setattr("app.core.pipeline.ai_relevance_score", lambda _item: 0.5)
+    monkeypatch.setattr("app.core.pipeline.freshness_score", lambda _dt: 0.5)
+    monkeypatch.setattr("app.core.pipeline.rank_score", lambda **_kwargs: 0.5)
+
+    settings = SimpleNamespace(
+        sources_path="sources.yaml",
+        request_timeout_seconds=1.0,
+        max_retries=0,
+        concurrency_limit=1,
+        per_source_min_interval_seconds=0.0,
+        rss_extract_full_text=False,
+        rss_full_text_max_items_per_source=0,
+        rss_full_text_concurrency_limit=None,
+        rss_known_streak_stop=0,
+    )
+
+    summary = run_fetch_cycle(settings=settings, logger=logger)
+    source_repo = _StatefulSourceRepo.last_instance
+    article_repo = _TrackingArticleRepo.last_instance
+    assert source_repo is not None
+    assert article_repo is not None
+
+    assert not legacy_fetch_calls
+    assert fetch_meta_calls and fetch_meta_calls[0]["if_none_match"] == '"etag-old"'
+    assert fetch_meta_calls[0]["if_modified_since"] == "Mon, 23 Feb 2026 10:00:00 GMT"
+    assert summary.not_modified_sources == 1
+    assert summary.fetched == 0
+    assert summary.new == 0
+    assert article_repo.insert_calls == []
+    source_finished_payload = next(
+        payload
+        for event, payload in logger.info_calls
+        if event == "source_fetch_finished" and payload["source_id"] == "rss_stateful"
+    )
+    assert source_finished_payload["not_modified"] is True
+    fetch_finished_payload = next(
+        payload for event, payload in logger.info_calls if event == "fetch_run_finished"
+    )
+    assert fetch_finished_payload["not_modified_sources"] == 1
+    assert source_repo.state_updates and source_repo.state_updates[0]["last_status_code"] == 304
+    assert source_repo.state_updates[0]["last_checked_at"] is not None
+
+
+def test_run_fetch_cycle_rss_200_persists_validators_and_processes_items(monkeypatch) -> None:
+    logger = _Logger()
+    session = _Session()
+
+    configs = [
+        SourceConfig(
+            id="rss_stateful",
+            name="RSS Stateful",
+            type="rss",
+            url="https://example.com/stateful.xml",
+            enabled=True,
+        )
+    ]
+    source_states = {
+        202: {
+            "etag": '"etag-prev"',
+            "last_modified": "Mon, 23 Feb 2026 09:00:00 GMT",
+            "last_checked_at": None,
+            "last_status_code": 200,
+        }
+    }
+    fetch_meta_calls: list[dict[str, object]] = []
+    legacy_fetch_calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
+
+    class _StatefulSourceRepo:
+        last_instance: ClassVar[Any] = None
+
+        def __init__(self, _session) -> None:
+            self.state_updates: list[dict[str, object]] = []
+            _StatefulSourceRepo.last_instance = self
+
+        def upsert_source(self, _config: SourceConfig):
+            return SimpleNamespace(id=202)
+
+        def get_source_fetch_state(self, source_id: int):
+            return dict(source_states[source_id])
+
+        def update_source_fetch_state(
+            self,
+            source_id: int,
+            *,
+            etag,
+            last_modified,
+            last_status_code,
+            last_checked_at,
+        ) -> None:
+            self.state_updates.append(
+                {
+                    "source_id": source_id,
+                    "etag": etag,
+                    "last_modified": last_modified,
+                    "last_status_code": last_status_code,
+                    "last_checked_at": last_checked_at,
+                }
+            )
+
+    class _TrackingArticleRepo:
+        last_instance = None
+
+        def __init__(self, _session) -> None:
+            self.insert_calls: list[dict[str, object]] = []
+            _TrackingArticleRepo.last_instance = self
+
+        def insert_article(self, **kwargs):
+            self.insert_calls.append(kwargs)
+            return SimpleNamespace(id=1), True
+
+    def _fake_fetch_rss_with_metadata(source_key: str, url: str, timeout_seconds: float, **kwargs):
+        fetch_meta_calls.append(
+            {
+                "source_key": source_key,
+                "url": url,
+                "timeout_seconds": timeout_seconds,
+                **kwargs,
+            }
+        )
+        return SimpleNamespace(
+            items=[
+                Article(
+                    source_key="rss_stateful",
+                    title="Fresh item",
+                    url="https://example.com/fresh",
+                    published_at=datetime(2026, 2, 23, 12, 0, tzinfo=UTC),
+                    summary="sum",
+                    content="content",
+                )
+            ],
+            not_modified=False,
+            status_code=200,
+            etag='"etag-new"',
+            last_modified="Mon, 23 Feb 2026 12:05:00 GMT",
+        )
+
+    def _legacy_fetch_rss(*args, **kwargs):
+        legacy_fetch_calls.append((args, kwargs))
+        return []
+
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.pipeline.SessionLocal", lambda: session)
+    monkeypatch.setattr("app.core.pipeline.SourceRepo", _StatefulSourceRepo)
+    monkeypatch.setattr("app.core.pipeline.ArticleRepo", _TrackingArticleRepo)
+    monkeypatch.setattr("app.core.pipeline.fetch_rss", _legacy_fetch_rss)
+    monkeypatch.setattr(
+        "app.core.pipeline.fetch_rss_with_metadata",
+        _fake_fetch_rss_with_metadata,
+        raising=False,
+    )
+    monkeypatch.setattr("app.core.pipeline.fetch_html", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("app.core.pipeline.canonicalize_url", lambda u: f"c:{u}")
+    monkeypatch.setattr("app.core.pipeline.canonical_url_hash", lambda u: f"h:{u}")
+    monkeypatch.setattr("app.core.pipeline.ai_relevance_score", lambda _item: 0.5)
+    monkeypatch.setattr("app.core.pipeline.freshness_score", lambda _dt: 0.5)
+    monkeypatch.setattr("app.core.pipeline.rank_score", lambda **_kwargs: 0.5)
+
+    settings = SimpleNamespace(
+        sources_path="sources.yaml",
+        request_timeout_seconds=1.0,
+        max_retries=0,
+        concurrency_limit=1,
+        per_source_min_interval_seconds=0.0,
+        rss_extract_full_text=False,
+        rss_full_text_max_items_per_source=0,
+        rss_full_text_concurrency_limit=None,
+        rss_known_streak_stop=0,
+    )
+
+    summary = run_fetch_cycle(settings=settings, logger=logger)
+    source_repo = _StatefulSourceRepo.last_instance
+    article_repo = _TrackingArticleRepo.last_instance
+    assert source_repo is not None
+    assert article_repo is not None
+
+    assert not legacy_fetch_calls
+    assert fetch_meta_calls and fetch_meta_calls[0]["if_none_match"] == '"etag-prev"'
+    assert fetch_meta_calls[0]["if_modified_since"] == "Mon, 23 Feb 2026 09:00:00 GMT"
+    assert summary.not_modified_sources == 0
+    assert summary.fetched == 1
+    assert summary.new == 1
+    assert len(article_repo.insert_calls) == 1
+    assert source_repo.state_updates and source_repo.state_updates[0]["etag"] == '"etag-new"'
+    assert source_repo.state_updates[0]["last_modified"] == "Mon, 23 Feb 2026 12:05:00 GMT"
+    assert source_repo.state_updates[0]["last_status_code"] == 200
+    assert source_repo.state_updates[0]["last_checked_at"] is not None
+
+
+def test_run_fetch_cycle_uses_rss_validators_and_handles_not_modified(monkeypatch) -> None:
+    logger = _Logger()
+    session = _Session()
+
+    configs = [
+        SourceConfig(
+            id="rss_stateful",
+            name="RSS Stateful",
+            type="rss",
+            url="https://example.com/stateful.xml",
+            enabled=True,
+        )
+    ]
+
+    class _TrackingSourceRepo:
+        last_instance = None
+
+        def __init__(self, _session) -> None:
+            self.get_calls: list[int] = []
+            self.update_calls: list[tuple[int, dict[str, object]]] = []
+            _TrackingSourceRepo.last_instance = self
+
+        def upsert_source(self, config: SourceConfig):
+            return SimpleNamespace(id=101, source_key=config.id)
+
+        def get_fetch_state(self, *, source_id: int):
+            self.get_calls.append(source_id)
+            return {
+                "etag": '"etag-old"',
+                "last_modified": "Sun, 22 Feb 2026 10:00:00 GMT",
+                "last_checked_at": None,
+                "last_status_code": 200,
+            }
+
+        def update_fetch_state(self, *, source_id: int, **kwargs):
+            self.update_calls.append((source_id, kwargs))
+
+    class _NoInsertArticleRepo:
+        def __init__(self, _session) -> None:
+            self.insert_calls = 0
+
+        def insert_article(self, **_kwargs):
+            self.insert_calls += 1
+            raise AssertionError(
+                "insert_article should not be called for 304/not-modified RSS source"
+            )
+
+    class _Rss304Result(list):
+        def __init__(self) -> None:
+            super().__init__([])
+            self.not_modified = True
+            self.status_code = 304
+            self.etag = '"etag-new"'
+            self.last_modified = "Mon, 23 Feb 2026 11:00:00 GMT"
+
+    rss_calls: list[dict[str, object]] = []
+
+    def _fake_fetch_rss(source_key: str, url: str, *_args, **kwargs):
+        rss_calls.append(
+            {
+                "source_key": source_key,
+                "url": url,
+                "if_none_match": kwargs.get("if_none_match"),
+                "if_modified_since": kwargs.get("if_modified_since"),
+            }
+        )
+        return _Rss304Result()
+
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.pipeline.SessionLocal", lambda: session)
+    monkeypatch.setattr("app.core.pipeline.SourceRepo", _TrackingSourceRepo)
+    monkeypatch.setattr("app.core.pipeline.ArticleRepo", _NoInsertArticleRepo)
+    monkeypatch.setattr("app.core.pipeline.fetch_rss", _fake_fetch_rss)
+    monkeypatch.setattr("app.core.pipeline.fetch_html", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("app.core.pipeline.canonicalize_url", lambda u: f"c:{u}")
+    monkeypatch.setattr("app.core.pipeline.canonical_url_hash", lambda u: f"h:{u}")
+    monkeypatch.setattr("app.core.pipeline.ai_relevance_score", lambda _item: 0.5)
+    monkeypatch.setattr("app.core.pipeline.freshness_score", lambda _dt: 0.5)
+    monkeypatch.setattr("app.core.pipeline.rank_score", lambda **_kwargs: 0.5)
+
+    settings = SimpleNamespace(
+        sources_path="sources.yaml",
+        request_timeout_seconds=1.0,
+        max_retries=0,
+        concurrency_limit=1,
+        per_source_min_interval_seconds=0.0,
+        rss_extract_full_text=False,
+        rss_full_text_max_items_per_source=0,
+        rss_full_text_concurrency_limit=None,
+        rss_known_streak_stop=0,
+    )
+
+    summary = run_fetch_cycle(settings=settings, logger=logger)
+    repo = _TrackingSourceRepo.last_instance
+    assert repo is not None
+
+    assert rss_calls == [
+        {
+            "source_key": "rss_stateful",
+            "url": "https://example.com/stateful.xml",
+            "if_none_match": '"etag-old"',
+            "if_modified_since": "Sun, 22 Feb 2026 10:00:00 GMT",
+        }
+    ]
+    assert summary.not_modified_sources == 1
+    assert summary.fetched == 0
+    assert summary.new == 0
+    assert summary.duplicates == 0
+
+    assert repo.get_calls == [101]
+    assert len(repo.update_calls) == 1
+    source_id, payload = repo.update_calls[0]
+    assert source_id == 101
+    assert payload["etag"] == '"etag-new"'
+    assert payload["last_modified"] == "Mon, 23 Feb 2026 11:00:00 GMT"
+    assert payload["last_status_code"] == 304
+    assert isinstance(payload["last_checked_at"], datetime)
+
+
+def test_run_fetch_cycle_default_rss_path_persists_304_metadata_from_wrapper(monkeypatch) -> None:
+    logger = _Logger()
+    session = _Session()
+
+    configs = [
+        SourceConfig(
+            id="rss_stateful_default_path",
+            name="RSS Stateful Default Path",
+            type="rss",
+            url="https://example.com/stateful-default.xml",
+            enabled=True,
+        )
+    ]
+
+    class _TrackingSourceRepo:
+        last_instance = None
+
+        def __init__(self, _session) -> None:
+            self.get_calls: list[int] = []
+            self.update_calls: list[tuple[int, dict[str, object]]] = []
+            _TrackingSourceRepo.last_instance = self
+
+        def upsert_source(self, config: SourceConfig):
+            return SimpleNamespace(id=303, source_key=config.id)
+
+        def get_fetch_state(self, *, source_id: int):
+            self.get_calls.append(source_id)
+            return {
+                "etag": '"etag-old"',
+                "last_modified": "Sun, 22 Feb 2026 10:00:00 GMT",
+                "last_checked_at": None,
+                "last_status_code": 200,
+            }
+
+        def update_fetch_state(self, *, source_id: int, **kwargs):
+            self.update_calls.append((source_id, kwargs))
+
+    class _NoInsertArticleRepo:
+        def __init__(self, _session) -> None:
+            self.insert_calls = 0
+
+        def insert_article(self, **_kwargs):
+            self.insert_calls += 1
+            raise AssertionError(
+                "insert_article should not be called for 304/not-modified RSS source"
+            )
+
+    wrapper_calls: list[dict[str, object]] = []
+
+    def _fake_wrapper_fetch_rss_with_metadata(source_key: str, url: str, *_args, **kwargs):
+        wrapper_calls.append(
+            {
+                "source_key": source_key,
+                "url": url,
+                "if_none_match": kwargs.get("if_none_match"),
+                "if_modified_since": kwargs.get("if_modified_since"),
+            }
+        )
+        return SimpleNamespace(
+            items=[],
+            not_modified=True,
+            status_code=304,
+            etag='"etag-304"',
+            last_modified="Mon, 23 Feb 2026 11:00:00 GMT",
+        )
+
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.pipeline.SessionLocal", lambda: session)
+    monkeypatch.setattr("app.core.pipeline.SourceRepo", _TrackingSourceRepo)
+    monkeypatch.setattr("app.core.pipeline.ArticleRepo", _NoInsertArticleRepo)
+    monkeypatch.setattr(
+        "app.ingest.rss.fetch_rss_with_metadata",
+        _fake_wrapper_fetch_rss_with_metadata,
+    )
+    monkeypatch.setattr("app.core.pipeline.fetch_html", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("app.core.pipeline.canonicalize_url", lambda u: f"c:{u}")
+    monkeypatch.setattr("app.core.pipeline.canonical_url_hash", lambda u: f"h:{u}")
+    monkeypatch.setattr("app.core.pipeline.ai_relevance_score", lambda _item: 0.5)
+    monkeypatch.setattr("app.core.pipeline.freshness_score", lambda _dt: 0.5)
+    monkeypatch.setattr("app.core.pipeline.rank_score", lambda **_kwargs: 0.5)
+
+    settings = SimpleNamespace(
+        sources_path="sources.yaml",
+        request_timeout_seconds=1.0,
+        max_retries=0,
+        concurrency_limit=1,
+        per_source_min_interval_seconds=0.0,
+        rss_extract_full_text=False,
+        rss_full_text_max_items_per_source=0,
+        rss_full_text_concurrency_limit=None,
+        rss_known_streak_stop=0,
+    )
+
+    summary = run_fetch_cycle(settings=settings, logger=logger)
+    repo = _TrackingSourceRepo.last_instance
+    assert repo is not None
+
+    assert wrapper_calls == [
+        {
+            "source_key": "rss_stateful_default_path",
+            "url": "https://example.com/stateful-default.xml",
+            "if_none_match": '"etag-old"',
+            "if_modified_since": "Sun, 22 Feb 2026 10:00:00 GMT",
+        }
+    ]
+    assert summary.not_modified_sources == 1
+    assert summary.fetched == 0
+    assert summary.new == 0
+    assert summary.duplicates == 0
+
+    assert repo.get_calls == [303]
+    assert len(repo.update_calls) == 1
+    source_id, payload = repo.update_calls[0]
+    assert source_id == 303
+    assert payload["etag"] == '"etag-304"'
+    assert payload["last_modified"] == "Mon, 23 Feb 2026 11:00:00 GMT"
+    assert payload["last_status_code"] == 304
+    assert isinstance(payload["last_checked_at"], datetime)
+
+
+# pylint: disable=too-many-statements
+def test_run_fetch_cycle_persists_rss_fetch_state_metadata_for_200(monkeypatch) -> None:
+    logger = _Logger()
+    session = _Session()
+
+    configs = [
+        SourceConfig(
+            id="rss_stateful_200",
+            name="RSS Stateful 200",
+            type="rss",
+            url="https://example.com/stateful-200.xml",
+            enabled=True,
+        )
+    ]
+
+    class _TrackingSourceRepo:
+        last_instance = None
+
+        def __init__(self, _session) -> None:
+            self.get_calls: list[int] = []
+            self.update_calls: list[tuple[int, dict[str, object]]] = []
+            _TrackingSourceRepo.last_instance = self
+
+        def upsert_source(self, config: SourceConfig):
+            return SimpleNamespace(id=202, source_key=config.id)
+
+        def get_fetch_state(self, *, source_id: int):
+            self.get_calls.append(source_id)
+            return {
+                "etag": None,
+                "last_modified": None,
+                "last_checked_at": None,
+                "last_status_code": None,
+            }
+
+        def update_fetch_state(self, *, source_id: int, **kwargs):
+            self.update_calls.append((source_id, kwargs))
+
+    class _TrackingArticleRepo:
+        last_instance = None
+
+        def __init__(self, _session) -> None:
+            self.insert_calls: list[str] = []
+            _TrackingArticleRepo.last_instance = self
+
+        def insert_article(self, **kwargs):
+            self.insert_calls.append(kwargs["url"])
+            return SimpleNamespace(id=1), True
+
+    class _Rss200Result(list):
+        def __init__(self, items: list[Article]) -> None:
+            super().__init__(items)
+            self.not_modified = False
+            self.status_code = 200
+            self.etag = '"etag-200"'
+            self.last_modified = "Mon, 23 Feb 2026 12:00:00 GMT"
+
+    rss_calls: list[dict[str, object]] = []
+
+    def _fake_fetch_rss(source_key: str, url: str, *_args, **kwargs):
+        rss_calls.append(
+            {
+                "source_key": source_key,
+                "url": url,
+                "if_none_match": kwargs.get("if_none_match"),
+                "if_modified_since": kwargs.get("if_modified_since"),
+            }
+        )
+        return _Rss200Result(
+            [
+                Article(
+                    source_key=source_key,
+                    title="Fresh RSS Item",
+                    url="https://example.com/fresh-rss-item",
+                    published_at=datetime(2026, 2, 23, 12, 0, tzinfo=UTC),
+                    summary=None,
+                    content=None,
+                )
+            ]
+        )
+
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.pipeline.SessionLocal", lambda: session)
+    monkeypatch.setattr("app.core.pipeline.SourceRepo", _TrackingSourceRepo)
+    monkeypatch.setattr("app.core.pipeline.ArticleRepo", _TrackingArticleRepo)
+    monkeypatch.setattr("app.core.pipeline.fetch_rss", _fake_fetch_rss)
+    monkeypatch.setattr("app.core.pipeline.fetch_html", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("app.core.pipeline.canonicalize_url", lambda u: f"c:{u}")
+    monkeypatch.setattr("app.core.pipeline.canonical_url_hash", lambda u: f"h:{u}")
+    monkeypatch.setattr("app.core.pipeline.ai_relevance_score", lambda _item: 0.5)
+    monkeypatch.setattr("app.core.pipeline.freshness_score", lambda _dt: 0.5)
+    monkeypatch.setattr("app.core.pipeline.rank_score", lambda **_kwargs: 0.5)
+
+    settings = SimpleNamespace(
+        sources_path="sources.yaml",
+        request_timeout_seconds=1.0,
+        max_retries=0,
+        concurrency_limit=1,
+        per_source_min_interval_seconds=0.0,
+        rss_extract_full_text=False,
+        rss_full_text_max_items_per_source=0,
+        rss_full_text_concurrency_limit=None,
+        rss_known_streak_stop=0,
+    )
+
+    summary = run_fetch_cycle(settings=settings, logger=logger)
+    source_repo = _TrackingSourceRepo.last_instance
+    article_repo = _TrackingArticleRepo.last_instance
+    assert source_repo is not None
+    assert article_repo is not None
+
+    assert rss_calls == [
+        {
+            "source_key": "rss_stateful_200",
+            "url": "https://example.com/stateful-200.xml",
+            "if_none_match": None,
+            "if_modified_since": None,
+        }
+    ]
+    assert article_repo.insert_calls == ["https://example.com/fresh-rss-item"]
+    assert summary.fetched == 1
+    assert summary.new == 1
+    assert summary.not_modified_sources == 0
+
+    assert source_repo.get_calls == [202]
+    assert len(source_repo.update_calls) == 1
+    source_id, payload = source_repo.update_calls[0]
+    assert source_id == 202
+    assert payload["etag"] == '"etag-200"'
+    assert payload["last_modified"] == "Mon, 23 Feb 2026 12:00:00 GMT"
+    assert payload["last_status_code"] == 200
+    assert isinstance(payload["last_checked_at"], datetime)

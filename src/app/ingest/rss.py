@@ -25,6 +25,24 @@ class RssFetchResult:
     last_modified: str | None
 
 
+class RssItemList(list[Article]):
+    """List-compatible RSS result that preserves response metadata."""
+
+    not_modified: bool
+    status_code: int
+    etag: str | None
+    last_modified: str | None
+
+
+def _with_rss_metadata(items: list[Article], result: RssFetchResult) -> list[Article]:
+    wrapped = RssItemList(items)
+    wrapped.not_modified = result.not_modified
+    wrapped.status_code = result.status_code
+    wrapped.etag = result.etag
+    wrapped.last_modified = result.last_modified
+    return wrapped
+
+
 def _to_datetime(value: struct_time | None) -> datetime | None:
     if value is None:
         return None
@@ -156,16 +174,21 @@ def fetch_rss(
     extract_full_text: bool = False,
     full_text_max_items: int = 20,
     full_text_semaphore: Semaphore | None = None,
+    *,
+    if_none_match: str | None = None,
+    if_modified_since: str | None = None,
 ) -> list[Article]:
     result = fetch_rss_with_metadata(
         source_key=source_key,
         url=url,
         timeout_seconds=timeout_seconds,
         fetcher=fetcher,
+        if_none_match=if_none_match,
+        if_modified_since=if_modified_since,
     )
     items = result.items
     if not extract_full_text:
-        return items
+        return _with_rss_metadata(items, result)
 
     for item in items[: max(0, full_text_max_items)]:
         try:
@@ -190,4 +213,4 @@ def fetch_rss(
                 full_text_semaphore.release()
         if text:
             item.content = text
-    return items
+    return _with_rss_metadata(items, result)

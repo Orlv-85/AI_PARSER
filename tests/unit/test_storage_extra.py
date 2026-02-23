@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config.sources import SourceConfig
 from app.storage import db
-from app.storage.models_sql import Base
+from app.storage.models_sql import Base, Source
 from app.storage.repos import ArticleRepo, SourceRepo
 
 
@@ -443,3 +443,54 @@ def test_list_for_view_supports_open_ended_date_ranges() -> None:
 
     assert [row[0].title for row in only_from] == ["Newer Open Range", "Middle Open Range"]
     assert [row[0].title for row in only_to] == ["Middle Open Range", "Older Open Range"]
+
+
+def test_source_repo_fetch_state_round_trip() -> None:
+    session = _session()
+    source_repo = SourceRepo(session)
+
+    source = source_repo.upsert_source(
+        SourceConfig(
+            id="rss_stateful",
+            name="RSS Stateful",
+            type="rss",
+            url="https://example.com/rss-stateful.xml",
+            enabled=True,
+        )
+    )
+
+    get_fetch_state = source_repo.get_source_fetch_state
+    update_fetch_state = source_repo.update_source_fetch_state
+
+    initial = get_fetch_state(source_id=source.id)
+    assert initial == {
+        "etag": None,
+        "last_modified": None,
+        "last_checked_at": None,
+        "last_status_code": None,
+    }
+
+    checked_at = datetime(2026, 2, 23, 12, 34, 56, tzinfo=UTC)
+    update_fetch_state(
+        source_id=source.id,
+        etag='"etag-v2"',
+        last_modified="Mon, 23 Feb 2026 12:34:00 GMT",
+        last_checked_at=checked_at,
+        last_status_code=304,
+    )
+    session.commit()
+
+    after = get_fetch_state(source_id=source.id)
+    assert after == {
+        "etag": '"etag-v2"',
+        "last_modified": "Mon, 23 Feb 2026 12:34:00 GMT",
+        "last_checked_at": checked_at,
+        "last_status_code": 304,
+    }
+
+    persisted = session.get(Source, source.id)
+    assert persisted is not None
+    assert persisted.etag == '"etag-v2"'
+    assert persisted.last_modified == "Mon, 23 Feb 2026 12:34:00 GMT"
+    assert persisted.last_checked_at == checked_at
+    assert persisted.last_status_code == 304
