@@ -23,8 +23,8 @@ class Source(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
 
-    articles: Mapped[list["Article"]] = relationship(back_populates="source")
-    aliases: Mapped[list["ArticleAlias"]] = relationship(back_populates="source")
+    articles: Mapped[list[Article]] = relationship(back_populates="source")
+    aliases: Mapped[list[ArticleAlias]] = relationship(back_populates="source")
 
 
 class Article(Base):
@@ -49,7 +49,7 @@ class Article(Base):
     rank_score: Mapped[float] = mapped_column(Float, default=0.0, index=True)
 
     source: Mapped[Source | None] = relationship(back_populates="articles")
-    aliases: Mapped[list["ArticleAlias"]] = relationship(back_populates="article")
+    aliases: Mapped[list[ArticleAlias]] = relationship(back_populates="article")
 
 
 class ArticleAlias(Base):

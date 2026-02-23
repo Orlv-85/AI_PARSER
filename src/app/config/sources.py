@@ -49,7 +49,7 @@ class SourceConfig(BaseModel):
         return lowered
 
     @model_validator(mode="after")
-    def validate_html_options(self) -> "SourceConfig":
+    def validate_html_options(self) -> SourceConfig:
         if self.type == "html" and self.html is None and self.parser_options is None:
             raise ValueError("html source requires 'html' or 'parser_options'")
         return self

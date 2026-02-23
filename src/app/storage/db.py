@@ -21,10 +21,9 @@ def create_all() -> None:
     Base.metadata.create_all(bind=engine)
 
 
-def get_session() -> Generator[Session, None, None]:
+def get_session() -> Generator[Session]:
     session = SessionLocal()
     try:
         yield session
     finally:
         session.close()
-
