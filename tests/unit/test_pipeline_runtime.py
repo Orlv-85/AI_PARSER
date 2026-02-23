@@ -172,3 +172,332 @@ def test_run_fetch_cycle_handles_no_enabled_sources(monkeypatch) -> None:
     assert summary.duplicates == 0
     assert summary.errors == 0
     assert session.committed is True
+
+
+def test_run_fetch_cycle_stops_rss_processing_after_known_streak(monkeypatch) -> None:
+    logger = _Logger()
+    session = _Session()
+
+    configs = [
+        SourceConfig(
+            id="rss_feed",
+            name="RSS Feed",
+            type="rss",
+            url="https://example.com/feed.xml",
+            enabled=True,
+        )
+    ]
+    rss_items = [
+        Article(
+            source_key="rss_feed",
+            title="Old 1",
+            url="https://example.com/old-1",
+            published_at=None,
+            summary=None,
+            content=None,
+        ),
+        Article(
+            source_key="rss_feed",
+            title="Old 2",
+            url="https://example.com/old-2",
+            published_at=None,
+            summary=None,
+            content=None,
+        ),
+        Article(
+            source_key="rss_feed",
+            title="New 3",
+            url="https://example.com/new-3",
+            published_at=None,
+            summary=None,
+            content=None,
+        ),
+    ]
+
+    class _TrackingArticleRepo:
+        last_instance = None
+
+        def __init__(self, _session) -> None:
+            self.exists_calls: list[str] = []
+            self.insert_calls: list[str] = []
+            self._known = {"h:https://example.com/old-1", "h:https://example.com/old-2"}
+            _TrackingArticleRepo.last_instance = self
+
+        def exists_by_canonical_hash(self, canonical_hash: str) -> bool:
+            self.exists_calls.append(canonical_hash)
+            return canonical_hash in self._known
+
+        def insert_article(self, **kwargs):
+            self.insert_calls.append(kwargs["url_canonical_hash"])
+            return SimpleNamespace(id=len(self.insert_calls)), True
+
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.pipeline.SessionLocal", lambda: session)
+    monkeypatch.setattr("app.core.pipeline.SourceRepo", _SourceRepo)
+    monkeypatch.setattr("app.core.pipeline.ArticleRepo", _TrackingArticleRepo)
+    monkeypatch.setattr("app.core.pipeline.fetch_rss", lambda *_args, **_kwargs: rss_items)
+    monkeypatch.setattr("app.core.pipeline.fetch_html", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("app.core.pipeline.canonicalize_url", lambda u: f"c:{u}")
+    monkeypatch.setattr("app.core.pipeline.canonical_url_hash", lambda u: f"h:{u}")
+    monkeypatch.setattr("app.core.pipeline.ai_relevance_score", lambda _item: 0.5)
+    monkeypatch.setattr("app.core.pipeline.freshness_score", lambda _dt: 0.5)
+    monkeypatch.setattr("app.core.pipeline.rank_score", lambda **_kwargs: 0.5)
+
+    settings = SimpleNamespace(
+        sources_path="sources.yaml",
+        request_timeout_seconds=1.0,
+        max_retries=0,
+        concurrency_limit=1,
+        per_source_min_interval_seconds=0.0,
+        rss_extract_full_text=False,
+        rss_full_text_max_items_per_source=0,
+        rss_full_text_concurrency_limit=None,
+        rss_known_streak_stop=2,
+    )
+
+    summary = run_fetch_cycle(settings=settings, logger=logger)
+    repo = _TrackingArticleRepo.last_instance
+    assert repo is not None
+
+    assert summary.fetched == 3
+    assert repo.exists_calls == [
+        "h:https://example.com/old-1",
+        "h:https://example.com/old-2",
+    ]
+    assert repo.insert_calls == []
+    assert summary.new == 0
+    assert summary.duplicates == 2
+
+
+def test_run_fetch_cycle_rss_known_streak_stop_does_not_apply_to_html(monkeypatch) -> None:
+    logger = _Logger()
+    session = _Session()
+
+    configs = [
+        SourceConfig(
+            id="rss_feed",
+            name="RSS Feed",
+            type="rss",
+            url="https://example.com/feed.xml",
+            enabled=True,
+        ),
+        SourceConfig(
+            id="html_feed",
+            name="HTML Feed",
+            type="html",
+            url="https://example.com/news",
+            enabled=True,
+            html={"list_selector": "main", "link_selector": "a"},
+        ),
+    ]
+    rss_items = [
+        Article(
+            source_key="rss_feed",
+            title="RSS Old 1",
+            url="https://example.com/rss-old-1",
+            published_at=None,
+            summary=None,
+            content=None,
+        ),
+        Article(
+            source_key="rss_feed",
+            title="RSS Old 2",
+            url="https://example.com/rss-old-2",
+            published_at=None,
+            summary=None,
+            content=None,
+        ),
+        Article(
+            source_key="rss_feed",
+            title="RSS New 3",
+            url="https://example.com/rss-new-3",
+            published_at=None,
+            summary=None,
+            content=None,
+        ),
+    ]
+    html_items = [
+        Article(
+            source_key="html_feed",
+            title="HTML 1",
+            url="https://example.com/html-1",
+            published_at=datetime(2026, 2, 21, 10, 0, tzinfo=UTC),
+            summary=None,
+            content=None,
+        ),
+        Article(
+            source_key="html_feed",
+            title="HTML 2",
+            url="https://example.com/html-2",
+            published_at=datetime(2026, 2, 21, 10, 1, tzinfo=UTC),
+            summary=None,
+            content=None,
+        ),
+        Article(
+            source_key="html_feed",
+            title="HTML 3",
+            url="https://example.com/html-3",
+            published_at=datetime(2026, 2, 21, 10, 2, tzinfo=UTC),
+            summary=None,
+            content=None,
+        ),
+    ]
+
+    class _TrackingArticleRepo:
+        last_instance = None
+
+        def __init__(self, _session) -> None:
+            self.exists_calls: list[str] = []
+            self.insert_calls: list[str] = []
+            self._known = {
+                "h:https://example.com/rss-old-1",
+                "h:https://example.com/rss-old-2",
+            }
+            _TrackingArticleRepo.last_instance = self
+
+        def exists_by_canonical_hash(self, canonical_hash: str) -> bool:
+            self.exists_calls.append(canonical_hash)
+            return canonical_hash in self._known
+
+        def insert_article(self, **kwargs):
+            self.insert_calls.append(kwargs["url_canonical_hash"])
+            return SimpleNamespace(id=len(self.insert_calls)), True
+
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.pipeline.SessionLocal", lambda: session)
+    monkeypatch.setattr("app.core.pipeline.SourceRepo", _SourceRepo)
+    monkeypatch.setattr("app.core.pipeline.ArticleRepo", _TrackingArticleRepo)
+    monkeypatch.setattr("app.core.pipeline.fetch_rss", lambda *_args, **_kwargs: rss_items)
+    monkeypatch.setattr("app.core.pipeline.fetch_html", lambda *_args, **_kwargs: html_items)
+    monkeypatch.setattr("app.core.pipeline.canonicalize_url", lambda u: f"c:{u}")
+    monkeypatch.setattr("app.core.pipeline.canonical_url_hash", lambda u: f"h:{u}")
+    monkeypatch.setattr("app.core.pipeline.ai_relevance_score", lambda _item: 0.5)
+    monkeypatch.setattr("app.core.pipeline.freshness_score", lambda _dt: 0.5)
+    monkeypatch.setattr("app.core.pipeline.rank_score", lambda **_kwargs: 0.5)
+
+    settings = SimpleNamespace(
+        sources_path="sources.yaml",
+        request_timeout_seconds=1.0,
+        max_retries=0,
+        concurrency_limit=1,
+        per_source_min_interval_seconds=0.0,
+        rss_extract_full_text=False,
+        rss_full_text_max_items_per_source=0,
+        rss_full_text_concurrency_limit=None,
+        rss_known_streak_stop=2,
+    )
+
+    summary = run_fetch_cycle(settings=settings, logger=logger)
+    repo = _TrackingArticleRepo.last_instance
+    assert repo is not None
+
+    assert summary.fetched == 6
+    assert repo.exists_calls == [
+        "h:https://example.com/rss-old-1",
+        "h:https://example.com/rss-old-2",
+    ]
+    assert repo.insert_calls == [
+        "h:https://example.com/html-1",
+        "h:https://example.com/html-2",
+        "h:https://example.com/html-3",
+    ]
+    assert summary.new == 3
+    assert summary.duplicates == 2
+
+
+def test_run_fetch_cycle_resets_rss_known_streak_on_new_item(monkeypatch) -> None:
+    logger = _Logger()
+    session = _Session()
+
+    configs = [
+        SourceConfig(
+            id="rss_feed",
+            name="RSS Feed",
+            type="rss",
+            url="https://example.com/feed.xml",
+            enabled=True,
+        )
+    ]
+    rss_items = [
+        Article(
+            source_key="rss_feed",
+            title="Old 1",
+            url="https://example.com/old-1",
+            published_at=None,
+            summary=None,
+            content=None,
+        ),
+        Article(
+            source_key="rss_feed",
+            title="New 2",
+            url="https://example.com/new-2",
+            published_at=None,
+            summary=None,
+            content=None,
+        ),
+        Article(
+            source_key="rss_feed",
+            title="Old 3",
+            url="https://example.com/old-3",
+            published_at=None,
+            summary=None,
+            content=None,
+        ),
+    ]
+
+    class _TrackingArticleRepo:
+        last_instance = None
+
+        def __init__(self, _session) -> None:
+            self.exists_calls: list[str] = []
+            self.insert_calls: list[str] = []
+            self._known = {"h:https://example.com/old-1", "h:https://example.com/old-3"}
+            _TrackingArticleRepo.last_instance = self
+
+        def exists_by_canonical_hash(self, canonical_hash: str) -> bool:
+            self.exists_calls.append(canonical_hash)
+            return canonical_hash in self._known
+
+        def insert_article(self, **kwargs):
+            self.insert_calls.append(kwargs["url_canonical_hash"])
+            return SimpleNamespace(id=len(self.insert_calls)), True
+
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.pipeline.SessionLocal", lambda: session)
+    monkeypatch.setattr("app.core.pipeline.SourceRepo", _SourceRepo)
+    monkeypatch.setattr("app.core.pipeline.ArticleRepo", _TrackingArticleRepo)
+    monkeypatch.setattr("app.core.pipeline.fetch_rss", lambda *_args, **_kwargs: rss_items)
+    monkeypatch.setattr("app.core.pipeline.fetch_html", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("app.core.pipeline.canonicalize_url", lambda u: f"c:{u}")
+    monkeypatch.setattr("app.core.pipeline.canonical_url_hash", lambda u: f"h:{u}")
+    monkeypatch.setattr("app.core.pipeline.ai_relevance_score", lambda _item: 0.5)
+    monkeypatch.setattr("app.core.pipeline.freshness_score", lambda _dt: 0.5)
+    monkeypatch.setattr("app.core.pipeline.rank_score", lambda **_kwargs: 0.5)
+
+    settings = SimpleNamespace(
+        sources_path="sources.yaml",
+        request_timeout_seconds=1.0,
+        max_retries=0,
+        concurrency_limit=1,
+        per_source_min_interval_seconds=0.0,
+        rss_extract_full_text=False,
+        rss_full_text_max_items_per_source=0,
+        rss_full_text_concurrency_limit=None,
+        rss_known_streak_stop=2,
+    )
+
+    summary = run_fetch_cycle(settings=settings, logger=logger)
+    repo = _TrackingArticleRepo.last_instance
+    assert repo is not None
+
+    assert repo.exists_calls == [
+        "h:https://example.com/old-1",
+        "h:https://example.com/new-2",
+        "h:https://example.com/old-3",
+    ]
+    assert repo.insert_calls == ["h:https://example.com/new-2"]
+    assert summary.new == 1
+    assert summary.duplicates == 2

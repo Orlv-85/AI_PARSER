@@ -7,7 +7,7 @@ name = "ai-news-collector"
 version = "0.1.0"
 description = "Spec-driven AI news collector MVP"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14,<3.15"
 dependencies = [
   "argon2-cffi>=25.1.0",
   "alembic>=1.16.0",
@@ -51,7 +51,7 @@ where = ["src"]
 "app.web" = ["index.html", "login.html"]
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py314"
 line-length = 100
 src = ["src", "tests"]
 
@@ -72,7 +72,7 @@ show_missing = true
 skip_empty = true
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
@@ -81,7 +81,7 @@ explicit_package_bases = true
 files = ["src", "tests"]
 
 [tool.pylint.main]
-py-version = "3.12"
+py-version = "3.14"
 jobs = 1
 ignore-paths = ["^src/app/storage/migrations/"]
 

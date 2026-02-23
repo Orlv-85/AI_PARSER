@@ -38,6 +38,14 @@ class ArticleRepo:
     def __init__(self, session: Session) -> None:
         self.session = session
 
+    def exists_by_canonical_hash(self, canonical_hash: str) -> bool:
+        stmt: Select[tuple[Article]] = (
+            select(Article)
+            .where(Article.url_canonical_hash == canonical_hash)
+            .limit(1)
+        )
+        return self.session.execute(stmt).scalar_one_or_none() is not None
+
     def insert_article(
         self,
         *,
