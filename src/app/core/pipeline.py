@@ -16,12 +16,54 @@ from app.storage.repos import ArticleRepo, SourceRepo
 
 
 @dataclass(frozen=True)
-class FetchSummary:
+class FetchSummary:  # pylint: disable=too-many-instance-attributes
     run_id: str
     fetched: int
     new: int
     duplicates: int
     errors: int
+    not_modified_sources: int = 0
+    skipped_known_html_links: int = 0
+    early_stop_hits: int = 0
+
+
+@dataclass
+class SourceMetrics:  # pylint: disable=too-many-instance-attributes
+    source_id: str
+    source_type: str
+    fetched_items: int = 0
+    new_items: int = 0
+    duplicate_items: int = 0
+    errors: int = 0
+    skipped_known_items: int = 0
+    early_stop_hit: bool = False
+    not_modified: bool = False
+
+
+def _log_source_metrics(
+    *,
+    logger: Logger,
+    run_id: str,
+    metrics: SourceMetrics,
+    enabled: bool,
+) -> None:
+    if not enabled:
+        return
+    logger.info(
+        "source_fetch_finished",
+        {
+            "run_id": run_id,
+            "source_id": metrics.source_id,
+            "source_type": metrics.source_type,
+            "fetched_items": metrics.fetched_items,
+            "new_items": metrics.new_items,
+            "duplicate_items": metrics.duplicate_items,
+            "skipped_known_items": metrics.skipped_known_items,
+            "early_stop_hit": metrics.early_stop_hit,
+            "not_modified": metrics.not_modified,
+            "errors": metrics.errors,
+        },
+    )
 
 
 def _fetch_source_items(
@@ -129,9 +171,11 @@ def _process_fetched_source_items(
     db_source_id: int,
     article_repo: ArticleRepo,
     settings: Settings,
-) -> tuple[int, int]:
+) -> tuple[int, int, int, bool]:
     new_count = 0
     duplicate_count = 0
+    skipped_known_items = 0
+    early_stop_hit = False
     rss_known_streak = 0
     rss_known_streak_stop = int(getattr(settings, "rss_known_streak_stop", 0) or 0)
     exists_by_canonical_hash = getattr(article_repo, "exists_by_canonical_hash", None)
@@ -153,8 +197,10 @@ def _process_fetched_source_items(
             and exists_by_canonical_hash_fn(canonical_hash)
         ):
             duplicate_count += 1
+            skipped_known_items += 1
             rss_known_streak += 1
             if rss_known_streak >= rss_known_streak_stop:
+                early_stop_hit = True
                 break
             continue
 
@@ -186,7 +232,7 @@ def _process_fetched_source_items(
         else:
             duplicate_count += 1
 
-    return new_count, duplicate_count
+    return new_count, duplicate_count, skipped_known_items, early_stop_hit
 
 
 def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
@@ -198,6 +244,9 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
     new_count = 0
     duplicate_count = 0
     error_count = 0
+    optimization_not_modified_sources = 0
+    optimization_skipped_known_html_links = 0
+    optimization_early_stop_hits = 0
     full_text_semaphore = (
         BoundedSemaphore(settings.rss_full_text_concurrency_limit)
         if settings.rss_full_text_concurrency_limit
@@ -229,8 +278,15 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
             if items is None:
                 continue
 
+            source_metrics = SourceMetrics(source_id=config.id, source_type=config.type)
             fetched_count += len(items)
-            source_new, source_duplicates = _process_fetched_source_items(
+            source_metrics.fetched_items = len(items)
+            (
+                source_new,
+                source_duplicates,
+                source_skipped_known,
+                source_early_stop,
+            ) = _process_fetched_source_items(
                 items=items,
                 config=config,
                 db_source_id=db_source_id,
@@ -239,6 +295,20 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
             )
             new_count += source_new
             duplicate_count += source_duplicates
+            source_metrics.new_items = source_new
+            source_metrics.duplicate_items = source_duplicates
+            source_metrics.skipped_known_items = source_skipped_known
+            source_metrics.early_stop_hit = source_early_stop
+            if source_early_stop:
+                optimization_early_stop_hits += 1
+            if config.type == "html":
+                optimization_skipped_known_html_links += source_skipped_known
+            _log_source_metrics(
+                logger=logger,
+                run_id=run_id,
+                metrics=source_metrics,
+                enabled=bool(getattr(settings, "fetch_emit_source_metrics", True)),
+            )
 
         session.commit()
 
@@ -250,6 +320,9 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
             "new": new_count,
             "duplicates": duplicate_count,
             "errors": error_count,
+            "not_modified_sources": optimization_not_modified_sources,
+            "skipped_known_html_links": optimization_skipped_known_html_links,
+            "early_stop_hits": optimization_early_stop_hits,
         },
     )
     return FetchSummary(
@@ -258,4 +331,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
         new=new_count,
         duplicates=duplicate_count,
         errors=error_count,
+        not_modified_sources=optimization_not_modified_sources,
+        skipped_known_html_links=optimization_skipped_known_html_links,
+        early_stop_hits=optimization_early_stop_hits,
     )

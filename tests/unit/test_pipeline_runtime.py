@@ -133,9 +133,18 @@ def test_run_fetch_cycle_counts_new_duplicates_and_errors(monkeypatch) -> None:
     assert summary.new == 1
     assert summary.duplicates == 1
     assert summary.errors == 1
+    assert summary.not_modified_sources == 0
+    assert summary.skipped_known_html_links == 0
+    assert summary.early_stop_hits == 0
     assert session.committed is True
     assert any(event == "source_fetch_failed" for event, _ in logger.error_calls)
-    assert any(event == "fetch_run_finished" for event, _ in logger.info_calls)
+    fetch_finished_payload = next(
+        payload for event, payload in logger.info_calls if event == "fetch_run_finished"
+    )
+    assert fetch_finished_payload["not_modified_sources"] == 0
+    assert fetch_finished_payload["skipped_known_html_links"] == 0
+    assert fetch_finished_payload["early_stop_hits"] == 0
+    assert any(event == "source_fetch_finished" for event, _ in logger.info_calls)
 
 
 def test_run_fetch_cycle_handles_no_enabled_sources(monkeypatch) -> None:
