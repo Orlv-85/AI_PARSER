@@ -37,13 +37,30 @@ class Fetcher:
             time.sleep(next_allowed - now)
         self._next_allowed_time[source_id] = time.monotonic() + self.per_source_min_interval_seconds
 
-    def request(self, *, source_id: str, url: str) -> httpx.Response:
+    def request(
+        self,
+        *,
+        source_id: str,
+        url: str,
+        if_none_match: str | None = None,
+        if_modified_since: str | None = None,
+    ) -> httpx.Response:
         self._respect_rate_limit(source_id)
         last_error: Exception | None = None
         client = self._get_client()
+        request_headers: dict[str, str] = {}
+        if if_none_match is not None:
+            request_headers["If-None-Match"] = if_none_match
+        if if_modified_since is not None:
+            request_headers["If-Modified-Since"] = if_modified_since
         for attempt in range(self.max_retries + 1):
             try:
-                response = client.get(url)
+                if request_headers:
+                    response = client.get(url, headers=request_headers)
+                else:
+                    response = client.get(url)
+                if getattr(response, "status_code", None) == 304:
+                    return response
                 response.raise_for_status()
                 return response
             except (httpx.RequestError, httpx.HTTPStatusError) as exc:

@@ -1,4 +1,5 @@
 import json
+from typing import Any, cast
 
 import httpx
 import pytest
@@ -40,6 +41,35 @@ class _ClientFactory:
     def __call__(self, **kwargs):
         _ = kwargs
         return _Client(self._outcomes)
+
+
+class _RecordingClient:
+    def __init__(self, outcomes, calls: list[dict[str, object]]) -> None:
+        self._outcomes = list(outcomes)
+        self.calls = calls
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def get(self, url: str, **kwargs):
+        self.calls.append({"url": url, "kwargs": kwargs})
+        outcome = self._outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+
+class _RecordingClientFactory:
+    def __init__(self, outcomes):
+        self._outcomes = outcomes
+        self.calls: list[dict[str, object]] = []
+
+    def __call__(self, **kwargs):
+        _ = kwargs
+        return _RecordingClient(self._outcomes, self.calls)
 
 
 class _TrackingClient:
@@ -103,6 +133,108 @@ def test_request_retries_and_returns_response(monkeypatch) -> None:
 
     assert result.text == "payload"
     assert sleeps == [0.25]
+
+
+def test_request_sends_conditional_headers_when_provided(monkeypatch) -> None:
+    factory = _RecordingClientFactory([_Response(text="payload")])
+    monkeypatch.setattr("app.ingest.fetcher.httpx.Client", factory)
+
+    fetcher = Fetcher()
+    result = fetcher.request(
+        source_id="rss",
+        url="https://example.com/feed.xml",
+        if_none_match='"etag-123"',
+        if_modified_since="Mon, 01 Jan 2024 00:00:00 GMT",
+    )
+
+    assert result.text == "payload"
+    assert factory.calls == [
+        {
+            "url": "https://example.com/feed.xml",
+            "kwargs": {
+                "headers": {
+                    "If-None-Match": '"etag-123"',
+                    "If-Modified-Since": "Mon, 01 Jan 2024 00:00:00 GMT",
+                }
+            },
+        }
+    ]
+
+
+def test_request_returns_304_not_modified_response_distinctly(monkeypatch) -> None:
+    request = httpx.Request("GET", "https://example.com/feed.xml")
+    not_modified = httpx.Response(304, request=request)
+    factory = _RecordingClientFactory([not_modified])
+    monkeypatch.setattr("app.ingest.fetcher.httpx.Client", factory)
+
+    fetcher = Fetcher()
+    result = fetcher.request(
+        source_id="rss",
+        url="https://example.com/feed.xml",
+        if_none_match='"etag-123"',
+    )
+
+    assert result.status_code == 304
+    first_call = cast(dict[str, Any], factory.calls[0])
+    assert first_call["kwargs"]["headers"] == {"If-None-Match": '"etag-123"'}
+
+
+def test_request_non_conditional_calls_do_not_send_conditional_headers(monkeypatch) -> None:
+    factory = _RecordingClientFactory([_Response(text="payload")])
+    monkeypatch.setattr("app.ingest.fetcher.httpx.Client", factory)
+
+    fetcher = Fetcher()
+    result = fetcher.request(source_id="rss", url="https://example.com/feed.xml")
+
+    assert result.text == "payload"
+    assert factory.calls == [{"url": "https://example.com/feed.xml", "kwargs": {}}]
+
+
+def test_request_retries_5xx_and_preserves_conditional_headers(monkeypatch) -> None:
+    request = httpx.Request("GET", "https://example.com/feed.xml")
+    response_500 = httpx.Response(500, request=request)
+    error_500 = httpx.HTTPStatusError("bad", request=request, response=response_500)
+    ok = httpx.Response(200, request=request, text="ok")
+    factory = _RecordingClientFactory([error_500, ok])
+    monkeypatch.setattr("app.ingest.fetcher.httpx.Client", factory)
+
+    sleeps: list[float] = []
+
+    def _record_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr("app.ingest.fetcher.time.sleep", _record_sleep)
+
+    fetcher = Fetcher(max_retries=1)
+    result = fetcher.request(
+        source_id="rss",
+        url="https://example.com/feed.xml",
+        if_none_match='"etag-123"',
+        if_modified_since="Mon, 01 Jan 2024 00:00:00 GMT",
+    )
+
+    assert result.status_code == 200
+    assert sleeps == [0.25]
+    assert factory.calls == [
+        {
+            "url": "https://example.com/feed.xml",
+            "kwargs": {
+                "headers": {
+                    "If-None-Match": '"etag-123"',
+                    "If-Modified-Since": "Mon, 01 Jan 2024 00:00:00 GMT",
+                }
+            },
+        },
+        {
+            "url": "https://example.com/feed.xml",
+            "kwargs": {
+                "headers": {
+                    "If-None-Match": '"etag-123"',
+                    "If-Modified-Since": "Mon, 01 Jan 2024 00:00:00 GMT",
+                }
+            },
+        },
+    ]
 
 
 def test_request_raises_runtime_error_with_json_payload(monkeypatch) -> None:
