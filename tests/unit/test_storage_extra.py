@@ -494,3 +494,30 @@ def test_source_repo_fetch_state_round_trip() -> None:
     assert persisted.last_modified == "Mon, 23 Feb 2026 12:34:00 GMT"
     assert persisted.last_checked_at == checked_at
     assert persisted.last_status_code == 304
+
+
+def test_article_repo_existing_canonical_hashes_returns_present_subset() -> None:
+    session = _session()
+    article_repo = ArticleRepo(session)
+    now = datetime.now(UTC)
+
+    article_repo.insert_article(
+        source_id=None,
+        title="One",
+        url="https://example.com/one",
+        url_canonical="https://example.com/one",
+        url_canonical_hash="h-one",
+        published_at=now,
+    )
+    article_repo.insert_article(
+        source_id=None,
+        title="Two",
+        url="https://example.com/two",
+        url_canonical="https://example.com/two",
+        url_canonical_hash="h-two",
+        published_at=now,
+    )
+
+    assert article_repo.existing_canonical_hashes(
+        ["missing", "h-two", "h-one", "missing-2"]
+    ) == {"h-one", "h-two"}

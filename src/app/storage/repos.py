@@ -98,6 +98,15 @@ class ArticleRepo:
         )
         return self.session.execute(stmt).scalar_one_or_none() is not None
 
+    def existing_canonical_hashes(self, canonical_hashes: list[str]) -> set[str]:
+        if not canonical_hashes:
+            return set()
+        stmt = select(Article.url_canonical_hash).where(
+            Article.url_canonical_hash.in_(canonical_hashes)
+        )
+        rows = self.session.execute(stmt).scalars().all()
+        return {str(value) for value in rows}
+
     def insert_article(
         self,
         *,

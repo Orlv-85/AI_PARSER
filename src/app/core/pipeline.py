@@ -289,7 +289,7 @@ def _fetch_result_items(result: object) -> list:
         return result
     return []
 
-
+# pylint: disable=too-many-branches,too-many-statements
 def _process_html_links_two_stage(
     *,
     links: list[str],
@@ -310,9 +310,24 @@ def _process_html_links_two_stage(
     exists_by_canonical_hash_fn = (
         exists_by_canonical_hash if callable(exists_by_canonical_hash) else None
     )
+    existing_canonical_hashes = getattr(article_repo, "existing_canonical_hashes", None)
+    existing_canonical_hashes_fn = (
+        existing_canonical_hashes if callable(existing_canonical_hashes) else None
+    )
     capped_links = links
     if isinstance(html_max_links_per_source, int) and html_max_links_per_source >= 0:
         capped_links = links[:html_max_links_per_source]
+    canonical_by_link: list[tuple[str, str, str]] = [
+        (
+            str(link),
+            canonicalize_url(str(link)),
+            canonical_url_hash(str(link)),
+        )
+        for link in capped_links
+    ]
+    known_hashes: set[str] = set()
+    if existing_canonical_hashes_fn is not None:
+        known_hashes = existing_canonical_hashes_fn([h for _, _, h in canonical_by_link])
     fetcher = Fetcher(
         timeout_seconds=settings.request_timeout_seconds,
         max_retries=settings.max_retries,
@@ -320,13 +335,13 @@ def _process_html_links_two_stage(
     )
 
     try:
-        for link in capped_links:
-            canonical = canonicalize_url(str(link))
-            canonical_hash = canonical_url_hash(str(link))
-            if (
-                exists_by_canonical_hash_fn is not None
-                and exists_by_canonical_hash_fn(canonical_hash)
-            ):
+        for link, canonical, canonical_hash in canonical_by_link:
+            is_known = False
+            if existing_canonical_hashes_fn is not None:
+                is_known = canonical_hash in known_hashes
+            elif exists_by_canonical_hash_fn is not None:
+                is_known = exists_by_canonical_hash_fn(canonical_hash)
+            if is_known:
                 duplicate_count += 1
                 skipped_known_items += 1
                 html_known_streak += 1
@@ -369,6 +384,8 @@ def _process_html_links_two_stage(
                 freshness_score=freshness,
                 rank_score=rank,
             )
+            if existing_canonical_hashes_fn is not None:
+                known_hashes.add(canonical_hash)
             if is_new:
                 new_count += 1
             else:
