@@ -184,6 +184,76 @@ def test_run_fetch_cycle_handles_no_enabled_sources(monkeypatch) -> None:
     assert session.committed is True
 
 
+def test_run_fetch_cycle_includes_db_enabled_sources_without_sources_yaml_edits(
+    monkeypatch,
+) -> None:
+    logger = _Logger()
+    session = _Session()
+    fetched_source_keys: list[str] = []
+
+    managed_source = SimpleNamespace(
+        id=77,
+        source_key="managed-approved",
+        name="Managed Approved",
+        type="rss",
+        url="https://example.com/managed-approved.xml",
+        enabled=True,
+        fetch_interval_minutes=30,
+        source_weight=1.0,
+    )
+
+    class _DbOnlySourceRepo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def upsert_source(self, config: SourceConfig):
+            return SimpleNamespace(id=abs(hash(config.id)) % 1000 + 1)
+
+        def list_enabled_sources(self):
+            return [managed_source]
+
+        def get_fetch_state(self, *, source_id: int):
+            assert source_id == managed_source.id
+            return {
+                "etag": None,
+                "last_modified": None,
+                "last_checked_at": None,
+                "last_status_code": None,
+            }
+
+    def _fake_fetch_rss(source_key: str, *_args, **_kwargs):
+        fetched_source_keys.append(source_key)
+        return [
+            Article(
+                source_key=source_key,
+                title="Managed Item",
+                url="https://example.com/managed-item",
+                published_at=None,
+                summary=None,
+                content=None,
+            )
+        ]
+
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: [])
+    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.pipeline.SessionLocal", lambda: session)
+    monkeypatch.setattr("app.core.pipeline.SourceRepo", _DbOnlySourceRepo)
+    monkeypatch.setattr("app.core.pipeline.ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr("app.core.pipeline.fetch_rss", _fake_fetch_rss)
+    monkeypatch.setattr("app.core.pipeline.canonicalize_url", lambda u: f"c:{u}")
+    monkeypatch.setattr("app.core.pipeline.canonical_url_hash", lambda u: f"h:{u}")
+    monkeypatch.setattr("app.core.pipeline.ai_relevance_score", lambda _item: 0.5)
+    monkeypatch.setattr("app.core.pipeline.freshness_score", lambda _dt: 0.5)
+    monkeypatch.setattr("app.core.pipeline.rank_score", lambda **_kwargs: 0.5)
+
+    summary = run_fetch_cycle(settings=Settings(sources_path="sources.yaml"), logger=logger)
+
+    assert fetched_source_keys == ["managed-approved"]
+    assert summary.fetched == 1
+    assert summary.new == 1
+    assert summary.errors == 0
+
+
 def test_run_fetch_cycle_rss_fast_profile_fetches_rss_before_html(monkeypatch) -> None:
     logger = _Logger()
     session = _Session()

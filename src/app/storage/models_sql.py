@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
@@ -55,6 +57,63 @@ class Source(Base):
 
     articles: Mapped[list[Article]] = relationship(back_populates="source")
     aliases: Mapped[list[ArticleAlias]] = relationship(back_populates="source")
+    approved_candidates: Mapped[list[SourceCandidate]] = relationship(
+        foreign_keys="SourceCandidate.approved_source_id",
+        back_populates="approved_source",
+    )
+
+
+class SourceImportBatch(Base):
+    __tablename__ = "source_import_batches"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    raw_text: Mapped[str] = mapped_column(Text)
+    parsed_count: Mapped[int] = mapped_column(Integer, default=0)
+    accepted_count: Mapped[int] = mapped_column(Integer, default=0)
+    rejected_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+    candidates: Mapped[list[SourceCandidate]] = relationship(back_populates="batch")
+
+
+class SourceCandidate(Base):
+    __tablename__ = "source_candidates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    batch_id: Mapped[int | None] = mapped_column(
+        ForeignKey("source_import_batches.id"), nullable=True, index=True
+    )
+    raw_input: Mapped[str] = mapped_column(Text)
+    normalized_url: Mapped[str] = mapped_column(String(2048), unique=True, index=True)
+    candidate_type: Mapped[str] = mapped_column(String(16), default="unknown")
+    status: Mapped[str] = mapped_column(String(16), default="draft")
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    duplicate_of_candidate_id: Mapped[int | None] = mapped_column(
+        ForeignKey("source_candidates.id"), nullable=True, index=True
+    )
+    approved_source_id: Mapped[int | None] = mapped_column(
+        ForeignKey("sources.id"), nullable=True, index=True
+    )
+    validation_status: Mapped[str] = mapped_column(String(16), default="pending")
+    validation_detected_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    validation_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    validation_details: Mapped[str | None] = mapped_column(Text, nullable=True)
+    validated_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+    batch: Mapped[SourceImportBatch | None] = relationship(back_populates="candidates")
+    duplicate_of: Mapped[SourceCandidate | None] = relationship(
+        remote_side="SourceCandidate.id",
+        foreign_keys=[duplicate_of_candidate_id],
+    )
+    approved_source: Mapped[Source | None] = relationship(
+        foreign_keys=[approved_source_id],
+        back_populates="approved_candidates",
+    )
 
 
 class Article(Base):

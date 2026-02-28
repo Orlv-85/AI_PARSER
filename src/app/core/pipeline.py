@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from logging import Logger
 from threading import BoundedSemaphore
+from typing import Any, cast
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig, load_sources
@@ -101,6 +102,23 @@ def _log_source_metrics(
             "errors": metrics.errors,
         },
     )
+
+
+def _managed_source_to_config(source: object) -> SourceConfig:
+    source_model = cast(Any, source)
+    source_type = str(source_model.type).lower()
+    payload: dict[str, object] = {
+        "id": str(source_model.source_key),
+        "name": str(source_model.name),
+        "type": source_type,
+        "url": str(source_model.url),
+        "enabled": bool(source_model.enabled),
+        "fetch_interval_minutes": int(source_model.fetch_interval_minutes),
+        "source_weight": float(source_model.source_weight),
+    }
+    if source_type == "html":
+        payload["html"] = {}
+    return SourceConfig.model_validate(payload)
 
 
 def _fetch_source_items(
@@ -694,8 +712,10 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
         enabled_sources: list[
             tuple[int, SourceConfig, int, dict[str, object | None] | None, bool]
         ] = []
+        configured_source_keys: set[str] = set()
 
         for idx, config in enumerate(configs):
+            configured_source_keys.add(config.id)
             db_source = source_repo.upsert_source(config)
             if not config.enabled:
                 continue
@@ -712,6 +732,31 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                     bool(supports_fetch_state),
                 )
             )
+
+        list_enabled_sources = getattr(source_repo, "list_enabled_sources", None)
+        if callable(list_enabled_sources):
+            next_index = len(configs)
+            for source in list_enabled_sources():
+                source_model = cast(Any, source)
+                source_key = str(source_model.source_key)
+                if source_key in configured_source_keys:
+                    continue
+                config = _managed_source_to_config(source_model)
+                source_id = int(source_model.id)
+                fetch_state, supports_fetch_state = _source_repo_get_fetch_state(
+                    source_repo,
+                    source_id=source_id,
+                )
+                enabled_sources.append(
+                    (
+                        next_index,
+                        config,
+                        source_id,
+                        fetch_state,
+                        bool(supports_fetch_state),
+                    )
+                )
+                next_index += 1
 
         fetched_by_index, fetch_errors = _collect_fetched_items(
             enabled_sources=enabled_sources,

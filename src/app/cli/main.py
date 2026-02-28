@@ -4,12 +4,15 @@ import uvicorn
 from app.config.settings import get_settings
 from app.config.sources import load_sources
 from app.core.pipeline import run_fetch_cycle
+from app.core.source_onboarding import import_source_candidates, run_source_validation_batch
 from app.mcp.server import run_mcp_server
 from app.observability import setup_json_logging
 from app.storage import SessionLocal, create_all
-from app.storage.repos import ArticleRepo
+from app.storage.repos import ArticleRepo, SourceCandidateRepo, SourceImportBatchRepo
 
 app = typer.Typer(help="AI News Collector CLI")
+_VALIDATE_BATCH_ID_OPTION = typer.Option(None, "--batch-id", min=1)
+_VALIDATE_CANDIDATE_ID_OPTION = typer.Option([], "--candidate-id", min=1)
 
 
 @app.callback()
@@ -119,3 +122,81 @@ def prune(
             f"prune complete: older_than_days={older_than_days} "
             f"deleted_articles={deleted_articles} deleted_aliases={deleted_aliases}"
         )
+
+
+@app.command("import-candidates")
+def import_candidates(
+    raw_text: str = typer.Argument(
+        ...,
+        help="Raw text containing candidate URLs or markdown links.",
+    ),
+) -> None:
+    create_all()
+    with SessionLocal() as session:
+        result = import_source_candidates(
+            raw_text=raw_text,
+            batch_repo=SourceImportBatchRepo(session),
+            candidate_repo=SourceCandidateRepo(session),
+        )
+        session.commit()
+        batch_id = result.batch.id
+        parsed_count = result.parsed_count
+        accepted_count = result.accepted_count
+        rejected_count = result.rejected_count
+    typer.echo(
+        "source import complete: "
+        f"batch_id={batch_id} "
+        f"parsed={parsed_count} "
+        f"accepted={accepted_count} "
+        f"rejected={rejected_count}"
+    )
+
+
+@app.command("validate-candidates")
+def validate_candidates(
+    batch_id: int | None = _VALIDATE_BATCH_ID_OPTION,
+    candidate_id: list[int] = _VALIDATE_CANDIDATE_ID_OPTION,
+) -> None:
+    candidate_ids = list(candidate_id)
+    if batch_id is None and not candidate_ids:
+        raise typer.BadParameter("Provide --batch-id or at least one --candidate-id.")
+
+    create_all()
+    with SessionLocal() as session:
+        results = run_source_validation_batch(
+            session=session,
+            batch_id=batch_id,
+            candidate_ids=candidate_ids or None,
+        )
+        session.commit()
+
+    typer.echo(f"source validation complete: validated={len(results)}")
+    for result in results:
+        detail = result.validation_error or "ok"
+        typer.echo(
+            f"{result.candidate_id}\t{result.detected_type}\t{result.status}\t{detail}"
+        )
+
+
+@app.command("review-batch-outcomes")
+def review_batch_outcomes(
+    batch_id: int = typer.Option(..., "--batch-id", min=1),
+) -> None:
+    create_all()
+    with SessionLocal() as session:
+        batch_repo = SourceImportBatchRepo(session)
+        batch = batch_repo.get_batch(batch_id)
+        if batch is None:
+            raise typer.BadParameter(f"source import batch not found: {batch_id}")
+        summary = SourceCandidateRepo(session).summarize_batch(batch_id=batch.id)
+
+    typer.echo(
+        "batch review outcomes: "
+        f"batch_id={summary['batch_id']} "
+        f"total={summary['total_candidates']} "
+        f"pending_review={summary['pending_review_count']} "
+        f"validated={summary['validated_count']} "
+        f"approved={summary['approved_count']} "
+        f"rejected={summary['rejected_count']} "
+        f"duplicates={summary['duplicate_count']}"
+    )

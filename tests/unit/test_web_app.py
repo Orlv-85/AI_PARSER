@@ -442,3 +442,56 @@ def test_news_template_has_network_error_handling_and_safe_row_rendering(
     assert "Unable to load news due to a network error. Please retry." in page.text
     assert "row.innerHTML" not in page.text
     assert "titleCell.textContent = item.title;" in page.text
+
+
+def test_source_onboarding_import_reports_only_new_candidates_for_current_batch(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+
+    app = create_app()
+    client = TestClient(app)
+
+    first = client.post(
+        "/api/source-onboarding/import",
+        json={"raw_text": "https://example.com/blog?utm_source=feed"},
+    )
+    assert first.status_code == 201
+    first_payload = first.json()
+    assert first_payload["batch_id"] == 1
+    assert first_payload["accepted_count"] == 1
+    assert first_payload["candidate_ids"] == [1]
+
+    second = client.post(
+        "/api/source-onboarding/import",
+        json={"raw_text": "https://EXAMPLE.com/blog#top"},
+    )
+    assert second.status_code == 201
+    second_payload = second.json()
+    assert second_payload["batch_id"] == 2
+    assert second_payload["accepted_count"] == 0
+    assert second_payload["rejected_count"] == 1
+    assert second_payload["candidate_ids"] == []
+
+
+def test_source_onboarding_validate_rejects_invalid_identifier_payloads(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+
+    app = create_app()
+    client = TestClient(app, raise_server_exceptions=False)
+
+    bad_batch_id = client.post(
+        "/api/source-onboarding/validate",
+        json={"batch_id": "not-an-int"},
+    )
+    assert bad_batch_id.status_code == 422
+
+    bad_candidate_ids = client.post(
+        "/api/source-onboarding/validate",
+        json={"candidate_ids": ["broken"]},
+    )
+    assert bad_candidate_ids.status_code == 422

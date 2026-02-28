@@ -226,3 +226,57 @@ def test_prune_command_dry_run_and_apply(monkeypatch) -> None:
     assert "prune dry-run:" in emitted[0]
     assert "prune complete:" in emitted[1]
     assert len(commits) == 1
+
+
+def test_review_batch_outcomes_command_reports_deterministic_summary(monkeypatch) -> None:
+    emitted: list[str] = []
+
+    class _SessionCM:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class _BatchRepo:
+        def __init__(self, session) -> None:
+            self.session = session
+
+        def get_batch(self, batch_id: int):
+            return SimpleNamespace(id=batch_id)
+
+    class _SourceCandidateRepo:
+        def __init__(self, session) -> None:
+            self.session = session
+
+        def summarize_batch(self, *, batch_id: int | None):
+            assert batch_id == 17
+            return {
+                "batch_id": 17,
+                "total_candidates": 6,
+                "draft_count": 1,
+                "validated_count": 2,
+                "approved_count": 1,
+                "rejected_count": 1,
+                "duplicate_count": 1,
+                "pending_review_count": 3,
+                "rejected_review_count": 1,
+            }
+
+    assert hasattr(
+        cli_main,
+        "review_batch_outcomes",
+    ), "Phase 5 CLI reporting command missing: app.cli.main.review_batch_outcomes"
+
+    monkeypatch.setattr(cli_main.typer, "echo", emitted.append)
+    monkeypatch.setattr(cli_main, "create_all", lambda: None)
+    monkeypatch.setattr(cli_main, "SessionLocal", _SessionCM)
+    monkeypatch.setattr(cli_main, "SourceImportBatchRepo", _BatchRepo)
+    monkeypatch.setattr(cli_main, "SourceCandidateRepo", _SourceCandidateRepo)
+
+    cli_main.review_batch_outcomes(batch_id=17)
+
+    assert emitted == [
+        "batch review outcomes: batch_id=17 total=6 pending_review=3 "
+        "validated=2 approved=1 rejected=1 duplicates=1",
+    ]

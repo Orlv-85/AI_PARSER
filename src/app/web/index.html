@@ -81,6 +81,14 @@
         border-radius: 10px;
         padding: 10px;
       }
+      .field textarea,
+      .field select {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px;
+        font: inherit;
+      }
       .btn {
         border: none;
         border-radius: 10px;
@@ -123,6 +131,34 @@
         color: var(--muted);
         margin-top: 12px;
       }
+      .pill {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: #ecfeff;
+        color: #155e75;
+        font-size: 12px;
+      }
+      .mini-input,
+      .mini-select {
+        width: 100%;
+        margin-top: 6px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 7px 8px;
+        font: inherit;
+        font-size: 13px;
+      }
+      .note {
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 12px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .action-group {
+        min-width: 240px;
+      }
       @media (max-width: 900px) {
         .layout { grid-template-columns: 1fr; }
         .sidebar { padding: 12px; }
@@ -136,6 +172,7 @@
         <div class="brand">AI News Collector</div>
         <button class="nav-btn active" id="btn-update">Update</button>
         <button class="nav-btn" id="btn-view">View</button>
+        <button class="nav-btn" id="btn-onboarding">Onboarding</button>
       </aside>
       <main class="content">
         <section id="page-update">
@@ -280,6 +317,75 @@
             </table>
           </div>
         </section>
+
+        <section id="page-onboarding" class="hidden">
+          <div class="card">
+            <h2>Source Onboarding Review</h2>
+            <p class="status" id="onboarding-status"></p>
+            <div class="row">
+              <div class="field">
+                <label>Batch ID</label>
+                <input id="onboarding-batch-id" type="number" value="7" min="1" />
+              </div>
+              <div class="field">
+                <label>Candidate status</label>
+                <select id="onboarding-filter-status">
+                  <option value="">Any</option>
+                  <option value="draft">Draft</option>
+                  <option value="approved">Approved</option>
+                  <option value="disabled">Disabled</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="duplicate">Duplicate</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Validation status</label>
+                <select id="onboarding-filter-validation">
+                  <option value="">Any</option>
+                  <option value="validated">Validated</option>
+                  <option value="pending">Pending</option>
+                  <option value="failed">Failed</option>
+                  <option value="warning">Warning</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Quick notes</label>
+                <textarea id="onboarding-review-note" rows="3" placeholder="Optional reviewer note"></textarea>
+              </div>
+            </div>
+            <div style="margin-top: 12px">
+              <button class="btn btn-primary" id="load-onboarding">Load review queue</button>
+              <button class="btn btn-secondary" id="load-onboarding-summary">Refresh batch summary</button>
+            </div>
+            <div class="status-box" id="onboarding-summary-box">
+              <div>Batch: <span id="onboarding-summary-batch">-</span></div>
+              <div>Parsed: <span id="onboarding-summary-parsed">-</span></div>
+              <div>Accepted: <span id="onboarding-summary-accepted">-</span></div>
+              <div>Rejected: <span id="onboarding-summary-rejected">-</span></div>
+              <div>Pending review: <span id="onboarding-summary-pending">-</span></div>
+              <div>Validated: <span id="onboarding-summary-validated">-</span></div>
+              <div>Approved: <span id="onboarding-summary-approved">-</span></div>
+              <div>Duplicates: <span id="onboarding-summary-duplicates">-</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Draft Candidates</h3>
+            <div class="empty hidden" id="onboarding-empty">No candidates match the selected filters.</div>
+            <table id="onboarding-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Status</th>
+                  <th>Validation</th>
+                  <th>Type / Details</th>
+                  <th>URL</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
       </main>
     </div>
 
@@ -287,8 +393,10 @@
       const $ = (id) => document.getElementById(id);
       const updateBtn = $("btn-update");
       const viewBtn = $("btn-view");
+      const onboardingBtn = $("btn-onboarding");
       const pageUpdate = $("page-update");
       const pageView = $("page-view");
+      const pageOnboarding = $("page-onboarding");
       let pollTimer = null;
       let visibleNewsItems = [];
 
@@ -303,14 +411,19 @@
 
       function showPage(name) {
         const update = name === "update";
+        const view = name === "view";
+        const onboarding = name === "onboarding";
         pageUpdate.classList.toggle("hidden", !update);
-        pageView.classList.toggle("hidden", update);
+        pageView.classList.toggle("hidden", !view);
+        pageOnboarding.classList.toggle("hidden", !onboarding);
         updateBtn.classList.toggle("active", update);
-        viewBtn.classList.toggle("active", !update);
+        viewBtn.classList.toggle("active", view);
+        onboardingBtn.classList.toggle("active", onboarding);
       }
 
       updateBtn.addEventListener("click", () => showPage("update"));
       viewBtn.addEventListener("click", () => showPage("view"));
+      onboardingBtn.addEventListener("click", () => showPage("onboarding"));
 
       function clearSettingErrors() {
         for (const field of [
@@ -592,15 +705,295 @@
         }
       }
 
+      function currentOnboardingBatchId() {
+        const batchId = Number($("onboarding-batch-id").value);
+        return Number.isFinite(batchId) && batchId > 0 ? batchId : 7;
+      }
+
+      function currentOnboardingFilters() {
+        return {
+          batch_id: currentOnboardingBatchId(),
+          status: $("onboarding-filter-status").value,
+          validation_status: $("onboarding-filter-validation").value,
+        };
+      }
+
+      function renderOnboardingSummary(summary) {
+        $("onboarding-summary-batch").textContent = summary.batch_id ?? "-";
+        $("onboarding-summary-parsed").textContent = summary.parsed_count ?? "-";
+        $("onboarding-summary-accepted").textContent = summary.accepted_count ?? "-";
+        $("onboarding-summary-rejected").textContent = summary.rejected_count ?? "-";
+        $("onboarding-summary-pending").textContent = summary.pending_review_count ?? "-";
+        $("onboarding-summary-validated").textContent = summary.validated_count ?? "-";
+        $("onboarding-summary-approved").textContent = summary.approved_count ?? "-";
+        $("onboarding-summary-duplicates").textContent = summary.duplicate_count ?? "-";
+      }
+
+      async function loadOnboardingSummary() {
+        const batchId = currentOnboardingBatchId();
+        try {
+          const response = await fetch(`/api/source-onboarding/batches/${batchId}/summary`);
+          if (!response.ok) {
+            setStatus("onboarding-status", "Failed to load batch summary.", "error");
+            return;
+          }
+          renderOnboardingSummary(await response.json());
+        } catch (_error) {
+          setStatus("onboarding-status", "Failed to load batch summary.", "error");
+        }
+      }
+
+      function buildOnboardingActionButton(label, handler) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "btn btn-secondary";
+        button.style.marginRight = "6px";
+        button.style.marginBottom = "6px";
+        button.textContent = label;
+        button.addEventListener("click", handler);
+        return button;
+      }
+
+      async function sendOnboardingAction(path, payload) {
+        const response = await fetch(path, {
+          method: payload ? "POST" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: payload ? JSON.stringify(payload) : null,
+        });
+        if (!response.ok) {
+          let detail = "Review action failed.";
+          try {
+            const body = await response.json();
+            if (typeof body.detail === "string") {
+              detail = body.detail;
+            }
+          } catch (_ignored) {}
+          throw new Error(detail);
+        }
+        return response.json();
+      }
+
+      async function updateOnboardingCandidate(candidateId, payload) {
+        const response = await fetch(`/api/source-onboarding/candidates/${candidateId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+          let detail = "Edit failed.";
+          try {
+            const body = await response.json();
+            if (typeof body.detail === "string") {
+              detail = body.detail;
+            }
+          } catch (_ignored) {}
+          throw new Error(detail);
+        }
+        return response.json();
+      }
+
+      async function loadOnboardingCandidates() {
+        const tbody = document.querySelector("#onboarding-table tbody");
+        tbody.innerHTML = "";
+        $("onboarding-empty").classList.add("hidden");
+        const filters = currentOnboardingFilters();
+        const params = new URLSearchParams({ batch_id: String(filters.batch_id) });
+        if (filters.status) params.set("status", filters.status);
+        if (filters.validation_status) params.set("validation_status", filters.validation_status);
+
+        try {
+          const response = await fetch(`/api/source-onboarding/candidates?${params.toString()}`);
+          if (!response.ok) {
+            setStatus("onboarding-status", "Failed to load onboarding candidates.", "error");
+            return;
+          }
+          const payload = await response.json();
+          renderOnboardingSummary(payload.summary || {});
+          const items = Array.isArray(payload.items) ? payload.items : [];
+          if (items.length === 0) {
+            $("onboarding-empty").classList.remove("hidden");
+            return;
+          }
+          for (const item of items) {
+            const row = document.createElement("tr");
+
+            const idCell = document.createElement("td");
+            idCell.textContent = String(item.candidate_id);
+            row.appendChild(idCell);
+
+            const statusCell = document.createElement("td");
+            const statusPill = document.createElement("span");
+            statusPill.className = "pill";
+            statusPill.textContent = item.status;
+            statusCell.appendChild(statusPill);
+            row.appendChild(statusCell);
+
+            const validationCell = document.createElement("td");
+            validationCell.textContent = item.validation_status;
+            if (item.validated_at) {
+              const validationMeta = document.createElement("div");
+              validationMeta.className = "note";
+              validationMeta.textContent = item.validated_at;
+              validationCell.appendChild(validationMeta);
+            }
+            row.appendChild(validationCell);
+
+            const typeCell = document.createElement("td");
+            const typeValue = item.validation_detected_type || item.candidate_type;
+            typeCell.textContent = typeValue;
+            if (item.validation_error) {
+              const errorMeta = document.createElement("div");
+              errorMeta.className = "note";
+              errorMeta.textContent = item.validation_error;
+              typeCell.appendChild(errorMeta);
+            } else if (item.validation_details) {
+              const detailsMeta = document.createElement("div");
+              detailsMeta.className = "note";
+              detailsMeta.textContent = item.validation_details;
+              typeCell.appendChild(detailsMeta);
+            }
+            row.appendChild(typeCell);
+
+            const urlCell = document.createElement("td");
+            const urlLink = document.createElement("a");
+            urlLink.textContent = item.normalized_url;
+            urlLink.target = "_blank";
+            urlLink.rel = "noopener noreferrer";
+            try {
+              urlLink.href = new URL(item.normalized_url).toString();
+            } catch (_ignored) {
+              urlLink.removeAttribute("href");
+            }
+            urlCell.appendChild(urlLink);
+            if (item.review_note) {
+              const noteMeta = document.createElement("div");
+              noteMeta.className = "note";
+              noteMeta.textContent = item.review_note;
+              urlCell.appendChild(noteMeta);
+            }
+            if (item.approved_source_id) {
+              const sourceMeta = document.createElement("div");
+              sourceMeta.className = "note";
+              sourceMeta.textContent = `Active source #${item.approved_source_id}`;
+              urlCell.appendChild(sourceMeta);
+            }
+            row.appendChild(urlCell);
+
+            const actionsCell = document.createElement("td");
+            actionsCell.className = "action-group";
+            const urlInput = document.createElement("input");
+            urlInput.className = "mini-input";
+            urlInput.value = item.normalized_url;
+            urlInput.placeholder = "Canonical URL";
+
+            const typeInput = document.createElement("select");
+            typeInput.className = "mini-select";
+            for (const optionValue of ["rss", "html", "unknown"]) {
+              const option = document.createElement("option");
+              option.value = optionValue;
+              option.textContent = optionValue.toUpperCase();
+              option.selected = optionValue === item.candidate_type;
+              typeInput.appendChild(option);
+            }
+
+            const duplicateInput = document.createElement("input");
+            duplicateInput.className = "mini-input";
+            duplicateInput.type = "number";
+            duplicateInput.min = "1";
+            duplicateInput.value = item.duplicate_of_candidate_id || "";
+            duplicateInput.placeholder = "Duplicate of candidate ID";
+
+            actionsCell.appendChild(buildOnboardingActionButton("Approve", async () => {
+              try {
+                await sendOnboardingAction(`/api/source-onboarding/candidates/${item.candidate_id}/approve`);
+                setStatus("onboarding-status", `Candidate ${item.candidate_id} approved.`, "success");
+                await loadOnboardingCandidates();
+              } catch (error) {
+                setStatus("onboarding-status", error.message, "error");
+              }
+            }));
+            if (item.approved_source_id) {
+              actionsCell.appendChild(buildOnboardingActionButton("Disable", async () => {
+                try {
+                  await sendOnboardingAction(`/api/source-onboarding/candidates/${item.candidate_id}/disable`);
+                  setStatus("onboarding-status", `Candidate ${item.candidate_id} disabled.`, "success");
+                  await loadOnboardingCandidates();
+                } catch (error) {
+                  setStatus("onboarding-status", error.message, "error");
+                }
+              }));
+            }
+            actionsCell.appendChild(buildOnboardingActionButton("Reject", async () => {
+              try {
+                await sendOnboardingAction(
+                  `/api/source-onboarding/candidates/${item.candidate_id}/reject`,
+                  { reason: $("onboarding-review-note").value.trim() || "Rejected from review UI" },
+                );
+                setStatus("onboarding-status", `Candidate ${item.candidate_id} rejected.`, "success");
+                await loadOnboardingCandidates();
+              } catch (error) {
+                setStatus("onboarding-status", error.message, "error");
+              }
+            }));
+            actionsCell.appendChild(buildOnboardingActionButton("Mark Duplicate", async () => {
+              const duplicateId = Number(duplicateInput.value);
+              if (!(duplicateId > 0)) {
+                setStatus("onboarding-status", "Duplicate target ID is required.", "error");
+                return;
+              }
+              try {
+                await sendOnboardingAction(
+                  `/api/source-onboarding/candidates/${item.candidate_id}/mark-duplicate`,
+                  {
+                    duplicate_of_candidate_id: duplicateId,
+                    reason: $("onboarding-review-note").value.trim() || null,
+                  },
+                );
+                setStatus("onboarding-status", `Candidate ${item.candidate_id} marked duplicate.`, "success");
+                await loadOnboardingCandidates();
+              } catch (error) {
+                setStatus("onboarding-status", error.message, "error");
+              }
+            }));
+            actionsCell.appendChild(buildOnboardingActionButton("Save Edit", async () => {
+              try {
+                await updateOnboardingCandidate(item.candidate_id, {
+                  normalized_url: urlInput.value.trim(),
+                  candidate_type: typeInput.value,
+                  raw_input: urlInput.value.trim(),
+                  review_note: $("onboarding-review-note").value.trim() || null,
+                });
+                setStatus("onboarding-status", `Candidate ${item.candidate_id} updated.`, "success");
+                await loadOnboardingCandidates();
+              } catch (error) {
+                setStatus("onboarding-status", error.message, "error");
+              }
+            }));
+            actionsCell.appendChild(urlInput);
+            actionsCell.appendChild(typeInput);
+            actionsCell.appendChild(duplicateInput);
+            row.appendChild(actionsCell);
+
+            tbody.appendChild(row);
+          }
+        } catch (_error) {
+          setStatus("onboarding-status", "Failed to load onboarding candidates.", "error");
+        }
+      }
+
       $("save-settings").addEventListener("click", saveSettings);
       $("run-update").addEventListener("click", runUpdate);
       $("refresh-status").addEventListener("click", refreshStatus);
       $("load-news").addEventListener("click", loadNews);
       $("copy-links").addEventListener("click", copyVisibleLinks);
+      $("load-onboarding").addEventListener("click", loadOnboardingCandidates);
+      $("load-onboarding-summary").addEventListener("click", loadOnboardingSummary);
 
       loadSettings();
       refreshStatus();
       loadNews();
+      loadOnboardingSummary();
+      loadOnboardingCandidates();
     </script>
   </body>
 </html>
