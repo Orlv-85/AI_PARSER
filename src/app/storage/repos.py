@@ -15,6 +15,42 @@ class SourceRepo:
         self.session = session
 
     def upsert_source(self, source_config: SourceConfig) -> Source:
+        source_values = {
+            "source_key": source_config.id,
+            "name": source_config.name,
+            "type": source_config.type,
+            "url": str(source_config.url),
+            "enabled": source_config.enabled,
+            "fetch_interval_minutes": source_config.fetch_interval_minutes,
+            "source_weight": source_config.source_weight,
+            "created_at": datetime.now(UTC),
+        }
+
+        bind = self.session.get_bind()
+        dialect_name = bind.dialect.name if bind is not None else ""
+        if dialect_name in {"postgresql", "sqlite"}:
+            insert_factory = postgresql_insert if dialect_name == "postgresql" else sqlite_insert
+            upsert_stmt = insert_factory(Source).values(source_values)
+            upsert_stmt = upsert_stmt.on_conflict_do_update(
+                index_elements=[Source.source_key],
+                set_={
+                    "name": upsert_stmt.excluded.name,
+                    "type": upsert_stmt.excluded.type,
+                    "url": upsert_stmt.excluded.url,
+                    "enabled": upsert_stmt.excluded.enabled,
+                    "fetch_interval_minutes": upsert_stmt.excluded.fetch_interval_minutes,
+                    "source_weight": upsert_stmt.excluded.source_weight,
+                },
+            )
+            self.session.execute(upsert_stmt)
+            self.session.flush()
+            refresh_stmt: Select[tuple[Source]] = (
+                select(Source)
+                .where(Source.source_key == source_config.id)
+                .execution_options(populate_existing=True)
+            )
+            return self.session.execute(refresh_stmt).scalar_one()
+
         stmt: Select[tuple[Source]] = select(Source).where(Source.source_key == source_config.id)
         source = self.session.execute(stmt).scalar_one_or_none()
         if source is None:
