@@ -97,6 +97,56 @@ def test_fetch_rss_uses_fetcher_and_httpx_branches(monkeypatch) -> None:
     assert via_httpx == ["ok"]
 
 
+def test_fetch_rss_httpx_branch_sends_conditional_headers_and_handles_304(monkeypatch) -> None:
+    request_log: list[dict[str, object]] = []
+
+    class _NotModifiedResponse:
+        status_code = 304
+        content = b""
+        headers = {"ETag": '"etag-1"', "Last-Modified": "Mon, 01 Jan 2024 00:00:00 GMT"}
+
+        @staticmethod
+        def raise_for_status() -> None:
+            return None
+
+    class _ConditionalClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def get(self, url: str, **kwargs):
+            request_log.append({"url": url, "kwargs": kwargs})
+            return _NotModifiedResponse()
+
+    monkeypatch.setattr("app.ingest.rss.httpx.Client", lambda **kwargs: _ConditionalClient())
+
+    result = rss_module.fetch_rss_with_metadata(
+        "s",
+        "https://example.com/feed",
+        timeout_seconds=3.0,
+        fetcher=None,
+        if_none_match='"etag-1"',
+        if_modified_since="Mon, 01 Jan 2024 00:00:00 GMT",
+    )
+
+    assert result.not_modified is True
+    assert result.status_code == 304
+    assert not result.items
+    assert request_log == [
+        {
+            "url": "https://example.com/feed",
+            "kwargs": {
+                "headers": {
+                    "If-None-Match": '"etag-1"',
+                    "If-Modified-Since": "Mon, 01 Jan 2024 00:00:00 GMT",
+                }
+            },
+        }
+    ]
+
+
 def test_fetch_rss_extract_full_text_enriches_only_first_n(monkeypatch) -> None:
     items = [
         Article(source_key="s", title="A", url="https://example.com/a"),

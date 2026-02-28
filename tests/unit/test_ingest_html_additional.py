@@ -1,7 +1,18 @@
+from typing import Any, cast
+
 import httpx
 
 from app.config.sources import SourceConfig
-from app.ingest.html import extract_article_text, extract_links_from_html, fetch_html
+from app.ingest.html import (
+    _build_html_article,
+    _extract_links_with_selectolax,
+    extract_article_text,
+    extract_links_from_html,
+    fetch_html,
+    fetch_html_article,
+    fetch_html_links,
+    fetch_html_links_with_metadata,
+)
 
 
 class _StaticFetcher:
@@ -20,6 +31,7 @@ class _Response:
     def __init__(self, text: str, status_code: int = 200) -> None:
         self.text = text
         self.status_code = status_code
+        self.headers: dict[str, str] = {}
 
     def raise_for_status(self) -> None:
         if self.status_code >= 400:
@@ -244,3 +256,215 @@ def test_fetch_html_httpx_branch_fail_soft_and_skip_missing_href(monkeypatch) ->
     items = fetch_html(source, fetcher=None)
     assert len(items) == 1
     assert items[0].title == "One"
+
+
+def test_extract_links_from_html_forces_lxml_on_invalid_parser(monkeypatch) -> None:
+    monkeypatch.setattr("app.ingest.html._SelectolaxHTMLParser", None, raising=False)
+    html_content = '<div><a href="/a">A</a><a>B</a><a href="/a">dup</a><a href="/b">B</a></div>'
+
+    links = extract_links_from_html(
+        html_content=html_content,
+        base_url="https://example.com",
+        list_selector=None,
+        link_selector="a",
+        parser="invalid-parser",
+    )
+
+    assert links == ["https://example.com/a", "https://example.com/b"]
+
+
+def test_extract_links_with_selectolax_falls_back_to_lxml_helper(monkeypatch) -> None:
+    monkeypatch.setattr("app.ingest.html._SelectolaxHTMLParser", None, raising=False)
+    calls: list[dict[str, object]] = []
+
+    def _fake_lxml(**kwargs):
+        calls.append(kwargs)
+        return ["https://example.com/fallback"]
+
+    monkeypatch.setattr("app.ingest.html._extract_links_with_lxml", _fake_lxml)
+
+    links = _extract_links_with_selectolax(
+        html_content="<div></div>",
+        base_url="https://example.com",
+        list_selector="div",
+        link_selector="a",
+    )
+
+    assert links == ["https://example.com/fallback"]
+    assert calls
+
+
+def test_extract_links_with_selectolax_uses_fake_parser(monkeypatch) -> None:
+    class _FakeNode:
+        def __init__(self, href: str | None) -> None:
+            self.attributes = {} if href is None else {"href": href}
+
+    class _FakeRoot:
+        def __init__(self, hrefs: list[str | None]) -> None:
+            self._hrefs = hrefs
+
+        def css(self, selector: str):
+            assert selector == "a"
+            return [_FakeNode(href) for href in self._hrefs]
+
+    class _FakeSelectolaxParser:
+        def __init__(self, html_content: str) -> None:
+            self.html_content = html_content
+
+        def css(self, selector: str):
+            if selector == "main":
+                return [_FakeRoot(["/a", None, "/a", "/b"])]
+            if selector == "a":
+                return [_FakeNode("/top")]
+            return []
+
+    monkeypatch.setattr(
+        "app.ingest.html._SelectolaxHTMLParser",
+        _FakeSelectolaxParser,
+        raising=False,
+    )
+
+    links = extract_links_from_html(
+        html_content="<main></main>",
+        base_url="https://example.com",
+        list_selector="main",
+        link_selector="a",
+        parser="selectolax",
+    )
+
+    assert links == ["https://example.com/a", "https://example.com/b"]
+
+
+def test_build_html_article_and_fetch_helpers_cover_non_html_and_httpx_paths(monkeypatch) -> None:
+    non_html = SourceConfig(
+        id="rss_source",
+        name="RSS",
+        type="rss",
+        url="https://example.com/feed",
+    )
+    assert (
+        _build_html_article(
+            source=non_html,
+            url="https://example.com/a",
+            article_html="<h1>x</h1>",
+        )
+        is None
+    )
+    assert not fetch_html_links(non_html)
+    assert fetch_html_article(source=non_html, url="https://example.com/a") is None
+    assert not fetch_html_links_with_metadata(non_html).links
+
+    source = _html_source()
+    list_html = '<main><a href="/news/1">one</a></main>'
+    article_html = "<html><body><h1>Helper Title</h1><p>body</p></body></html>"
+    responses = {
+        "https://example.com/news": _Response(list_html),
+        "https://example.com/news/1": _Response(article_html),
+    }
+    monkeypatch.setattr("app.ingest.html.httpx.Client", lambda **kwargs: _HttpClient(responses))
+    monkeypatch.setattr("app.ingest.html.extract_article_text", lambda **kwargs: "body")
+
+    links = fetch_html_links(source, fetcher=None)
+    article = fetch_html_article(source=source, url="https://example.com/news/1", fetcher=None)
+
+    assert links == ["https://example.com/news/1"]
+    assert article is not None
+    assert article.title == "Helper Title"
+
+
+def test_fetch_html_links_with_metadata_httpx_not_modified_and_success(monkeypatch) -> None:
+    source = _html_source()
+    request_log: list[dict[str, object]] = []
+    responses = {
+        "https://example.com/news": _Response("", status_code=304),
+    }
+    responses["https://example.com/news"].headers = {
+        "ETag": '"etag-1"',
+        "Last-Modified": "Mon, 01 Jan 2024 00:00:00 GMT",
+    }
+
+    class _ConditionalClient(_HttpClient):
+        def get(self, url: str, **kwargs) -> _Response:
+            request_log.append({"url": url, "kwargs": kwargs})
+            return self.mapping[url]
+
+    monkeypatch.setattr(
+        "app.ingest.html.httpx.Client",
+        lambda **kwargs: _ConditionalClient(responses),
+    )
+
+    not_modified = fetch_html_links_with_metadata(
+        source,
+        fetcher=None,
+        if_none_match='"etag-1"',
+        if_modified_since="Mon, 01 Jan 2024 00:00:00 GMT",
+    )
+
+    assert not_modified.not_modified is True
+    assert not_modified.status_code == 304
+    assert not_modified.etag == '"etag-1"'
+    first_call = cast(dict[str, Any], request_log[0])
+    assert first_call["kwargs"]["headers"]["If-None-Match"] == '"etag-1"'
+
+    responses["https://example.com/news"] = _Response('<main><a href="/news/2">two</a></main>')
+    responses["https://example.com/news"].headers = {
+        "ETag": '"etag-2"',
+        "Last-Modified": "Tue, 02 Jan 2024 00:00:00 GMT",
+    }
+
+    success = fetch_html_links_with_metadata(source, fetcher=None)
+
+    assert success.not_modified is False
+    assert success.links == ["https://example.com/news/2"]
+    assert success.etag == '"etag-2"'
+
+
+def test_fetch_html_links_with_metadata_uses_fetcher_request_branch() -> None:
+    source = _html_source()
+
+    class _FetcherWithRequest:
+        @staticmethod
+        def request(**kwargs):
+            _ = kwargs
+            response = _Response('<main><a href="/news/3">three</a></main>')
+            response.headers = {
+                "ETag": '"etag-3"',
+                "Last-Modified": "Wed, 03 Jan 2024 00:00:00 GMT",
+            }
+            return response
+
+    result = fetch_html_links_with_metadata(
+        source,
+        fetcher=_FetcherWithRequest(),
+        if_none_match='"etag-old"',
+        if_modified_since="Tue, 02 Jan 2024 00:00:00 GMT",
+    )
+
+    assert result.not_modified is False
+    assert result.links == ["https://example.com/news/3"]
+    assert result.etag == '"etag-3"'
+
+
+def test_fetch_html_skips_none_articles_in_both_paths(monkeypatch) -> None:
+    source = _html_source()
+
+    monkeypatch.setattr(
+        "app.ingest.html.fetch_html_links",
+        lambda *_args, **_kwargs: ["https://example.com/news/1"],
+    )
+    monkeypatch.setattr(
+        "app.ingest.html.fetch_html_article",
+        lambda *_args, **_kwargs: None,
+    )
+
+    assert not fetch_html(source, fetcher=_StaticFetcher({}))
+
+    list_html = '<main><a href="/news/1">one</a></main>'
+    responses = {
+        "https://example.com/news": _Response(list_html),
+        "https://example.com/news/1": _Response("<html><body><h1>Ignored</h1></body></html>"),
+    }
+    monkeypatch.setattr("app.ingest.html.httpx.Client", lambda **kwargs: _HttpClient(responses))
+    monkeypatch.setattr("app.ingest.html._build_html_article", lambda **_kwargs: None)
+
+    assert not fetch_html(source, fetcher=None)

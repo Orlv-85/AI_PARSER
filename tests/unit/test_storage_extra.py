@@ -1,4 +1,6 @@
+# pylint: disable=protected-access,too-many-statements
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -282,6 +284,202 @@ def test_list_for_view_applies_rank_sort_without_query() -> None:
         "Older High Rank 2",
         "Recent Low Rank 2",
     ]
+
+
+def test_source_repo_fallback_upsert_and_fetch_state_edge_cases() -> None:
+    source_cfg = SourceConfig(
+        id="source_fallback",
+        name="Fallback Source",
+        type="rss",
+        url="https://example.com/feed",
+        enabled=False,
+        fetch_interval_minutes=45,
+        source_weight=2.5,
+    )
+
+    class _ExecResult:
+        def __init__(self, value):
+            self._value = value
+
+        def scalar_one_or_none(self):
+            return self._value
+
+    class _Session:
+        def __init__(self) -> None:
+            self.added: list[Source] = []
+            self.flush_calls = 0
+            self._existing: Source | None = None
+
+        def get_bind(self):
+            return SimpleNamespace(dialect=SimpleNamespace(name="mysql"))
+
+        def execute(self, stmt):
+            _ = stmt
+            return _ExecResult(self._existing)
+
+        def add(self, source: Source) -> None:
+            self.added.append(source)
+
+        def flush(self) -> None:
+            self.flush_calls += 1
+
+        def get(self, model, source_id: int):
+            _ = (model, source_id)
+            return self._existing
+
+    session = _Session()
+    repo = SourceRepo(session)
+
+    created = repo.upsert_source(source_cfg)
+    session._existing = created
+
+    assert created.source_key == "source_fallback"
+    assert created.name == "Fallback Source"
+    assert created.enabled is False
+    assert created.fetch_interval_minutes == 45
+    assert created.source_weight == 2.5
+    assert session.added == [created]
+    assert session.flush_calls == 1
+
+    created.name = "stale"
+    updated = repo.upsert_source(
+        SourceConfig(
+            id="source_fallback",
+            name="Fallback Source Updated",
+            type="rss",
+            url="https://example.com/updated",
+            enabled=True,
+            fetch_interval_minutes=15,
+            source_weight=1.5,
+        )
+    )
+    assert updated is created
+    assert updated.name == "Fallback Source Updated"
+    assert updated.type == "rss"
+    assert updated.url == "https://example.com/updated"
+    assert updated.enabled is True
+
+    naive_time = datetime(2026, 2, 28, 12, 0, 0)
+    created.last_checked_at = naive_time
+    state = repo.get_fetch_state(source_id=1)
+    assert state["last_checked_at"] == naive_time.replace(tzinfo=UTC)
+
+    aware_time = datetime(2026, 2, 28, 13, 0, 0, tzinfo=UTC)
+    repo.update_fetch_state(
+        source_id=1,
+        etag="etag-1",
+        last_modified="Mon, 01 Jan 2024 00:00:00 GMT",
+        last_checked_at=aware_time,
+        last_status_code=304,
+    )
+    assert created.etag == "etag-1"
+    assert created.last_modified == "Mon, 01 Jan 2024 00:00:00 GMT"
+    assert created.last_checked_at == aware_time
+    assert created.last_status_code == 304
+
+    session._existing = None
+    try:
+        repo.get_fetch_state(source_id=99)
+    except ValueError as exc:
+        assert "source not found" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for missing source")
+
+    try:
+        repo.update_fetch_state(
+            source_id=99,
+            etag=None,
+            last_modified=None,
+            last_checked_at=aware_time,
+            last_status_code=None,
+        )
+    except ValueError as exc:
+        assert "source not found" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for missing source")
+
+
+def test_article_repo_batch_fallback_and_empty_hashes() -> None:
+    class _ExecResult:
+        @staticmethod
+        def scalars():
+            return SimpleNamespace(all=lambda: [])
+
+    class _Session:
+        @staticmethod
+        def get_bind():
+            return SimpleNamespace(dialect=SimpleNamespace(name="mysql"))
+
+        @staticmethod
+        def execute(stmt):
+            _ = stmt
+            return _ExecResult()
+
+    article_repo = ArticleRepo(_Session())
+    insert_calls: list[dict[str, object]] = []
+    insert_results = iter(
+        [
+            (SimpleNamespace(id=1), True),
+            (SimpleNamespace(id=2), False),
+        ]
+    )
+
+    def _fake_insert_article(**kwargs):
+        insert_calls.append(kwargs)
+        return next(insert_results)
+
+    article_repo.insert_article = _fake_insert_article  # type: ignore[method-assign]
+
+    assert article_repo.existing_canonical_hashes([]) == set()
+
+    new_count, duplicate_count = article_repo.upsert_articles_batch(
+        [
+            {
+                "source_id": None,
+                "title": "A",
+                "url": "https://example.com/a",
+                "url_canonical": "https://example.com/a",
+                "url_canonical_hash": "h-a",
+                "published_at": datetime.now(UTC),
+                "summary": None,
+                "content": None,
+                "ai_relevance_score": 0.1,
+                "freshness_score": 0.1,
+                "rank_score": 0.1,
+            },
+            {
+                "source_id": None,
+                "title": "B",
+                "url": "https://example.com/b",
+                "url_canonical": "https://example.com/b",
+                "url_canonical_hash": "h-b",
+                "published_at": datetime.now(UTC),
+                "summary": None,
+                "content": None,
+                "ai_relevance_score": 0.2,
+                "freshness_score": 0.2,
+                "rank_score": 0.2,
+            },
+            {
+                "source_id": None,
+                "title": "B newer",
+                "url": "https://example.com/b",
+                "url_canonical": "https://example.com/b",
+                "url_canonical_hash": "h-b",
+                "published_at": datetime.now(UTC),
+                "summary": None,
+                "content": None,
+                "ai_relevance_score": 0.9,
+                "freshness_score": 0.9,
+                "rank_score": 0.9,
+            },
+        ]
+    )
+
+    assert new_count == 1
+    assert duplicate_count == 2
+    assert len(insert_calls) == 2
+    assert insert_calls[1]["ai_relevance_score"] == 0.9
 
 
 def test_prune_older_than_and_count() -> None:
