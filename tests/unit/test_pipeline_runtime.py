@@ -1182,6 +1182,271 @@ def test_run_fetch_cycle_persists_rss_fetch_state_metadata_for_200(monkeypatch) 
     assert isinstance(payload["last_checked_at"], datetime)
 
 
+def test_run_fetch_cycle_html_304_uses_validators_and_skips_processing(monkeypatch) -> None:
+    logger = _Logger()
+    session = _Session()
+
+    configs = [
+        SourceConfig(
+            id="html_stateful",
+            name="HTML Stateful",
+            type="html",
+            url="https://example.com/news",
+            enabled=True,
+            html={"list_selector": "main", "link_selector": "a"},
+        )
+    ]
+
+    class _TrackingSourceRepo:
+        last_instance = None
+
+        def __init__(self, _session) -> None:
+            self.get_calls: list[int] = []
+            self.update_calls: list[tuple[int, dict[str, object]]] = []
+            _TrackingSourceRepo.last_instance = self
+
+        def upsert_source(self, config: SourceConfig):
+            return SimpleNamespace(id=404, source_key=config.id)
+
+        def get_fetch_state(self, *, source_id: int):
+            self.get_calls.append(source_id)
+            return {
+                "etag": '"html-etag-old"',
+                "last_modified": "Sun, 22 Feb 2026 10:00:00 GMT",
+                "last_checked_at": None,
+                "last_status_code": 200,
+            }
+
+        def update_fetch_state(self, *, source_id: int, **kwargs):
+            self.update_calls.append((source_id, kwargs))
+
+    class _NoInsertArticleRepo:
+        def __init__(self, _session) -> None:
+            self.insert_calls = 0
+
+        def insert_article(self, **_kwargs):
+            self.insert_calls += 1
+            raise AssertionError("insert_article should not be called for 304/not-modified HTML")
+
+    html_calls: list[dict[str, object]] = []
+    article_calls: list[str] = []
+
+    def _fake_fetch_html_links_with_metadata(_source, *_args, **kwargs):
+        html_calls.append(
+            {
+                "if_none_match": kwargs.get("if_none_match"),
+                "if_modified_since": kwargs.get("if_modified_since"),
+            }
+        )
+        return SimpleNamespace(
+            links=[],
+            not_modified=True,
+            status_code=304,
+            etag='"html-etag-new"',
+            last_modified="Mon, 23 Feb 2026 12:00:00 GMT",
+        )
+
+    def _unexpected_fetch_html_article(*_args, **_kwargs):
+        article_calls.append("called")
+        raise AssertionError("fetch_html_article should not run for 304/not-modified HTML")
+
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.pipeline.SessionLocal", lambda: session)
+    monkeypatch.setattr("app.core.pipeline.SourceRepo", _TrackingSourceRepo)
+    monkeypatch.setattr("app.core.pipeline.ArticleRepo", _NoInsertArticleRepo)
+    monkeypatch.setattr("app.core.pipeline.fetch_rss", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("app.core.pipeline.fetch_html", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(
+        "app.core.pipeline.fetch_html_links_with_metadata",
+        _fake_fetch_html_links_with_metadata,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "app.core.pipeline.fetch_html_article",
+        _unexpected_fetch_html_article,
+        raising=False,
+    )
+    monkeypatch.setattr("app.core.pipeline.canonicalize_url", lambda u: f"c:{u}")
+    monkeypatch.setattr("app.core.pipeline.canonical_url_hash", lambda u: f"h:{u}")
+    monkeypatch.setattr("app.core.pipeline.ai_relevance_score", lambda _item: 0.5)
+    monkeypatch.setattr("app.core.pipeline.freshness_score", lambda _dt: 0.5)
+    monkeypatch.setattr("app.core.pipeline.rank_score", lambda **_kwargs: 0.5)
+
+    settings = SimpleNamespace(
+        sources_path="sources.yaml",
+        request_timeout_seconds=1.0,
+        max_retries=0,
+        concurrency_limit=1,
+        per_source_min_interval_seconds=0.0,
+        rss_extract_full_text=False,
+        rss_full_text_max_items_per_source=0,
+        rss_full_text_concurrency_limit=None,
+        rss_known_streak_stop=0,
+        html_known_streak_stop=20,
+        html_max_links_per_source=10,
+        fetch_emit_source_metrics=True,
+        fetch_conditional_html_list_enabled=True,
+    )
+
+    summary = run_fetch_cycle(settings=settings, logger=logger)
+    repo = _TrackingSourceRepo.last_instance
+    assert repo is not None
+
+    assert html_calls == [
+        {
+            "if_none_match": '"html-etag-old"',
+            "if_modified_since": "Sun, 22 Feb 2026 10:00:00 GMT",
+        }
+    ]
+    assert not article_calls
+    assert summary.not_modified_sources == 1
+    assert summary.fetched == 0
+    assert summary.new == 0
+    source_finished_payload = next(
+        payload
+        for event, payload in logger.info_calls
+        if event == "source_fetch_finished" and payload["source_id"] == "html_stateful"
+    )
+    assert source_finished_payload["not_modified"] is True
+    assert repo.get_calls == [404]
+    assert len(repo.update_calls) == 1
+    source_id, payload = repo.update_calls[0]
+    assert source_id == 404
+    assert payload["etag"] == '"html-etag-new"'
+    assert payload["last_modified"] == "Mon, 23 Feb 2026 12:00:00 GMT"
+    assert payload["last_status_code"] == 304
+    assert isinstance(payload["last_checked_at"], datetime)
+
+
+def test_run_fetch_cycle_html_conditional_disabled_uses_normal_two_stage_path(monkeypatch) -> None:
+    logger = _Logger()
+    session = _Session()
+
+    configs = [
+        SourceConfig(
+            id="html_stateful_disabled",
+            name="HTML Stateful Disabled",
+            type="html",
+            url="https://example.com/news",
+            enabled=True,
+            html={"list_selector": "main", "link_selector": "a"},
+        )
+    ]
+
+    class _TrackingSourceRepo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def upsert_source(self, config: SourceConfig):
+            return SimpleNamespace(id=405, source_key=config.id)
+
+        def get_fetch_state(self, *, source_id: int):
+            del source_id
+            return {
+                "etag": '"html-etag-old"',
+                "last_modified": "Sun, 22 Feb 2026 10:00:00 GMT",
+                "last_checked_at": None,
+                "last_status_code": 200,
+            }
+
+        def update_fetch_state(self, *, source_id: int, **kwargs):
+            raise AssertionError(
+                "update_fetch_state should not be called when conditional HTML is disabled"
+            )
+
+    class _TrackingArticleRepo:
+        last_instance = None
+
+        def __init__(self, _session) -> None:
+            self.insert_calls: list[str] = []
+            _TrackingArticleRepo.last_instance = self
+
+        def exists_by_canonical_hash(self, _canonical_hash: str) -> bool:
+            return False
+
+        def insert_article(self, **kwargs):
+            self.insert_calls.append(kwargs["url"])
+            return SimpleNamespace(id=len(self.insert_calls)), True
+
+    metadata_calls: list[str] = []
+
+    def _unexpected_fetch_html_links_with_metadata(*_args, **_kwargs):
+        metadata_calls.append("called")
+        raise AssertionError("metadata-aware HTML fetch path should not be used when disabled")
+
+    def _fake_fetch_html_links(*_args, **_kwargs):
+        return ["https://example.com/item-1"]
+
+    def _fake_fetch_html_article(*args, **kwargs):
+        url = kwargs.get("url")
+        if not isinstance(url, str) and len(args) >= 2:
+            url = args[1]
+        assert isinstance(url, str)
+        return Article(
+            source_key="html_stateful_disabled",
+            title="Fetched item",
+            url=url,
+            published_at=None,
+            summary=None,
+            content="content",
+        )
+
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.pipeline.SessionLocal", lambda: session)
+    monkeypatch.setattr("app.core.pipeline.SourceRepo", _TrackingSourceRepo)
+    monkeypatch.setattr("app.core.pipeline.ArticleRepo", _TrackingArticleRepo)
+    monkeypatch.setattr("app.core.pipeline.fetch_rss", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("app.core.pipeline.fetch_html", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(
+        "app.core.pipeline.fetch_html_links_with_metadata",
+        _unexpected_fetch_html_links_with_metadata,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "app.core.pipeline.fetch_html_links",
+        _fake_fetch_html_links,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "app.core.pipeline.fetch_html_article",
+        _fake_fetch_html_article,
+        raising=False,
+    )
+    monkeypatch.setattr("app.core.pipeline.canonicalize_url", lambda u: f"c:{u}")
+    monkeypatch.setattr("app.core.pipeline.canonical_url_hash", lambda u: f"h:{u}")
+    monkeypatch.setattr("app.core.pipeline.ai_relevance_score", lambda _item: 0.5)
+    monkeypatch.setattr("app.core.pipeline.freshness_score", lambda _dt: 0.5)
+    monkeypatch.setattr("app.core.pipeline.rank_score", lambda **_kwargs: 0.5)
+
+    settings = SimpleNamespace(
+        sources_path="sources.yaml",
+        request_timeout_seconds=1.0,
+        max_retries=0,
+        concurrency_limit=1,
+        per_source_min_interval_seconds=0.0,
+        rss_extract_full_text=False,
+        rss_full_text_max_items_per_source=0,
+        rss_full_text_concurrency_limit=None,
+        rss_known_streak_stop=0,
+        html_known_streak_stop=20,
+        html_max_links_per_source=10,
+        fetch_emit_source_metrics=True,
+        fetch_conditional_html_list_enabled=False,
+    )
+
+    summary = run_fetch_cycle(settings=settings, logger=logger)
+    repo = _TrackingArticleRepo.last_instance
+    assert repo is not None
+
+    assert not metadata_calls
+    assert summary.not_modified_sources == 0
+    assert summary.fetched == 1
+    assert summary.new == 1
+    assert repo.insert_calls == ["https://example.com/item-1"]
+
+
 def test_run_fetch_cycle_html_two_stage_skips_known_links_and_respects_max_links(
     monkeypatch,
 ) -> None:

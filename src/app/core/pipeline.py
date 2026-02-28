@@ -9,7 +9,12 @@ from app.config.sources import SourceConfig, load_sources
 from app.core.canonicalize import canonical_url_hash, canonicalize_url
 from app.core.scoring import ai_relevance_score, freshness_score, rank_score
 from app.ingest.fetcher import Fetcher
-from app.ingest.html import fetch_html, fetch_html_article, fetch_html_links
+from app.ingest.html import (
+    fetch_html,
+    fetch_html_article,
+    fetch_html_links,
+    fetch_html_links_with_metadata,
+)
 from app.ingest.rss import fetch_rss, fetch_rss_with_metadata
 from app.storage import SessionLocal, create_all
 from app.storage.repos import ArticleRepo, SourceRepo
@@ -35,6 +40,10 @@ class FetchSummary:  # pylint: disable=too-many-instance-attributes
 @dataclass(frozen=True)
 class HtmlLinkFetchResult:
     links: list[str]
+    not_modified: bool = False
+    status_code: int | None = None
+    etag: str | None = None
+    last_modified: str | None = None
 
 
 @dataclass
@@ -48,6 +57,19 @@ class SourceMetrics:  # pylint: disable=too-many-instance-attributes
     skipped_known_items: int = 0
     early_stop_hit: bool = False
     not_modified: bool = False
+
+
+def _coerce_html_link_fetch_result(result: object) -> HtmlLinkFetchResult:
+    status_code = getattr(result, "status_code", None)
+    etag = getattr(result, "etag", None)
+    last_modified = getattr(result, "last_modified", None)
+    return HtmlLinkFetchResult(
+        links=list(getattr(result, "links", [])),
+        not_modified=bool(getattr(result, "not_modified", False)),
+        status_code=int(status_code) if status_code is not None else None,
+        etag=etag if isinstance(etag, str) else None,
+        last_modified=last_modified if isinstance(last_modified, str) else None,
+    )
 
 
 def _log_source_metrics(
@@ -81,12 +103,12 @@ def _fetch_source_items(
     config: SourceConfig,
     db_source_id: int,
     fetch_state: dict[str, object | None] | None,
-    enable_rss_fetch_state: bool,
+    enable_fetch_state: bool,
     settings: Settings,
     logger: Logger,
     run_id: str,
     full_text_semaphore: BoundedSemaphore | None,
-):  # type: ignore[no-untyped-def]
+):  # type: ignore[no-untyped-def]  # pylint: disable=too-many-return-statements
     del db_source_id
     fetcher = Fetcher(
         timeout_seconds=settings.request_timeout_seconds,
@@ -110,7 +132,7 @@ def _fetch_source_items(
         if_none_match = None
         if_modified_since = None
         if (
-            enable_rss_fetch_state
+            enable_fetch_state
             and bool(getattr(settings, "fetch_conditional_rss_enabled", True))
             and fetch_state is not None
         ):
@@ -119,7 +141,7 @@ def _fetch_source_items(
             if_none_match = etag if isinstance(etag, str) else None
             if_modified_since = last_modified if isinstance(last_modified, str) else None
         use_explicit_metadata_fetch = (
-            enable_rss_fetch_state
+            enable_fetch_state
             and bool(getattr(settings, "fetch_conditional_rss_enabled", True))
             and fetch_rss_with_metadata is not _DEFAULT_FETCH_RSS_WITH_METADATA
         )
@@ -146,14 +168,33 @@ def _fetch_source_items(
     html_two_stage_supported = (
         config.type == "html"
         and all(
-        hasattr(settings, attr)
-        for attr in ("html_known_streak_stop", "html_max_links_per_source")
+            hasattr(settings, attr)
+            for attr in ("html_known_streak_stop", "html_max_links_per_source")
         )
+    )
+    html_conditional_enabled = bool(
+        getattr(settings, "fetch_conditional_html_list_enabled", False)
     )
     if config.type == "html" and html_two_stage_supported and (
         fetch_html_links is not _DEFAULT_FETCH_HTML_LINKS
         or fetch_html_article is not _DEFAULT_FETCH_HTML_ARTICLE
     ):
+        if_none_match = None
+        if_modified_since = None
+        if enable_fetch_state and html_conditional_enabled and fetch_state is not None:
+            etag = fetch_state.get("etag")
+            last_modified = fetch_state.get("last_modified")
+            if_none_match = etag if isinstance(etag, str) else None
+            if_modified_since = last_modified if isinstance(last_modified, str) else None
+        if enable_fetch_state and html_conditional_enabled:
+            html_result = fetch_html_links_with_metadata(
+                config,
+                settings.request_timeout_seconds,
+                fetcher=fetcher,
+                if_none_match=if_none_match,
+                if_modified_since=if_modified_since,
+            )
+            return _coerce_html_link_fetch_result(html_result)
         return HtmlLinkFetchResult(
             fetch_html_links(
                 config,
@@ -168,6 +209,22 @@ def _fetch_source_items(
             fetcher=fetcher,
         )
     if html_two_stage_supported:
+        if_none_match = None
+        if_modified_since = None
+        if enable_fetch_state and html_conditional_enabled and fetch_state is not None:
+            etag = fetch_state.get("etag")
+            last_modified = fetch_state.get("last_modified")
+            if_none_match = etag if isinstance(etag, str) else None
+            if_modified_since = last_modified if isinstance(last_modified, str) else None
+        if enable_fetch_state and html_conditional_enabled:
+            html_result = fetch_html_links_with_metadata(
+                config,
+                settings.request_timeout_seconds,
+                fetcher=fetcher,
+                if_none_match=if_none_match,
+                if_modified_since=if_modified_since,
+            )
+            return _coerce_html_link_fetch_result(html_result)
         return HtmlLinkFetchResult(
             fetch_html_links(
                 config,
@@ -226,7 +283,7 @@ def _collect_fetched_items(
                 config=config,
                 db_source_id=db_source_id,
                 fetch_state=fetch_state,
-                enable_rss_fetch_state=enable_rss_fetch_state,
+                enable_fetch_state=enable_rss_fetch_state,
                 settings=settings,
                 logger=logger,
                 run_id=run_id,
@@ -447,7 +504,7 @@ def _process_html_links_two_stage(
     return fetched_articles, new_count, duplicate_count, skipped_known_items, early_stop_hit
 
 
-def _persist_rss_fetch_state_if_present(
+def _persist_fetch_state_if_present(
     *,
     source_repo: SourceRepo,
     db_source_id: int,
@@ -458,7 +515,7 @@ def _persist_rss_fetch_state_if_present(
     status_code = getattr(result, "status_code", None)
     has_metadata = any(
         value is not None for value in (etag, last_modified, status_code)
-    ) or hasattr(result, "not_modified")
+    ) or bool(getattr(result, "not_modified", False))
     if not has_metadata:
         return
     _source_repo_update_fetch_state(
@@ -604,7 +661,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                     config,
                     db_source.id,
                     fetch_state,
-                    bool(supports_fetch_state and config.type == "rss"),
+                    bool(supports_fetch_state),
                 )
             )
 
@@ -623,8 +680,8 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                 continue
 
             source_metrics = SourceMetrics(source_id=config.id, source_type=config.type)
-            if config.type == "rss":
-                _persist_rss_fetch_state_if_present(
+            if config.type in {"rss", "html"}:
+                _persist_fetch_state_if_present(
                     source_repo=source_repo,
                     db_source_id=db_source_id,
                     result=fetch_result,
