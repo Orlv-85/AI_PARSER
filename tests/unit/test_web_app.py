@@ -36,6 +36,10 @@ def test_web_app_pages_and_update_flow(monkeypatch, tmp_path) -> None:
     assert page.status_code == 200
     assert "Update" in page.text
     assert "View" in page.text
+    assert "Import Source Candidates" in page.text
+    assert 'id="onboarding-import-raw-text"' in page.text
+    assert 'id="import-onboarding-batch"' in page.text
+    assert "/api/source-onboarding/import" in page.text
     health = client.get("/health")
     assert health.status_code == 200
     assert health.json() == {"status": "ok"}

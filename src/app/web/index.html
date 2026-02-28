@@ -320,6 +320,21 @@
 
         <section id="page-onboarding" class="hidden">
           <div class="card">
+            <h2>Import Source Candidates</h2>
+            <p class="status" id="onboarding-import-status"></p>
+            <div class="field">
+              <label>Candidate URLs or notes with embedded links</label>
+              <textarea
+                id="onboarding-import-raw-text"
+                rows="6"
+                placeholder="Paste URLs, markdown links, or mixed notes here"
+              ></textarea>
+            </div>
+            <div style="margin-top: 12px">
+              <button class="btn btn-primary" id="import-onboarding-batch">Import batch</button>
+            </div>
+          </div>
+          <div class="card">
             <h2>Source Onboarding Review</h2>
             <p class="status" id="onboarding-status"></p>
             <div class="row">
@@ -743,6 +758,47 @@
         }
       }
 
+      async function importOnboardingBatch() {
+        const rawText = $("onboarding-import-raw-text").value.trim();
+        if (!rawText) {
+          setStatus("onboarding-import-status", "Paste at least one URL to import.", "error");
+          return;
+        }
+
+        setStatus("onboarding-import-status", "Importing candidate batch...");
+        try {
+          const response = await fetch("/api/source-onboarding/import", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ raw_text: rawText }),
+          });
+          if (!response.ok) {
+            let detail = "Failed to import candidate batch.";
+            try {
+              const body = await response.json();
+              if (typeof body.detail === "string") {
+                detail = body.detail;
+              }
+            } catch (_ignored) {}
+            setStatus("onboarding-import-status", detail, "error");
+            return;
+          }
+
+          const payload = await response.json();
+          $("onboarding-batch-id").value = String(payload.batch_id);
+          setStatus(
+            "onboarding-import-status",
+            `Imported batch ${payload.batch_id}: accepted=${payload.accepted_count}, rejected=${payload.rejected_count}.`,
+            "success",
+          );
+          setStatus("onboarding-status", `Loaded imported batch ${payload.batch_id}.`, "success");
+          await loadOnboardingSummary();
+          await loadOnboardingCandidates();
+        } catch (_error) {
+          setStatus("onboarding-import-status", "Failed to import candidate batch.", "error");
+        }
+      }
+
       function buildOnboardingActionButton(label, handler) {
         const button = document.createElement("button");
         button.type = "button";
@@ -986,6 +1042,7 @@
       $("refresh-status").addEventListener("click", refreshStatus);
       $("load-news").addEventListener("click", loadNews);
       $("copy-links").addEventListener("click", copyVisibleLinks);
+      $("import-onboarding-batch").addEventListener("click", importOnboardingBatch);
       $("load-onboarding").addEventListener("click", loadOnboardingCandidates);
       $("load-onboarding-summary").addEventListener("click", loadOnboardingSummary);
 
