@@ -2,6 +2,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
 
+import pytest
+from pydantic import ValidationError
+
 from app.web.models import WebUpdateSettings
 from app.web.service import UpdateRunService
 from app.web.settings_store import UpdateSettingsStore
@@ -14,6 +17,7 @@ def test_update_settings_store_round_trips_extended_optimization_fields(tmp_path
         max_retries=1,
         per_source_min_interval_seconds=0.2,
         concurrency_limit=3,
+        update_execution_mode="process",
         fetch_http_max_connections=33,
         fetch_http_max_keepalive_connections=11,
         rss_known_streak_stop=7,
@@ -27,6 +31,7 @@ def test_update_settings_store_round_trips_extended_optimization_fields(tmp_path
     loaded = store.load()
 
     assert loaded == settings
+    assert loaded.update_execution_mode == "process"
 
 
 def test_update_run_service_propagates_extended_runtime_settings(monkeypatch) -> None:
@@ -86,3 +91,15 @@ def test_update_run_service_propagates_extended_runtime_settings(monkeypatch) ->
     assert merged.html_max_links_per_source == 66
     assert merged.article_batch_upsert_enabled is True
     assert merged.fetch_emit_source_metrics is False
+
+
+def test_web_update_settings_supports_update_execution_mode_literals() -> None:
+    default_settings = WebUpdateSettings()
+    process_settings = WebUpdateSettings(update_execution_mode="process")
+
+    assert default_settings.update_execution_mode == "thread"
+    assert process_settings.update_execution_mode == "process"
+    assert process_settings.model_dump(mode="python")["update_execution_mode"] == "process"
+
+    with pytest.raises(ValidationError):
+        WebUpdateSettings(update_execution_mode="invalid")

@@ -147,17 +147,17 @@
 
 **Purpose**: Additional performance gains after P1/P2 are stable.
 
-- [ ] T042 [P] [US2] Add HTML list-page conditional fetch support in `src/app/ingest/html.py` + state persistence in `src/app/storage/repos.py`.
-- [ ] T043 [P] [US3] Evaluate `selectolax` for HTML link extraction hot path and benchmark vs `lxml` (`src/app/ingest/html.py`, `tests/benchmarks/` if added).
-- [ ] T044 [P] [US1] Add source-type execution profiles (RSS-fast vs HTML-heavy) in `src/app/core/pipeline.py` and `src/app/config/settings.py`.
-- [ ] T045 [US1] Prototype queue/offloaded worker mode (e.g., RQ) for web-triggered updates in `src/app/web/service.py` / new worker module (design spike only unless approved).
+- [x] T042 [P] [US2] Add HTML list-page conditional fetch support in `src/app/ingest/html.py` + state persistence in `src/app/storage/repos.py`.
+- [x] T043 [P] [US3] Evaluate `selectolax` for HTML link extraction hot path and benchmark vs `lxml` (`src/app/ingest/html.py`, `tests/benchmarks/` if added).
+- [x] T044 [P] [US1] Add source-type execution profiles (RSS-fast vs HTML-heavy) in `src/app/core/pipeline.py` and `src/app/config/settings.py`.
+- [x] T045 [US1] Prototype queue/offloaded worker mode (e.g., RQ) for web-triggered updates in `src/app/web/service.py` / new worker module (design spike only unless approved).
 
 ---
 
 ## Final Quality Gates (mandatory before merge)
 
-- [ ] T046 Run `make lint PYTHON=./venv1/bin/python` (repo-wide) and record result.
-- [ ] T047 Run `./venv1/bin/pytest` (repo-wide) and record result.
+- [x] T046 Run `make lint PYTHON=./venv1/bin/python` (repo-wide) and record result.
+- [x] T047 Run `./venv1/bin/pytest` (repo-wide) and record result.
 - [ ] T048 Run target performance benchmark/baseline comparison and attach before/after numbers to PR/notes.
 - [ ] T049 Validate production-safe defaults (`full-text off`, conservative concurrency, feature flags) in `README.md` / deploy scripts.
 

@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 
 class WebUpdateSettings(BaseModel):
+    update_execution_mode: Literal["thread", "process"] = "thread"
     request_timeout_seconds: float = Field(default=15.0, gt=0.0, le=120.0)
     max_retries: int = Field(default=3, ge=0, le=10)
     per_source_min_interval_seconds: float = Field(default=1.0, ge=0.0, le=60.0)
