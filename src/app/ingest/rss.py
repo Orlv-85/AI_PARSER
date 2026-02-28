@@ -1,6 +1,7 @@
 import calendar
 import logging
 import re
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from threading import Semaphore
 from time import struct_time
@@ -13,6 +14,33 @@ from app.ingest.fetcher import Fetcher
 from app.ingest.html import extract_article_text
 
 _LOGGER = logging.getLogger(__name__)
+
+
+@dataclass
+class RssFetchResult:
+    items: list[Article]
+    not_modified: bool
+    status_code: int
+    etag: str | None
+    last_modified: str | None
+
+
+class RssItemList(list[Article]):
+    """List-compatible RSS result that preserves response metadata."""
+
+    not_modified: bool
+    status_code: int
+    etag: str | None
+    last_modified: str | None
+
+
+def _with_rss_metadata(items: list[Article], result: RssFetchResult) -> list[Article]:
+    wrapped = RssItemList(items)
+    wrapped.not_modified = result.not_modified
+    wrapped.status_code = result.status_code
+    wrapped.etag = result.etag
+    wrapped.last_modified = result.last_modified
+    return wrapped
 
 
 def _to_datetime(value: struct_time | None) -> datetime | None:
@@ -73,6 +101,70 @@ def _extract_linked_article_text(
     extracted = extract_article_text(html_content=html_content, url=link, strategy="trafilatura")
     return _normalize_plain_text(extracted)
 
+
+def fetch_rss_with_metadata(
+    source_key: str,
+    url: str,
+    timeout_seconds: float = 15.0,
+    fetcher: Fetcher | None = None,
+    *,
+    if_none_match: str | None = None,
+    if_modified_since: str | None = None,
+) -> RssFetchResult:
+    if fetcher is not None:
+        request_method = getattr(fetcher, "request", None)
+        if callable(request_method):
+            response = request_method(
+                source_id=source_key,
+                url=url,
+                if_none_match=if_none_match,
+                if_modified_since=if_modified_since,
+            )
+        else:
+            content = fetcher.fetch_bytes(source_id=source_key, url=url)
+            items = parse_rss(source_key=source_key, content=content)
+            return RssFetchResult(
+                items=items,
+                not_modified=False,
+                status_code=200,
+                etag=None,
+                last_modified=None,
+            )
+    else:
+        headers: dict[str, str] = {}
+        if if_none_match is not None:
+            headers["If-None-Match"] = if_none_match
+        if if_modified_since is not None:
+            headers["If-Modified-Since"] = if_modified_since
+        with httpx.Client(timeout=timeout_seconds, follow_redirects=True) as client:
+            if headers:
+                response = client.get(url, headers=headers)
+            else:
+                response = client.get(url)
+            if getattr(response, "status_code", None) != 304:
+                response.raise_for_status()
+
+    status_code = int(getattr(response, "status_code", 200))
+    if status_code == 304:
+        return RssFetchResult(
+            items=[],
+            not_modified=True,
+            status_code=status_code,
+            etag=getattr(response, "headers", {}).get("ETag"),
+            last_modified=getattr(response, "headers", {}).get("Last-Modified"),
+        )
+
+    content = response.content
+    items = parse_rss(source_key=source_key, content=content)
+    headers = getattr(response, "headers", {})
+    return RssFetchResult(
+        items=items,
+        not_modified=False,
+        status_code=status_code,
+        etag=headers.get("ETag"),
+        last_modified=headers.get("Last-Modified"),
+    )
+
 # pylint: disable=too-many-positional-arguments
 def fetch_rss(
     source_key: str,
@@ -82,18 +174,21 @@ def fetch_rss(
     extract_full_text: bool = False,
     full_text_max_items: int = 20,
     full_text_semaphore: Semaphore | None = None,
+    *,
+    if_none_match: str | None = None,
+    if_modified_since: str | None = None,
 ) -> list[Article]:
-    if fetcher is not None:
-        content = fetcher.fetch_bytes(source_id=source_key, url=url)
-    else:
-        with httpx.Client(timeout=timeout_seconds, follow_redirects=True) as client:
-            response = client.get(url)
-            response.raise_for_status()
-            content = response.content
-
-    items = parse_rss(source_key=source_key, content=content)
+    result = fetch_rss_with_metadata(
+        source_key=source_key,
+        url=url,
+        timeout_seconds=timeout_seconds,
+        fetcher=fetcher,
+        if_none_match=if_none_match,
+        if_modified_since=if_modified_since,
+    )
+    items = result.items
     if not extract_full_text:
-        return items
+        return _with_rss_metadata(items, result)
 
     for item in items[: max(0, full_text_max_items)]:
         try:
@@ -118,4 +213,4 @@ def fetch_rss(
                 full_text_semaphore.release()
         if text:
             item.content = text
-    return items
+    return _with_rss_metadata(items, result)

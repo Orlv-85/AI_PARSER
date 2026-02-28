@@ -6,6 +6,7 @@ LIMITS="${LIMITS:-1 5 10 20}"
 RUNS_PER_LIMIT="${RUNS_PER_LIMIT:-1}"
 BUILD_APP="${BUILD_APP:-0}"
 ENSURE_STACK_UP="${ENSURE_STACK_UP:-1}"
+BENCH_LABEL="${BENCH_LABEL:-baseline}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -57,7 +58,15 @@ run_fetch_once() {
     AINEWS_PER_SOURCE_MIN_INTERVAL_SECONDS \
     AINEWS_RSS_EXTRACT_FULL_TEXT \
     AINEWS_RSS_FULL_TEXT_MAX_ITEMS_PER_SOURCE \
-    AINEWS_RSS_FULL_TEXT_CONCURRENCY_LIMIT
+    AINEWS_RSS_FULL_TEXT_CONCURRENCY_LIMIT \
+    AINEWS_FETCH_HTTP_MAX_CONNECTIONS \
+    AINEWS_FETCH_HTTP_MAX_KEEPALIVE_CONNECTIONS \
+    AINEWS_FETCH_EMIT_SOURCE_METRICS \
+    AINEWS_FETCH_CONDITIONAL_RSS_ENABLED \
+    AINEWS_FETCH_CONDITIONAL_HTML_LIST_ENABLED \
+    AINEWS_HTML_KNOWN_STREAK_STOP \
+    AINEWS_HTML_MAX_LINKS_PER_SOURCE \
+    AINEWS_ARTICLE_BATCH_UPSERT_ENABLED
   do
     if [[ -n "${!key:-}" ]]; then
       run_env_args+=(-e "${key}=${!key}")
@@ -117,8 +126,8 @@ main() {
   fi
 
   printf "Benchmarking fetch latency (ms)\n"
-  printf "compose_file=%s runs_per_limit=%s limits=%s\n" "$COMPOSE_FILE" "$RUNS_PER_LIMIT" "$LIMITS"
-  printf "limit\trun\telapsed_ms\tsummary\n"
+  printf "label=%s compose_file=%s runs_per_limit=%s limits=%s\n" "$BENCH_LABEL" "$COMPOSE_FILE" "$RUNS_PER_LIMIT" "$LIMITS"
+  printf "label\tlimit\trun\telapsed_ms\tsummary\n"
 
   local limit run result elapsed_ms summary
   for limit in $LIMITS; do
@@ -126,7 +135,7 @@ main() {
       result="$(run_fetch_once "$limit")"
       elapsed_ms="${result%%$'\t'*}"
       summary="${result#*$'\t'}"
-      printf "%s\t%s\t%s\t%s\n" "$limit" "$run" "$elapsed_ms" "$summary"
+      printf "%s\t%s\t%s\t%s\t%s\n" "$BENCH_LABEL" "$limit" "$run" "$elapsed_ms" "$summary"
     done
   done
 }

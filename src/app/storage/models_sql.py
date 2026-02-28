@@ -2,6 +2,32 @@ from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.types import TypeDecorator
+
+
+class UTCDateTime(TypeDecorator[datetime]):  # pylint: disable=too-many-ancestors
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    @property
+    def python_type(self) -> type[datetime]:
+        return datetime
+
+    def process_bind_param(self, value, dialect):  # type: ignore[no-untyped-def]
+        del dialect
+        return value
+
+    def process_literal_param(self, value, dialect):  # type: ignore[no-untyped-def]
+        del dialect
+        return value
+
+    def process_result_value(self, value, dialect):  # type: ignore[no-untyped-def]
+        del dialect
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value
 
 
 class Base(DeclarativeBase):
@@ -19,6 +45,10 @@ class Source(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     fetch_interval_minutes: Mapped[int] = mapped_column(Integer, default=30)
     source_weight: Mapped[float] = mapped_column(Float, default=1.0)
+    etag: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    last_modified: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    last_checked_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    last_status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )

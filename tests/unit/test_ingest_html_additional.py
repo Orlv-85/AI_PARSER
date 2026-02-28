@@ -1,7 +1,7 @@
 import httpx
 
 from app.config.sources import SourceConfig
-from app.ingest.html import extract_article_text, fetch_html
+from app.ingest.html import extract_article_text, extract_links_from_html, fetch_html
 
 
 class _StaticFetcher:
@@ -138,6 +138,54 @@ def test_extract_article_text_unknown_strategy_returns_none_when_fallback_empty(
 def test_fetch_html_returns_empty_for_non_html_source() -> None:
     source = SourceConfig(id="rss_source", name="RSS", type="rss", url="https://example.com/feed")
     assert not fetch_html(source)
+
+
+def test_extract_links_from_html_prefers_selectolax_in_auto_mode_when_available(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.ingest.html._SelectolaxHTMLParser", object(), raising=False)
+    monkeypatch.setattr(
+        "app.ingest.html._extract_links_with_selectolax",
+        lambda **_kwargs: ["selectolax"],
+    )
+    monkeypatch.setattr(
+        "app.ingest.html._extract_links_with_lxml",
+        lambda **_kwargs: ["lxml"],
+    )
+
+    links = extract_links_from_html(
+        html_content="<main><a href='/x'>x</a></main>",
+        base_url="https://example.com",
+        list_selector="main",
+        link_selector="a",
+        parser="auto",
+    )
+
+    assert links == ["selectolax"]
+
+
+def test_extract_links_from_html_falls_back_to_lxml_when_selectolax_unavailable(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.ingest.html._SelectolaxHTMLParser", None, raising=False)
+    monkeypatch.setattr(
+        "app.ingest.html._extract_links_with_selectolax",
+        lambda **_kwargs: ["selectolax"],
+    )
+    monkeypatch.setattr(
+        "app.ingest.html._extract_links_with_lxml",
+        lambda **_kwargs: ["lxml"],
+    )
+
+    links = extract_links_from_html(
+        html_content="<main><a href='/x'>x</a></main>",
+        base_url="https://example.com",
+        list_selector="main",
+        link_selector="a",
+        parser="selectolax",
+    )
+
+    assert links == ["lxml"]
 
 
 def test_fetch_html_uses_fetcher_and_fail_soft(monkeypatch) -> None:

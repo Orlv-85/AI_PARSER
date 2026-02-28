@@ -1,6 +1,7 @@
 import json
 import time
 from dataclasses import dataclass, field
+from typing import Literal
 
 import httpx
 
@@ -11,13 +12,40 @@ DEFAULT_USER_AGENT = (
 )
 
 
+# pylint: disable=too-many-instance-attributes
 @dataclass
 class Fetcher:
     timeout_seconds: float = 15.0
     max_retries: int = 3
     per_source_min_interval_seconds: float = 1.0
+    http_max_connections: int | None = None
+    http_max_keepalive_connections: int | None = None
     user_agent: str = DEFAULT_USER_AGENT
     _next_allowed_time: dict[str, float] = field(default_factory=dict)
+    _client: httpx.Client | None = field(default=None, init=False, repr=False)
+
+    def _get_client(self) -> httpx.Client:
+        if self._client is None:
+            if (
+                self.http_max_connections is not None
+                or self.http_max_keepalive_connections is not None
+            ):
+                self._client = httpx.Client(
+                    timeout=self.timeout_seconds,
+                    follow_redirects=True,
+                    limits=httpx.Limits(
+                        max_connections=self.http_max_connections,
+                        max_keepalive_connections=self.http_max_keepalive_connections,
+                    ),
+                    headers={"User-Agent": self.user_agent},
+                )
+            else:
+                self._client = httpx.Client(
+                    timeout=self.timeout_seconds,
+                    follow_redirects=True,
+                    headers={"User-Agent": self.user_agent},
+                )
+        return self._client
 
     def _respect_rate_limit(self, source_id: str) -> None:
         now = time.monotonic()
@@ -26,24 +54,37 @@ class Fetcher:
             time.sleep(next_allowed - now)
         self._next_allowed_time[source_id] = time.monotonic() + self.per_source_min_interval_seconds
 
-    def request(self, *, source_id: str, url: str) -> httpx.Response:
+    def request(
+        self,
+        *,
+        source_id: str,
+        url: str,
+        if_none_match: str | None = None,
+        if_modified_since: str | None = None,
+    ) -> httpx.Response:
         self._respect_rate_limit(source_id)
         last_error: Exception | None = None
-        with httpx.Client(
-            timeout=self.timeout_seconds,
-            follow_redirects=True,
-            headers={"User-Agent": self.user_agent},
-        ) as client:
-            for attempt in range(self.max_retries + 1):
-                try:
+        client = self._get_client()
+        request_headers: dict[str, str] = {}
+        if if_none_match is not None:
+            request_headers["If-None-Match"] = if_none_match
+        if if_modified_since is not None:
+            request_headers["If-Modified-Since"] = if_modified_since
+        for attempt in range(self.max_retries + 1):
+            try:
+                if request_headers:
+                    response = client.get(url, headers=request_headers)
+                else:
                     response = client.get(url)
-                    response.raise_for_status()
+                if getattr(response, "status_code", None) == 304:
                     return response
-                except (httpx.RequestError, httpx.HTTPStatusError) as exc:
-                    last_error = exc
-                    if attempt >= self.max_retries:
-                        break
-                    time.sleep(0.25 * (2**attempt))
+                response.raise_for_status()
+                return response
+            except (httpx.RequestError, httpx.HTTPStatusError) as exc:
+                last_error = exc
+                if attempt >= self.max_retries:
+                    break
+                time.sleep(0.25 * (2**attempt))
         raise RuntimeError(
             json.dumps(
                 {
@@ -60,3 +101,17 @@ class Fetcher:
 
     def fetch_bytes(self, *, source_id: str, url: str) -> bytes:
         return self.request(source_id=source_id, url=url).content
+
+    def close(self) -> None:
+        if self._client is None:
+            return
+        self._client.close()
+        self._client = None
+
+    def __enter__(self) -> Fetcher:
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> Literal[False]:
+        _ = (exc_type, exc, tb)
+        self.close()
+        return False

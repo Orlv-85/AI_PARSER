@@ -1,6 +1,9 @@
 import logging
 from time import struct_time
 
+import pytest
+
+import app.ingest.rss as rss_module
 from app.core.models import Article
 from app.ingest.rss import (
     _extract_linked_article_text,
@@ -288,3 +291,123 @@ def test_fetch_rss_extract_full_text_uses_semaphore_acquire_and_release(monkeypa
     assert result[0].content == "ok text"
     assert semaphore.acquire_calls == 1
     assert semaphore.release_calls == 1
+
+
+class _RequestResponse:
+    def __init__(
+        self,
+        *,
+        status_code: int,
+        content: bytes = b"",
+        headers: dict[str, str] | None = None,
+    ) -> None:
+        self.status_code = status_code
+        self.content = content
+        self.headers = headers or {}
+
+    def raise_for_status(self) -> None:
+        return None
+
+
+class _RequestFetcher:
+    def __init__(self, response: _RequestResponse) -> None:
+        self.response = response
+        self.calls: list[dict[str, object]] = []
+
+    def request(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.response
+
+
+def _fetch_rss_with_metadata_api():
+    api = getattr(rss_module, "fetch_rss_with_metadata", None)
+    assert callable(api), "Expected app.ingest.rss.fetch_rss_with_metadata() to be added"
+    return api
+
+
+def test_fetch_rss_with_metadata_304_skips_parse_and_reports_not_modified(monkeypatch) -> None:
+    api = _fetch_rss_with_metadata_api()
+    fetcher = _RequestFetcher(_RequestResponse(status_code=304))
+
+    def _parse_should_not_run(*args, **kwargs):
+        raise AssertionError("parse_rss should not be called for HTTP 304")
+
+    monkeypatch.setattr("app.ingest.rss.parse_rss", _parse_should_not_run)
+
+    result = api(
+        "s",
+        "https://example.com/feed.xml",
+        fetcher=fetcher,
+        if_none_match='"etag-old"',
+        if_modified_since="Mon, 01 Jan 2024 00:00:00 GMT",
+    )
+
+    assert result.not_modified is True
+    assert result.status_code == 304
+    assert not result.items
+    assert hasattr(result, "etag")
+    assert hasattr(result, "last_modified")
+
+
+def test_fetch_rss_with_metadata_passes_conditional_validators_to_fetcher_request() -> None:
+    api = _fetch_rss_with_metadata_api()
+    fetcher = _RequestFetcher(_RequestResponse(status_code=304))
+
+    _ = api(
+        "s",
+        "https://example.com/feed.xml",
+        fetcher=fetcher,
+        if_none_match='"etag-123"',
+        if_modified_since="Tue, 02 Jan 2024 00:00:00 GMT",
+    )
+
+    assert fetcher.calls == [
+        {
+            "source_id": "s",
+            "url": "https://example.com/feed.xml",
+            "if_none_match": '"etag-123"',
+            "if_modified_since": "Tue, 02 Jan 2024 00:00:00 GMT",
+        }
+    ]
+
+
+def test_fetch_rss_with_metadata_200_captures_headers_and_parses(monkeypatch) -> None:
+    api = _fetch_rss_with_metadata_api()
+    response = _RequestResponse(
+        status_code=200,
+        content=b"<rss></rss>",
+        headers={
+            "ETag": '"etag-new"',
+            "Last-Modified": "Wed, 03 Jan 2024 00:00:00 GMT",
+        },
+    )
+    fetcher = _RequestFetcher(response)
+    monkeypatch.setattr("app.ingest.rss.parse_rss", lambda source_key, content: ["parsed-item"])
+
+    result = api("s", "https://example.com/feed.xml", fetcher=fetcher)
+
+    assert result.not_modified is False
+    assert result.status_code == 200
+    assert result.etag == '"etag-new"'
+    assert result.last_modified == "Wed, 03 Jan 2024 00:00:00 GMT"
+    assert result.items == ["parsed-item"]
+
+
+def test_fetch_rss_compatibility_wrapper_still_returns_item_list(monkeypatch) -> None:
+    if not hasattr(rss_module, "fetch_rss_with_metadata"):
+        pytest.fail("Expected fetch_rss_with_metadata() for compatibility wrapper coverage")
+
+    class _Result:
+        def __init__(self) -> None:
+            self.items = ["a", "b"]
+            self.not_modified = False
+            self.status_code = 200
+            self.etag = None
+            self.last_modified = None
+
+    monkeypatch.setattr("app.ingest.rss.fetch_rss_with_metadata", lambda *args, **kwargs: _Result())
+
+    result = fetch_rss("s", "https://example.com/feed.xml", fetcher=None)
+
+    assert result == ["a", "b"]
+    assert isinstance(result, list)

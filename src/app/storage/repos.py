@@ -2,6 +2,8 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Any, cast
 
 from sqlalchemy import Select, delete, desc, select
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from app.config.sources import SourceConfig
@@ -13,6 +15,42 @@ class SourceRepo:
         self.session = session
 
     def upsert_source(self, source_config: SourceConfig) -> Source:
+        source_values = {
+            "source_key": source_config.id,
+            "name": source_config.name,
+            "type": source_config.type,
+            "url": str(source_config.url),
+            "enabled": source_config.enabled,
+            "fetch_interval_minutes": source_config.fetch_interval_minutes,
+            "source_weight": source_config.source_weight,
+            "created_at": datetime.now(UTC),
+        }
+
+        bind = self.session.get_bind()
+        dialect_name = bind.dialect.name if bind is not None else ""
+        if dialect_name in {"postgresql", "sqlite"}:
+            insert_factory = postgresql_insert if dialect_name == "postgresql" else sqlite_insert
+            upsert_stmt = insert_factory(Source).values(source_values)
+            upsert_stmt = upsert_stmt.on_conflict_do_update(
+                index_elements=[Source.source_key],
+                set_={
+                    "name": upsert_stmt.excluded.name,
+                    "type": upsert_stmt.excluded.type,
+                    "url": upsert_stmt.excluded.url,
+                    "enabled": upsert_stmt.excluded.enabled,
+                    "fetch_interval_minutes": upsert_stmt.excluded.fetch_interval_minutes,
+                    "source_weight": upsert_stmt.excluded.source_weight,
+                },
+            )
+            self.session.execute(upsert_stmt)
+            self.session.flush()
+            refresh_stmt: Select[tuple[Source]] = (
+                select(Source)
+                .where(Source.source_key == source_config.id)
+                .execution_options(populate_existing=True)
+            )
+            return self.session.execute(refresh_stmt).scalar_one()
+
         stmt: Select[tuple[Source]] = select(Source).where(Source.source_key == source_config.id)
         source = self.session.execute(stmt).scalar_one_or_none()
         if source is None:
@@ -33,6 +71,58 @@ class SourceRepo:
         stmt: Select[tuple[Source]] = select(Source).where(Source.enabled.is_(True))
         return list(self.session.scalars(stmt).all())
 
+    def get_fetch_state(self, *, source_id: int) -> dict[str, object | None]:
+        source = self.session.get(Source, source_id)
+        if source is None:
+            raise ValueError(f"source not found: {source_id}")
+        last_checked_at = source.last_checked_at
+        if last_checked_at is not None and last_checked_at.tzinfo is None:
+            last_checked_at = last_checked_at.replace(tzinfo=UTC)
+        return {
+            "etag": source.etag,
+            "last_modified": source.last_modified,
+            "last_checked_at": last_checked_at,
+            "last_status_code": source.last_status_code,
+        }
+
+    def get_source_fetch_state(self, source_id: int) -> dict[str, object | None]:
+        return self.get_fetch_state(source_id=source_id)
+
+    def update_fetch_state(
+        self,
+        *,
+        source_id: int,
+        etag: str | None,
+        last_modified: str | None,
+        last_checked_at: datetime,
+        last_status_code: int | None,
+    ) -> None:
+        source = self.session.get(Source, source_id)
+        if source is None:
+            raise ValueError(f"source not found: {source_id}")
+        source.etag = etag
+        source.last_modified = last_modified
+        source.last_checked_at = last_checked_at
+        source.last_status_code = last_status_code
+        self.session.flush()
+
+    def update_source_fetch_state(
+        self,
+        source_id: int,
+        *,
+        etag: str | None,
+        last_modified: str | None,
+        last_checked_at: datetime,
+        last_status_code: int | None,
+    ) -> None:
+        self.update_fetch_state(
+            source_id=source_id,
+            etag=etag,
+            last_modified=last_modified,
+            last_checked_at=last_checked_at,
+            last_status_code=last_status_code,
+        )
+
 
 class ArticleRepo:
     def __init__(self, session: Session) -> None:
@@ -45,6 +135,69 @@ class ArticleRepo:
             .limit(1)
         )
         return self.session.execute(stmt).scalar_one_or_none() is not None
+
+    def existing_canonical_hashes(self, canonical_hashes: list[str]) -> set[str]:
+        if not canonical_hashes:
+            return set()
+        stmt = select(Article.url_canonical_hash).where(
+            Article.url_canonical_hash.in_(canonical_hashes)
+        )
+        rows = self.session.execute(stmt).scalars().all()
+        return {str(value) for value in rows}
+
+    def upsert_articles_batch(self, rows: list[dict[str, Any]]) -> tuple[int, int]:
+        if not rows:
+            return 0, 0
+
+        normalized_by_hash: dict[str, dict[str, Any]] = {}
+        input_duplicates = 0
+        for row in rows:
+            canonical_hash = str(row["url_canonical_hash"])
+            if canonical_hash in normalized_by_hash:
+                input_duplicates += 1
+                existing_row = normalized_by_hash[canonical_hash]
+                existing_row["ai_relevance_score"] = row["ai_relevance_score"]
+                existing_row["freshness_score"] = row["freshness_score"]
+                existing_row["rank_score"] = row["rank_score"]
+                continue
+            normalized_by_hash[canonical_hash] = dict(row)
+
+        normalized_rows = list(normalized_by_hash.values())
+        canonical_hashes = list(normalized_by_hash)
+        existing_before = self.existing_canonical_hashes(canonical_hashes)
+        new_count = sum(
+            1 for canonical_hash in canonical_hashes if canonical_hash not in existing_before
+        )
+        duplicate_count = (len(canonical_hashes) - new_count) + input_duplicates
+
+        bind = self.session.get_bind()
+        dialect_name = bind.dialect.name if bind is not None else ""
+        if dialect_name in {"postgresql", "sqlite"}:
+            insert_factory = postgresql_insert if dialect_name == "postgresql" else sqlite_insert
+            stmt = insert_factory(Article).values(normalized_rows)
+            excluded = stmt.excluded
+            stmt = stmt.on_conflict_do_update(
+                index_elements=[Article.url_canonical_hash],
+                set_={
+                    "ai_relevance_score": excluded.ai_relevance_score,
+                    "freshness_score": excluded.freshness_score,
+                    "rank_score": excluded.rank_score,
+                },
+            )
+            self.session.execute(stmt)
+            self.session.flush()
+            return new_count, duplicate_count
+
+        actual_new = 0
+        actual_duplicates = 0
+        for row in normalized_rows:
+            _, is_new = self.insert_article(**row)
+            if is_new:
+                actual_new += 1
+            else:
+                actual_duplicates += 1
+        actual_duplicates += input_duplicates
+        return actual_new, actual_duplicates
 
     def insert_article(
         self,

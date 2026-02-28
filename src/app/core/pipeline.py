@@ -9,33 +9,120 @@ from app.config.sources import SourceConfig, load_sources
 from app.core.canonicalize import canonical_url_hash, canonicalize_url
 from app.core.scoring import ai_relevance_score, freshness_score, rank_score
 from app.ingest.fetcher import Fetcher
-from app.ingest.html import fetch_html
-from app.ingest.rss import fetch_rss
+from app.ingest.html import (
+    fetch_html,
+    fetch_html_article,
+    fetch_html_links,
+    fetch_html_links_with_metadata,
+)
+from app.ingest.rss import fetch_rss, fetch_rss_with_metadata
 from app.storage import SessionLocal, create_all
 from app.storage.repos import ArticleRepo, SourceRepo
 
+_DEFAULT_FETCH_RSS_WITH_METADATA = fetch_rss_with_metadata
+_DEFAULT_FETCH_HTML = fetch_html
+_DEFAULT_FETCH_HTML_LINKS = fetch_html_links
+_DEFAULT_FETCH_HTML_ARTICLE = fetch_html_article
+
 
 @dataclass(frozen=True)
-class FetchSummary:
+class FetchSummary:  # pylint: disable=too-many-instance-attributes
     run_id: str
     fetched: int
     new: int
     duplicates: int
     errors: int
+    not_modified_sources: int = 0
+    skipped_known_html_links: int = 0
+    early_stop_hits: int = 0
+
+
+@dataclass(frozen=True)
+class HtmlLinkFetchResult:
+    links: list[str]
+    not_modified: bool = False
+    status_code: int | None = None
+    etag: str | None = None
+    last_modified: str | None = None
+
+
+@dataclass
+class SourceMetrics:  # pylint: disable=too-many-instance-attributes
+    source_id: str
+    source_type: str
+    fetched_items: int = 0
+    new_items: int = 0
+    duplicate_items: int = 0
+    errors: int = 0
+    skipped_known_items: int = 0
+    early_stop_hit: bool = False
+    not_modified: bool = False
+
+
+def _coerce_html_link_fetch_result(result: object) -> HtmlLinkFetchResult:
+    status_code = getattr(result, "status_code", None)
+    etag = getattr(result, "etag", None)
+    last_modified = getattr(result, "last_modified", None)
+    return HtmlLinkFetchResult(
+        links=list(getattr(result, "links", [])),
+        not_modified=bool(getattr(result, "not_modified", False)),
+        status_code=int(status_code) if status_code is not None else None,
+        etag=etag if isinstance(etag, str) else None,
+        last_modified=last_modified if isinstance(last_modified, str) else None,
+    )
+
+
+def _html_link_parser_setting(settings: Settings) -> str | None:
+    parser = getattr(settings, "html_link_parser", "auto")
+    return parser if isinstance(parser, str) else "auto"
+
+
+def _log_source_metrics(
+    *,
+    logger: Logger,
+    run_id: str,
+    metrics: SourceMetrics,
+    enabled: bool,
+) -> None:
+    if not enabled:
+        return
+    logger.info(
+        "source_fetch_finished",
+        {
+            "run_id": run_id,
+            "source_id": metrics.source_id,
+            "source_type": metrics.source_type,
+            "fetched_items": metrics.fetched_items,
+            "new_items": metrics.new_items,
+            "duplicate_items": metrics.duplicate_items,
+            "skipped_known_items": metrics.skipped_known_items,
+            "early_stop_hit": metrics.early_stop_hit,
+            "not_modified": metrics.not_modified,
+            "errors": metrics.errors,
+        },
+    )
 
 
 def _fetch_source_items(
     *,
     config: SourceConfig,
+    db_source_id: int,
+    fetch_state: dict[str, object | None] | None,
+    enable_fetch_state: bool,
     settings: Settings,
     logger: Logger,
     run_id: str,
     full_text_semaphore: BoundedSemaphore | None,
-):  # type: ignore[no-untyped-def]
+):  # type: ignore[no-untyped-def]  # pylint: disable=too-many-return-statements
+    del db_source_id
     fetcher = Fetcher(
         timeout_seconds=settings.request_timeout_seconds,
         max_retries=settings.max_retries,
         per_source_min_interval_seconds=settings.per_source_min_interval_seconds,
+        http_max_connections=getattr(settings, "fetch_http_max_connections", 20),
+        http_max_keepalive_connections=getattr(
+            settings, "fetch_http_max_keepalive_connections", 10
+        ),
     )
     logger.info(
         "source_fetch_started",
@@ -47,6 +134,31 @@ def _fetch_source_items(
         },
     )
     if config.type == "rss":
+        if_none_match = None
+        if_modified_since = None
+        if (
+            enable_fetch_state
+            and bool(getattr(settings, "fetch_conditional_rss_enabled", True))
+            and fetch_state is not None
+        ):
+            etag = fetch_state.get("etag")
+            last_modified = fetch_state.get("last_modified")
+            if_none_match = etag if isinstance(etag, str) else None
+            if_modified_since = last_modified if isinstance(last_modified, str) else None
+        use_explicit_metadata_fetch = (
+            enable_fetch_state
+            and bool(getattr(settings, "fetch_conditional_rss_enabled", True))
+            and fetch_rss_with_metadata is not _DEFAULT_FETCH_RSS_WITH_METADATA
+        )
+        if use_explicit_metadata_fetch:
+            return fetch_rss_with_metadata(
+                config.id,
+                str(config.url),
+                settings.request_timeout_seconds,
+                fetcher=fetcher,
+                if_none_match=if_none_match,
+                if_modified_since=if_modified_since,
+            )
         return fetch_rss(
             config.id,
             str(config.url),
@@ -55,6 +167,79 @@ def _fetch_source_items(
             extract_full_text=settings.rss_extract_full_text,
             full_text_max_items=settings.rss_full_text_max_items_per_source,
             full_text_semaphore=full_text_semaphore,
+            if_none_match=if_none_match,
+            if_modified_since=if_modified_since,
+        )
+    html_two_stage_supported = (
+        config.type == "html"
+        and all(
+            hasattr(settings, attr)
+            for attr in ("html_known_streak_stop", "html_max_links_per_source")
+        )
+    )
+    html_conditional_enabled = bool(
+        getattr(settings, "fetch_conditional_html_list_enabled", False)
+    )
+    if config.type == "html" and html_two_stage_supported and (
+        fetch_html_links is not _DEFAULT_FETCH_HTML_LINKS
+        or fetch_html_article is not _DEFAULT_FETCH_HTML_ARTICLE
+    ):
+        if_none_match = None
+        if_modified_since = None
+        if enable_fetch_state and html_conditional_enabled and fetch_state is not None:
+            etag = fetch_state.get("etag")
+            last_modified = fetch_state.get("last_modified")
+            if_none_match = etag if isinstance(etag, str) else None
+            if_modified_since = last_modified if isinstance(last_modified, str) else None
+        if enable_fetch_state and html_conditional_enabled:
+            html_result = fetch_html_links_with_metadata(
+                config,
+                settings.request_timeout_seconds,
+                fetcher=fetcher,
+                link_parser=_html_link_parser_setting(settings),
+                if_none_match=if_none_match,
+                if_modified_since=if_modified_since,
+            )
+            return _coerce_html_link_fetch_result(html_result)
+        return HtmlLinkFetchResult(
+            fetch_html_links(
+                config,
+                settings.request_timeout_seconds,
+                fetcher=fetcher,
+                link_parser=_html_link_parser_setting(settings),
+            )
+        )
+    if config.type == "html" and fetch_html is not _DEFAULT_FETCH_HTML:
+        return fetch_html(
+            config,
+            settings.request_timeout_seconds,
+            fetcher=fetcher,
+        )
+    if html_two_stage_supported:
+        if_none_match = None
+        if_modified_since = None
+        if enable_fetch_state and html_conditional_enabled and fetch_state is not None:
+            etag = fetch_state.get("etag")
+            last_modified = fetch_state.get("last_modified")
+            if_none_match = etag if isinstance(etag, str) else None
+            if_modified_since = last_modified if isinstance(last_modified, str) else None
+        if enable_fetch_state and html_conditional_enabled:
+            html_result = fetch_html_links_with_metadata(
+                config,
+                settings.request_timeout_seconds,
+                fetcher=fetcher,
+                link_parser=_html_link_parser_setting(settings),
+                if_none_match=if_none_match,
+                if_modified_since=if_modified_since,
+            )
+            return _coerce_html_link_fetch_result(html_result)
+        return HtmlLinkFetchResult(
+            fetch_html_links(
+                config,
+                settings.request_timeout_seconds,
+                fetcher=fetcher,
+                link_parser=_html_link_parser_setting(settings),
+            )
         )
     return fetch_html(
         config,
@@ -86,40 +271,309 @@ def _log_source_fetch_error(
     )
 
 
+def _profiled_source_groups(
+    enabled_sources: list[tuple[int, SourceConfig, int, dict[str, object | None] | None, bool]],
+    settings: Settings,
+) -> list[list[tuple[int, SourceConfig, int, dict[str, object | None] | None, bool]]]:
+    profile = str(getattr(settings, "fetch_execution_profile", "balanced") or "balanced")
+    if profile not in {"balanced", "rss_fast", "html_heavy"}:
+        profile = "balanced"
+    if profile == "balanced":
+        return [enabled_sources]
+
+    rss_sources = [entry for entry in enabled_sources if entry[1].type == "rss"]
+    html_sources = [entry for entry in enabled_sources if entry[1].type == "html"]
+    groups = [rss_sources, html_sources] if profile == "rss_fast" else [html_sources, rss_sources]
+    return [group for group in groups if group]
+
+
+def _source_group_max_workers(
+    group: list[tuple[int, SourceConfig, int, dict[str, object | None] | None, bool]],
+    settings: Settings,
+) -> int:
+    base_limit = int(settings.concurrency_limit)
+    max_workers = int(max(1, min(base_limit, len(group))))
+    if not group:
+        return max_workers
+    source_type = group[0][1].type
+    if any(entry[1].type != source_type for entry in group):
+        return max_workers
+    if source_type == "rss":
+        type_limit = getattr(settings, "fetch_rss_concurrency_limit", None)
+    elif source_type == "html":
+        type_limit = getattr(settings, "fetch_html_concurrency_limit", None)
+    else:
+        type_limit = None
+    if isinstance(type_limit, int) and type_limit > 0:
+        max_workers = int(min(max_workers, type_limit))
+    return int(max_workers)
+
+
 def _collect_fetched_items(
     *,
-    enabled_sources: list[tuple[int, SourceConfig, int]],
+    enabled_sources: list[tuple[int, SourceConfig, int, dict[str, object | None] | None, bool]],
     settings: Settings,
     logger: Logger,
     run_id: str,
     full_text_semaphore: BoundedSemaphore | None,
-) -> tuple[dict[int, list], int]:
-    fetched_by_index: dict[int, list] = {}
+) -> tuple[dict[int, object], int]:
+    fetched_by_index: dict[int, object] = {}
     error_count = 0
     if not enabled_sources:
         return fetched_by_index, error_count
 
-    max_workers = max(1, min(settings.concurrency_limit, len(enabled_sources)))
-    with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures: dict[Future, tuple[int, SourceConfig, int]] = {
-            pool.submit(
-                _fetch_source_items,
-                config=config,
-                settings=settings,
-                logger=logger,
-                run_id=run_id,
-                full_text_semaphore=full_text_semaphore,
-            ): (idx, config, db_source_id)
-            for idx, config, db_source_id in enabled_sources
-        }
-        for future in as_completed(futures):
-            idx, config, _db_source_id = futures[future]
-            try:
-                fetched_by_index[idx] = future.result()
-            except Exception as exc:
-                error_count += 1
-                _log_source_fetch_error(logger=logger, run_id=run_id, config=config, exc=exc)
+    for group in _profiled_source_groups(enabled_sources, settings):
+        max_workers = _source_group_max_workers(group, settings)
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures: dict[Future, tuple[int, SourceConfig, int]] = {
+                pool.submit(
+                    _fetch_source_items,
+                    config=config,
+                    db_source_id=db_source_id,
+                    fetch_state=fetch_state,
+                    enable_fetch_state=enable_fetch_state,
+                    settings=settings,
+                    logger=logger,
+                    run_id=run_id,
+                    full_text_semaphore=full_text_semaphore,
+                ): (idx, config, db_source_id)
+                for idx, config, db_source_id, fetch_state, enable_fetch_state in group
+            }
+            for future in as_completed(futures):
+                idx, config, _db_source_id = futures[future]
+                try:
+                    fetched_by_index[idx] = future.result()
+                except Exception as exc:
+                    error_count += 1
+                    _log_source_fetch_error(logger=logger, run_id=run_id, config=config, exc=exc)
     return fetched_by_index, error_count
+
+
+def _source_repo_get_fetch_state(
+    source_repo: SourceRepo,
+    *,
+    source_id: int,
+) -> tuple[dict[str, object | None] | None, bool]:
+    getter = getattr(source_repo, "get_fetch_state", None)
+    if callable(getter):
+        return getter(source_id=source_id), True
+    getter = getattr(source_repo, "get_source_fetch_state", None)
+    if callable(getter):
+        return getter(source_id), True
+    return None, False
+
+
+def _source_repo_update_fetch_state(
+    source_repo: SourceRepo,
+    *,
+    source_id: int,
+    etag: str | None,
+    last_modified: str | None,
+    last_status_code: int | None,
+    last_checked_at: datetime,
+) -> bool:
+    updater = getattr(source_repo, "update_fetch_state", None)
+    if callable(updater):
+        updater(
+            source_id=source_id,
+            etag=etag,
+            last_modified=last_modified,
+            last_status_code=last_status_code,
+            last_checked_at=last_checked_at,
+        )
+        return True
+    updater = getattr(source_repo, "update_source_fetch_state", None)
+    if callable(updater):
+        updater(
+            source_id,
+            etag=etag,
+            last_modified=last_modified,
+            last_status_code=last_status_code,
+            last_checked_at=last_checked_at,
+        )
+        return True
+    return False
+
+
+def _fetch_result_items(result: object) -> list:
+    items = getattr(result, "items", None)
+    if isinstance(items, list):
+        return items
+    if isinstance(result, list):
+        return result
+    return []
+
+
+def _upsert_article_rows(
+    *,
+    article_repo: ArticleRepo,
+    rows: list[dict[str, object]],
+    prefer_batch: bool,
+) -> tuple[int, int]:
+    if not rows:
+        return 0, 0
+
+    batch_upsert = getattr(article_repo, "upsert_articles_batch", None)
+    if prefer_batch and callable(batch_upsert):
+        batch_result = batch_upsert(rows)
+        return int(batch_result[0]), int(batch_result[1])
+
+    new_count = 0
+    duplicate_count = 0
+    for row in rows:
+        _, is_new = article_repo.insert_article(**row)
+        if is_new:
+            new_count += 1
+        else:
+            duplicate_count += 1
+    return new_count, duplicate_count
+
+# pylint: disable=too-many-branches,too-many-statements
+def _process_html_links_two_stage(
+    *,
+    links: list[str],
+    config: SourceConfig,
+    db_source_id: int,
+    article_repo: ArticleRepo,
+    settings: Settings,
+) -> tuple[int, int, int, int, bool]:
+    new_count = 0
+    duplicate_count = 0
+    skipped_known_items = 0
+    early_stop_hit = False
+    fetched_articles = 0
+    html_known_streak = 0
+    html_known_streak_stop = int(getattr(settings, "html_known_streak_stop", 0) or 0)
+    html_max_links_per_source = getattr(settings, "html_max_links_per_source", None)
+    batch_mode = bool(getattr(settings, "article_batch_upsert_enabled", False))
+    exists_by_canonical_hash = getattr(article_repo, "exists_by_canonical_hash", None)
+    exists_by_canonical_hash_fn = (
+        exists_by_canonical_hash if callable(exists_by_canonical_hash) else None
+    )
+    existing_canonical_hashes = getattr(article_repo, "existing_canonical_hashes", None)
+    existing_canonical_hashes_fn = (
+        existing_canonical_hashes if callable(existing_canonical_hashes) else None
+    )
+    capped_links = links
+    if isinstance(html_max_links_per_source, int) and html_max_links_per_source >= 0:
+        capped_links = links[:html_max_links_per_source]
+    canonical_by_link: list[tuple[str, str, str]] = [
+        (
+            str(link),
+            canonicalize_url(str(link)),
+            canonical_url_hash(str(link)),
+        )
+        for link in capped_links
+    ]
+    known_hashes: set[str] = set()
+    if existing_canonical_hashes_fn is not None:
+        known_hashes = existing_canonical_hashes_fn([h for _, _, h in canonical_by_link])
+    queued_rows: list[dict[str, object]] = []
+    fetcher = Fetcher(
+        timeout_seconds=settings.request_timeout_seconds,
+        max_retries=settings.max_retries,
+        per_source_min_interval_seconds=settings.per_source_min_interval_seconds,
+        http_max_connections=getattr(settings, "fetch_http_max_connections", 20),
+        http_max_keepalive_connections=getattr(
+            settings, "fetch_http_max_keepalive_connections", 10
+        ),
+    )
+
+    try:
+        for link, canonical, canonical_hash in canonical_by_link:
+            is_known = False
+            if existing_canonical_hashes_fn is not None:
+                is_known = canonical_hash in known_hashes
+            elif exists_by_canonical_hash_fn is not None:
+                is_known = exists_by_canonical_hash_fn(canonical_hash)
+            if is_known:
+                duplicate_count += 1
+                skipped_known_items += 1
+                html_known_streak += 1
+                if 0 < html_known_streak_stop <= html_known_streak:
+                    early_stop_hit = True
+                    break
+                continue
+
+            html_known_streak = 0
+            try:
+                item = fetch_html_article(
+                    source=config,
+                    url=str(link),
+                    timeout_seconds=settings.request_timeout_seconds,
+                    fetcher=fetcher,
+                )
+            except Exception:
+                continue
+            if item is None:
+                continue
+            fetched_articles += 1
+
+            relevance = ai_relevance_score(item)
+            freshness = freshness_score(item.published_at)
+            rank = rank_score(
+                relevance=relevance,
+                freshness=freshness,
+                source_weight=config.source_weight,
+            )
+            row: dict[str, object] = {
+                "source_id": db_source_id,
+                "title": item.title,
+                "url": str(item.url),
+                "url_canonical": canonical,
+                "url_canonical_hash": canonical_hash,
+                "published_at": item.published_at or datetime.now(UTC),
+                "summary": item.summary,
+                "content": item.content,
+                "ai_relevance_score": relevance,
+                "freshness_score": freshness,
+                "rank_score": rank,
+            }
+            if batch_mode:
+                queued_rows.append(row)
+            else:
+                _, is_new = article_repo.insert_article(**row)
+                if is_new:
+                    new_count += 1
+                else:
+                    duplicate_count += 1
+            if existing_canonical_hashes_fn is not None or batch_mode:
+                known_hashes.add(canonical_hash)
+        if batch_mode:
+            batch_new, batch_duplicates = _upsert_article_rows(
+                article_repo=article_repo,
+                rows=queued_rows,
+                prefer_batch=True,
+            )
+            new_count += batch_new
+            duplicate_count += batch_duplicates
+    finally:
+        fetcher.close()
+    return fetched_articles, new_count, duplicate_count, skipped_known_items, early_stop_hit
+
+
+def _persist_fetch_state_if_present(
+    *,
+    source_repo: SourceRepo,
+    db_source_id: int,
+    result: object,
+) -> None:
+    etag = getattr(result, "etag", None)
+    last_modified = getattr(result, "last_modified", None)
+    status_code = getattr(result, "status_code", None)
+    has_metadata = any(
+        value is not None for value in (etag, last_modified, status_code)
+    ) or bool(getattr(result, "not_modified", False))
+    if not has_metadata:
+        return
+    _source_repo_update_fetch_state(
+        source_repo,
+        source_id=db_source_id,
+        etag=etag if isinstance(etag, str) else None,
+        last_modified=last_modified if isinstance(last_modified, str) else None,
+        last_status_code=int(status_code) if status_code is not None else None,
+        last_checked_at=datetime.now(UTC),
+    )
 
 
 def _process_fetched_source_items(
@@ -129,11 +583,14 @@ def _process_fetched_source_items(
     db_source_id: int,
     article_repo: ArticleRepo,
     settings: Settings,
-) -> tuple[int, int]:
+) -> tuple[int, int, int, bool]:
     new_count = 0
     duplicate_count = 0
+    skipped_known_items = 0
+    early_stop_hit = False
     rss_known_streak = 0
     rss_known_streak_stop = int(getattr(settings, "rss_known_streak_stop", 0) or 0)
+    batch_mode = bool(getattr(settings, "article_batch_upsert_enabled", False))
     exists_by_canonical_hash = getattr(article_repo, "exists_by_canonical_hash", None)
     exists_by_canonical_hash_fn = (
         exists_by_canonical_hash if callable(exists_by_canonical_hash) else None
@@ -143,6 +600,7 @@ def _process_fetched_source_items(
         and rss_known_streak_stop > 0
         and exists_by_canonical_hash_fn is not None
     )
+    queued_rows_by_hash: dict[str, dict[str, object]] = {}
 
     for item in items:
         canonical = canonicalize_url(str(item.url))
@@ -153,8 +611,10 @@ def _process_fetched_source_items(
             and exists_by_canonical_hash_fn(canonical_hash)
         ):
             duplicate_count += 1
+            skipped_known_items += 1
             rss_known_streak += 1
             if rss_known_streak >= rss_known_streak_stop:
+                early_stop_hit = True
                 break
             continue
 
@@ -168,27 +628,48 @@ def _process_fetched_source_items(
             freshness=freshness,
             source_weight=config.source_weight,
         )
-        _, is_new = article_repo.insert_article(
-            source_id=db_source_id,
-            title=item.title,
-            url=str(item.url),
-            url_canonical=canonical,
-            url_canonical_hash=canonical_hash,
-            published_at=item.published_at or datetime.now(UTC),
-            summary=item.summary,
-            content=item.content,
-            ai_relevance_score=relevance,
-            freshness_score=freshness,
-            rank_score=rank,
-        )
-        if is_new:
-            new_count += 1
+        row: dict[str, object] = {
+            "source_id": db_source_id,
+            "title": item.title,
+            "url": str(item.url),
+            "url_canonical": canonical,
+            "url_canonical_hash": canonical_hash,
+            "published_at": item.published_at or datetime.now(UTC),
+            "summary": item.summary,
+            "content": item.content,
+            "ai_relevance_score": relevance,
+            "freshness_score": freshness,
+            "rank_score": rank,
+        }
+        if batch_mode:
+            existing_row = queued_rows_by_hash.get(canonical_hash)
+            if existing_row is not None:
+                existing_row["ai_relevance_score"] = row["ai_relevance_score"]
+                existing_row["freshness_score"] = row["freshness_score"]
+                existing_row["rank_score"] = row["rank_score"]
+                duplicate_count += 1
+                continue
+            queued_rows_by_hash[canonical_hash] = row
         else:
-            duplicate_count += 1
+            _, is_new = article_repo.insert_article(**row)
+            if is_new:
+                new_count += 1
+            else:
+                duplicate_count += 1
 
-    return new_count, duplicate_count
+    if batch_mode:
+        batch_new, batch_duplicates = _upsert_article_rows(
+            article_repo=article_repo,
+            rows=list(queued_rows_by_hash.values()),
+            prefer_batch=True,
+        )
+        new_count += batch_new
+        duplicate_count += batch_duplicates
+
+    return new_count, duplicate_count, skipped_known_items, early_stop_hit
 
 
+# pylint: disable=too-many-statements
 def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
     configs = load_sources(settings.sources_path)
     create_all()
@@ -198,6 +679,9 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
     new_count = 0
     duplicate_count = 0
     error_count = 0
+    optimization_not_modified_sources = 0
+    optimization_skipped_known_html_links = 0
+    optimization_early_stop_hits = 0
     full_text_semaphore = (
         BoundedSemaphore(settings.rss_full_text_concurrency_limit)
         if settings.rss_full_text_concurrency_limit
@@ -207,13 +691,27 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
     with SessionLocal() as session:
         source_repo = SourceRepo(session)
         article_repo = ArticleRepo(session)
-        enabled_sources: list[tuple[int, SourceConfig, int]] = []
+        enabled_sources: list[
+            tuple[int, SourceConfig, int, dict[str, object | None] | None, bool]
+        ] = []
 
         for idx, config in enumerate(configs):
             db_source = source_repo.upsert_source(config)
             if not config.enabled:
                 continue
-            enabled_sources.append((idx, config, db_source.id))
+            fetch_state, supports_fetch_state = _source_repo_get_fetch_state(
+                source_repo,
+                source_id=db_source.id,
+            )
+            enabled_sources.append(
+                (
+                    idx,
+                    config,
+                    db_source.id,
+                    fetch_state,
+                    bool(supports_fetch_state),
+                )
+            )
 
         fetched_by_index, fetch_errors = _collect_fetched_items(
             enabled_sources=enabled_sources,
@@ -224,13 +722,71 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
         )
         error_count += fetch_errors
 
-        for idx, config, db_source_id in enabled_sources:
-            items = fetched_by_index.get(idx)
-            if items is None:
+        for idx, config, db_source_id, _fetch_state, _enable_rss_fetch_state in enabled_sources:
+            fetch_result = fetched_by_index.get(idx)
+            if fetch_result is None:
                 continue
 
+            source_metrics = SourceMetrics(source_id=config.id, source_type=config.type)
+            if config.type in {"rss", "html"}:
+                _persist_fetch_state_if_present(
+                    source_repo=source_repo,
+                    db_source_id=db_source_id,
+                    result=fetch_result,
+                )
+                if bool(getattr(fetch_result, "not_modified", False)):
+                    source_metrics.not_modified = True
+                    optimization_not_modified_sources += 1
+                    _log_source_metrics(
+                        logger=logger,
+                        run_id=run_id,
+                        metrics=source_metrics,
+                        enabled=bool(getattr(settings, "fetch_emit_source_metrics", True)),
+                    )
+                    continue
+
+            if config.type == "html" and isinstance(fetch_result, HtmlLinkFetchResult):
+                (
+                    source_fetched,
+                    source_new,
+                    source_duplicates,
+                    source_skipped_known,
+                    source_early_stop,
+                ) = _process_html_links_two_stage(
+                    links=fetch_result.links,
+                    config=config,
+                    db_source_id=db_source_id,
+                    article_repo=article_repo,
+                    settings=settings,
+                )
+                fetched_count += source_fetched
+                source_metrics.fetched_items = source_fetched
+                new_count += source_new
+                duplicate_count += source_duplicates
+                source_metrics.new_items = source_new
+                source_metrics.duplicate_items = source_duplicates
+                source_metrics.skipped_known_items = source_skipped_known
+                source_metrics.early_stop_hit = source_early_stop
+                if source_early_stop:
+                    optimization_early_stop_hits += 1
+                optimization_skipped_known_html_links += source_skipped_known
+                _log_source_metrics(
+                    logger=logger,
+                    run_id=run_id,
+                    metrics=source_metrics,
+                    enabled=bool(getattr(settings, "fetch_emit_source_metrics", True)),
+                )
+                continue
+
+            items = _fetch_result_items(fetch_result)
             fetched_count += len(items)
-            source_new, source_duplicates = _process_fetched_source_items(
+            source_metrics.fetched_items = len(items)
+            (
+                source_new,
+                source_duplicates,
+                source_skipped_known,
+                source_early_stop,
+            ) = _process_fetched_source_items(
                 items=items,
                 config=config,
                 db_source_id=db_source_id,
@@ -239,6 +795,20 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
             )
             new_count += source_new
             duplicate_count += source_duplicates
+            source_metrics.new_items = source_new
+            source_metrics.duplicate_items = source_duplicates
+            source_metrics.skipped_known_items = source_skipped_known
+            source_metrics.early_stop_hit = source_early_stop
+            if source_early_stop:
+                optimization_early_stop_hits += 1
+            if config.type == "html":
+                optimization_skipped_known_html_links += source_skipped_known
+            _log_source_metrics(
+                logger=logger,
+                run_id=run_id,
+                metrics=source_metrics,
+                enabled=bool(getattr(settings, "fetch_emit_source_metrics", True)),
+            )
 
         session.commit()
 
@@ -250,6 +820,9 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
             "new": new_count,
             "duplicates": duplicate_count,
             "errors": error_count,
+            "not_modified_sources": optimization_not_modified_sources,
+            "skipped_known_html_links": optimization_skipped_known_html_links,
+            "early_stop_hits": optimization_early_stop_hits,
         },
     )
     return FetchSummary(
@@ -258,4 +831,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
         new=new_count,
         duplicates=duplicate_count,
         errors=error_count,
+        not_modified_sources=optimization_not_modified_sources,
+        skipped_known_html_links=optimization_skipped_known_html_links,
+        early_stop_hits=optimization_early_stop_hits,
     )
