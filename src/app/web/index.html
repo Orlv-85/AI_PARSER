@@ -370,6 +370,7 @@
             </div>
             <div style="margin-top: 12px">
               <button class="btn btn-primary" id="load-onboarding">Load review queue</button>
+              <button class="btn btn-secondary" id="validate-onboarding-batch">Validate current batch</button>
               <button class="btn btn-secondary" id="load-onboarding-summary">Refresh batch summary</button>
             </div>
             <div class="status-box" id="onboarding-summary-box">
@@ -799,6 +800,40 @@
         }
       }
 
+      async function validateOnboardingBatch() {
+        const batchId = currentOnboardingBatchId();
+        setStatus("onboarding-status", `Validating batch ${batchId}...`);
+        try {
+          const response = await fetch("/api/source-onboarding/validate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ batch_id: batchId }),
+          });
+          if (!response.ok) {
+            let detail = "Failed to validate batch.";
+            try {
+              const body = await response.json();
+              if (typeof body.detail === "string") {
+                detail = body.detail;
+              }
+            } catch (_ignored) {}
+            setStatus("onboarding-status", detail, "error");
+            return;
+          }
+
+          const payload = await response.json();
+          setStatus(
+            "onboarding-status",
+            `Validated ${payload.validated_count} candidates for batch ${batchId}.`,
+            "success",
+          );
+          await loadOnboardingSummary();
+          await loadOnboardingCandidates();
+        } catch (_error) {
+          setStatus("onboarding-status", "Failed to validate batch.", "error");
+        }
+      }
+
       function buildOnboardingActionButton(label, handler) {
         const button = document.createElement("button");
         button.type = "button";
@@ -1044,6 +1079,7 @@
       $("copy-links").addEventListener("click", copyVisibleLinks);
       $("import-onboarding-batch").addEventListener("click", importOnboardingBatch);
       $("load-onboarding").addEventListener("click", loadOnboardingCandidates);
+      $("validate-onboarding-batch").addEventListener("click", validateOnboardingBatch);
       $("load-onboarding-summary").addEventListener("click", loadOnboardingSummary);
 
       loadSettings();
