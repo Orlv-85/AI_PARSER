@@ -21,6 +21,7 @@ def test_settings_fetch_optimization_defaults() -> None:
     assert settings.fetch_execution_profile == "balanced"
     assert settings.fetch_rss_concurrency_limit is None
     assert settings.fetch_html_concurrency_limit is None
+    assert settings.html_link_parser == "auto"
     assert settings.fetch_http_max_connections == 20
     assert settings.fetch_http_max_keepalive_connections == 10
     assert settings.fetch_emit_source_metrics is True
@@ -35,6 +36,7 @@ def test_settings_reads_fetch_optimization_flags_from_env(monkeypatch) -> None:
     monkeypatch.setenv("AINEWS_FETCH_EXECUTION_PROFILE", "rss_fast")
     monkeypatch.setenv("AINEWS_FETCH_RSS_CONCURRENCY_LIMIT", "6")
     monkeypatch.setenv("AINEWS_FETCH_HTML_CONCURRENCY_LIMIT", "2")
+    monkeypatch.setenv("AINEWS_HTML_LINK_PARSER", "lxml")
     monkeypatch.setenv("AINEWS_FETCH_HTTP_MAX_CONNECTIONS", "40")
     monkeypatch.setenv("AINEWS_FETCH_HTTP_MAX_KEEPALIVE_CONNECTIONS", "12")
     monkeypatch.setenv("AINEWS_FETCH_EMIT_SOURCE_METRICS", "false")
@@ -49,6 +51,7 @@ def test_settings_reads_fetch_optimization_flags_from_env(monkeypatch) -> None:
     assert settings.fetch_execution_profile == "rss_fast"
     assert settings.fetch_rss_concurrency_limit == 6
     assert settings.fetch_html_concurrency_limit == 2
+    assert settings.html_link_parser == "lxml"
     assert settings.fetch_http_max_connections == 40
     assert settings.fetch_http_max_keepalive_connections == 12
     assert settings.fetch_emit_source_metrics is False

@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     fetch_execution_profile: str = "balanced"
     fetch_rss_concurrency_limit: int | None = None
     fetch_html_concurrency_limit: int | None = None
+    html_link_parser: str = "auto"
     per_source_min_interval_seconds: float = 1.0
     fetch_http_max_connections: int | None = 20
     fetch_http_max_keepalive_connections: int | None = 10

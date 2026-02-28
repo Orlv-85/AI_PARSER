@@ -72,6 +72,11 @@ def _coerce_html_link_fetch_result(result: object) -> HtmlLinkFetchResult:
     )
 
 
+def _html_link_parser_setting(settings: Settings) -> str | None:
+    parser = getattr(settings, "html_link_parser", "auto")
+    return parser if isinstance(parser, str) else "auto"
+
+
 def _log_source_metrics(
     *,
     logger: Logger,
@@ -191,6 +196,7 @@ def _fetch_source_items(
                 config,
                 settings.request_timeout_seconds,
                 fetcher=fetcher,
+                link_parser=_html_link_parser_setting(settings),
                 if_none_match=if_none_match,
                 if_modified_since=if_modified_since,
             )
@@ -200,6 +206,7 @@ def _fetch_source_items(
                 config,
                 settings.request_timeout_seconds,
                 fetcher=fetcher,
+                link_parser=_html_link_parser_setting(settings),
             )
         )
     if config.type == "html" and fetch_html is not _DEFAULT_FETCH_HTML:
@@ -221,6 +228,7 @@ def _fetch_source_items(
                 config,
                 settings.request_timeout_seconds,
                 fetcher=fetcher,
+                link_parser=_html_link_parser_setting(settings),
                 if_none_match=if_none_match,
                 if_modified_since=if_modified_since,
             )
@@ -230,6 +238,7 @@ def _fetch_source_items(
                 config,
                 settings.request_timeout_seconds,
                 fetcher=fetcher,
+                link_parser=_html_link_parser_setting(settings),
             )
         )
     return fetch_html(

@@ -1,11 +1,16 @@
 from dataclasses import dataclass
-from typing import cast
+from typing import Literal, cast
 from urllib.parse import urljoin
 
 import httpx
 import trafilatura
 from lxml import html as lxml_html
 from readability import Document
+
+try:
+    from selectolax.parser import HTMLParser as _SelectolaxHTMLParser
+except ImportError:  # pragma: no cover - optional dependency
+    _SelectolaxHTMLParser = None
 
 from app.config.sources import SourceConfig
 from app.core.models import Article
@@ -27,6 +32,39 @@ def extract_links_from_html(
     base_url: str,
     list_selector: str | None,
     link_selector: str | None,
+    parser: str | None = None,
+) -> list[str]:
+    selected_parser = _resolve_link_parser(parser)
+    if selected_parser == "selectolax":
+        return _extract_links_with_selectolax(
+            html_content=html_content,
+            base_url=base_url,
+            list_selector=list_selector,
+            link_selector=link_selector,
+        )
+    return _extract_links_with_lxml(
+        html_content=html_content,
+        base_url=base_url,
+        list_selector=list_selector,
+        link_selector=link_selector,
+    )
+
+
+def _resolve_link_parser(parser: str | None) -> Literal["lxml", "selectolax"]:
+    parser_name = (parser or "auto").strip().lower()
+    if parser_name not in {"auto", "lxml", "selectolax"}:
+        parser_name = "auto"
+    if parser_name in {"auto", "selectolax"} and _SelectolaxHTMLParser is not None:
+        return "selectolax"
+    return "lxml"
+
+
+def _extract_links_with_lxml(
+    *,
+    html_content: str,
+    base_url: str,
+    list_selector: str | None,
+    link_selector: str | None,
 ) -> list[str]:
     tree = lxml_html.fromstring(html_content)
     roots = tree.cssselect(list_selector) if list_selector else [tree]
@@ -37,6 +75,40 @@ def extract_links_from_html(
     for root in roots:
         for node in root.cssselect(selector):
             href = node.attrib.get("href")
+            if not href:
+                continue
+            absolute = urljoin(base_url, href).strip()
+            if absolute in seen:
+                continue
+            seen.add(absolute)
+            found.append(absolute)
+    return found
+
+
+def _extract_links_with_selectolax(
+    *,
+    html_content: str,
+    base_url: str,
+    list_selector: str | None,
+    link_selector: str | None,
+) -> list[str]:
+    if _SelectolaxHTMLParser is None:
+        return _extract_links_with_lxml(
+            html_content=html_content,
+            base_url=base_url,
+            list_selector=list_selector,
+            link_selector=link_selector,
+        )
+
+    tree = _SelectolaxHTMLParser(html_content)
+    roots = tree.css(list_selector) if list_selector else [tree]
+    selector = link_selector or "a"
+
+    found: list[str] = []
+    seen: set[str] = set()
+    for root in roots:
+        for node in root.css(selector):
+            href = node.attributes.get("href")
             if not href:
                 continue
             absolute = urljoin(base_url, href).strip()
@@ -98,6 +170,7 @@ def fetch_html_links(
     source: SourceConfig,
     timeout_seconds: float = 15.0,
     fetcher: Fetcher | None = None,
+    link_parser: str | None = None,
 ) -> list[str]:
     if source.type != "html" or source.html is None:
         return []
@@ -115,6 +188,7 @@ def fetch_html_links(
         base_url=str(source.url),
         list_selector=source.html.list_selector,
         link_selector=source.html.link_selector,
+        parser=link_parser,
     )
 
 
@@ -122,6 +196,7 @@ def fetch_html_links_with_metadata(
     source: SourceConfig,
     timeout_seconds: float = 15.0,
     fetcher: Fetcher | None = None,
+    link_parser: str | None = None,
     *,
     if_none_match: str | None = None,
     if_modified_since: str | None = None,
@@ -166,6 +241,7 @@ def fetch_html_links_with_metadata(
             base_url=str(source.url),
             list_selector=source.html.list_selector,
             link_selector=source.html.link_selector,
+            parser=link_parser,
         ),
         not_modified=False,
         status_code=response.status_code,
