@@ -17,7 +17,7 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     _SelectolaxHTMLParser: type[Any] | None = None
 else:
-    _SelectolaxHTMLParser = cast(type[Any], _selectolax_parser.HTMLParser)
+    _SelectolaxHTMLParser = cast(type[Any], _selectolax_parser.HTMLParser)  # pragma: no cover
 
 
 @dataclass(frozen=True)
