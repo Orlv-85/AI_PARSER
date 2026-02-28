@@ -284,6 +284,7 @@ Safe defaults now favor stability on a small VPS:
 - Keep RSS full-text extraction disabled unless you are debugging extraction quality.
 - Start with conservative concurrency (`10/4`) and increase only after measuring a full run.
 - Keep cron auto-update disabled by default; prefer manual/UI-triggered runs until the source set is stable.
+- Keep `update_execution_mode=thread` as the default web setting; switch to `process` only when you need to isolate a long-running web-triggered update from the request-serving process.
 - Enable `article_batch_upsert_enabled` only after verifying the database path on staging or a controlled production window.
 
 Recommended starting values for the new runtime knobs:
@@ -310,6 +311,16 @@ Fast rollback toggles if an update regresses:
 - lower `html_max_links_per_source`
 - set `rss_known_streak_stop=0` or `html_known_streak_stop=0` to disable early-stop logic
 - keep `fetch_emit_source_metrics=true` while investigating so the logs stay comparable
+
+### Benchmark snapshot
+
+Local fixture benchmark for HTML link extraction (`tests/fixtures/html/list_page.html`, 1000 iterations, Python 3.14.2, `venv1`):
+
+- `lxml`: `0.0413s`
+- `selectolax`: `0.0341s`
+- measured speedup: `1.21x`
+
+This is a parser micro-benchmark, not a full end-to-end fetch run, but it is stable and reproducible for before/after comparisons of the hot link-extraction path.
 
 ### Top news
 

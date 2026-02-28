@@ -158,8 +158,8 @@
 
 - [x] T046 Run `make lint PYTHON=./venv1/bin/python` (repo-wide) and record result.
 - [x] T047 Run `./venv1/bin/pytest` (repo-wide) and record result.
-- [ ] T048 Run target performance benchmark/baseline comparison and attach before/after numbers to PR/notes.
-- [ ] T049 Validate production-safe defaults (`full-text off`, conservative concurrency, feature flags) in `README.md` / deploy scripts.
+- [x] T048 Run target performance benchmark/baseline comparison and attach before/after numbers to PR/notes.
+- [x] T049 Validate production-safe defaults (`full-text off`, conservative concurrency, feature flags) in `README.md` / deploy scripts.
 
 ## Dependencies & Execution Order
 

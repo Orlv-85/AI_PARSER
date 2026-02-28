@@ -288,7 +288,13 @@ tests/
   - fetch run with mocked HTTP responses incl. `304`
   - mixed RSS/HTML source behavior and counters
 - Performance regression harness:
-  - repeatable benchmark script on fixed fixtures/source snapshots (optional but recommended)
+- repeatable benchmark script on fixed fixtures/source snapshots (optional but recommended)
+
+Benchmark note (completed local fixture run):
+- `scripts/bench_html_link_parsers.py` on `tests/fixtures/html/list_page.html` (1000 iterations, Python 3.14.2)
+- `lxml`: `0.0413s`
+- `selectolax`: `0.0341s`
+- observed `selectolax` speedup on the link-extraction hot path: `1.21x`
 - Final gates before merge:
   - `make lint PYTHON=./venv1/bin/python`
   - `./venv1/bin/pytest`
