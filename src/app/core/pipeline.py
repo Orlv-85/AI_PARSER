@@ -262,6 +262,44 @@ def _log_source_fetch_error(
     )
 
 
+def _profiled_source_groups(
+    enabled_sources: list[tuple[int, SourceConfig, int, dict[str, object | None] | None, bool]],
+    settings: Settings,
+) -> list[list[tuple[int, SourceConfig, int, dict[str, object | None] | None, bool]]]:
+    profile = str(getattr(settings, "fetch_execution_profile", "balanced") or "balanced")
+    if profile not in {"balanced", "rss_fast", "html_heavy"}:
+        profile = "balanced"
+    if profile == "balanced":
+        return [enabled_sources]
+
+    rss_sources = [entry for entry in enabled_sources if entry[1].type == "rss"]
+    html_sources = [entry for entry in enabled_sources if entry[1].type == "html"]
+    groups = [rss_sources, html_sources] if profile == "rss_fast" else [html_sources, rss_sources]
+    return [group for group in groups if group]
+
+
+def _source_group_max_workers(
+    group: list[tuple[int, SourceConfig, int, dict[str, object | None] | None, bool]],
+    settings: Settings,
+) -> int:
+    base_limit = int(settings.concurrency_limit)
+    max_workers = int(max(1, min(base_limit, len(group))))
+    if not group:
+        return max_workers
+    source_type = group[0][1].type
+    if any(entry[1].type != source_type for entry in group):
+        return max_workers
+    if source_type == "rss":
+        type_limit = getattr(settings, "fetch_rss_concurrency_limit", None)
+    elif source_type == "html":
+        type_limit = getattr(settings, "fetch_html_concurrency_limit", None)
+    else:
+        type_limit = None
+    if isinstance(type_limit, int) and type_limit > 0:
+        max_workers = int(min(max_workers, type_limit))
+    return int(max_workers)
+
+
 def _collect_fetched_items(
     *,
     enabled_sources: list[tuple[int, SourceConfig, int, dict[str, object | None] | None, bool]],
@@ -275,29 +313,30 @@ def _collect_fetched_items(
     if not enabled_sources:
         return fetched_by_index, error_count
 
-    max_workers = max(1, min(settings.concurrency_limit, len(enabled_sources)))
-    with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures: dict[Future, tuple[int, SourceConfig, int]] = {
-            pool.submit(
-                _fetch_source_items,
-                config=config,
-                db_source_id=db_source_id,
-                fetch_state=fetch_state,
-                enable_fetch_state=enable_rss_fetch_state,
-                settings=settings,
-                logger=logger,
-                run_id=run_id,
-                full_text_semaphore=full_text_semaphore,
-            ): (idx, config, db_source_id)
-            for idx, config, db_source_id, fetch_state, enable_rss_fetch_state in enabled_sources
-        }
-        for future in as_completed(futures):
-            idx, config, _db_source_id = futures[future]
-            try:
-                fetched_by_index[idx] = future.result()
-            except Exception as exc:
-                error_count += 1
-                _log_source_fetch_error(logger=logger, run_id=run_id, config=config, exc=exc)
+    for group in _profiled_source_groups(enabled_sources, settings):
+        max_workers = _source_group_max_workers(group, settings)
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures: dict[Future, tuple[int, SourceConfig, int]] = {
+                pool.submit(
+                    _fetch_source_items,
+                    config=config,
+                    db_source_id=db_source_id,
+                    fetch_state=fetch_state,
+                    enable_fetch_state=enable_fetch_state,
+                    settings=settings,
+                    logger=logger,
+                    run_id=run_id,
+                    full_text_semaphore=full_text_semaphore,
+                ): (idx, config, db_source_id)
+                for idx, config, db_source_id, fetch_state, enable_fetch_state in group
+            }
+            for future in as_completed(futures):
+                idx, config, _db_source_id = futures[future]
+                try:
+                    fetched_by_index[idx] = future.result()
+                except Exception as exc:
+                    error_count += 1
+                    _log_source_fetch_error(logger=logger, run_id=run_id, config=config, exc=exc)
     return fetched_by_index, error_count
 
 

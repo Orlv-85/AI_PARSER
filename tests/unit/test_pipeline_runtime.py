@@ -184,6 +184,190 @@ def test_run_fetch_cycle_handles_no_enabled_sources(monkeypatch) -> None:
     assert session.committed is True
 
 
+def test_run_fetch_cycle_rss_fast_profile_fetches_rss_before_html(monkeypatch) -> None:
+    logger = _Logger()
+    session = _Session()
+    order: list[str] = []
+
+    configs = [
+        SourceConfig(
+            id="html_first",
+            name="HTML First",
+            type="html",
+            url="https://example.com/html-first",
+            enabled=True,
+            html={"list_selector": "main", "link_selector": "a"},
+        ),
+        SourceConfig(
+            id="rss_first",
+            name="RSS First",
+            type="rss",
+            url="https://example.com/rss-first.xml",
+            enabled=True,
+        ),
+        SourceConfig(
+            id="html_second",
+            name="HTML Second",
+            type="html",
+            url="https://example.com/html-second",
+            enabled=True,
+            html={"list_selector": "main", "link_selector": "a"},
+        ),
+        SourceConfig(
+            id="rss_second",
+            name="RSS Second",
+            type="rss",
+            url="https://example.com/rss-second.xml",
+            enabled=True,
+        ),
+    ]
+
+    class _ImmediateFuture:
+        def __init__(self, result):
+            self._result = result
+
+        def result(self):
+            return self._result
+
+    class _ImmediateExecutor:
+        def __init__(self, *, max_workers: int) -> None:
+            self.max_workers = max_workers
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> Literal[False]:
+            return False
+
+        def submit(self, fn, **kwargs):
+            return _ImmediateFuture(fn(**kwargs))
+
+    def _fake_fetch_source_items(*, config, **_kwargs):
+        order.append(config.id)
+        return []
+
+    def _immediate_as_completed(futures):
+        return list(futures)
+
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.pipeline.SessionLocal", lambda: session)
+    monkeypatch.setattr("app.core.pipeline.SourceRepo", _SourceRepo)
+    monkeypatch.setattr("app.core.pipeline.ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr("app.core.pipeline._fetch_source_items", _fake_fetch_source_items)
+    monkeypatch.setattr("app.core.pipeline.ThreadPoolExecutor", _ImmediateExecutor)
+    monkeypatch.setattr("app.core.pipeline.as_completed", _immediate_as_completed)
+
+    settings = SimpleNamespace(
+        sources_path="sources.yaml",
+        concurrency_limit=1,
+        rss_full_text_concurrency_limit=None,
+        fetch_execution_profile="rss_fast",
+        fetch_emit_source_metrics=False,
+    )
+
+    summary = run_fetch_cycle(settings=settings, logger=logger)
+
+    assert summary.errors == 0
+    assert order == ["rss_first", "rss_second", "html_first", "html_second"]
+
+
+def test_run_fetch_cycle_execution_profile_applies_per_type_concurrency_caps(monkeypatch) -> None:
+    logger = _Logger()
+    session = _Session()
+    max_workers_seen: list[int] = []
+
+    configs = [
+        SourceConfig(
+            id="rss_one",
+            name="RSS One",
+            type="rss",
+            url="https://example.com/rss-one.xml",
+            enabled=True,
+        ),
+        SourceConfig(
+            id="rss_two",
+            name="RSS Two",
+            type="rss",
+            url="https://example.com/rss-two.xml",
+            enabled=True,
+        ),
+        SourceConfig(
+            id="rss_three",
+            name="RSS Three",
+            type="rss",
+            url="https://example.com/rss-three.xml",
+            enabled=True,
+        ),
+        SourceConfig(
+            id="html_one",
+            name="HTML One",
+            type="html",
+            url="https://example.com/html-one",
+            enabled=True,
+            html={"list_selector": "main", "link_selector": "a"},
+        ),
+        SourceConfig(
+            id="html_two",
+            name="HTML Two",
+            type="html",
+            url="https://example.com/html-two",
+            enabled=True,
+            html={"list_selector": "main", "link_selector": "a"},
+        ),
+    ]
+
+    class _ImmediateFuture:
+        def __init__(self, result):
+            self._result = result
+
+        def result(self):
+            return self._result
+
+    class _ImmediateExecutor:
+        def __init__(self, *, max_workers: int) -> None:
+            max_workers_seen.append(max_workers)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> Literal[False]:
+            return False
+
+        def submit(self, fn, **kwargs):
+            return _ImmediateFuture(fn(**kwargs))
+
+    def _fake_fetch_source_items(**_kwargs):
+        return []
+
+    def _immediate_as_completed(futures):
+        return list(futures)
+
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.pipeline.SessionLocal", lambda: session)
+    monkeypatch.setattr("app.core.pipeline.SourceRepo", _SourceRepo)
+    monkeypatch.setattr("app.core.pipeline.ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr("app.core.pipeline._fetch_source_items", _fake_fetch_source_items)
+    monkeypatch.setattr("app.core.pipeline.ThreadPoolExecutor", _ImmediateExecutor)
+    monkeypatch.setattr("app.core.pipeline.as_completed", _immediate_as_completed)
+
+    settings = SimpleNamespace(
+        sources_path="sources.yaml",
+        concurrency_limit=8,
+        rss_full_text_concurrency_limit=None,
+        fetch_execution_profile="rss_fast",
+        fetch_rss_concurrency_limit=2,
+        fetch_html_concurrency_limit=1,
+        fetch_emit_source_metrics=False,
+    )
+
+    summary = run_fetch_cycle(settings=settings, logger=logger)
+
+    assert summary.errors == 0
+    assert max_workers_seen == [2, 1]
+
+
 def test_run_fetch_cycle_stops_rss_processing_after_known_streak(monkeypatch) -> None:
     logger = _Logger()
     session = _Session()
