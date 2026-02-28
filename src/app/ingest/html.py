@@ -1,5 +1,6 @@
 from dataclasses import dataclass
-from typing import Literal, cast
+from importlib import import_module
+from typing import Any, Literal, cast
 from urllib.parse import urljoin
 
 import httpx
@@ -7,14 +8,16 @@ import trafilatura
 from lxml import html as lxml_html
 from readability import Document
 
-try:
-    from selectolax.parser import HTMLParser as _SelectolaxHTMLParser
-except ImportError:  # pragma: no cover - optional dependency
-    _SelectolaxHTMLParser = None
-
 from app.config.sources import SourceConfig
 from app.core.models import Article
 from app.ingest.fetcher import Fetcher
+
+try:
+    _selectolax_parser = import_module("selectolax.parser")
+except ImportError:  # pragma: no cover - optional dependency
+    _SelectolaxHTMLParser: type[Any] | None = None
+else:
+    _SelectolaxHTMLParser = cast(type[Any], _selectolax_parser.HTMLParser)
 
 
 @dataclass(frozen=True)
@@ -101,7 +104,7 @@ def _extract_links_with_selectolax(
         )
 
     tree = _SelectolaxHTMLParser(html_content)
-    roots = tree.css(list_selector) if list_selector else [tree]
+    roots: list[Any] = list(tree.css(list_selector)) if list_selector else [tree]
     selector = link_selector or "a"
 
     found: list[str] = []

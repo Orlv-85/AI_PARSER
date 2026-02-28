@@ -190,6 +190,35 @@ def test_request_non_conditional_calls_do_not_send_conditional_headers(monkeypat
     assert factory.calls == [{"url": "https://example.com/feed.xml", "kwargs": {}}]
 
 
+def test_request_builds_client_with_limits_when_configured(monkeypatch) -> None:
+    client_calls: list[dict[str, object]] = []
+
+    class _ClientWithRecordedInit:
+        def __init__(self, **kwargs) -> None:
+            client_calls.append(kwargs)
+
+        def get(self, url: str, **kwargs):
+            _ = (url, kwargs)
+            return _Response(text="payload")
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr("app.ingest.fetcher.httpx.Client", _ClientWithRecordedInit)
+
+    fetcher = Fetcher(
+        http_max_connections=50,
+        http_max_keepalive_connections=25,
+    )
+    result = fetcher.request(source_id="rss", url="https://example.com/feed.xml")
+
+    assert result.text == "payload"
+    assert len(client_calls) == 1
+    limits = cast(httpx.Limits, client_calls[0]["limits"])
+    assert limits.max_connections == 50
+    assert limits.max_keepalive_connections == 25
+
+
 def test_request_retries_5xx_and_preserves_conditional_headers(monkeypatch) -> None:
     request = httpx.Request("GET", "https://example.com/feed.xml")
     response_500 = httpx.Response(500, request=request)
