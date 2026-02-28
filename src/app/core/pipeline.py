@@ -92,6 +92,10 @@ def _fetch_source_items(
         timeout_seconds=settings.request_timeout_seconds,
         max_retries=settings.max_retries,
         per_source_min_interval_seconds=settings.per_source_min_interval_seconds,
+        http_max_connections=getattr(settings, "fetch_http_max_connections", 20),
+        http_max_keepalive_connections=getattr(
+            settings, "fetch_http_max_keepalive_connections", 10
+        ),
     )
     logger.info(
         "source_fetch_started",
@@ -105,13 +109,18 @@ def _fetch_source_items(
     if config.type == "rss":
         if_none_match = None
         if_modified_since = None
-        if enable_rss_fetch_state and fetch_state is not None:
+        if (
+            enable_rss_fetch_state
+            and bool(getattr(settings, "fetch_conditional_rss_enabled", True))
+            and fetch_state is not None
+        ):
             etag = fetch_state.get("etag")
             last_modified = fetch_state.get("last_modified")
             if_none_match = etag if isinstance(etag, str) else None
             if_modified_since = last_modified if isinstance(last_modified, str) else None
         use_explicit_metadata_fetch = (
             enable_rss_fetch_state
+            and bool(getattr(settings, "fetch_conditional_rss_enabled", True))
             and fetch_rss_with_metadata is not _DEFAULT_FETCH_RSS_WITH_METADATA
         )
         if use_explicit_metadata_fetch:
@@ -359,6 +368,10 @@ def _process_html_links_two_stage(
         timeout_seconds=settings.request_timeout_seconds,
         max_retries=settings.max_retries,
         per_source_min_interval_seconds=settings.per_source_min_interval_seconds,
+        http_max_connections=getattr(settings, "fetch_http_max_connections", 20),
+        http_max_keepalive_connections=getattr(
+            settings, "fetch_http_max_keepalive_connections", 10
+        ),
     )
 
     try:

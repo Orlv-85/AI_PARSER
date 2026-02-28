@@ -170,6 +170,44 @@ The plan uses well-supported primitives and documented behavior:
 - Queue/offloaded ingestion worker mode
 - Priority source groups / execution profiles
 
+## Operational Runbook (Phase 6)
+
+### Metrics to watch during rollout
+
+- `fetch_run_duration_seconds` trend per run
+- `not_modified_sources` in `fetch_run_finished`
+- `skipped_known_html_links` in `fetch_run_finished`
+- `early_stop_hits` in `fetch_run_finished`
+- per-source `source_fetch_finished` payloads:
+  - `fetched_items`
+  - `new_items`
+  - `duplicate_items`
+  - `skipped_known_items`
+  - `early_stop_hit`
+
+### Safe rollout order
+
+1. Keep source metrics enabled and compare two to three runs against the same source mix.
+2. Validate that unchanged RSS sources produce more `not_modified_sources`.
+3. Validate that HTML-heavy runs show higher `skipped_known_html_links` without rising error counts.
+4. Enable batch upsert only after network-side improvements are stable.
+
+### Rollback levers
+
+- `article_batch_upsert_enabled=false`
+- `fetch_conditional_requests_enabled=false`
+- `rss_known_streak_stop=0`
+- `html_known_streak_stop=0`
+- reduce `html_max_links_per_source`
+- reduce `concurrency_limit`
+
+### Success signals
+
+- shorter run duration on repeated polls
+- fewer article-page requests for HTML-heavy sources
+- stable or lower error counts
+- no user-visible `502` or app-health degradation during updates
+
 ## Project Structure
 
 ### Documentation (this feature)
@@ -275,4 +313,3 @@ tests/
 - Distributed worker cluster / Kafka
 - Content embeddings / semantic dedup
 - Headless browser rendering for JS-heavy sites
-

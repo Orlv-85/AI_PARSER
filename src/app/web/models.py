@@ -9,6 +9,13 @@ class WebUpdateSettings(BaseModel):
     max_retries: int = Field(default=3, ge=0, le=10)
     per_source_min_interval_seconds: float = Field(default=1.0, ge=0.0, le=60.0)
     concurrency_limit: int = Field(default=8, ge=1, le=64)
+    fetch_http_max_connections: int | None = Field(default=20, ge=1, le=256)
+    fetch_http_max_keepalive_connections: int | None = Field(default=10, ge=0, le=256)
+    rss_known_streak_stop: int = Field(default=20, ge=0, le=500)
+    html_known_streak_stop: int = Field(default=20, ge=0, le=500)
+    html_max_links_per_source: int | None = Field(default=50, ge=1, le=500)
+    article_batch_upsert_enabled: bool = False
+    fetch_emit_source_metrics: bool = True
 
 
 class UpdateStatus(BaseModel):

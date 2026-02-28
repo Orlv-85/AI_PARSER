@@ -1416,6 +1416,13 @@ def test_run_fetch_cycle_html_two_stage_stops_after_known_streak(monkeypatch) ->
     assert summary.errors == 0
     assert summary.skipped_known_html_links == 2
     assert summary.early_stop_hits == 1
+    source_finished_payload = next(
+        payload
+        for event, payload in logger.info_calls
+        if event == "source_fetch_finished" and payload["source_id"] == "html_known_streak"
+    )
+    assert source_finished_payload["skipped_known_items"] == 2
+    assert source_finished_payload["early_stop_hit"] is True
 
 
 def test_run_fetch_cycle_html_two_stage_skips_known_links_before_article_fetch_future(

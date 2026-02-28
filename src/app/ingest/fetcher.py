@@ -12,22 +12,39 @@ DEFAULT_USER_AGENT = (
 )
 
 
+# pylint: disable=too-many-instance-attributes
 @dataclass
 class Fetcher:
     timeout_seconds: float = 15.0
     max_retries: int = 3
     per_source_min_interval_seconds: float = 1.0
+    http_max_connections: int | None = None
+    http_max_keepalive_connections: int | None = None
     user_agent: str = DEFAULT_USER_AGENT
     _next_allowed_time: dict[str, float] = field(default_factory=dict)
     _client: httpx.Client | None = field(default=None, init=False, repr=False)
 
     def _get_client(self) -> httpx.Client:
         if self._client is None:
-            self._client = httpx.Client(
-                timeout=self.timeout_seconds,
-                follow_redirects=True,
-                headers={"User-Agent": self.user_agent},
-            )
+            if (
+                self.http_max_connections is not None
+                or self.http_max_keepalive_connections is not None
+            ):
+                self._client = httpx.Client(
+                    timeout=self.timeout_seconds,
+                    follow_redirects=True,
+                    limits=httpx.Limits(
+                        max_connections=self.http_max_connections,
+                        max_keepalive_connections=self.http_max_keepalive_connections,
+                    ),
+                    headers={"User-Agent": self.user_agent},
+                )
+            else:
+                self._client = httpx.Client(
+                    timeout=self.timeout_seconds,
+                    follow_redirects=True,
+                    headers={"User-Agent": self.user_agent},
+                )
         return self._client
 
     def _respect_rate_limit(self, source_id: str) -> None:

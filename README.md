@@ -251,8 +251,9 @@ ai-news fetch --once
 ### Cron-friendly auto-update (every 30 minutes)
 
 Use the helper script for repeated cron runs. It defaults to the tuned settings
-`AINEWS_CONCURRENCY_LIMIT=20` and `AINEWS_RSS_FULL_TEXT_CONCURRENCY_LIMIT=8`,
-and you can override them via environment variables.
+`AINEWS_CONCURRENCY_LIMIT=10`, `AINEWS_RSS_FULL_TEXT_CONCURRENCY_LIMIT=4`,
+and disables RSS full-text extraction by default with
+`AINEWS_RSS_EXTRACT_FULL_TEXT=0`. You can override them via environment variables.
 
 ```bash
 chmod +x scripts/auto_update_once.sh
@@ -264,8 +265,9 @@ Example `crontab` entry (adjust paths/venv as needed):
 ```cron
 */30 * * * * cd /opt/ai-news && \
   . /opt/ai-news/venv1/bin/activate && \
-  AINEWS_CONCURRENCY_LIMIT=20 \
-  AINEWS_RSS_FULL_TEXT_CONCURRENCY_LIMIT=8 \
+  AINEWS_CONCURRENCY_LIMIT=10 \
+  AINEWS_RSS_FULL_TEXT_CONCURRENCY_LIMIT=4 \
+  AINEWS_RSS_EXTRACT_FULL_TEXT=0 \
   /opt/ai-news/scripts/auto_update_once.sh >> /var/log/ai-news-auto-update.log 2>&1
 ```
 
@@ -274,6 +276,40 @@ Notes:
 - Overlapping cron runs are not ideal (extra fetch work/load). Article deduplication prevents duplicate rows, but prefer schedules that avoid overlap.
 - `scripts/deploy_prod.sh` can install/update a managed cron entry automatically on the server (default disabled) using Docker Compose + `10/4`, with RSS full-text extraction disabled by default for cron (`AUTO_UPDATE_RSS_EXTRACT_FULL_TEXT=0`).
 - Deploy-time cron knobs: `AUTO_UPDATE_ENABLED`, `AUTO_UPDATE_CRON_SCHEDULE`, `AUTO_UPDATE_LOG_PATH`, `AUTO_UPDATE_CONCURRENCY_LIMIT`, `AUTO_UPDATE_FULLTEXT_CONCURRENCY_LIMIT`, `AUTO_UPDATE_RSS_EXTRACT_FULL_TEXT`.
+
+### Fetch optimization rollout (recommended for production)
+
+Safe defaults now favor stability on a small VPS:
+
+- Keep RSS full-text extraction disabled unless you are debugging extraction quality.
+- Start with conservative concurrency (`10/4`) and increase only after measuring a full run.
+- Keep cron auto-update disabled by default; prefer manual/UI-triggered runs until the source set is stable.
+- Enable `article_batch_upsert_enabled` only after verifying the database path on staging or a controlled production window.
+
+Recommended starting values for the new runtime knobs:
+
+- `fetch_http_max_connections=20`
+- `fetch_http_max_keepalive_connections=10`
+- `rss_known_streak_stop=20`
+- `html_known_streak_stop=20`
+- `html_max_links_per_source=50`
+- `article_batch_upsert_enabled=false`
+- `fetch_emit_source_metrics=true`
+
+Suggested rollout order:
+
+1. Run with source metrics enabled and batch upsert disabled.
+2. Watch a few update runs and confirm `not_modified_sources`, `skipped_known_html_links`, `early_stop_hits`, and total duration move in the expected direction.
+3. If the app stays stable, enable `article_batch_upsert_enabled` and repeat the same checks.
+4. Only after that, consider increasing concurrency or relaxing `html_max_links_per_source`.
+
+Fast rollback toggles if an update regresses:
+
+- disable `article_batch_upsert_enabled`
+- lower `concurrency_limit`
+- lower `html_max_links_per_source`
+- set `rss_known_streak_stop=0` or `html_known_streak_stop=0` to disable early-stop logic
+- keep `fetch_emit_source_metrics=true` while investigating so the logs stay comparable
 
 ### Top news
 

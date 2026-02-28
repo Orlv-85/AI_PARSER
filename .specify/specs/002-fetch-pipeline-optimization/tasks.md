@@ -215,4 +215,3 @@ This already delivers major wins without DB semantic changes.
 - Preserve fail-soft behavior per source.
 - Do not increase concurrency as a first-line optimization; remove wasted work first.
 - Measure before/after every slice to avoid “optimizations” that move bottlenecks instead of reducing them.
-
