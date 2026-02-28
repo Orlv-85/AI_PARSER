@@ -289,6 +289,31 @@ def _fetch_result_items(result: object) -> list:
         return result
     return []
 
+
+def _upsert_article_rows(
+    *,
+    article_repo: ArticleRepo,
+    rows: list[dict[str, object]],
+    prefer_batch: bool,
+) -> tuple[int, int]:
+    if not rows:
+        return 0, 0
+
+    batch_upsert = getattr(article_repo, "upsert_articles_batch", None)
+    if prefer_batch and callable(batch_upsert):
+        batch_result = batch_upsert(rows)
+        return int(batch_result[0]), int(batch_result[1])
+
+    new_count = 0
+    duplicate_count = 0
+    for row in rows:
+        _, is_new = article_repo.insert_article(**row)
+        if is_new:
+            new_count += 1
+        else:
+            duplicate_count += 1
+    return new_count, duplicate_count
+
 # pylint: disable=too-many-branches,too-many-statements
 def _process_html_links_two_stage(
     *,
@@ -306,6 +331,7 @@ def _process_html_links_two_stage(
     html_known_streak = 0
     html_known_streak_stop = int(getattr(settings, "html_known_streak_stop", 0) or 0)
     html_max_links_per_source = getattr(settings, "html_max_links_per_source", None)
+    batch_mode = bool(getattr(settings, "article_batch_upsert_enabled", False))
     exists_by_canonical_hash = getattr(article_repo, "exists_by_canonical_hash", None)
     exists_by_canonical_hash_fn = (
         exists_by_canonical_hash if callable(exists_by_canonical_hash) else None
@@ -328,6 +354,7 @@ def _process_html_links_two_stage(
     known_hashes: set[str] = set()
     if existing_canonical_hashes_fn is not None:
         known_hashes = existing_canonical_hashes_fn([h for _, _, h in canonical_by_link])
+    queued_rows: list[dict[str, object]] = []
     fetcher = Fetcher(
         timeout_seconds=settings.request_timeout_seconds,
         max_retries=settings.max_retries,
@@ -371,25 +398,37 @@ def _process_html_links_two_stage(
                 freshness=freshness,
                 source_weight=config.source_weight,
             )
-            _, is_new = article_repo.insert_article(
-                source_id=db_source_id,
-                title=item.title,
-                url=str(item.url),
-                url_canonical=canonical,
-                url_canonical_hash=canonical_hash,
-                published_at=item.published_at or datetime.now(UTC),
-                summary=item.summary,
-                content=item.content,
-                ai_relevance_score=relevance,
-                freshness_score=freshness,
-                rank_score=rank,
-            )
-            if existing_canonical_hashes_fn is not None:
-                known_hashes.add(canonical_hash)
-            if is_new:
-                new_count += 1
+            row: dict[str, object] = {
+                "source_id": db_source_id,
+                "title": item.title,
+                "url": str(item.url),
+                "url_canonical": canonical,
+                "url_canonical_hash": canonical_hash,
+                "published_at": item.published_at or datetime.now(UTC),
+                "summary": item.summary,
+                "content": item.content,
+                "ai_relevance_score": relevance,
+                "freshness_score": freshness,
+                "rank_score": rank,
+            }
+            if batch_mode:
+                queued_rows.append(row)
             else:
-                duplicate_count += 1
+                _, is_new = article_repo.insert_article(**row)
+                if is_new:
+                    new_count += 1
+                else:
+                    duplicate_count += 1
+            if existing_canonical_hashes_fn is not None or batch_mode:
+                known_hashes.add(canonical_hash)
+        if batch_mode:
+            batch_new, batch_duplicates = _upsert_article_rows(
+                article_repo=article_repo,
+                rows=queued_rows,
+                prefer_batch=True,
+            )
+            new_count += batch_new
+            duplicate_count += batch_duplicates
     finally:
         fetcher.close()
     return fetched_articles, new_count, duplicate_count, skipped_known_items, early_stop_hit
@@ -433,6 +472,7 @@ def _process_fetched_source_items(
     early_stop_hit = False
     rss_known_streak = 0
     rss_known_streak_stop = int(getattr(settings, "rss_known_streak_stop", 0) or 0)
+    batch_mode = bool(getattr(settings, "article_batch_upsert_enabled", False))
     exists_by_canonical_hash = getattr(article_repo, "exists_by_canonical_hash", None)
     exists_by_canonical_hash_fn = (
         exists_by_canonical_hash if callable(exists_by_canonical_hash) else None
@@ -442,6 +482,7 @@ def _process_fetched_source_items(
         and rss_known_streak_stop > 0
         and exists_by_canonical_hash_fn is not None
     )
+    queued_rows_by_hash: dict[str, dict[str, object]] = {}
 
     for item in items:
         canonical = canonicalize_url(str(item.url))
@@ -469,23 +510,43 @@ def _process_fetched_source_items(
             freshness=freshness,
             source_weight=config.source_weight,
         )
-        _, is_new = article_repo.insert_article(
-            source_id=db_source_id,
-            title=item.title,
-            url=str(item.url),
-            url_canonical=canonical,
-            url_canonical_hash=canonical_hash,
-            published_at=item.published_at or datetime.now(UTC),
-            summary=item.summary,
-            content=item.content,
-            ai_relevance_score=relevance,
-            freshness_score=freshness,
-            rank_score=rank,
-        )
-        if is_new:
-            new_count += 1
+        row: dict[str, object] = {
+            "source_id": db_source_id,
+            "title": item.title,
+            "url": str(item.url),
+            "url_canonical": canonical,
+            "url_canonical_hash": canonical_hash,
+            "published_at": item.published_at or datetime.now(UTC),
+            "summary": item.summary,
+            "content": item.content,
+            "ai_relevance_score": relevance,
+            "freshness_score": freshness,
+            "rank_score": rank,
+        }
+        if batch_mode:
+            existing_row = queued_rows_by_hash.get(canonical_hash)
+            if existing_row is not None:
+                existing_row["ai_relevance_score"] = row["ai_relevance_score"]
+                existing_row["freshness_score"] = row["freshness_score"]
+                existing_row["rank_score"] = row["rank_score"]
+                duplicate_count += 1
+                continue
+            queued_rows_by_hash[canonical_hash] = row
         else:
-            duplicate_count += 1
+            _, is_new = article_repo.insert_article(**row)
+            if is_new:
+                new_count += 1
+            else:
+                duplicate_count += 1
+
+    if batch_mode:
+        batch_new, batch_duplicates = _upsert_article_rows(
+            article_repo=article_repo,
+            rows=list(queued_rows_by_hash.values()),
+            prefer_batch=True,
+        )
+        new_count += batch_new
+        duplicate_count += batch_duplicates
 
     return new_count, duplicate_count, skipped_known_items, early_stop_hit
 

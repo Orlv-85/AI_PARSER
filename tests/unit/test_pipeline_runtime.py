@@ -1635,3 +1635,195 @@ def test_run_fetch_cycle_html_two_stage_uses_batch_known_hash_precheck_when_avai
     assert repo.insert_calls == article_calls
     assert summary.new == 2
     assert summary.skipped_known_html_links == 1
+
+
+def test_run_fetch_cycle_uses_batch_article_upsert_when_enabled(monkeypatch) -> None:
+    logger = _Logger()
+    session = _Session()
+
+    configs = [
+        SourceConfig(
+            id="rss_batch",
+            name="RSS Batch",
+            type="rss",
+            url="https://example.com/rss-batch.xml",
+            enabled=True,
+        )
+    ]
+
+    class _BatchArticleRepo:
+        last_instance = None
+
+        def __init__(self, _session) -> None:
+            self.batch_calls: list[list[str]] = []
+            self.insert_calls = 0
+            _BatchArticleRepo.last_instance = self
+
+        def upsert_articles_batch(self, rows: list[dict[str, object]]) -> tuple[int, int]:
+            self.batch_calls.append([str(row["url_canonical_hash"]) for row in rows])
+            return 1, 1
+
+        def insert_article(self, **_kwargs):
+            self.insert_calls += 1
+            raise AssertionError("insert_article should not be used when batch upsert is enabled")
+
+    rss_items = [
+        Article(
+            source_key="rss_batch",
+            title="One",
+            url="https://example.com/one",
+            published_at=None,
+            summary=None,
+            content=None,
+        ),
+        Article(
+            source_key="rss_batch",
+            title="Two",
+            url="https://example.com/two",
+            published_at=None,
+            summary=None,
+            content=None,
+        ),
+    ]
+
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.pipeline.SessionLocal", lambda: session)
+    monkeypatch.setattr("app.core.pipeline.SourceRepo", _SourceRepo)
+    monkeypatch.setattr("app.core.pipeline.ArticleRepo", _BatchArticleRepo)
+    monkeypatch.setattr("app.core.pipeline.fetch_rss", lambda *_args, **_kwargs: rss_items)
+    monkeypatch.setattr("app.core.pipeline.fetch_html", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("app.core.pipeline.canonicalize_url", lambda u: f"c:{u}")
+    monkeypatch.setattr("app.core.pipeline.canonical_url_hash", lambda u: f"h:{u}")
+    monkeypatch.setattr("app.core.pipeline.ai_relevance_score", lambda _item: 0.5)
+    monkeypatch.setattr("app.core.pipeline.freshness_score", lambda _dt: 0.5)
+    monkeypatch.setattr("app.core.pipeline.rank_score", lambda **_kwargs: 0.5)
+
+    settings = SimpleNamespace(
+        sources_path="sources.yaml",
+        request_timeout_seconds=1.0,
+        max_retries=0,
+        concurrency_limit=1,
+        per_source_min_interval_seconds=0.0,
+        rss_extract_full_text=False,
+        rss_full_text_max_items_per_source=0,
+        rss_full_text_concurrency_limit=None,
+        rss_known_streak_stop=0,
+        article_batch_upsert_enabled=True,
+        fetch_emit_source_metrics=True,
+    )
+
+    summary = run_fetch_cycle(settings=settings, logger=logger)
+    repo = _BatchArticleRepo.last_instance
+    assert repo is not None
+
+    assert repo.batch_calls == [["h:https://example.com/one", "h:https://example.com/two"]]
+    assert repo.insert_calls == 0
+    assert summary.fetched == 2
+    assert summary.new == 1
+    assert summary.duplicates == 1
+
+
+def test_run_fetch_cycle_batch_upsert_does_not_advance_rss_known_streak_for_in_run_duplicates(
+    monkeypatch,
+) -> None:
+    logger = _Logger()
+    session = _Session()
+
+    configs = [
+        SourceConfig(
+            id="rss_batch_streak",
+            name="RSS Batch Streak",
+            type="rss",
+            url="https://example.com/rss-batch-streak.xml",
+            enabled=True,
+        )
+    ]
+
+    class _BatchArticleRepo:
+        last_instance = None
+
+        def __init__(self, _session) -> None:
+            self.exists_calls: list[str] = []
+            self.batch_calls: list[list[str]] = []
+            _BatchArticleRepo.last_instance = self
+
+        def exists_by_canonical_hash(self, canonical_hash: str) -> bool:
+            self.exists_calls.append(canonical_hash)
+            return False
+
+        def upsert_articles_batch(self, rows: list[dict[str, object]]) -> tuple[int, int]:
+            self.batch_calls.append([str(row["url_canonical_hash"]) for row in rows])
+            return 2, 0
+
+        def insert_article(self, **_kwargs):
+            raise AssertionError("insert_article should not be used when batch upsert is enabled")
+
+    rss_items = [
+        Article(
+            source_key="rss_batch_streak",
+            title="One",
+            url="https://example.com/one",
+            published_at=None,
+            summary=None,
+            content=None,
+        ),
+        Article(
+            source_key="rss_batch_streak",
+            title="One again",
+            url="https://example.com/one",
+            published_at=None,
+            summary=None,
+            content=None,
+        ),
+        Article(
+            source_key="rss_batch_streak",
+            title="Two",
+            url="https://example.com/two",
+            published_at=None,
+            summary=None,
+            content=None,
+        ),
+    ]
+
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.pipeline.SessionLocal", lambda: session)
+    monkeypatch.setattr("app.core.pipeline.SourceRepo", _SourceRepo)
+    monkeypatch.setattr("app.core.pipeline.ArticleRepo", _BatchArticleRepo)
+    monkeypatch.setattr("app.core.pipeline.fetch_rss", lambda *_args, **_kwargs: rss_items)
+    monkeypatch.setattr("app.core.pipeline.fetch_html", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("app.core.pipeline.canonicalize_url", lambda u: f"c:{u}")
+    monkeypatch.setattr("app.core.pipeline.canonical_url_hash", lambda u: f"h:{u}")
+    monkeypatch.setattr("app.core.pipeline.ai_relevance_score", lambda _item: 0.5)
+    monkeypatch.setattr("app.core.pipeline.freshness_score", lambda _dt: 0.5)
+    monkeypatch.setattr("app.core.pipeline.rank_score", lambda **_kwargs: 0.5)
+
+    settings = SimpleNamespace(
+        sources_path="sources.yaml",
+        request_timeout_seconds=1.0,
+        max_retries=0,
+        concurrency_limit=1,
+        per_source_min_interval_seconds=0.0,
+        rss_extract_full_text=False,
+        rss_full_text_max_items_per_source=0,
+        rss_full_text_concurrency_limit=None,
+        rss_known_streak_stop=1,
+        article_batch_upsert_enabled=True,
+        fetch_emit_source_metrics=True,
+    )
+
+    summary = run_fetch_cycle(settings=settings, logger=logger)
+    repo = _BatchArticleRepo.last_instance
+    assert repo is not None
+
+    assert repo.batch_calls == [["h:https://example.com/one", "h:https://example.com/two"]]
+    assert repo.exists_calls == [
+        "h:https://example.com/one",
+        "h:https://example.com/one",
+        "h:https://example.com/two",
+    ]
+    assert summary.fetched == 3
+    assert summary.new == 2
+    assert summary.duplicates == 1
+    assert summary.early_stop_hits == 0

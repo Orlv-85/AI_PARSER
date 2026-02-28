@@ -2,6 +2,8 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Any, cast
 
 from sqlalchemy import Select, delete, desc, select
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from app.config.sources import SourceConfig
@@ -106,6 +108,60 @@ class ArticleRepo:
         )
         rows = self.session.execute(stmt).scalars().all()
         return {str(value) for value in rows}
+
+    def upsert_articles_batch(self, rows: list[dict[str, Any]]) -> tuple[int, int]:
+        if not rows:
+            return 0, 0
+
+        normalized_by_hash: dict[str, dict[str, Any]] = {}
+        input_duplicates = 0
+        for row in rows:
+            canonical_hash = str(row["url_canonical_hash"])
+            if canonical_hash in normalized_by_hash:
+                input_duplicates += 1
+                existing_row = normalized_by_hash[canonical_hash]
+                existing_row["ai_relevance_score"] = row["ai_relevance_score"]
+                existing_row["freshness_score"] = row["freshness_score"]
+                existing_row["rank_score"] = row["rank_score"]
+                continue
+            normalized_by_hash[canonical_hash] = dict(row)
+
+        normalized_rows = list(normalized_by_hash.values())
+        canonical_hashes = list(normalized_by_hash)
+        existing_before = self.existing_canonical_hashes(canonical_hashes)
+        new_count = sum(
+            1 for canonical_hash in canonical_hashes if canonical_hash not in existing_before
+        )
+        duplicate_count = (len(canonical_hashes) - new_count) + input_duplicates
+
+        bind = self.session.get_bind()
+        dialect_name = bind.dialect.name if bind is not None else ""
+        if dialect_name in {"postgresql", "sqlite"}:
+            insert_factory = postgresql_insert if dialect_name == "postgresql" else sqlite_insert
+            stmt = insert_factory(Article).values(normalized_rows)
+            excluded = stmt.excluded
+            stmt = stmt.on_conflict_do_update(
+                index_elements=[Article.url_canonical_hash],
+                set_={
+                    "ai_relevance_score": excluded.ai_relevance_score,
+                    "freshness_score": excluded.freshness_score,
+                    "rank_score": excluded.rank_score,
+                },
+            )
+            self.session.execute(stmt)
+            self.session.flush()
+            return new_count, duplicate_count
+
+        actual_new = 0
+        actual_duplicates = 0
+        for row in normalized_rows:
+            _, is_new = self.insert_article(**row)
+            if is_new:
+                actual_new += 1
+            else:
+                actual_duplicates += 1
+        actual_duplicates += input_duplicates
+        return actual_new, actual_duplicates
 
     def insert_article(
         self,
