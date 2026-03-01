@@ -23,7 +23,7 @@ def test_web_app_pages_and_update_flow(monkeypatch, tmp_path) -> None:
 
     monkeypatch.setattr(
         "app.web.service.run_fetch_cycle",
-        lambda **kwargs: SimpleNamespace(fetched=3, new=2, duplicates=1, errors=0),
+        lambda **kwargs: SimpleNamespace(source_count=7, fetched=3, new=2, duplicates=1, errors=0),
     )
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
@@ -36,6 +36,7 @@ def test_web_app_pages_and_update_flow(monkeypatch, tmp_path) -> None:
     assert page.status_code == 200
     assert "Update" in page.text
     assert "View" in page.text
+    assert 'id="run-sources"' in page.text
     assert "Import Source Candidates" in page.text
     assert 'id="onboarding-import-raw-text"' in page.text
     assert 'id="import-onboarding-batch"' in page.text
@@ -74,6 +75,7 @@ def test_web_app_pages_and_update_flow(monkeypatch, tmp_path) -> None:
 
     assert terminal is not None
     assert terminal["status"] == "finished"
+    assert terminal["source_count"] == 7
     assert terminal["fetched"] == 3
 
     news = client.get("/api/news")
@@ -104,7 +106,7 @@ def test_second_update_run_is_rejected_when_running(monkeypatch, tmp_path) -> No
 
     def _slow_cycle(**_kwargs):
         time.sleep(0.2)
-        return SimpleNamespace(fetched=1, new=1, duplicates=0, errors=0)
+        return SimpleNamespace(source_count=2, fetched=1, new=1, duplicates=0, errors=0)
 
     monkeypatch.setattr("app.web.service.run_fetch_cycle", _slow_cycle)
 

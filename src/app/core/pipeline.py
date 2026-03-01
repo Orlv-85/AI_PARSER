@@ -29,6 +29,7 @@ _DEFAULT_FETCH_HTML_ARTICLE = fetch_html_article
 @dataclass(frozen=True)
 class FetchSummary:  # pylint: disable=too-many-instance-attributes
     run_id: str
+    source_count: int
     fetched: int
     new: int
     duplicates: int
@@ -872,6 +873,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
     )
     return FetchSummary(
         run_id=run_id,
+        source_count=len(enabled_sources),
         fetched=fetched_count,
         new=new_count,
         duplicates=duplicate_count,

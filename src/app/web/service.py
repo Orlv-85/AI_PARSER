@@ -66,6 +66,7 @@ def _run_offloaded_fetch_cycle(
         summary = run_fetch_cycle(settings=merged_settings, logger=setup_json_logging())
         result_payload = {
             "status": "finished",
+            "source_count": int(getattr(summary, "source_count", 0)),
             "fetched": summary.fetched,
             "new": summary.new,
             "duplicates": summary.duplicates,
@@ -132,6 +133,7 @@ class UpdateRunService:
                 status="running",
                 started_at=datetime.now(UTC),
                 finished_at=None,
+                source_count=0,
                 fetched=0,
                 new=0,
                 duplicates=0,
@@ -199,6 +201,7 @@ class UpdateRunService:
                     status="finished",
                     started_at=self._status.started_at,
                     finished_at=datetime.now(UTC),
+                    source_count=int(getattr(summary, "source_count", 0)),
                     fetched=summary.fetched,
                     new=summary.new,
                     duplicates=summary.duplicates,
@@ -211,6 +214,7 @@ class UpdateRunService:
                     "run_id": run_id,
                     "source_id": None,
                     "status": "finished",
+                    "source_count": int(getattr(summary, "source_count", 0)),
                     "fetched": summary.fetched,
                     "new": summary.new,
                     "duplicates": summary.duplicates,
@@ -224,6 +228,7 @@ class UpdateRunService:
                     status="failed",
                     started_at=self._status.started_at,
                     finished_at=datetime.now(UTC),
+                    source_count=0,
                     fetched=0,
                     new=0,
                     duplicates=0,
@@ -292,6 +297,7 @@ class UpdateRunService:
     def _finalize_harvested_status_locked(self, result_payload: dict[str, object]) -> None:
         status = str(result_payload.get("status", "failed"))
         fetched = _coerce_int(result_payload.get("fetched", 0), default=0)
+        source_count = _coerce_int(result_payload.get("source_count", 0), default=0)
         new_items = _coerce_int(result_payload.get("new", 0), default=0)
         duplicates = _coerce_int(result_payload.get("duplicates", 0), default=0)
         errors = _coerce_int(result_payload.get("errors", 1), default=1)
@@ -304,6 +310,7 @@ class UpdateRunService:
             status="finished" if status == "finished" else "failed",
             started_at=self._status.started_at,
             finished_at=datetime.now(UTC),
+            source_count=source_count,
             fetched=fetched,
             new=new_items,
             duplicates=duplicates,
@@ -315,6 +322,7 @@ class UpdateRunService:
             "run_id": self._status.run_id,
             "source_id": None,
             "status": self._status.status,
+            "source_count": source_count,
             "fetched": fetched,
             "new": new_items,
             "duplicates": duplicates,

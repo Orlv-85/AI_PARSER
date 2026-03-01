@@ -188,6 +188,7 @@
               <div>Finished: <span id="run-finished">-</span></div>
               <div>
                 Counters:
+                sources=<span id="run-sources">0</span>,
                 fetched=<span id="run-fetched">0</span>,
                 new=<span id="run-new">0</span>,
                 duplicates=<span id="run-duplicates">0</span>,
@@ -580,6 +581,7 @@
         $("run-id").textContent = status.run_id || "-";
         $("run-started").textContent = status.started_at || "-";
         $("run-finished").textContent = status.finished_at || "-";
+        $("run-sources").textContent = status.source_count ?? 0;
         $("run-fetched").textContent = status.fetched;
         $("run-new").textContent = status.new;
         $("run-duplicates").textContent = status.duplicates;

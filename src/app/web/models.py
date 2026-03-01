@@ -24,6 +24,7 @@ class UpdateStatus(BaseModel):
     status: Literal["idle", "running", "finished", "failed"] = "idle"
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    source_count: int = 0
     fetched: int = 0
     new: int = 0
     duplicates: int = 0
