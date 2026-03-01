@@ -12,8 +12,8 @@ LAST_DEPLOY_FILE="${LAST_DEPLOY_FILE:-.last_deploy_commit}"
 LAST_DEPLOY_IMAGE_FILE="${LAST_DEPLOY_IMAGE_FILE:-.last_deploy_image}"
 APP_IMAGE_REPO="${APP_IMAGE_REPO:-ghcr.io/orlv-85/ai-parser}"
 APP_IMAGE="${APP_IMAGE:-}"
-AUTO_UPDATE_ENABLED="${AUTO_UPDATE_ENABLED:-0}"
-AUTO_UPDATE_CRON_SCHEDULE="${AUTO_UPDATE_CRON_SCHEDULE:-*/30 * * * *}"
+AUTO_UPDATE_ENABLED="${AUTO_UPDATE_ENABLED:-1}"
+AUTO_UPDATE_CRON_SCHEDULE="${AUTO_UPDATE_CRON_SCHEDULE:-0 1 * * *}"
 AUTO_UPDATE_LOG_PATH="${AUTO_UPDATE_LOG_PATH:-/var/log/ai-news-auto-update.log}"
 AUTO_UPDATE_CONCURRENCY_LIMIT="${AUTO_UPDATE_CONCURRENCY_LIMIT:-10}"
 AUTO_UPDATE_FULLTEXT_CONCURRENCY_LIMIT="${AUTO_UPDATE_FULLTEXT_CONCURRENCY_LIMIT:-4}"
@@ -132,7 +132,7 @@ install_auto_update_cron() {
   crontab -l >"$tmp_existing" 2>/dev/null || true
   sed "/^${begin_marker}\$/,/^${end_marker}\$/d" "$tmp_existing" >"$tmp_new"
 
-  if [ "$AUTO_UPDATE_ENABLED" = "1" ]; then
+  if is_enabled "$AUTO_UPDATE_ENABLED"; then
     cron_cmd="cd $ROOT_DIR && "
     if [ -n "$flock_bin" ]; then
       cron_cmd="${cron_cmd}${flock_bin} -n /tmp/ai-news-auto-update.lock "
