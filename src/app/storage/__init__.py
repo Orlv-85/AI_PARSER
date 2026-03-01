@@ -1,6 +1,15 @@
 from app.storage.db import SessionLocal, create_all, engine, get_session
-from app.storage.models_sql import Article, ArticleAlias, Base, FetchRun, Source
-from app.storage.repos import ArticleRepo, SourceRepo
+from app.storage.models_sql import (
+    Article,
+    ArticleAlias,
+    Base,
+    FetchRun,
+    NewsDigestGroup,
+    NewsDigestItem,
+    NewsDigestReport,
+    Source,
+)
+from app.storage.repos import ArticleRepo, NewsDigestRepo, SourceRepo
 
 __all__ = [
     "Article",
@@ -8,6 +17,10 @@ __all__ = [
     "ArticleRepo",
     "Base",
     "FetchRun",
+    "NewsDigestGroup",
+    "NewsDigestItem",
+    "NewsDigestRepo",
+    "NewsDigestReport",
     "SessionLocal",
     "Source",
     "SourceRepo",

@@ -1,5 +1,6 @@
 import logging
 from datetime import UTC, date, datetime
+from html import escape
 from pathlib import Path
 from typing import SupportsIndex, SupportsInt, cast
 
@@ -19,11 +20,21 @@ from app.core.source_onboarding import (
     run_source_validation_batch,
 )
 from app.storage import SessionLocal, create_all
-from app.storage.models_sql import Base
-from app.storage.repos import ArticleRepo, SourceCandidateRepo, SourceImportBatchRepo
+from app.storage.models_sql import Base, NewsDigestReport
+from app.storage.repos import (
+    ArticleRepo,
+    NewsDigestRepo,
+    SourceCandidateRepo,
+    SourceImportBatchRepo,
+)
 from app.web.auth import SessionSigner, verify_password
 from app.web.models import (
+    DigestLinkFeedItem,
     NewsArticleDetail,
+    NewsDigestGroupPayload,
+    NewsDigestItemPayload,
+    NewsDigestPayload,
+    NewsDigestResponse,
     NewsItem,
     SourceOnboardingApproveResponse,
     SourceOnboardingBatchSummary,
@@ -42,18 +53,81 @@ from app.web.service import SourceOnboardingService, UpdateRunService
 from app.web.settings_store import UpdateSettingsStore
 
 _TEMPLATE = Path(__file__).with_name("index.html")
+_DIGEST_TEMPLATE = Path(__file__).with_name("digest.html")
 _LOGIN_TEMPLATE = Path(__file__).with_name("login.html")
 _LOGGER = logging.getLogger(__name__)
 _SOURCE_ONBOARDING_OVERLAP_BATCH_QUERY = Query(None, ge=1)
 _SOURCE_ONBOARDING_OVERLAP_CANDIDATE_QUERY = Query(default=[])
+_NEWS_LINKS_DATE_QUERY = Query(alias="date")
+_NEWS_DIGEST_DATE_QUERY = Query(alias="date")
 
 
 def _render_index() -> str:
     return _TEMPLATE.read_text(encoding="utf-8")
 
 
+def _render_digest(*, report_date: date, digest: NewsDigestReport | None) -> str:
+    empty_state_class = "empty-state"
+    if digest is None or not digest.groups:
+        digest_content = ""
+    else:
+        empty_state_class = "empty-state hidden"
+        sections: list[str] = []
+        for group in digest.groups:
+            items = "".join(
+                (
+                    '<li class="digest-item">'
+                    f'<a href="{escape(item.url, quote=True)}">{escape(item.title)}</a>'
+                    f"<p>{escape(item.summary)}</p>"
+                    "</li>"
+                )
+                for item in group.items
+            )
+            sections.append(
+                '<section class="digest-group">'
+                f"<h2>{escape(group.title)}</h2>"
+                f'<ul class="digest-list">{items}</ul>'
+                "</section>"
+            )
+        digest_content = "".join(sections)
+
+    return (
+        _DIGEST_TEMPLATE.read_text(encoding="utf-8")
+        .replace("__REPORT_DATE__", report_date.isoformat())
+        .replace("__EMPTY_STATE_CLASS__", empty_state_class)
+        .replace("__DIGEST_CONTENT__", digest_content)
+    )
+
+
 def _render_login() -> str:
     return _LOGIN_TEMPLATE.read_text(encoding="utf-8")
+
+
+def _build_digest_response(
+    *,
+    report_date: date,
+    digest: NewsDigestReport | None,
+) -> NewsDigestResponse:
+    if digest is None:
+        return NewsDigestResponse(report_date=report_date, groups=[])
+
+    return NewsDigestResponse(
+        report_date=report_date,
+        groups=[
+            NewsDigestGroupPayload(
+                title=group.title,
+                items=[
+                    NewsDigestItemPayload(
+                        title=item.title,
+                        summary=item.summary,
+                        url=item.url,
+                    )
+                    for item in group.items
+                ],
+            )
+            for group in digest.groups
+        ],
+    )
 
 
 def _parse_source_onboarding_identifier(
@@ -133,9 +207,10 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
 
         path = request.url.path
         is_auth_route = path in {"/login", "/api/auth/login", "/api/auth/logout"}
-        is_unprotected = path == "/health" or is_auth_route
-        is_protected_api = path.startswith("/api/")
-        is_protected_ui = path == "/"
+        is_public_digest_api = path in {"/api/news/links", "/api/news/digests"}
+        is_unprotected = path == "/health" or path == "/" or is_auth_route or is_public_digest_api
+        is_protected_ui = path == "/admin"
+        is_protected_api = path.startswith("/api/") and not is_public_digest_api
         is_protected = is_protected_api or is_protected_ui
 
         if not is_protected or is_unprotected:
@@ -153,6 +228,18 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
 
     @api.get("/", response_class=HTMLResponse)
     def index() -> str:
+        report_date = datetime.now(UTC).date()
+        try:
+            create_all()
+            with SessionLocal() as session:
+                digest = NewsDigestRepo(session).get_digest(report_date=report_date)
+        except SQLAlchemyError as exc:
+            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+
+        return _render_digest(report_date=report_date, digest=digest)
+
+    @api.get("/admin", response_class=HTMLResponse)
+    def admin_index() -> str:
         return _render_index()
 
     @api.get("/login", response_class=HTMLResponse)
@@ -160,7 +247,7 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
         if auth_enabled:
             session_cookie = request.cookies.get(settings.auth_cookie_name)
             if session_cookie and signer and signer.verify(session_cookie) is not None:
-                return RedirectResponse(url="/", status_code=303)
+                return RedirectResponse(url="/admin", status_code=303)
         return HTMLResponse(content=_render_login())
 
     @api.get("/health")
@@ -329,6 +416,85 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
             content=jsonable_encoder(payload),
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
+
+    @api.get("/api/news/links", response_model=list[DigestLinkFeedItem])
+    def list_news_links(
+        *,
+        target_date: date = _NEWS_LINKS_DATE_QUERY,
+        limit: int = Query(30, ge=1, le=200),
+        min_ai_relevance: float = Query(0.2, ge=0.0, le=1.0),
+    ) -> list[DigestLinkFeedItem]:
+        try:
+            create_all()
+            with SessionLocal() as session:
+                repo = ArticleRepo(session)
+                rows = repo.list_for_agent(
+                    hours=None,
+                    limit=limit,
+                    query=None,
+                    days=1,
+                    sort="published",
+                    min_ai_relevance=min_ai_relevance,
+                    date_from=target_date,
+                    date_to=target_date,
+                )
+        except SQLAlchemyError as exc:
+            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+
+        return [
+            DigestLinkFeedItem(
+                article_id=article.id,
+                title=article.title,
+                published_at=article.published_at,
+                url=article.url,
+                url_canonical=article.url_canonical,
+                source_id=article.source_id,
+                source_key=source_key,
+                source_name=source_name,
+            )
+            for article, source_key, source_name in rows
+        ]
+
+    @api.post("/api/news/digests", response_model=NewsDigestResponse)
+    def save_news_digest(payload: NewsDigestPayload) -> NewsDigestResponse:
+        try:
+            create_all()
+            with SessionLocal() as session:
+                repo = NewsDigestRepo(session)
+                repo.save_digest(
+                    report_date=payload.report_date,
+                    groups=[
+                        {
+                            "title": group.title,
+                            "items": [
+                                {
+                                    "title": item.title,
+                                    "summary": item.summary,
+                                    "url": item.url,
+                                }
+                                for item in group.items
+                            ],
+                        }
+                        for group in payload.groups
+                    ],
+                )
+                session.commit()
+                stored = repo.get_digest(report_date=payload.report_date)
+        except SQLAlchemyError as exc:
+            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+
+        return _build_digest_response(report_date=payload.report_date, digest=stored)
+
+    @api.get("/api/news/digests", response_model=NewsDigestResponse)
+    def get_news_digest(*, target_date: date = _NEWS_DIGEST_DATE_QUERY) -> NewsDigestResponse:
+        try:
+            create_all()
+            with SessionLocal() as session:
+                digest = NewsDigestRepo(session).get_digest(report_date=target_date)
+        except SQLAlchemyError as exc:
+            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+
+        return _build_digest_response(report_date=target_date, digest=digest)
 
     @api.get("/api/news/{article_id}", response_model=NewsArticleDetail)
     def get_news_article(article_id: int) -> NewsArticleDetail:

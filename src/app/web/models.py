@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 
 class WebUpdateSettings(BaseModel):
@@ -54,6 +54,44 @@ class NewsArticleDetail(BaseModel):
     source_id: int | None = None
     source_key: str | None = None
     source_name: str | None = None
+
+
+class DigestLinkFeedItem(BaseModel):
+    article_id: int
+    title: str
+    published_at: datetime
+    url: str
+    url_canonical: str
+    source_id: int | None = None
+    source_key: str | None = None
+    source_name: str | None = None
+
+
+class NewsDigestItemPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    title: str = Field(min_length=1, max_length=255)
+    summary: str = Field(min_length=1, max_length=2000)
+    url: HttpUrl
+
+
+class NewsDigestGroupPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    title: str = Field(min_length=1, max_length=255)
+    items: list[NewsDigestItemPayload] = Field(min_length=1)
+
+
+class NewsDigestPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    report_date: date
+    groups: list[NewsDigestGroupPayload] = Field(min_length=1)
+
+
+class NewsDigestResponse(BaseModel):
+    report_date: date
+    groups: list[NewsDigestGroupPayload]
 
 
 class SourceOnboardingCandidateView(BaseModel):

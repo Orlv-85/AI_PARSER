@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
 
@@ -171,6 +171,51 @@ class FetchRun(Base):
     new_count: Mapped[int] = mapped_column(Integer, default=0)
     duplicate_count: Mapped[int] = mapped_column(Integer, default=0)
     error_count: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class NewsDigestReport(Base):
+    __tablename__ = "news_digest_reports"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    report_date: Mapped[date] = mapped_column(Date, unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+    groups: Mapped[list[NewsDigestGroup]] = relationship(
+        back_populates="report",
+        cascade="all, delete-orphan",
+        order_by="NewsDigestGroup.position",
+    )
+
+
+class NewsDigestGroup(Base):
+    __tablename__ = "news_digest_groups"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    report_id: Mapped[int] = mapped_column(ForeignKey("news_digest_reports.id"), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+
+    report: Mapped[NewsDigestReport] = relationship(back_populates="groups")
+    items: Mapped[list[NewsDigestItem]] = relationship(
+        back_populates="group",
+        cascade="all, delete-orphan",
+        order_by="NewsDigestItem.position",
+    )
+
+
+class NewsDigestItem(Base):
+    __tablename__ = "news_digest_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("news_digest_groups.id"), index=True)
+    title: Mapped[str] = mapped_column(String(512))
+    summary: Mapped[str] = mapped_column(Text)
+    url: Mapped[str] = mapped_column(String(2048))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+
+    group: Mapped[NewsDigestGroup] = relationship(back_populates="items")
 
 
 Index("ix_articles_published_at_desc", Article.published_at.desc())

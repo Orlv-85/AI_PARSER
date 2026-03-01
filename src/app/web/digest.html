@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Daily Digest</title>
+    <style>
+      :root {
+        --bg-top: #eef4f7;
+        --bg-bottom: #f8fafc;
+        --surface: #ffffff;
+        --border: #d7e1ea;
+        --text: #102a43;
+        --muted: #5c6f82;
+        --accent: #0f766e;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        color: var(--text);
+        background: linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+      }
+      main {
+        max-width: 880px;
+        margin: 0 auto;
+        padding: 48px 20px 64px;
+      }
+      .hero,
+      .digest-group,
+      .empty-state {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
+      }
+      .hero {
+        padding: 28px;
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: clamp(2rem, 4vw, 3rem);
+      }
+      .lede {
+        margin: 0 0 20px;
+        color: var(--muted);
+      }
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 0.95rem;
+        color: var(--muted);
+      }
+      input[type="date"] {
+        width: min(240px, 100%);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px 14px;
+        font: inherit;
+      }
+      .digest-shell {
+        margin-top: 20px;
+      }
+      .digest-group,
+      .empty-state {
+        margin-top: 18px;
+      }
+      .hidden {
+        display: none;
+      }
+      .digest-group {
+        padding: 22px;
+      }
+      .digest-group h2 {
+        margin: 0 0 14px;
+      }
+      .digest-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .digest-item + .digest-item {
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border);
+      }
+      .digest-item a {
+        color: var(--accent);
+        font-weight: 600;
+        text-decoration: none;
+      }
+      .digest-item p {
+        margin: 6px 0 0;
+        color: var(--muted);
+      }
+      .empty-state {
+        padding: 26px;
+        color: var(--muted);
+        text-align: center;
+      }
+      @media (max-width: 700px) {
+        main {
+          padding-top: 28px;
+        }
+        .hero {
+          padding: 22px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="public-digest-shell">
+      <section class="hero">
+        <p class="lede" style="margin-bottom: 8px; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent);">
+          Public Briefing
+        </p>
+        <h1>Daily Digest</h1>
+        <p class="lede">A public summary of the latest curated AI news.</p>
+        <label for="digest-date">Digest Date</label>
+        <input id="digest-date" type="date" value="__REPORT_DATE__" />
+        <div class="digest-shell">
+          <div id="digest-empty-state" class="__EMPTY_STATE_CLASS__">
+            No digest has been published for this date yet.
+          </div>
+          <div id="digest-results">__DIGEST_CONTENT__</div>
+        </div>
+      </section>
+    </main>
+    <script>
+      const dateInput = document.getElementById("digest-date");
+      const emptyState = document.getElementById("digest-empty-state");
+      const results = document.getElementById("digest-results");
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function renderDigest(payload) {
+        if (!payload.groups.length) {
+          results.innerHTML = "";
+          emptyState.classList.remove("hidden");
+          return;
+        }
+
+        emptyState.classList.add("hidden");
+        results.innerHTML = payload.groups
+          .map((group) => {
+            const items = group.items
+              .map(
+                (item) => `
+                  <li class="digest-item">
+                    <a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>
+                    <p>${escapeHtml(item.summary)}</p>
+                  </li>
+                `,
+              )
+              .join("");
+
+            return `
+              <section class="digest-group">
+                <h2>${escapeHtml(group.title)}</h2>
+                <ul class="digest-list">${items}</ul>
+              </section>
+            `;
+          })
+          .join("");
+      }
+
+      async function loadDigest(selectedDate) {
+        const response = await fetch("/api/news/digests?date=" + encodeURIComponent(selectedDate));
+        if (!response.ok) {
+          return;
+        }
+        const payload = await response.json();
+        renderDigest(payload);
+      }
+
+      dateInput.addEventListener("change", async () => {
+        await loadDigest(dateInput.value);
+      });
+    </script>
+  </body>
+</html>
