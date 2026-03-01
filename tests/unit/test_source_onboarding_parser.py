@@ -1,6 +1,10 @@
 import pytest
 
-from app.core.source_onboarding import extract_candidate_urls, normalize_candidate_url
+from app.core.source_onboarding import (
+    extract_candidate_urls,
+    normalize_candidate_url,
+    parse_source_candidates,
+)
 
 
 def test_extract_candidate_urls_finds_plain_text_urls_in_prose() -> None:
@@ -42,3 +46,23 @@ def test_normalize_candidate_url_rejects_search_wrapper_urls() -> None:
         normalize_candidate_url(
             "https://www.google.com/url?q=https%3A%2F%2Fexample.com%2Fblog&sa=D&source=editors"
         )
+
+
+def test_normalize_candidate_url_keeps_non_default_port_and_normalizes_root_path() -> None:
+    assert normalize_candidate_url("https://Example.com:8443/") == "https://example.com:8443"
+
+
+def test_parse_source_candidates_rejects_invalid_and_duplicate_urls() -> None:
+    candidates, parsed_count, rejected_count = parse_source_candidates(
+        "\n".join(
+            [
+                "https://www.google.com/url?q=https%3A%2F%2Fexample.com%2Fblog&sa=D",
+                "https://example.com/feed.xml",
+                "https://example.com/feed.xml#dup",
+            ]
+        )
+    )
+
+    assert parsed_count == 3
+    assert rejected_count == 2
+    assert [candidate.normalized_url for candidate in candidates] == ["https://example.com/feed.xml"]

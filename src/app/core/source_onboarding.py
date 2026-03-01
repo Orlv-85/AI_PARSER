@@ -334,7 +334,8 @@ def group_candidate_overlaps(  # pylint: disable=too-many-branches
                     )
                     if neighbor_id not in visited:
                         pending.append(neighbor_id)
-            if len(component_ids) < 2:
+            # Defensive guard: graph construction should make this unreachable.
+            if len(component_ids) < 2:  # pragma: no cover
                 continue
 
             members = [candidate_by_id[member_id] for member_id in sorted(component_ids)]

@@ -100,6 +100,26 @@ def test_update_settings_validation_error(monkeypatch, tmp_path) -> None:
     assert response.status_code == 422
 
 
+def test_create_app_skips_sqlite_directory_creation_for_in_memory_database(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("AINEWS_DATABASE_URL", "sqlite+pysqlite:///:memory:")
+    get_settings.cache_clear()
+
+    mkdir_calls: list[tuple[str, bool, bool]] = []
+
+    def _record_mkdir(self, _mode=0o777, parents=False, exist_ok=False):
+        mkdir_calls.append((str(self), parents, exist_ok))
+
+    monkeypatch.setattr("pathlib.Path.mkdir", _record_mkdir)
+
+    app = create_app()
+
+    assert app is not None
+    assert not mkdir_calls
+
+
 def test_second_update_run_is_rejected_when_running(monkeypatch, tmp_path) -> None:
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()

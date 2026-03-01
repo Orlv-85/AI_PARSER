@@ -6,7 +6,7 @@ from typing import Any, ClassVar, Literal
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
 from app.core.models import Article
-from app.core.pipeline import run_fetch_cycle
+from app.core.pipeline import _managed_source_to_config, run_fetch_cycle
 
 
 class _Logger:
@@ -50,6 +50,25 @@ class _ArticleRepo:
     def insert_article(self, **_kwargs):
         self.calls += 1
         return SimpleNamespace(id=self.calls), self.calls == 1
+
+
+def test_managed_source_to_config_adds_empty_html_payload_for_html_sources() -> None:
+    managed = SimpleNamespace(
+        source_key="managed-html",
+        name="Managed HTML",
+        type="html",
+        url="https://example.com/html",
+        enabled=True,
+        fetch_interval_minutes=30,
+        source_weight=1.2,
+    )
+
+    config = _managed_source_to_config(managed)
+
+    assert config.type == "html"
+    assert config.html is not None
+    assert config.html.list_selector is None
+    assert config.html.link_selector is None
 
 
 def test_run_fetch_cycle_counts_new_duplicates_and_errors(monkeypatch) -> None:

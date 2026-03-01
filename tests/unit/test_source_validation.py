@@ -107,3 +107,181 @@ def test_validate_html_candidate_warns_when_page_loads_but_has_no_article_links(
     assert _value(result, "detected_type") == "html"
     assert _value(result, "link_count") == 0
     assert "link" in _value(result, "validation_error").lower()
+
+
+def test_run_source_validation_rejects_missing_candidate(monkeypatch) -> None:
+    class _Repo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def get_candidate(self, _candidate_id: int):
+            return None
+
+    monkeypatch.setattr(source_onboarding, "SourceCandidateRepo", _Repo)
+
+    try:
+        source_onboarding.run_source_validation(candidate_id=77, session=object())
+    except ValueError as exc:
+        assert "source candidate not found: 77" in str(exc)
+    else:  # pragma: no cover - exercised when the guard is implemented incorrectly
+        raise AssertionError("run_source_validation should reject unknown candidate ids")
+
+
+def test_run_source_validation_infers_unknown_candidate_type_and_records_result(
+    monkeypatch,
+) -> None:
+    recorded: dict[str, object] = {}
+
+    candidate = SimpleNamespace(
+        id=9,
+        candidate_type="unknown",
+        normalized_url="https://example.com/feed.xml",
+    )
+
+    class _Repo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def get_candidate(self, candidate_id: int):
+            assert candidate_id == 9
+            return candidate
+
+        def record_validation_result(self, *, candidate_id: int, result) -> None:
+            recorded["candidate_id"] = candidate_id
+            recorded["result"] = result
+
+    monkeypatch.setattr(source_onboarding, "SourceCandidateRepo", _Repo)
+
+    result = source_onboarding.run_source_validation(
+        candidate_id=9,
+        session=object(),
+        fetch_feed=lambda _url: {"entries": [{"title": "Post"}]},
+    )
+
+    assert result.detected_type == "rss"
+    assert result.status == "validated"
+    assert recorded["candidate_id"] == 9
+    assert recorded["result"] is result
+
+
+def test_run_source_validation_returns_failed_result_for_unsupported_candidate_type(
+    monkeypatch,
+) -> None:
+    recorded: dict[str, object] = {}
+
+    candidate = SimpleNamespace(
+        id=12,
+        candidate_type="podcast",
+        normalized_url="https://example.com/podcast",
+    )
+
+    class _Repo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def get_candidate(self, candidate_id: int):
+            assert candidate_id == 12
+            return candidate
+
+        def record_validation_result(self, *, candidate_id: int, result) -> None:
+            recorded["candidate_id"] = candidate_id
+            recorded["result"] = result
+
+    monkeypatch.setattr(source_onboarding, "SourceCandidateRepo", _Repo)
+
+    result = source_onboarding.run_source_validation(candidate_id=12, session=object())
+
+    assert result.status == "failed"
+    assert result.detected_type == "unknown"
+    assert "unsupported candidate type" in str(result.validation_error).lower()
+    assert recorded["candidate_id"] == 12
+    assert recorded["result"] is result
+
+
+def test_run_source_validation_batch_requires_scope() -> None:
+    try:
+        source_onboarding.run_source_validation_batch(session=object())
+    except ValueError as exc:
+        assert "batch_id or candidate_ids is required" in str(exc)
+    else:  # pragma: no cover - exercised when the guard is implemented incorrectly
+        raise AssertionError("run_source_validation_batch should require batch_id or candidate_ids")
+
+
+def test_review_candidate_overlaps_filters_non_group_results(monkeypatch) -> None:
+    expected_group = source_onboarding.CandidateOverlapGroup(
+        candidate_ids=[1, 2],
+        reason="same_host_path_prefix",
+        preferred_candidate_id=1,
+    )
+
+    class _Repo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def find_overlap_groups(self, *, batch_id, candidate_ids):
+            assert batch_id == 5
+            assert candidate_ids == [1, 2]
+            return [expected_group, "ignored"]
+
+    monkeypatch.setattr(source_onboarding, "SourceCandidateRepo", _Repo)
+
+    groups = source_onboarding.review_candidate_overlaps(
+        session=object(),
+        batch_id=5,
+        candidate_ids=[1, 2],
+    )
+
+    assert groups == [expected_group]
+
+
+def test_run_source_validation_executes_html_path_and_batch_wrapper(monkeypatch) -> None:
+    recorded: list[int] = []
+
+    html_candidate = SimpleNamespace(
+        id=21,
+        candidate_type="html",
+        normalized_url="https://example.com/blog",
+    )
+    batch_candidates = [SimpleNamespace(id=21), SimpleNamespace(id=22)]
+
+    class _Repo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def get_candidate(self, candidate_id: int):
+            assert candidate_id == 21
+            return html_candidate
+
+        def record_validation_result(self, *, candidate_id: int, result) -> None:
+            _ = result
+            recorded.append(candidate_id)
+
+        def list_candidates(self, *, batch_id, candidate_ids):
+            assert batch_id == 8
+            assert candidate_ids is None
+            return batch_candidates
+
+    monkeypatch.setattr(source_onboarding, "SourceCandidateRepo", _Repo)
+
+    html_result = source_onboarding.run_source_validation(
+        candidate_id=21,
+        session=object(),
+        fetch_html=lambda _url: "<html/>",
+        extract_links=lambda _html, base_url: [f"{base_url}/a"],
+    )
+    assert html_result.detected_type == "html"
+    assert html_result.status == "validated"
+    assert recorded == [21]
+
+    calls: list[int] = []
+
+    def _run_source_validation(**kwargs):
+        calls.append(kwargs["candidate_id"])
+        return SimpleNamespace(candidate_id=kwargs["candidate_id"], status="validated")
+
+    monkeypatch.setattr(source_onboarding, "run_source_validation", _run_source_validation)
+
+    results = source_onboarding.run_source_validation_batch(session=object(), batch_id=8)
+
+    assert calls == [21, 22]
+    assert [result.candidate_id for result in results] == [21, 22]

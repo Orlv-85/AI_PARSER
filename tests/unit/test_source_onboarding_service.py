@@ -1,9 +1,12 @@
+# pylint: disable=protected-access
+
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from app.core.source_onboarding import review_source_candidate
 from app.storage.models_sql import Base, Source
 from app.storage.repos import SourceCandidateRepo, SourceImportBatchRepo, SourceRepo
+from app.web.service import SourceOnboardingService
 
 
 def _build_session():
@@ -270,3 +273,37 @@ def test_review_source_candidate_rejects_invalid_edit_payloads() -> None:
     finally:
         session.close()
         engine.dispose()
+
+
+def test_source_onboarding_service_disable_requires_approved_source_id(monkeypatch) -> None:
+    service = SourceOnboardingService(session=None)  # type: ignore[arg-type]
+
+    def _review_source_candidate(**_kwargs):
+        return type(
+            "Candidate",
+            (),
+            {
+                "id": 11,
+                "status": "disabled",
+                "approved_source_id": None,
+            },
+        )()
+
+    monkeypatch.setattr("app.web.service.review_source_candidate", _review_source_candidate)
+
+    try:
+        service.disable_candidate(11)
+    except ValueError as exc:
+        assert "missing approved_source_id" in str(exc)
+    else:  # pragma: no cover - exercised when the guard is implemented incorrectly
+        raise AssertionError("disable_candidate should reject missing approved_source_id")
+
+
+def test_source_onboarding_service_first_batch_id_returns_none_for_empty_candidates() -> None:
+    assert SourceOnboardingService._first_batch_id([]) is None
+
+
+def test_source_onboarding_service_first_batch_id_returns_first_candidate_batch_id() -> None:
+    candidate = type("Candidate", (), {"batch_id": 42})()
+
+    assert SourceOnboardingService._first_batch_id([candidate]) == 42

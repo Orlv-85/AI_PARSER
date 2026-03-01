@@ -1,7 +1,9 @@
+from importlib import import_module
 from typing import Any, cast
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config.settings import get_settings
@@ -325,3 +327,269 @@ def test_source_onboarding_review_routes_reject_malformed_inputs_cleanly(
     )
     assert invalid_type.status_code == 400
     assert "candidate_type must be one of" in invalid_type.json()["detail"].lower()
+
+
+def test_source_onboarding_import_route_rejects_non_mapping_and_blank_text(
+    monkeypatch, tmp_path
+) -> None:
+    client = _build_client(monkeypatch, tmp_path)
+
+    non_mapping = client.post("/api/source-onboarding/import", json=["not", "a", "dict"])
+    assert non_mapping.status_code == 422
+    assert non_mapping.json()["detail"] == "raw_text is required"
+
+    blank = client.post("/api/source-onboarding/import", json={"raw_text": "   "})
+    assert blank.status_code == 422
+    assert blank.json()["detail"] == "raw_text is required"
+
+
+def test_source_onboarding_import_route_returns_503_when_storage_is_unavailable(
+    monkeypatch, tmp_path
+) -> None:
+    client = _build_client(monkeypatch, tmp_path)
+    web_app_module = import_module("app.web.app")
+
+    def _raise_db_error(**_kwargs):
+        raise SQLAlchemyError("db unavailable")
+
+    monkeypatch.setattr(web_app_module, "import_source_candidates", _raise_db_error)
+
+    response = client.post(
+        "/api/source-onboarding/import",
+        json={"raw_text": "https://example.com/feed.xml"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "News storage is unavailable"
+
+
+def test_source_onboarding_validate_route_rejects_invalid_payload_shapes(
+    monkeypatch, tmp_path
+) -> None:
+    client = _build_client(monkeypatch, tmp_path)
+
+    non_mapping = client.post("/api/source-onboarding/validate", json=["bad"])
+    assert non_mapping.status_code == 422
+    assert "batch_id or candidate_ids is required" in non_mapping.json()["detail"]
+
+    missing_scope = client.post("/api/source-onboarding/validate", json={})
+    assert missing_scope.status_code == 422
+    assert "batch_id or candidate_ids is required" in missing_scope.json()["detail"]
+
+    bool_batch = client.post("/api/source-onboarding/validate", json={"batch_id": True})
+    assert bool_batch.status_code == 422
+    assert "batch_id must be an integer" in bool_batch.json()["detail"]
+
+    zero_batch = client.post("/api/source-onboarding/validate", json={"batch_id": 0})
+    assert zero_batch.status_code == 422
+    assert "batch_id must be >= 1" in zero_batch.json()["detail"]
+
+    invalid_candidate_list = client.post(
+        "/api/source-onboarding/validate",
+        json={"candidate_ids": "abc"},
+    )
+    assert invalid_candidate_list.status_code == 422
+    assert "candidate_ids must be a list of integers" in invalid_candidate_list.json()["detail"]
+
+    none_candidate = client.post(
+        "/api/source-onboarding/validate",
+        json={"candidate_ids": [None]},
+    )
+    assert none_candidate.status_code == 422
+    assert "candidate_ids must be a list of integers" in none_candidate.json()["detail"]
+
+
+def test_source_onboarding_validate_route_accepts_candidate_ids_only(
+    monkeypatch, tmp_path
+) -> None:
+    client = _build_client(monkeypatch, tmp_path)
+    web_app_module = import_module("app.web.app")
+    captured: dict[str, object] = {}
+
+    def _run_source_validation_batch(**kwargs):
+        captured["batch_id"] = kwargs["batch_id"]
+        captured["candidate_ids"] = kwargs["candidate_ids"]
+        return [
+            cast(
+                Any,
+                type(
+                    "ValidationResult",
+                    (),
+                    {
+                        "candidate_id": 7,
+                        "status": "validated",
+                        "detected_type": "rss",
+                        "validation_error": None,
+                        "entry_count": 3,
+                        "link_count": None,
+                        "sample_links": None,
+                    },
+                )(),
+            )
+        ]
+
+    monkeypatch.setattr(web_app_module, "run_source_validation_batch", _run_source_validation_batch)
+
+    response = client.post(
+        "/api/source-onboarding/validate",
+        json={"candidate_ids": [7]},
+    )
+
+    assert response.status_code == 200
+    assert captured == {"batch_id": None, "candidate_ids": [7]}
+    assert response.json() == {
+        "validated_count": 1,
+        "results": [
+            {
+                "candidate_id": 7,
+                "status": "validated",
+                "detected_type": "rss",
+                "validation_error": None,
+                "entry_count": 3,
+                "link_count": None,
+                "sample_links": None,
+            }
+        ],
+    }
+
+
+def test_source_onboarding_validate_route_returns_503_when_storage_is_unavailable(
+    monkeypatch, tmp_path
+) -> None:
+    client = _build_client(monkeypatch, tmp_path)
+    web_app_module = import_module("app.web.app")
+
+    def _raise_db_error(**_kwargs):
+        raise SQLAlchemyError("db unavailable")
+
+    monkeypatch.setattr(web_app_module, "run_source_validation_batch", _raise_db_error)
+
+    response = client.post("/api/source-onboarding/validate", json={"batch_id": 1})
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "News storage is unavailable"
+
+
+def test_source_onboarding_overlaps_and_listing_return_503_on_storage_errors(
+    monkeypatch, tmp_path
+) -> None:
+    client = _build_client(monkeypatch, tmp_path)
+    web_app_module = import_module("app.web.app")
+
+    def _raise_db_error(**_kwargs):
+        raise SQLAlchemyError("db unavailable")
+
+    monkeypatch.setattr(web_app_module, "review_candidate_overlaps", _raise_db_error)
+    overlaps = client.get("/api/source-onboarding/overlaps", params={"batch_id": 1})
+    assert overlaps.status_code == 503
+    assert overlaps.json()["detail"] == "News storage is unavailable"
+
+    class _BrokenService:
+        def __init__(self, _session) -> None:
+            pass
+
+        def list_candidates(self, **_kwargs):
+            raise SQLAlchemyError("db unavailable")
+
+        def get_batch_summary(self, _batch_id: int):
+            raise SQLAlchemyError("db unavailable")
+
+    monkeypatch.setattr(web_app_module, "SourceOnboardingService", _BrokenService)
+
+    listed = client.get("/api/source-onboarding/candidates", params={"batch_id": 1})
+    assert listed.status_code == 503
+    assert listed.json()["detail"] == "News storage is unavailable"
+
+    summary = client.get("/api/source-onboarding/batches/1/summary")
+    assert summary.status_code == 503
+    assert summary.json()["detail"] == "News storage is unavailable"
+
+
+def test_source_onboarding_review_routes_return_503_on_storage_errors(
+    monkeypatch, tmp_path
+) -> None:
+    client = _build_client(monkeypatch, tmp_path)
+    web_app_module = import_module("app.web.app")
+
+    class _BrokenService:
+        def __init__(self, _session) -> None:
+            pass
+
+        def approve_candidate(self, _candidate_id: int):
+            raise SQLAlchemyError("db unavailable")
+
+        def disable_candidate(self, _candidate_id: int):
+            raise SQLAlchemyError("db unavailable")
+
+        def reject_candidate(self, _candidate_id: int, *, reason: str | None = None):
+            _ = reason
+            raise SQLAlchemyError("db unavailable")
+
+        def mark_duplicate(
+            self,
+            _candidate_id: int,
+            *,
+            duplicate_of_candidate_id: int,
+            reason: str | None = None,
+        ):
+            _ = (duplicate_of_candidate_id, reason)
+            raise SQLAlchemyError("db unavailable")
+
+        def edit_candidate(self, _candidate_id: int, **_kwargs):
+            raise SQLAlchemyError("db unavailable")
+
+    monkeypatch.setattr(web_app_module, "SourceOnboardingService", _BrokenService)
+
+    approve = client.post("/api/source-onboarding/candidates/1/approve")
+    assert approve.status_code == 503
+    assert approve.json()["detail"] == "News storage is unavailable"
+
+    disable = client.post("/api/source-onboarding/candidates/1/disable")
+    assert disable.status_code == 503
+    assert disable.json()["detail"] == "News storage is unavailable"
+
+    reject = client.post("/api/source-onboarding/candidates/1/reject", json={"reason": "x"})
+    assert reject.status_code == 503
+    assert reject.json()["detail"] == "News storage is unavailable"
+
+    duplicate = client.post(
+        "/api/source-onboarding/candidates/1/mark-duplicate",
+        json={"duplicate_of_candidate_id": 2},
+    )
+    assert duplicate.status_code == 503
+    assert duplicate.json()["detail"] == "News storage is unavailable"
+
+    edit = client.patch(
+        "/api/source-onboarding/candidates/1",
+        json={"review_note": "x"},
+    )
+    assert edit.status_code == 503
+    assert edit.json()["detail"] == "News storage is unavailable"
+
+
+def test_source_onboarding_disable_and_reject_routes_return_400_on_domain_errors(
+    monkeypatch, tmp_path
+) -> None:
+    client = _build_client(monkeypatch, tmp_path)
+    web_app_module = import_module("app.web.app")
+
+    class _DomainErrorService:
+        def __init__(self, _session) -> None:
+            pass
+
+        def disable_candidate(self, _candidate_id: int):
+            raise ValueError("cannot disable draft candidate")
+
+        def reject_candidate(self, _candidate_id: int, *, reason: str | None = None):
+            _ = reason
+            raise ValueError("candidate already rejected")
+
+    monkeypatch.setattr(web_app_module, "SourceOnboardingService", _DomainErrorService)
+
+    disable = client.post("/api/source-onboarding/candidates/1/disable")
+    assert disable.status_code == 400
+    assert disable.json()["detail"] == "cannot disable draft candidate"
+
+    reject = client.post("/api/source-onboarding/candidates/1/reject", json={"reason": "x"})
+    assert reject.status_code == 400
+    assert reject.json()["detail"] == "candidate already rejected"
