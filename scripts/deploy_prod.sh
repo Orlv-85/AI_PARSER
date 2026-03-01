@@ -65,6 +65,17 @@ install_pocketpaw() {
     exit 1
   fi
 
+  if ! python3 -m ensurepip --version >/dev/null 2>&1; then
+    if command -v apt-get >/dev/null 2>&1; then
+      echo "Installing python3-venv system package for PocketPaw"
+      apt-get update >/dev/null
+      apt-get install -y python3-venv >/dev/null
+    else
+      echo "python3 venv support is missing and apt-get is unavailable" >&2
+      exit 1
+    fi
+  fi
+
   if [ ! -x "$POCKETPAW_VENV_PATH/bin/python" ]; then
     echo "Creating PocketPaw virtualenv at $POCKETPAW_VENV_PATH"
     python3 -m venv "$POCKETPAW_VENV_PATH"
