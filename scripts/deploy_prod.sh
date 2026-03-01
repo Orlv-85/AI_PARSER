@@ -81,6 +81,16 @@ install_pocketpaw() {
     python3 -m venv "$POCKETPAW_VENV_PATH"
   fi
 
+  if ! "$POCKETPAW_VENV_PATH/bin/python" -m pip --version >/dev/null 2>&1; then
+    echo "Rebuilding PocketPaw virtualenv to restore pip"
+    python3 -m venv --clear "$POCKETPAW_VENV_PATH"
+  fi
+
+  if ! "$POCKETPAW_VENV_PATH/bin/python" -m pip --version >/dev/null 2>&1; then
+    echo "Bootstrapping pip inside PocketPaw virtualenv"
+    "$POCKETPAW_VENV_PATH/bin/python" -m ensurepip --upgrade >/dev/null
+  fi
+
   echo "Installing PocketPaw ${POCKETPAW_VERSION} into $POCKETPAW_VENV_PATH"
   "$POCKETPAW_VENV_PATH/bin/python" -m pip install --upgrade pip >/dev/null
   "$POCKETPAW_VENV_PATH/bin/python" -m pip install --upgrade "pocketpaw==${POCKETPAW_VERSION}" >/dev/null
