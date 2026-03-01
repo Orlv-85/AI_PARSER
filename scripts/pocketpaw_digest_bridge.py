@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -19,8 +20,15 @@ _ROOT_DIR = _SCRIPT_DIR.parent
 _DEFAULT_PROMPT_PATH = _ROOT_DIR / "automation" / "pocketpaw" / "antigravity_digest_prompt.txt"
 
 
-def _read_json_response(url: str, *, body: bytes | None = None) -> Any:
+def _read_json_response(
+    url: str,
+    *,
+    body: bytes | None = None,
+    headers: dict[str, str] | None = None,
+) -> Any:
     request = Request(url=url, data=body)
+    for key, value in (headers or {}).items():
+        request.add_header(key, value)
     if body is not None:
         request.add_header("Content-Type", "application/json")
         request.method = "POST"
@@ -109,13 +117,20 @@ def _write_json(path: Path, payload: object) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def fetch_bundle(*, base_url: str, report_date: str, limit: int, out_path: Path, prompt_path: Path) -> None:
+def _fetch_feed_items(*, base_url: str, report_date: str, limit: int) -> list[dict[str, Any]]:
     query = urlencode({"date": report_date, "limit": limit})
     items = _read_json_response(f"{base_url.rstrip('/')}/api/news/links?{query}")
     if not isinstance(items, list):
         raise RuntimeError("news links API did not return a list")
     if not items:
         raise RuntimeError("news links API returned no articles for the requested date")
+    if not all(isinstance(item, dict) for item in items):
+        raise RuntimeError("news links API returned an invalid article entry")
+    return items
+
+
+def fetch_bundle(*, base_url: str, report_date: str, limit: int, out_path: Path, prompt_path: Path) -> None:
+    items = _fetch_feed_items(base_url=base_url, report_date=report_date, limit=limit)
 
     prompt = prompt_path.read_text(encoding="utf-8")
     bundle = {
@@ -146,6 +161,198 @@ def publish_digest(*, base_url: str, report_date: str, input_path: Path) -> dict
     return response
 
 
+def _default_feed_summary(*, row: dict[str, Any], report_date: str) -> str:
+    source_name = str(row.get("source_name") or "unknown source").strip() or "unknown source"
+    published_at = str(row.get("published_at") or report_date).strip() or report_date
+    return f"Source: {source_name}. Published at {published_at}. Included in the daily digest."
+
+
+def repair_digest_coverage(
+    *,
+    digest: dict[str, Any],
+    feed_items: list[dict[str, Any]],
+    report_date: str,
+) -> dict[str, Any]:
+    feed_by_url: dict[str, dict[str, Any]] = {}
+    ordered_urls: list[str] = []
+    for row in feed_items:
+        url = str(row["url"])
+        if url not in feed_by_url:
+            feed_by_url[url] = row
+            ordered_urls.append(url)
+
+    repaired_groups: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+    for group in digest.get("groups", []):
+        if not isinstance(group, dict):
+            continue
+        group_title = str(group.get("title", "")).strip() or f"Daily Coverage {len(repaired_groups) + 1}"
+        repaired_items: list[dict[str, str]] = []
+        for item in group.get("items", []):
+            if not isinstance(item, dict):
+                continue
+            url = str(item.get("url", ""))
+            if url not in feed_by_url or url in seen_urls:
+                continue
+            title = str(item.get("title", "")).strip() or str(feed_by_url[url].get("title") or "").strip()
+            summary = str(item.get("summary", "")).strip() or _default_feed_summary(
+                row=feed_by_url[url],
+                report_date=report_date,
+            )
+            if not title or not _is_http_url(url):
+                continue
+            repaired_items.append({"title": title, "summary": summary[:_MAX_SUMMARY_LENGTH], "url": url})
+            seen_urls.add(url)
+        if repaired_items:
+            repaired_groups.append({"title": group_title, "items": repaired_items})
+
+    missing_items: list[dict[str, str]] = []
+    for url in ordered_urls:
+        if url in seen_urls:
+            continue
+        row = feed_by_url[url]
+        missing_items.append(
+            {
+                "title": str(row["title"]).strip(),
+                "summary": _default_feed_summary(row=row, report_date=report_date)[:_MAX_SUMMARY_LENGTH],
+                "url": url,
+            }
+        )
+
+    for start in range(0, len(missing_items), _MAX_ITEMS_PER_GROUP):
+        repaired_groups.append(
+            {
+                "title": f"Additional Coverage {len(repaired_groups) + 1}",
+                "items": missing_items[start : start + _MAX_ITEMS_PER_GROUP],
+            }
+        )
+
+    if not repaired_groups:
+        raise RuntimeError("repaired digest contains no valid groups")
+    return {"report_date": report_date, "groups": repaired_groups}
+
+
+def _extract_message_text(payload: object) -> str:
+    if not isinstance(payload, dict):
+        raise RuntimeError("antigravity response was not a JSON object")
+    content = payload.get("content")
+    if not isinstance(content, list):
+        raise RuntimeError("antigravity response did not include a content array")
+    text_parts: list[str] = []
+    for item in content:
+        if not isinstance(item, dict):
+            continue
+        item_type = str(item.get("type", ""))
+        if item_type in {"text", "output_text"}:
+            text = item.get("text")
+            if isinstance(text, str):
+                text_parts.append(text)
+    if not text_parts:
+        raise RuntimeError("antigravity response did not include text content")
+    return "\n".join(text_parts).strip()
+
+
+def _fetch_antigravity_proxy_api_key(*, admin_url: str, admin_password: str) -> str:
+    config = _read_json_response(
+        f"{admin_url.rstrip('/')}/api/config",
+        headers={"Authorization": admin_password},
+    )
+    if not isinstance(config, dict):
+        raise RuntimeError("antigravity config response was not a JSON object")
+    proxy = config.get("proxy")
+    if not isinstance(proxy, dict):
+        raise RuntimeError("antigravity config did not include proxy settings")
+    api_key = proxy.get("api_key")
+    if not isinstance(api_key, str) or not api_key.strip():
+        raise RuntimeError("antigravity proxy api_key is missing")
+    return api_key
+
+
+def publish_antigravity_digest(
+    *,
+    base_url: str,
+    report_date: str,
+    limit: int,
+    admin_url: str,
+    admin_password: str,
+    model: str,
+    prompt_path: Path,
+) -> dict[str, Any]:
+    feed_items = _fetch_feed_items(base_url=base_url, report_date=report_date, limit=limit)
+    prompt = prompt_path.read_text(encoding="utf-8").strip()
+    api_key = _fetch_antigravity_proxy_api_key(admin_url=admin_url, admin_password=admin_password)
+
+    llm_payload = {
+        "model": model,
+        "max_tokens": 4000,
+        "messages": [
+            {
+                "role": "user",
+                "content": (
+                    f"{prompt}\n\n"
+                    "You must include every article from the provided list exactly once.\n"
+                    "If a story is weak, still include it.\n"
+                    "Do not omit any URL.\n\n"
+                    f"Input payload:\n{json.dumps({'report_date': report_date, 'articles': feed_items}, ensure_ascii=False)}"
+                ),
+            }
+        ],
+    }
+
+    llm_response = _read_json_response(
+        f"{admin_url.rstrip('/')}/v1/messages",
+        body=json.dumps(llm_payload).encode("utf-8"),
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+        },
+    )
+    llm_text = _extract_message_text(llm_response)
+    try:
+        generated = json.loads(llm_text)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("antigravity returned non-JSON content") from exc
+
+    normalized = normalize_digest(generated, report_date=report_date)
+    repaired = repair_digest_coverage(digest=normalized, feed_items=feed_items, report_date=report_date)
+    response = _read_json_response(
+        f"{base_url.rstrip('/')}/api/news/digests",
+        body=json.dumps(repaired).encode("utf-8"),
+    )
+    if not isinstance(response, dict):
+        raise RuntimeError("publish response was not a JSON object")
+
+    saved = _read_json_response(f"{base_url.rstrip('/')}/api/news/digests?date={report_date}")
+    if not isinstance(saved, dict):
+        raise RuntimeError("saved digest response was not a JSON object")
+    saved_groups = saved.get("groups")
+    if not isinstance(saved_groups, list):
+        raise RuntimeError("saved digest response did not contain a valid groups array")
+
+    expected_urls = sorted(str(row["url"]) for row in feed_items)
+    actual_urls = sorted(
+        str(item["url"])
+        for group in saved_groups
+        if isinstance(group, dict)
+        for item in group.get("items", [])
+        if isinstance(item, dict) and "url" in item
+    )
+    if expected_urls != actual_urls:
+        raise RuntimeError(
+            "saved digest links do not match fetched links: "
+            f"expected={len(expected_urls)} actual={len(actual_urls)}"
+        )
+
+    return {
+        "report_date": report_date,
+        "fetched_count": len(expected_urls),
+        "saved_count": len(actual_urls),
+        "group_count": len(saved_groups),
+        "model": model,
+        "mode": "antigravity",
+    }
+
+
 def build_feed_digest_payload(*, items: object, report_date: str) -> dict[str, Any]:
     if not isinstance(items, list):
         raise ValueError("news links API did not return a list")
@@ -160,16 +367,10 @@ def build_feed_digest_payload(*, items: object, report_date: str) -> dict[str, A
         url = row.get("url")
         if not title or not _is_http_url(url):
             raise ValueError("news links API returned an article without a valid title/url")
-        source_name = str(row.get("source_name") or "unknown source").strip() or "unknown source"
-        published_at = str(row.get("published_at") or report_date).strip() or report_date
         normalized_items.append(
             {
                 "title": title,
-                "summary": (
-                    f"Source: {source_name}. "
-                    f"Published at {published_at}. "
-                    "Included in the daily digest."
-                ),
+                "summary": _default_feed_summary(row=row, report_date=report_date),
                 "url": str(url),
             }
         )
@@ -255,6 +456,24 @@ def _build_parser() -> argparse.ArgumentParser:
     publish_feed_parser.add_argument("--report-date", required=True)
     publish_feed_parser.add_argument("--limit", type=int, default=200)
 
+    publish_ai_parser = subparsers.add_parser(
+        "publish-antigravity-digest",
+        help="Generate a digest via Antigravity, repair coverage, publish it, and verify full link coverage",
+    )
+    publish_ai_parser.add_argument("--base-url", required=True)
+    publish_ai_parser.add_argument("--report-date", required=True)
+    publish_ai_parser.add_argument("--limit", type=int, default=200)
+    publish_ai_parser.add_argument("--antigravity-url", required=True)
+    publish_ai_parser.add_argument(
+        "--antigravity-admin-password",
+        default=os.environ.get("ANTIGRAVITY_ADMIN_PASSWORD", ""),
+    )
+    publish_ai_parser.add_argument(
+        "--antigravity-model",
+        default=os.environ.get("ANTIGRAVITY_MODEL", "gemini-3-flash"),
+    )
+    publish_ai_parser.add_argument("--prompt", default=str(_DEFAULT_PROMPT_PATH))
+
     return parser
 
 
@@ -293,6 +512,20 @@ def main() -> int:
                 base_url=args.base_url,
                 report_date=args.report_date,
                 limit=args.limit,
+            )
+            sys.stdout.write(json.dumps(response, ensure_ascii=False, indent=2) + "\n")
+            return 0
+        if args.command == "publish-antigravity-digest":
+            if not args.antigravity_admin_password:
+                raise RuntimeError("antigravity admin password is required")
+            response = publish_antigravity_digest(
+                base_url=args.base_url,
+                report_date=args.report_date,
+                limit=args.limit,
+                admin_url=args.antigravity_url,
+                admin_password=args.antigravity_admin_password,
+                model=args.antigravity_model,
+                prompt_path=Path(args.prompt),
             )
             sys.stdout.write(json.dumps(response, ensure_ascii=False, indent=2) + "\n")
             return 0

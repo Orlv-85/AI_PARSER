@@ -134,3 +134,50 @@ def test_build_feed_digest_payload_rejects_invalid_feed_row() -> None:
             items=[{"title": "Missing URL"}],
             report_date="2026-03-01",
         )
+
+
+def test_repair_digest_coverage_adds_missing_links_without_duplicates() -> None:
+    bridge = _load_bridge_module()
+
+    repaired = bridge.repair_digest_coverage(
+        digest={
+            "report_date": "2026-03-01",
+            "groups": [
+                {
+                    "title": "AI Coding",
+                    "items": [
+                        {
+                            "title": "First item",
+                            "summary": "AI summary",
+                            "url": "https://example.com/1",
+                        },
+                        {
+                            "title": "Duplicate item",
+                            "summary": "Duplicate should be dropped",
+                            "url": "https://example.com/1",
+                        },
+                    ],
+                }
+            ],
+        },
+        feed_items=[
+            {
+                "title": "First item",
+                "url": "https://example.com/1",
+                "source_name": "One",
+                "published_at": "2026-03-01T10:00:00Z",
+            },
+            {
+                "title": "Second item",
+                "url": "https://example.com/2",
+                "source_name": "Two",
+                "published_at": "2026-03-01T11:00:00Z",
+            },
+        ],
+        report_date="2026-03-01",
+    )
+
+    urls = [item["url"] for group in repaired["groups"] for item in group["items"]]
+
+    assert urls == ["https://example.com/1", "https://example.com/2"]
+    assert repaired["groups"][-1]["title"].startswith("Additional Coverage")
