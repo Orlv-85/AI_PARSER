@@ -36,7 +36,7 @@ jobs:
         run: docker build -f build/Dockerfile --target test --build-arg PYTHON_IMAGE=python:3.14-slim -t ai-news-test:${{ github.sha }} .
 
       - name: Run tests in Docker with coverage
-        run: docker run --rm ai-news-test:${{ github.sha }}
+        run: docker run --rm -e AINEWS_COVERAGE_FAIL_UNDER=90 ai-news-test:${{ github.sha }}
 
   build-image:
     needs:
