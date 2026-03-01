@@ -20,6 +20,9 @@ AUTO_UPDATE_FULLTEXT_CONCURRENCY_LIMIT="${AUTO_UPDATE_FULLTEXT_CONCURRENCY_LIMIT
 AUTO_UPDATE_RSS_EXTRACT_FULL_TEXT="${AUTO_UPDATE_RSS_EXTRACT_FULL_TEXT:-0}"
 ANTIGRAVITY_ENABLED="${ANTIGRAVITY_ENABLED:-1}"
 ANTIGRAVITY_PORT="${ANTIGRAVITY_PORT:-8045}"
+POCKETPAW_ENABLED="${POCKETPAW_ENABLED:-1}"
+POCKETPAW_VERSION="${POCKETPAW_VERSION:-0.2.5}"
+POCKETPAW_VENV_PATH="${POCKETPAW_VENV_PATH:-$ROOT_DIR/.tools/pocketpaw-venv}"
 
 if [ -n "$DEPLOY_TAG" ]; then
   echo "Checking out tag: $DEPLOY_TAG"
@@ -38,7 +41,37 @@ export APP_IMAGE
 
 CURRENT_COMMIT="$(git rev-parse --verify HEAD)"
 
-mkdir -p data backups data/antigravity
+mkdir -p data backups data/antigravity .tools
+
+install_pocketpaw() {
+  if [ "$POCKETPAW_ENABLED" != "1" ]; then
+    echo "POCKETPAW_ENABLED=0; skipping PocketPaw installation"
+    return 0
+  fi
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "python3 is required to install PocketPaw" >&2
+    exit 1
+  fi
+
+  if [ ! -x "$POCKETPAW_VENV_PATH/bin/python" ]; then
+    echo "Creating PocketPaw virtualenv at $POCKETPAW_VENV_PATH"
+    python3 -m venv "$POCKETPAW_VENV_PATH"
+  fi
+
+  echo "Installing PocketPaw ${POCKETPAW_VERSION} into $POCKETPAW_VENV_PATH"
+  "$POCKETPAW_VENV_PATH/bin/python" -m pip install --upgrade pip >/dev/null
+  "$POCKETPAW_VENV_PATH/bin/python" -m pip install --upgrade "pocketpaw==${POCKETPAW_VERSION}" >/dev/null
+
+  if [ ! -x "$POCKETPAW_VENV_PATH/bin/pocketpaw" ]; then
+    echo "PocketPaw installation completed but binary is missing" >&2
+    exit 1
+  fi
+
+  printf '%s\n' "$POCKETPAW_VERSION" > "$ROOT_DIR/.tools/pocketpaw-version"
+  ln -sf "$POCKETPAW_VENV_PATH/bin/pocketpaw" "$ROOT_DIR/.tools/pocketpaw"
+  echo "PocketPaw is installed and available at $ROOT_DIR/.tools/pocketpaw"
+}
 
 install_auto_update_cron() {
   if ! command -v crontab >/dev/null 2>&1; then
@@ -93,6 +126,8 @@ install_auto_update_cron() {
 
 echo "Starting PostgreSQL..."
 docker compose -f "$COMPOSE_FILE" up -d db
+
+install_pocketpaw
 
 if [ "$ANTIGRAVITY_ENABLED" = "1" ]; then
   echo "Starting Antigravity Manager..."

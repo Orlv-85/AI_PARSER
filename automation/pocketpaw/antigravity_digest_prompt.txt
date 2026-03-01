@@ -1,0 +1,52 @@
+Create a daily AI news digest from the provided article list.
+
+Return only JSON.
+Do not return markdown.
+Do not wrap the JSON in code fences.
+Do not add any explanation before or after the JSON.
+
+Return exactly this structure:
+{
+  "report_date": "YYYY-MM-DD",
+  "title": "Daily AI News Digest",
+  "generated_by": "antigravity",
+  "groups": [
+    {
+      "title": "string",
+      "items": [
+        {
+          "article_id": 123,
+          "title": "string",
+          "summary": "string",
+          "url": "https://example.com/article"
+        }
+      ]
+    }
+  ]
+}
+
+Rules:
+- Group stories by topic.
+- Prefer these stable group names when they fit:
+  - AI Coding
+  - Agent Frameworks
+  - RAG & Data Systems
+  - Security
+  - Evaluation & Observability
+  - Automation
+  - Infrastructure
+- Do not include empty groups.
+- Do not duplicate the same story across groups.
+- Use at most 8 groups.
+- Use at most 6 items per group.
+- Keep the original article title except minor whitespace cleanup.
+- Preserve the original URL exactly.
+- Preserve article_id if provided.
+- summary must be 1-2 sentences.
+- summary must explain:
+  1. what the article is about
+  2. why it matters technically
+- Be concise, technical, and specific.
+- Do not use hype, filler, or generic praise.
+- Do not invent facts that are not supported by the provided article context.
+- The report_date must exactly match the input date.

@@ -1,0 +1,41 @@
+job:
+  name: daily_ai_digest
+  description: Fetch date-scoped links from AI_PARSER, summarize via Antigravity, publish digest back
+  inputs:
+    report_date: "YYYY-MM-DD"
+    base_url: "https://your-domain.example"
+    link_limit: 50
+
+  steps:
+    - id: fetch_bundle
+      command: >
+        ./venv1/bin/python scripts/pocketpaw_digest_bridge.py fetch-bundle
+        --base-url {{base_url}}
+        --report-date {{report_date}}
+        --limit {{link_limit}}
+        --out tmp/pocketpaw_digest_bundle.json
+
+    - id: summarize_in_antigravity
+      instruction: >
+        Submit tmp/pocketpaw_digest_bundle.json to Antigravity.
+        Use the embedded prompt and article list.
+        Save Antigravity JSON-only output to tmp/pocketpaw_digest_raw.json.
+
+    - id: validate_digest
+      command: >
+        ./venv1/bin/python scripts/pocketpaw_digest_bridge.py validate-digest
+        --report-date {{report_date}}
+        --input tmp/pocketpaw_digest_raw.json
+        --out tmp/pocketpaw_digest_validated.json
+
+    - id: publish_digest
+      command: >
+        ./venv1/bin/python scripts/pocketpaw_digest_bridge.py publish-digest
+        --base-url {{base_url}}
+        --report-date {{report_date}}
+        --input tmp/pocketpaw_digest_validated.json
+
+  outputs:
+    - tmp/pocketpaw_digest_bundle.json
+    - tmp/pocketpaw_digest_raw.json
+    - tmp/pocketpaw_digest_validated.json

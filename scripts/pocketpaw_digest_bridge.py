@@ -1,0 +1,215 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode, urlparse
+from urllib.request import Request, urlopen
+
+_DEFAULT_TITLE = "Daily AI News Digest"
+_DEFAULT_GENERATED_BY = "pocketpaw-antigravity"
+_MAX_GROUPS = 8
+_MAX_ITEMS_PER_GROUP = 6
+_MAX_SUMMARY_LENGTH = 400
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_ROOT_DIR = _SCRIPT_DIR.parent
+_DEFAULT_PROMPT_PATH = _ROOT_DIR / "automation" / "pocketpaw" / "antigravity_digest_prompt.txt"
+
+
+def _read_json_response(url: str, *, body: bytes | None = None) -> Any:
+    request = Request(url=url, data=body)
+    if body is not None:
+        request.add_header("Content-Type", "application/json")
+        request.method = "POST"
+    try:
+        with urlopen(request, timeout=30) as response:
+            return json.load(response)
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"HTTP {exc.code} for {url}: {detail}") from exc
+    except URLError as exc:
+        raise RuntimeError(f"Network error for {url}: {exc.reason}") from exc
+
+
+def _is_http_url(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    parsed = urlparse(value)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
+def _validate_group(group: object) -> dict[str, Any] | None:
+    if not isinstance(group, dict):
+        return None
+    title = str(group.get("title", "")).strip()
+    items = group.get("items")
+    if not title or not isinstance(items, list):
+        return None
+
+    normalized_items: list[dict[str, Any]] = []
+    for item in items[:_MAX_ITEMS_PER_GROUP]:
+        if not isinstance(item, dict):
+            continue
+        item_title = str(item.get("title", "")).strip()
+        summary = str(item.get("summary", "")).strip()
+        url = item.get("url")
+        article_id = item.get("article_id")
+        if not item_title or not summary or len(summary) > _MAX_SUMMARY_LENGTH:
+            continue
+        if not _is_http_url(url):
+            continue
+        normalized_item: dict[str, Any] = {
+            "title": item_title,
+            "summary": summary,
+            "url": str(url),
+        }
+        if isinstance(article_id, int):
+            normalized_item["article_id"] = article_id
+        normalized_items.append(normalized_item)
+
+    if not normalized_items:
+        return None
+    return {"title": title, "items": normalized_items}
+
+
+def normalize_digest(payload: object, *, report_date: str) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise ValueError("digest payload must be a JSON object")
+    if payload.get("report_date") != report_date:
+        raise ValueError("digest report_date does not match requested report_date")
+
+    groups = payload.get("groups")
+    if not isinstance(groups, list):
+        raise ValueError("digest groups must be a JSON array")
+
+    normalized_groups: list[dict[str, Any]] = []
+    for group in groups[:_MAX_GROUPS]:
+        normalized = _validate_group(group)
+        if normalized is not None:
+            normalized_groups.append(normalized)
+
+    if not normalized_groups:
+        raise ValueError("digest contains no valid groups after normalization")
+
+    return {
+        "report_date": report_date,
+        "title": _DEFAULT_TITLE,
+        "generated_by": _DEFAULT_GENERATED_BY,
+        "groups": normalized_groups,
+    }
+
+
+def _load_json(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _write_json(path: Path, payload: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def fetch_bundle(*, base_url: str, report_date: str, limit: int, out_path: Path, prompt_path: Path) -> None:
+    query = urlencode({"date": report_date, "limit": limit})
+    items = _read_json_response(f"{base_url.rstrip('/')}/api/news/links?{query}")
+    if not isinstance(items, list):
+        raise RuntimeError("news links API did not return a list")
+    if not items:
+        raise RuntimeError("news links API returned no articles for the requested date")
+
+    prompt = prompt_path.read_text(encoding="utf-8")
+    bundle = {
+        "report_date": report_date,
+        "title": _DEFAULT_TITLE,
+        "prompt": prompt,
+        "articles": items,
+    }
+    _write_json(out_path, bundle)
+
+
+def validate_digest(*, report_date: str, input_path: Path, out_path: Path | None) -> dict[str, Any]:
+    payload = _load_json(input_path)
+    normalized = normalize_digest(payload, report_date=report_date)
+    if out_path is not None:
+        _write_json(out_path, normalized)
+    return normalized
+
+
+def publish_digest(*, base_url: str, report_date: str, input_path: Path) -> dict[str, Any]:
+    normalized = validate_digest(report_date=report_date, input_path=input_path, out_path=None)
+    response = _read_json_response(
+        f"{base_url.rstrip('/')}/api/news/digests",
+        body=json.dumps(normalized).encode("utf-8"),
+    )
+    if not isinstance(response, dict):
+        raise RuntimeError("publish response was not a JSON object")
+    return response
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="PocketPaw bridge for AI_PARSER daily digests")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    fetch_parser = subparsers.add_parser("fetch-bundle", help="Fetch article links and write bundle JSON")
+    fetch_parser.add_argument("--base-url", required=True)
+    fetch_parser.add_argument("--report-date", required=True)
+    fetch_parser.add_argument("--limit", type=int, default=50)
+    fetch_parser.add_argument("--out", required=True)
+    fetch_parser.add_argument("--prompt", default=str(_DEFAULT_PROMPT_PATH))
+
+    validate_parser = subparsers.add_parser("validate-digest", help="Validate and normalize digest JSON")
+    validate_parser.add_argument("--report-date", required=True)
+    validate_parser.add_argument("--input", required=True)
+    validate_parser.add_argument("--out", required=False)
+
+    publish_parser = subparsers.add_parser("publish-digest", help="Validate and publish digest JSON")
+    publish_parser.add_argument("--base-url", required=True)
+    publish_parser.add_argument("--report-date", required=True)
+    publish_parser.add_argument("--input", required=True)
+
+    return parser
+
+
+def main() -> int:
+    parser = _build_parser()
+    args = parser.parse_args()
+    try:
+        if args.command == "fetch-bundle":
+            fetch_bundle(
+                base_url=args.base_url,
+                report_date=args.report_date,
+                limit=args.limit,
+                out_path=Path(args.out),
+                prompt_path=Path(args.prompt),
+            )
+            return 0
+        if args.command == "validate-digest":
+            normalized = validate_digest(
+                report_date=args.report_date,
+                input_path=Path(args.input),
+                out_path=Path(args.out) if args.out else None,
+            )
+            if not args.out:
+                sys.stdout.write(json.dumps(normalized, ensure_ascii=False, indent=2) + "\n")
+            return 0
+        if args.command == "publish-digest":
+            response = publish_digest(
+                base_url=args.base_url,
+                report_date=args.report_date,
+                input_path=Path(args.input),
+            )
+            sys.stdout.write(json.dumps(response, ensure_ascii=False, indent=2) + "\n")
+            return 0
+    except (RuntimeError, ValueError, json.JSONDecodeError) as exc:
+        sys.stderr.write(f"{exc}\n")
+        return 1
+
+    parser.error(f"unsupported command: {args.command}")
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
