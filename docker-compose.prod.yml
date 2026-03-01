@@ -49,7 +49,6 @@ services:
     container_name: ai-news-antigravity
     restart: unless-stopped
     environment:
-      API_KEY: ${ANTIGRAVITY_API_KEY:-change_me}
       WEB_PASSWORD: ${ANTIGRAVITY_WEB_PASSWORD:-change_me}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ACCOUNT_EMAIL: ${ANTIGRAVITY_ACCOUNT_EMAIL:-}

@@ -110,7 +110,6 @@ jobs:
           ANTIGRAVITY_ENABLED: ${{ vars.ANTIGRAVITY_ENABLED || 'true' }}
           ANTIGRAVITY_IMAGE: ${{ vars.ANTIGRAVITY_IMAGE || 'lbjlaq/antigravity-manager:latest' }}
           ANTIGRAVITY_PORT: ${{ vars.ANTIGRAVITY_PORT || '8045' }}
-          ANTIGRAVITY_API_KEY: ${{ secrets.ANTIGRAVITY_API_KEY }}
           ANTIGRAVITY_WEB_PASSWORD: ${{ secrets.ANTIGRAVITY_WEB_PASSWORD }}
           ANTIGRAVITY_ACCOUNT_EMAIL: ${{ secrets.ANTIGRAVITY_ACCOUNT_EMAIL }}
           ANTIGRAVITY_ACCOUNT_PASSWORD: ${{ secrets.ANTIGRAVITY_ACCOUNT_PASSWORD }}
@@ -119,7 +118,6 @@ jobs:
           AINEWS_AUTH_PASSWORD_HASH_ESCAPED="$(printf '%s' "${AINEWS_AUTH_PASSWORD_HASH}" | sed 's/[$]/$$/g')"
           AINEWS_AUTH_SECRET_ESCAPED="$(printf '%s' "${AINEWS_AUTH_SECRET}" | sed 's/[$]/$$/g')"
           AINEWS_MCP_AUTH_TOKEN_ESCAPED="$(printf '%s' "${AINEWS_MCP_AUTH_TOKEN}" | sed 's/[$]/$$/g')"
-          ANTIGRAVITY_API_KEY_ESCAPED="$(printf '%s' "${ANTIGRAVITY_API_KEY:-change_me}" | sed 's/[$]/$$/g')"
           ANTIGRAVITY_WEB_PASSWORD_ESCAPED="$(printf '%s' "${ANTIGRAVITY_WEB_PASSWORD:-change_me}" | sed 's/[$]/$$/g')"
           ANTIGRAVITY_ACCOUNT_EMAIL_ESCAPED="$(printf '%s' "${ANTIGRAVITY_ACCOUNT_EMAIL}" | sed 's/[$]/$$/g')"
           ANTIGRAVITY_ACCOUNT_PASSWORD_ESCAPED="$(printf '%s' "${ANTIGRAVITY_ACCOUNT_PASSWORD}" | sed 's/[$]/$$/g')"
@@ -136,7 +134,6 @@ jobs:
             printf 'ANTIGRAVITY_ENABLED=%s\n' "${ANTIGRAVITY_ENABLED}"
             printf 'ANTIGRAVITY_IMAGE=%s\n' "${ANTIGRAVITY_IMAGE}"
             printf 'ANTIGRAVITY_PORT=%s\n' "${ANTIGRAVITY_PORT}"
-            printf 'ANTIGRAVITY_API_KEY=%s\n' "${ANTIGRAVITY_API_KEY_ESCAPED}"
             printf 'ANTIGRAVITY_WEB_PASSWORD=%s\n' "${ANTIGRAVITY_WEB_PASSWORD_ESCAPED}"
             printf 'ANTIGRAVITY_ACCOUNT_EMAIL=%s\n' "${ANTIGRAVITY_ACCOUNT_EMAIL_ESCAPED}"
             printf 'ANTIGRAVITY_ACCOUNT_PASSWORD=%s\n' "${ANTIGRAVITY_ACCOUNT_PASSWORD_ESCAPED}"
@@ -159,7 +156,7 @@ jobs:
         run: |
           sshpass -p "${SERVER_PASSWORD}" scp -o StrictHostKeyChecking=accept-new /tmp/ai_news_auth.env "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/ai_news_auth.env"
           sshpass -p "${SERVER_PASSWORD}" scp -o StrictHostKeyChecking=accept-new /tmp/ai_news_ghcr.token "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/ai_news_ghcr.token"
-          sshpass -p "${SERVER_PASSWORD}" ssh -o StrictHostKeyChecking=accept-new "${DEPLOY_USER}@${DEPLOY_HOST}" "cd '${DEPLOY_APP_DIR}' && touch .env && grep -vE '^(AINEWS_AUTH_ENABLED|AINEWS_AUTH_USERNAME|AINEWS_AUTH_PASSWORD_HASH|AINEWS_AUTH_SECRET|AINEWS_AUTH_SESSION_TTL_SECONDS|AINEWS_AUTH_COOKIE_SECURE|AINEWS_MCP_AUTH_ENABLED|AINEWS_MCP_AUTH_TOKEN|ANTIGRAVITY_ENABLED|ANTIGRAVITY_IMAGE|ANTIGRAVITY_PORT|ANTIGRAVITY_API_KEY|ANTIGRAVITY_WEB_PASSWORD|ANTIGRAVITY_ACCOUNT_EMAIL|ANTIGRAVITY_ACCOUNT_PASSWORD|ANTHROPIC_API_KEY)=' .env > .env.next || true && cat /tmp/ai_news_auth.env >> .env.next && mv .env.next .env && rm -f /tmp/ai_news_auth.env && cat /tmp/ai_news_ghcr.token | docker login ghcr.io -u 'orlv-85' --password-stdin && rm -f /tmp/ai_news_ghcr.token && git fetch --force origin '+refs/tags/*:refs/tags/*' && git checkout --force '${DEPLOY_TAG}' && APP_IMAGE='ghcr.io/orlv-85/ai-parser:${DEPLOY_TAG}' ./scripts/deploy_prod.sh '${DEPLOY_TAG}'"
+          sshpass -p "${SERVER_PASSWORD}" ssh -o StrictHostKeyChecking=accept-new "${DEPLOY_USER}@${DEPLOY_HOST}" "cd '${DEPLOY_APP_DIR}' && touch .env && grep -vE '^(AINEWS_AUTH_ENABLED|AINEWS_AUTH_USERNAME|AINEWS_AUTH_PASSWORD_HASH|AINEWS_AUTH_SECRET|AINEWS_AUTH_SESSION_TTL_SECONDS|AINEWS_AUTH_COOKIE_SECURE|AINEWS_MCP_AUTH_ENABLED|AINEWS_MCP_AUTH_TOKEN|ANTIGRAVITY_ENABLED|ANTIGRAVITY_IMAGE|ANTIGRAVITY_PORT|ANTIGRAVITY_WEB_PASSWORD|ANTIGRAVITY_ACCOUNT_EMAIL|ANTIGRAVITY_ACCOUNT_PASSWORD|ANTHROPIC_API_KEY)=' .env > .env.next || true && cat /tmp/ai_news_auth.env >> .env.next && mv .env.next .env && rm -f /tmp/ai_news_auth.env && cat /tmp/ai_news_ghcr.token | docker login ghcr.io -u 'orlv-85' --password-stdin && rm -f /tmp/ai_news_ghcr.token && git fetch --force origin '+refs/tags/*:refs/tags/*' && git checkout --force '${DEPLOY_TAG}' && APP_IMAGE='ghcr.io/orlv-85/ai-parser:${DEPLOY_TAG}' ./scripts/deploy_prod.sh '${DEPLOY_TAG}'"
 
   cleanup-ghcr:
     needs: deploy
