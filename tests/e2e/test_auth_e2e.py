@@ -144,6 +144,9 @@ def test_e2e_auth_disabled_default_routes_are_open(monkeypatch, tmp_path) -> Non
     monkeypatch.delenv("AINEWS_AUTH_PASSWORD_HASH", raising=False)
     monkeypatch.delenv("AINEWS_AUTH_SECRET", raising=False)
 
+    engine = create_engine(f"sqlite:///{tmp_path}/auth-disabled-open-routes.db", future=True)
+    session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+
     class _ArticleRepo:
         def __init__(self, _session) -> None:
             pass
@@ -159,7 +162,8 @@ def test_e2e_auth_disabled_default_routes_are_open(monkeypatch, tmp_path) -> Non
             return [(row, "open-auth", "Open Auth")]
 
     web_app_module = import_module("app.web.app")
-    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(web_app_module, "create_all", lambda: Base.metadata.create_all(bind=engine))
+    monkeypatch.setattr(web_app_module, "SessionLocal", session_local)
     monkeypatch.setattr(web_app_module, "ArticleRepo", _ArticleRepo)
 
     client = TestClient(create_app())

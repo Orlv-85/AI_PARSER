@@ -9,14 +9,20 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import Settings, get_settings
+from app.storage.models_sql import Base
 from app.web.app import create_app
 
 
 def _build_authenticated_client(monkeypatch, tmp_path) -> TestClient:
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()
+
+    engine = create_engine(f"sqlite:///{tmp_path}/auth-stage1.db", future=True)
+    session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
     auth_module = import_module("app.web.auth")
     password_hash = auth_module.hash_password("s3cret-pass")
@@ -41,7 +47,8 @@ def _build_authenticated_client(monkeypatch, tmp_path) -> TestClient:
             return [(row, "auth-src", "Auth Source")]
 
     web_app_module = import_module("app.web.app")
-    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(web_app_module, "create_all", lambda: Base.metadata.create_all(bind=engine))
+    monkeypatch.setattr(web_app_module, "SessionLocal", session_local)
     monkeypatch.setattr(web_app_module, "ArticleRepo", _ArticleRepo)
 
     return TestClient(create_app())
