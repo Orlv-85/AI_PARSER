@@ -1,5 +1,5 @@
 import logging
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from html import escape
 from pathlib import Path
 from typing import SupportsIndex, SupportsInt, cast
@@ -228,7 +228,7 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
 
     @api.get("/", response_class=HTMLResponse)
     def index() -> str:
-        report_date = datetime.now(UTC).date()
+        report_date = datetime.now(UTC).date() - timedelta(days=1)
         try:
             create_all()
             with SessionLocal() as session:

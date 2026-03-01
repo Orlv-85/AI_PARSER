@@ -10,7 +10,7 @@ from app.storage.models_sql import Base
 from app.web.app import create_app
 
 
-def test_public_digest_page_renders_digest_shell_with_today_selected(
+def test_public_digest_page_renders_digest_shell_with_yesterday_selected(
     monkeypatch, tmp_path
 ) -> None:
     monkeypatch.chdir(tmp_path)
@@ -37,9 +37,9 @@ def test_public_digest_page_renders_digest_shell_with_today_selected(
     response = client.get("/")
 
     assert response.status_code == 200
-    assert "Daily Digest" in response.text
+    assert "Yesterday&#39;s Digest" in response.text or "Yesterday's Digest" in response.text
     assert 'type="date"' in response.text
-    assert 'value="2026-03-01"' in response.text
+    assert 'value="2026-02-28"' in response.text
 
 
 def test_public_digest_page_shows_clean_empty_state_when_digest_missing(
@@ -104,4 +104,4 @@ def test_public_digest_page_stays_public_when_auth_is_enabled(monkeypatch, tmp_p
     response = client.get("/", follow_redirects=False)
 
     assert response.status_code == 200
-    assert "Daily Digest" in response.text
+    assert "Yesterday&#39;s Digest" in response.text or "Yesterday's Digest" in response.text

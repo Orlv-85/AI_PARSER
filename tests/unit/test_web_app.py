@@ -53,7 +53,7 @@ def test_web_app_pages_and_update_flow(monkeypatch, tmp_path) -> None:
 
     page = client.get("/")
     assert page.status_code == 200
-    assert "Daily Digest" in page.text
+    assert "Yesterday&#39;s Digest" in page.text or "Yesterday's Digest" in page.text
     assert 'id="digest-date"' in page.text
     assert "No digest has been published for this date yet." in page.text
     health = client.get("/health")
@@ -488,8 +488,8 @@ def test_news_template_has_date_range_inputs_and_copy_links_markers(
     assert page.status_code == 200
     assert 'id="digest-date"' in page.text
     assert 'type="date"' in page.text
-    assert "Daily Digest" in page.text
-    assert "A public summary of the latest curated AI news." in page.text
+    assert "Yesterday&#39;s Digest" in page.text or "Yesterday's Digest" in page.text
+    assert "defaulting to yesterday in UTC" in page.text
 
 
 def test_news_template_has_network_error_handling_and_safe_row_rendering(
@@ -607,7 +607,7 @@ def test_admin_route_is_protected_and_public_root_stays_open(monkeypatch, tmp_pa
     admin_page = client.get("/admin", follow_redirects=False)
 
     assert public_page.status_code == 200
-    assert "Daily Digest" in public_page.text
+    assert "Yesterday&#39;s Digest" in public_page.text or "Yesterday's Digest" in public_page.text
     assert admin_page.status_code in {302, 303, 307, 308}
     assert admin_page.headers["location"].endswith("/login")
 
@@ -660,7 +660,7 @@ def test_public_root_hides_admin_controls_while_admin_route_shows_them(
     admin_page = client.get("/admin")
 
     assert public_page.status_code == 200
-    assert "Daily Digest" in public_page.text
+    assert "Yesterday&#39;s Digest" in public_page.text or "Yesterday's Digest" in public_page.text
     assert "Update Sources" not in public_page.text
     assert "Import Source Candidates" not in public_page.text
 
