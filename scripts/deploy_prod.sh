@@ -43,8 +43,19 @@ CURRENT_COMMIT="$(git rev-parse --verify HEAD)"
 
 mkdir -p data backups data/antigravity .tools
 
+is_enabled() {
+  case "${1:-}" in
+    1|true|TRUE|yes|YES|on|ON)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 install_pocketpaw() {
-  if [ "$POCKETPAW_ENABLED" != "1" ]; then
+  if ! is_enabled "$POCKETPAW_ENABLED"; then
     echo "POCKETPAW_ENABLED=0; skipping PocketPaw installation"
     return 0
   fi
@@ -129,7 +140,7 @@ docker compose -f "$COMPOSE_FILE" up -d db
 
 install_pocketpaw
 
-if [ "$ANTIGRAVITY_ENABLED" = "1" ]; then
+if is_enabled "$ANTIGRAVITY_ENABLED"; then
   echo "Starting Antigravity Manager..."
   docker compose -f "$COMPOSE_FILE" up -d antigravity
 else
@@ -148,7 +159,7 @@ until docker compose -f "$COMPOSE_FILE" exec -T db sh -lc 'pg_isready -U "$POSTG
 done
 
 echo "Deploying app image: $APP_IMAGE"
-if [ "$ANTIGRAVITY_ENABLED" = "1" ]; then
+if is_enabled "$ANTIGRAVITY_ENABLED"; then
   echo "Pulling app and Antigravity images from registries..."
   docker compose -f "$COMPOSE_FILE" pull app antigravity
 else
@@ -168,7 +179,7 @@ docker compose -f "$COMPOSE_FILE" run --rm app ai-news prune --older-than-days "
 echo "Restarting app..."
 docker compose -f "$COMPOSE_FILE" up -d app caddy
 
-if [ "$ANTIGRAVITY_ENABLED" = "1" ]; then
+if is_enabled "$ANTIGRAVITY_ENABLED"; then
   echo "Refreshing Antigravity Manager..."
   docker compose -f "$COMPOSE_FILE" up -d antigravity
 fi
@@ -184,7 +195,7 @@ until docker compose -f "$COMPOSE_FILE" exec -T app python -c "import urllib.req
   sleep 2
 done
 
-if [ "$ANTIGRAVITY_ENABLED" = "1" ]; then
+if is_enabled "$ANTIGRAVITY_ENABLED"; then
   echo "Checking Antigravity Manager HTTP endpoint..."
   attempt=0
   until curl -fsS "http://127.0.0.1:${ANTIGRAVITY_PORT}" >/dev/null 2>&1; do
