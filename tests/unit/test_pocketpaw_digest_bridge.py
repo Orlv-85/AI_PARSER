@@ -46,8 +46,6 @@ def test_normalize_digest_keeps_valid_groups_and_items() -> None:
     normalized = bridge.normalize_digest(payload, report_date="2026-03-01")
 
     assert normalized["report_date"] == "2026-03-01"
-    assert normalized["title"] == "Daily AI News Digest"
-    assert normalized["generated_by"] == "pocketpaw-antigravity"
     assert normalized["groups"] == [
         {
             "title": "AI Coding",
@@ -96,3 +94,43 @@ def test_normalize_digest_rejects_when_no_valid_groups_remain() -> None:
 
     with pytest.raises(ValueError, match="no valid groups"):
         bridge.normalize_digest(payload, report_date="2026-03-01")
+
+
+def test_build_feed_digest_payload_includes_every_link_once() -> None:
+    bridge = _load_bridge_module()
+
+    payload = bridge.build_feed_digest_payload(
+        items=[
+            {
+                "article_id": 10,
+                "title": "First item",
+                "url": "https://example.com/1",
+                "source_name": "Tech Source",
+                "published_at": "2026-03-01T10:00:00Z",
+            },
+            {
+                "article_id": 11,
+                "title": "Second item",
+                "url": "https://example.com/2",
+                "source_name": "Infra Source",
+                "published_at": "2026-03-01T11:00:00Z",
+            },
+        ],
+        report_date="2026-03-01",
+    )
+
+    urls = [item["url"] for group in payload["groups"] for item in group["items"]]
+
+    assert payload["report_date"] == "2026-03-01"
+    assert urls == ["https://example.com/1", "https://example.com/2"]
+    assert payload["groups"][0]["items"][0]["summary"].startswith("Source: Tech Source.")
+
+
+def test_build_feed_digest_payload_rejects_invalid_feed_row() -> None:
+    bridge = _load_bridge_module()
+
+    with pytest.raises(ValueError, match="valid title/url"):
+        bridge.build_feed_digest_payload(
+            items=[{"title": "Missing URL"}],
+            report_date="2026-03-01",
+        )

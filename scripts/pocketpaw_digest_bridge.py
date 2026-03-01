@@ -11,7 +11,6 @@ from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
 
 _DEFAULT_TITLE = "Daily AI News Digest"
-_DEFAULT_GENERATED_BY = "pocketpaw-antigravity"
 _MAX_GROUPS = 8
 _MAX_ITEMS_PER_GROUP = 6
 _MAX_SUMMARY_LENGTH = 400
@@ -97,8 +96,6 @@ def normalize_digest(payload: object, *, report_date: str) -> dict[str, Any]:
 
     return {
         "report_date": report_date,
-        "title": _DEFAULT_TITLE,
-        "generated_by": _DEFAULT_GENERATED_BY,
         "groups": normalized_groups,
     }
 
@@ -149,6 +146,86 @@ def publish_digest(*, base_url: str, report_date: str, input_path: Path) -> dict
     return response
 
 
+def build_feed_digest_payload(*, items: object, report_date: str) -> dict[str, Any]:
+    if not isinstance(items, list):
+        raise ValueError("news links API did not return a list")
+    if not items:
+        raise ValueError("news links API returned no articles for the requested date")
+
+    normalized_items: list[dict[str, str]] = []
+    for row in items:
+        if not isinstance(row, dict):
+            raise ValueError("news links API returned an invalid article entry")
+        title = str(row.get("title", "")).strip()
+        url = row.get("url")
+        if not title or not _is_http_url(url):
+            raise ValueError("news links API returned an article without a valid title/url")
+        source_name = str(row.get("source_name") or "unknown source").strip() or "unknown source"
+        published_at = str(row.get("published_at") or report_date).strip() or report_date
+        normalized_items.append(
+            {
+                "title": title,
+                "summary": (
+                    f"Source: {source_name}. "
+                    f"Published at {published_at}. "
+                    "Included in the daily digest."
+                ),
+                "url": str(url),
+            }
+        )
+
+    groups: list[dict[str, Any]] = []
+    for start in range(0, len(normalized_items), _MAX_ITEMS_PER_GROUP):
+        groups.append(
+            {
+                "title": f"Daily Coverage {len(groups) + 1}",
+                "items": normalized_items[start : start + _MAX_ITEMS_PER_GROUP],
+            }
+        )
+    return {"report_date": report_date, "groups": groups}
+
+
+def publish_feed_digest(*, base_url: str, report_date: str, limit: int) -> dict[str, Any]:
+    query = urlencode({"date": report_date, "limit": limit})
+    items = _read_json_response(f"{base_url.rstrip('/')}/api/news/links?{query}")
+    payload = build_feed_digest_payload(items=items, report_date=report_date)
+
+    response = _read_json_response(
+        f"{base_url.rstrip('/')}/api/news/digests",
+        body=json.dumps(payload).encode("utf-8"),
+    )
+    if not isinstance(response, dict):
+        raise RuntimeError("publish response was not a JSON object")
+
+    saved = _read_json_response(f"{base_url.rstrip('/')}/api/news/digests?date={report_date}")
+    if not isinstance(saved, dict):
+        raise RuntimeError("saved digest response was not a JSON object")
+    saved_groups = saved.get("groups")
+    if not isinstance(saved_groups, list):
+        raise RuntimeError("saved digest response did not contain a valid groups array")
+
+    expected_urls = sorted(str(row["url"]) for row in items)
+    actual_urls = sorted(
+        str(item["url"])
+        for group in saved_groups
+        if isinstance(group, dict)
+        for item in group.get("items", [])
+        if isinstance(item, dict) and "url" in item
+    )
+    if expected_urls != actual_urls:
+        raise RuntimeError(
+            "saved digest links do not match fetched links: "
+            f"expected={len(expected_urls)} actual={len(actual_urls)}"
+        )
+
+    return {
+        "report_date": report_date,
+        "fetched_count": len(expected_urls),
+        "saved_count": len(actual_urls),
+        "group_count": len(saved_groups),
+    }
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="PocketPaw bridge for AI_PARSER daily digests")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -169,6 +246,14 @@ def _build_parser() -> argparse.ArgumentParser:
     publish_parser.add_argument("--base-url", required=True)
     publish_parser.add_argument("--report-date", required=True)
     publish_parser.add_argument("--input", required=True)
+
+    publish_feed_parser = subparsers.add_parser(
+        "publish-feed-digest",
+        help="Build a digest from the public link feed, publish it, and verify full link coverage",
+    )
+    publish_feed_parser.add_argument("--base-url", required=True)
+    publish_feed_parser.add_argument("--report-date", required=True)
+    publish_feed_parser.add_argument("--limit", type=int, default=200)
 
     return parser
 
@@ -200,6 +285,14 @@ def main() -> int:
                 base_url=args.base_url,
                 report_date=args.report_date,
                 input_path=Path(args.input),
+            )
+            sys.stdout.write(json.dumps(response, ensure_ascii=False, indent=2) + "\n")
+            return 0
+        if args.command == "publish-feed-digest":
+            response = publish_feed_digest(
+                base_url=args.base_url,
+                report_date=args.report_date,
+                limit=args.limit,
             )
             sys.stdout.write(json.dumps(response, ensure_ascii=False, indent=2) + "\n")
             return 0
