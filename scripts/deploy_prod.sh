@@ -18,6 +18,8 @@ AUTO_UPDATE_LOG_PATH="${AUTO_UPDATE_LOG_PATH:-/var/log/ai-news-auto-update.log}"
 AUTO_UPDATE_CONCURRENCY_LIMIT="${AUTO_UPDATE_CONCURRENCY_LIMIT:-10}"
 AUTO_UPDATE_FULLTEXT_CONCURRENCY_LIMIT="${AUTO_UPDATE_FULLTEXT_CONCURRENCY_LIMIT:-4}"
 AUTO_UPDATE_RSS_EXTRACT_FULL_TEXT="${AUTO_UPDATE_RSS_EXTRACT_FULL_TEXT:-0}"
+ANTIGRAVITY_ENABLED="${ANTIGRAVITY_ENABLED:-1}"
+ANTIGRAVITY_PORT="${ANTIGRAVITY_PORT:-8045}"
 
 if [ -n "$DEPLOY_TAG" ]; then
   echo "Checking out tag: $DEPLOY_TAG"
@@ -36,7 +38,7 @@ export APP_IMAGE
 
 CURRENT_COMMIT="$(git rev-parse --verify HEAD)"
 
-mkdir -p data backups
+mkdir -p data backups data/antigravity
 
 install_auto_update_cron() {
   if ! command -v crontab >/dev/null 2>&1; then
@@ -92,6 +94,13 @@ install_auto_update_cron() {
 echo "Starting PostgreSQL..."
 docker compose -f "$COMPOSE_FILE" up -d db
 
+if [ "$ANTIGRAVITY_ENABLED" = "1" ]; then
+  echo "Starting Antigravity Manager..."
+  docker compose -f "$COMPOSE_FILE" up -d antigravity
+else
+  echo "ANTIGRAVITY_ENABLED=0; skipping Antigravity Manager startup"
+fi
+
 echo "Waiting for PostgreSQL readiness..."
 attempt=0
 until docker compose -f "$COMPOSE_FILE" exec -T db sh -lc 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null 2>&1; do
@@ -104,8 +113,13 @@ until docker compose -f "$COMPOSE_FILE" exec -T db sh -lc 'pg_isready -U "$POSTG
 done
 
 echo "Deploying app image: $APP_IMAGE"
-echo "Pulling app image from registry..."
-docker compose -f "$COMPOSE_FILE" pull app
+if [ "$ANTIGRAVITY_ENABLED" = "1" ]; then
+  echo "Pulling app and Antigravity images from registries..."
+  docker compose -f "$COMPOSE_FILE" pull app antigravity
+else
+  echo "Pulling app image from registry..."
+  docker compose -f "$COMPOSE_FILE" pull app
+fi
 
 echo "Starting app and caddy..."
 docker compose -f "$COMPOSE_FILE" up -d app caddy
@@ -119,6 +133,11 @@ docker compose -f "$COMPOSE_FILE" run --rm app ai-news prune --older-than-days "
 echo "Restarting app..."
 docker compose -f "$COMPOSE_FILE" up -d app caddy
 
+if [ "$ANTIGRAVITY_ENABLED" = "1" ]; then
+  echo "Refreshing Antigravity Manager..."
+  docker compose -f "$COMPOSE_FILE" up -d antigravity
+fi
+
 echo "Checking app health..."
 attempt=0
 until docker compose -f "$COMPOSE_FILE" exec -T app python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/health', timeout=3)" >/dev/null 2>&1; do
@@ -129,6 +148,19 @@ until docker compose -f "$COMPOSE_FILE" exec -T app python -c "import urllib.req
   fi
   sleep 2
 done
+
+if [ "$ANTIGRAVITY_ENABLED" = "1" ]; then
+  echo "Checking Antigravity Manager HTTP endpoint..."
+  attempt=0
+  until curl -fsS "http://127.0.0.1:${ANTIGRAVITY_PORT}" >/dev/null 2>&1; do
+    attempt=$((attempt + 1))
+    if [ "$attempt" -ge 30 ]; then
+      echo "Antigravity Manager HTTP check failed" >&2
+      exit 1
+    fi
+    sleep 2
+  done
+fi
 
 if [ -n "${CADDY_SITE_ADDRESS:-}" ] && [ "${CADDY_SITE_ADDRESS}" != "localhost" ]; then
   echo "Checking HTTPS endpoint health via Caddy..."

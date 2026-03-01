@@ -44,6 +44,21 @@ services:
       - ./data:/app/data
       - ./sources.yaml:/app/sources.yaml:ro
 
+  antigravity:
+    image: ${ANTIGRAVITY_IMAGE:-lbjlaq/antigravity-manager:latest}
+    container_name: ai-news-antigravity
+    restart: unless-stopped
+    environment:
+      API_KEY: ${ANTIGRAVITY_API_KEY:-change_me}
+      WEB_PASSWORD: ${ANTIGRAVITY_WEB_PASSWORD:-change_me}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ACCOUNT_EMAIL: ${ANTIGRAVITY_ACCOUNT_EMAIL:-}
+      ACCOUNT_PASSWORD: ${ANTIGRAVITY_ACCOUNT_PASSWORD:-}
+    ports:
+      - "127.0.0.1:${ANTIGRAVITY_PORT:-8045}:8045"
+    volumes:
+      - ./data/antigravity:/root/.antigravity_tools
+
   caddy:
     image: caddy:2-alpine
     container_name: ai-news-caddy
