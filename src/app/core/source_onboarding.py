@@ -585,6 +585,7 @@ def export_approved_sources_yaml(*, session: Session) -> str:
 
 def write_approved_sources_yaml_snapshot(*, session: Session, path: Path) -> str:
     snapshot = export_approved_sources_yaml(session=session)
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(snapshot, encoding="utf-8")
     return snapshot
 
