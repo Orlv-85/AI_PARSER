@@ -12,6 +12,8 @@ from typing import Any
 from urllib.parse import urljoin
 
 import yaml
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import sessionmaker
 
 try:
     import httpx
@@ -22,6 +24,8 @@ except Exception:  # pragma: no cover - optional for lint-only mode
 
 
 SECTION_DEFAULT = "User-curated: AI agents"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = REPO_ROOT / "src"
 
 
 @dataclass
@@ -30,6 +34,24 @@ class EntrySpan:
     start_line: int
     end_line: int
     text: str
+
+
+def ensure_src_path() -> None:
+    src_root = str(SRC_ROOT)
+    if src_root not in sys.path:
+        sys.path.insert(0, src_root)
+
+
+def db_ids_arg(value: str | None) -> list[int]:
+    if not value:
+        return []
+    ids: list[int] = []
+    for part in value.split(","):
+        stripped = part.strip()
+        if not stripped:
+            continue
+        ids.append(int(stripped))
+    return ids
 
 
 def load_text(path: Path) -> str:
@@ -579,8 +601,120 @@ def cmd_fetch_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_db_bootstrap(args: argparse.Namespace) -> int:
+    ensure_src_path()
+
+    from app.config.sources import bootstrap_sources_into_db
+    from app.storage.models_sql import Base
+    from app.storage.repos import SourceRepo
+
+    engine = create_engine(args.database_url, future=True)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    Base.metadata.create_all(engine)
+    session = session_factory()
+    try:
+        repo = SourceRepo(session)
+        imported_sources = bootstrap_sources_into_db(path=Path(args.sources), repo=repo)
+        session.commit()
+        print(f"Imported {len(imported_sources)} source row(s) from {args.sources} into {args.database_url}")
+        for source in imported_sources[: args.limit]:
+            print(f"- {source.source_key}: {source.type} {source.url}")
+        if len(imported_sources) > args.limit:
+            print(f"... truncated {len(imported_sources) - args.limit} additional row(s)")
+    finally:
+        session.close()
+        engine.dispose()
+    return 0
+
+
+def cmd_db_export(args: argparse.Namespace) -> int:
+    ensure_src_path()
+
+    from app.core.source_onboarding import export_approved_sources_yaml
+
+    engine = create_engine(args.database_url, future=True)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    session = session_factory()
+    try:
+        snapshot = export_approved_sources_yaml(session=session)
+    finally:
+        session.close()
+        engine.dispose()
+
+    output_path = Path(args.output)
+    output_path.write_text(snapshot, encoding="utf-8")
+    print(f"Wrote approved-source snapshot to {output_path}")
+    return 0
+
+
+def cmd_db_review(args: argparse.Namespace) -> int:
+    ensure_src_path()
+
+    from app.storage.models_sql import SourceCandidate
+
+    engine = create_engine(args.database_url, future=True)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    session = session_factory()
+    try:
+        stmt = select(SourceCandidate).order_by(SourceCandidate.id.asc())
+        if args.batch_id is not None:
+            stmt = stmt.where(SourceCandidate.batch_id == args.batch_id)
+        if args.status:
+            stmt = stmt.where(SourceCandidate.status == args.status)
+        rows = session.execute(stmt.limit(args.limit)).scalars().all()
+        if not rows:
+            print("No source candidates matched the filter")
+            return 0
+        for row in rows:
+            print(
+                f"- id={row.id} batch={row.batch_id} status={row.status} "
+                f"validation={row.validation_status} type={row.candidate_type} url={row.normalized_url}"
+            )
+    finally:
+        session.close()
+        engine.dispose()
+    return 0
+
+
+def cmd_db_validate(args: argparse.Namespace) -> int:
+    ensure_src_path()
+
+    from app.core.source_onboarding import run_source_validation_batch
+
+    candidate_ids = db_ids_arg(args.ids)
+    if args.batch_id is None and not candidate_ids:
+        print("db-validate requires --batch-id or --ids", file=sys.stderr)
+        return 2
+
+    engine = create_engine(args.database_url, future=True)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    session = session_factory()
+    try:
+        results = run_source_validation_batch(
+            session=session,
+            batch_id=args.batch_id,
+            candidate_ids=candidate_ids or None,
+        )
+        session.commit()
+        if not results:
+            print("No source candidates were selected for validation")
+            return 0
+        for result in results:
+            detail = result.validation_error or "ok"
+            print(
+                f"- id={result.candidate_id} status={result.status} "
+                f"detected_type={result.detected_type} detail={detail}"
+            )
+    finally:
+        session.close()
+        engine.dispose()
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Helper for onboarding new sources into sources.yaml")
+    parser = argparse.ArgumentParser(
+        description="Helper for YAML seeding and DB-backed source onboarding flows"
+    )
     parser.add_argument("--sources", default="sources.yaml", help="Path to sources.yaml")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -622,6 +756,61 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--runs", type=int, default=5, help="How many recent fetch_runs to show")
     check.add_argument("--fetch-log", help="Optional fetch log path to summarize source_fetch_failed lines")
     check.set_defaults(func=cmd_fetch_check)
+
+    db_bootstrap = sub.add_parser(
+        "db-bootstrap",
+        help="Import sources.yaml into the DB-backed sources registry",
+    )
+    db_bootstrap.add_argument(
+        "--database-url",
+        default="sqlite:///./data/ai_news.db",
+        help="SQLAlchemy database URL",
+    )
+    db_bootstrap.add_argument("--limit", type=int, default=20, help="How many imported rows to print")
+    db_bootstrap.set_defaults(func=cmd_db_bootstrap)
+
+    db_export = sub.add_parser(
+        "db-export",
+        help="Export enabled DB-backed sources to a deterministic YAML snapshot",
+    )
+    db_export.add_argument(
+        "--database-url",
+        default="sqlite:///./data/ai_news.db",
+        help="SQLAlchemy database URL",
+    )
+    db_export.add_argument(
+        "--output",
+        default="tmp/approved_sources.snapshot.yaml",
+        help="Path for the generated YAML snapshot",
+    )
+    db_export.set_defaults(func=cmd_db_export)
+
+    db_review = sub.add_parser(
+        "db-review",
+        help="List DB-backed source candidates for review",
+    )
+    db_review.add_argument(
+        "--database-url",
+        default="sqlite:///./data/ai_news.db",
+        help="SQLAlchemy database URL",
+    )
+    db_review.add_argument("--batch-id", type=int, help="Optional import batch id")
+    db_review.add_argument("--status", help="Optional candidate status filter")
+    db_review.add_argument("--limit", type=int, default=50, help="Maximum candidates to print")
+    db_review.set_defaults(func=cmd_db_review)
+
+    db_validate = sub.add_parser(
+        "db-validate",
+        help="Run DB-backed candidate validation for a batch or explicit ids",
+    )
+    db_validate.add_argument(
+        "--database-url",
+        default="sqlite:///./data/ai_news.db",
+        help="SQLAlchemy database URL",
+    )
+    db_validate.add_argument("--batch-id", type=int, help="Validate all candidates in a batch")
+    db_validate.add_argument("--ids", help="Comma-separated candidate ids")
+    db_validate.set_defaults(func=cmd_db_validate)
 
     return parser
 

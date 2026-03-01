@@ -1,8 +1,11 @@
 from datetime import UTC, datetime
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from app.config.sources import SourceConfig, load_sources
+from app.config import sources as sources_config
+from app.config.sources import SourceConfig, bootstrap_sources_into_db, load_sources
 from app.core import scoring
 from app.core.canonicalize import canonicalize_url
 from app.core.dedup import simhash64
@@ -71,3 +74,57 @@ def test_ai_relevance_skips_keywords_in_stop_words(monkeypatch) -> None:
     monkeypatch.setattr(scoring, "STOP_WORDS", scoring.STOP_WORDS | {"zzstop"})
     article = Article(source_key="s", title="zzstop", url="https://example.com")
     assert ai_relevance_score(article) == 0.0
+
+
+def test_bootstrap_sources_into_db_requires_repo_upsert_and_session(tmp_path) -> None:
+    with pytest.raises(ValueError, match="repo must provide upsert_source"):
+        bootstrap_sources_into_db(path=tmp_path / "sources.yaml", repo=object())
+
+
+def test_bootstrap_sources_into_db_skips_duplicate_urls_and_reuses_existing_url(
+    monkeypatch, tmp_path
+) -> None:
+    path = tmp_path / "sources.yaml"
+    path.write_text("sources: []\n", encoding="utf-8")
+    loaded = [
+        SourceConfig(id="aa", name="A", type="rss", url="https://example.com/feed.xml"),
+        SourceConfig(id="bb", name="B", type="rss", url="https://example.com/feed.xml"),
+        SourceConfig(id="cc", name="C", type="rss", url="https://example.com/blog"),
+    ]
+
+    class _ScalarResult:
+        def __init__(self, value) -> None:
+            self._value = value
+
+        def scalar_one_or_none(self):
+            return self._value
+
+    existing_by_url = SimpleNamespace(id=303, source_key="existing", url="https://example.com/blog")
+    execute_values = iter(
+        [
+            None,
+            None,
+            None,
+            existing_by_url,
+        ]
+    )
+    upserted: list[str] = []
+
+    class _Session:
+        def execute(self, _stmt):
+            return _ScalarResult(next(execute_values))
+
+    class _Repo:
+        def __init__(self) -> None:
+            self.session = _Session()
+
+        def upsert_source(self, config: SourceConfig):
+            upserted.append(config.id)
+            return SimpleNamespace(id=len(upserted), source_key=config.id, url=str(config.url))
+
+    monkeypatch.setattr(sources_config, "load_sources", lambda _path: loaded)
+
+    imported = bootstrap_sources_into_db(path=Path(path), repo=_Repo())
+
+    assert upserted == ["aa"]
+    assert [getattr(item, "source_key", None) for item in imported] == ["aa", "existing"]

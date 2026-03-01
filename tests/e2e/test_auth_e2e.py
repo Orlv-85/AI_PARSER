@@ -3,8 +3,11 @@ from importlib import import_module
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import get_settings
+from app.storage.models_sql import Base
 from app.web.app import create_app
 
 
@@ -141,6 +144,9 @@ def test_e2e_auth_disabled_default_routes_are_open(monkeypatch, tmp_path) -> Non
     monkeypatch.delenv("AINEWS_AUTH_PASSWORD_HASH", raising=False)
     monkeypatch.delenv("AINEWS_AUTH_SECRET", raising=False)
 
+    engine = create_engine(f"sqlite:///{tmp_path}/auth-disabled-open-routes.db", future=True)
+    session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+
     class _ArticleRepo:
         def __init__(self, _session) -> None:
             pass
@@ -156,7 +162,8 @@ def test_e2e_auth_disabled_default_routes_are_open(monkeypatch, tmp_path) -> Non
             return [(row, "open-auth", "Open Auth")]
 
     web_app_module = import_module("app.web.app")
-    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(web_app_module, "create_all", lambda: Base.metadata.create_all(bind=engine))
+    monkeypatch.setattr(web_app_module, "SessionLocal", session_local)
     monkeypatch.setattr(web_app_module, "ArticleRepo", _ArticleRepo)
 
     client = TestClient(create_app())
@@ -166,3 +173,104 @@ def test_e2e_auth_disabled_default_routes_are_open(monkeypatch, tmp_path) -> Non
 
     api_news = client.get("/api/news")
     assert api_news.status_code == 200
+
+
+def test_e2e_login_grants_access_to_admin_shell(monkeypatch, tmp_path) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+
+    auth_module = import_module("app.web.auth")
+    password_hash = auth_module.hash_password("e2e-pass")
+
+    monkeypatch.setenv("AINEWS_AUTH_USERNAME", "operator")
+    monkeypatch.setenv("AINEWS_AUTH_PASSWORD_HASH", password_hash)
+    monkeypatch.setenv("AINEWS_AUTH_SECRET", "fedcba9876543210fedcba9876543210")
+    monkeypatch.setenv("AINEWS_AUTH_SESSION_TTL_SECONDS", "60")
+
+    class _ArticleRepo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def list_for_view(self, **_kwargs):
+            row = SimpleNamespace(
+                title="Admin Shell Item",
+                published_at=datetime(2026, 2, 21, 17, 0, tzinfo=UTC),
+                rank_score=0.81,
+                url_canonical="https://example.com/admin-shell",
+                source_id=4,
+            )
+            return [(row, "admin-shell", "Admin Shell")]
+
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(web_app_module, "ArticleRepo", _ArticleRepo)
+
+    client = TestClient(create_app())
+
+    denied = client.get("/admin", follow_redirects=False)
+    assert denied.status_code in {302, 303, 307, 308}
+    assert denied.headers["location"].endswith("/login")
+
+    login = client.post(
+        "/api/auth/login",
+        json={"username": "operator", "password": "e2e-pass"},
+        follow_redirects=False,
+    )
+    assert login.status_code in {200, 204, 302, 303}
+
+    allowed = client.get("/admin")
+    assert allowed.status_code == 200
+    assert "Update Sources" in allowed.text
+
+
+def test_e2e_public_digest_apis_stay_open_while_admin_apis_require_auth(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+
+    auth_module = import_module("app.web.auth")
+    password_hash = auth_module.hash_password("e2e-pass")
+
+    monkeypatch.setenv("AINEWS_AUTH_USERNAME", "operator")
+    monkeypatch.setenv("AINEWS_AUTH_PASSWORD_HASH", password_hash)
+    monkeypatch.setenv("AINEWS_AUTH_SECRET", "fedcba9876543210fedcba9876543210")
+    monkeypatch.setenv("AINEWS_AUTH_SESSION_TTL_SECONDS", "60")
+
+    engine = create_engine(f"sqlite:///{tmp_path}/phase3-auth-boundary.db", future=True)
+    session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+
+    def _create_all_local() -> None:
+        Base.metadata.create_all(bind=engine)
+
+    class _ArticleRepo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def list_for_agent(self, **_kwargs):
+            row = SimpleNamespace(
+                id=55,
+                title="Public Feed Item",
+                published_at=datetime(2026, 3, 1, 12, 0, tzinfo=UTC),
+                url="https://example.com/public-feed",
+                url_canonical="https://example.com/public-feed",
+                source_id=8,
+            )
+            return [(row, "public-feed", "Public Feed")]
+
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "create_all", _create_all_local)
+    monkeypatch.setattr(web_app_module, "SessionLocal", session_local)
+    monkeypatch.setattr(web_app_module, "ArticleRepo", _ArticleRepo)
+
+    client = TestClient(create_app())
+
+    public_digest = client.get("/api/news/digests?date=2026-03-01")
+    public_links = client.get("/api/news/links?date=2026-03-01")
+    protected_update = client.get("/api/update/settings")
+
+    assert public_digest.status_code == 200
+    assert public_digest.json() == {"report_date": "2026-03-01", "groups": []}
+    assert public_links.status_code == 200
+    assert public_links.json()[0]["article_id"] == 55
+    assert protected_update.status_code == 401

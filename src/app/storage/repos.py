@@ -1,13 +1,28 @@
+import json
+import re
 from datetime import UTC, date, datetime, time, timedelta
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
+from urllib.parse import urlsplit
 
 from sqlalchemy import Select, delete, desc, select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.config.sources import SourceConfig
-from app.storage.models_sql import Article, ArticleAlias, Source
+from app.storage.models_sql import (
+    Article,
+    ArticleAlias,
+    NewsDigestGroup,
+    NewsDigestItem,
+    NewsDigestReport,
+    Source,
+    SourceCandidate,
+    SourceImportBatch,
+)
+
+if TYPE_CHECKING:
+    from app.core.source_onboarding import CandidateOverlapGroup
 
 
 class SourceRepo:
@@ -71,6 +86,61 @@ class SourceRepo:
         stmt: Select[tuple[Source]] = select(Source).where(Source.enabled.is_(True))
         return list(self.session.scalars(stmt).all())
 
+    def disable_source(self, source_id: int) -> Source:
+        source = self.session.get(Source, source_id)
+        if source is None:
+            raise ValueError(f"source not found: {source_id}")
+        source.enabled = False
+        self.session.flush()
+        return source
+
+    def create_from_candidate(self, candidate: object) -> Source:
+        approved_source_id = self._read_int_value(candidate, "approved_source_id")
+        if approved_source_id is not None:
+            approved_source = self.session.get(Source, approved_source_id)
+            if approved_source is not None:
+                approved_source.enabled = True
+                approved_source.type = self._source_type_for_candidate(
+                    candidate,
+                    default=approved_source.type,
+                )
+                approved_source.url = self._read_object_value(candidate, "normalized_url")
+                approved_source.name = self._source_name_for_candidate(
+                    candidate,
+                    default=approved_source.name,
+                )
+                self.session.flush()
+                return approved_source
+
+        source_url = self._read_object_value(candidate, "normalized_url")
+        existing_stmt: Select[tuple[Source]] = (
+            select(Source).where(Source.url == source_url).limit(1)
+        )
+        existing = self.session.execute(existing_stmt).scalar_one_or_none()
+        if existing is not None:
+            existing.enabled = True
+            existing.type = self._source_type_for_candidate(
+                candidate,
+                default=existing.type,
+            )
+            existing.name = self._source_name_for_candidate(candidate, default=existing.name)
+            self.session.flush()
+            return existing
+
+        source_key = self._allocate_source_key(candidate)
+        source = Source(
+            source_key=source_key,
+            name=self._source_name_for_candidate(candidate),
+            type=self._source_type_for_candidate(candidate, default="html"),
+            url=source_url,
+            enabled=True,
+            fetch_interval_minutes=30,
+            source_weight=1.0,
+        )
+        self.session.add(source)
+        self.session.flush()
+        return source
+
     def get_fetch_state(self, *, source_id: int) -> dict[str, object | None]:
         source = self.session.get(Source, source_id)
         if source is None:
@@ -122,6 +192,74 @@ class SourceRepo:
             last_checked_at=last_checked_at,
             last_status_code=last_status_code,
         )
+
+    @staticmethod
+    def _read_object_value(
+        candidate: object,
+        field_name: str,
+        *,
+        default: str | None = None,
+    ) -> str:
+        if isinstance(candidate, dict):
+            value = candidate.get(field_name, default)
+        else:
+            value = getattr(candidate, field_name, default)
+        if value is None:
+            raise ValueError(f"candidate field is required: {field_name}")
+        return str(value)
+
+    def _allocate_source_key(self, candidate: object) -> str:
+        base_key = self._source_key_for_candidate(candidate)
+        suffix = 1
+        candidate_key = base_key
+        while self.session.execute(
+            select(Source.id).where(Source.source_key == candidate_key).limit(1)
+        ).scalar_one_or_none() is not None:
+            suffix += 1
+            candidate_key = f"{base_key[:59]}-{suffix}"
+        return candidate_key
+
+    def _source_key_for_candidate(self, candidate: object) -> str:
+        source_url = self._read_object_value(candidate, "normalized_url")
+        parts = urlsplit(source_url)
+        host = (parts.hostname or "source").lower()
+        host_token = re.sub(r"[^a-z0-9]+", "-", host).strip("-")
+        path = re.sub(r"[^a-z0-9]+", "-", (parts.path or "").lower()).strip("-")
+        key = "-".join(token for token in (host_token, path or None) if token)
+        return (key or "source-candidate")[:64]
+
+    def _source_name_for_candidate(self, candidate: object, *, default: str | None = None) -> str:
+        source_url = self._read_object_value(candidate, "normalized_url")
+        host = (urlsplit(source_url).hostname or "").lower()
+        if host:
+            return host
+        if default is not None:
+            return default
+        return source_url
+
+    def _source_type_for_candidate(self, candidate: object, *, default: str) -> str:
+        candidate_type = self._read_object_value(
+            candidate,
+            "candidate_type",
+            default=default,
+        ).lower()
+        if candidate_type == "unknown":
+            candidate_type = self._read_object_value(
+                candidate,
+                "validation_detected_type",
+                default=default,
+            ).lower()
+        return candidate_type or default
+
+    @staticmethod
+    def _read_int_value(candidate: object, field_name: str) -> int | None:
+        if isinstance(candidate, dict):
+            value = candidate.get(field_name)
+        else:
+            value = getattr(candidate, field_name, None)
+        if value is None:
+            return None
+        return int(value)
 
 
 class ArticleRepo:
@@ -436,3 +574,357 @@ class ArticleRepo:
         self.session.execute(delete(ArticleAlias).where(ArticleAlias.article_id.in_(old_article_ids)))
         self.session.execute(delete(Article).where(Article.published_at < cutoff))
         return deleted_articles, deleted_aliases
+
+
+class SourceImportBatchRepo:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def create_import_batch(
+        self,
+        *,
+        raw_text: str,
+        parsed_count: int = 0,
+        accepted_count: int = 0,
+        rejected_count: int = 0,
+    ) -> SourceImportBatch:
+        return self.create_batch(
+            raw_text=raw_text,
+            parsed_count=parsed_count,
+            accepted_count=accepted_count,
+            rejected_count=rejected_count,
+        )
+
+    def create_batch(
+        self,
+        *,
+        raw_text: str,
+        parsed_count: int = 0,
+        accepted_count: int = 0,
+        rejected_count: int = 0,
+    ) -> SourceImportBatch:
+        batch = SourceImportBatch(
+            raw_text=raw_text,
+            parsed_count=parsed_count,
+            accepted_count=accepted_count,
+            rejected_count=rejected_count,
+        )
+        self.session.add(batch)
+        self.session.flush()
+        return batch
+
+    def update_counts(
+        self,
+        *,
+        batch: SourceImportBatch,
+        parsed_count: int,
+        accepted_count: int,
+        rejected_count: int,
+    ) -> SourceImportBatch:
+        batch.parsed_count = parsed_count
+        batch.accepted_count = accepted_count
+        batch.rejected_count = rejected_count
+        self.session.flush()
+        return batch
+
+    def get_batch(self, batch_id: int) -> SourceImportBatch | None:
+        return self.session.get(SourceImportBatch, batch_id)
+
+
+class SourceCandidateRepo:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def create_draft_candidate(
+        self,
+        *,
+        raw_input: str,
+        normalized_url: str,
+        batch_id: int | None = None,
+        candidate_type: str = "unknown",
+    ) -> tuple[SourceCandidate, bool]:
+        stmt: Select[tuple[SourceCandidate]] = select(SourceCandidate).where(
+            SourceCandidate.normalized_url == normalized_url
+        )
+        existing = self.session.execute(stmt).scalar_one_or_none()
+        if existing is not None:
+            return existing, False
+
+        candidate = SourceCandidate(
+            batch_id=batch_id,
+            raw_input=raw_input,
+            normalized_url=normalized_url,
+            candidate_type=candidate_type,
+        )
+        self.session.add(candidate)
+        self.session.flush()
+        return candidate, True
+
+    def create_draft_candidates(
+        self,
+        *,
+        batch_id: int | None,
+        candidates: list[object],
+    ) -> tuple[list[SourceCandidate], int]:
+        rows: list[SourceCandidate] = []
+        accepted_count = 0
+        for candidate_data in candidates:
+            raw_input = self._read_candidate_value(candidate_data, "raw_input")
+            normalized_url = self._read_candidate_value(candidate_data, "normalized_url")
+            candidate_type = self._read_candidate_value(
+                candidate_data,
+                "candidate_type",
+                default="unknown",
+            )
+            candidate, created = self.create_draft_candidate(
+                raw_input=raw_input,
+                normalized_url=normalized_url,
+                batch_id=batch_id,
+                candidate_type=candidate_type,
+            )
+            if created:
+                rows.append(candidate)
+                accepted_count += 1
+        return rows, accepted_count
+
+    def insert_normalized_draft_candidates(
+        self,
+        *,
+        batch_id: int | None,
+        candidates: list[object],
+    ) -> tuple[list[SourceCandidate], int]:
+        return self.create_draft_candidates(batch_id=batch_id, candidates=candidates)
+
+    @staticmethod
+    def _read_candidate_value(
+        candidate_data: object,
+        field_name: str,
+        *,
+        default: str | None = None,
+    ) -> str:
+        if isinstance(candidate_data, dict):
+            value = candidate_data.get(field_name, default)
+        else:
+            value = getattr(candidate_data, field_name, default)
+        if value is None:
+            raise ValueError(f"candidate field is required: {field_name}")
+        return str(value)
+
+    def get_candidate(self, candidate_id: int) -> SourceCandidate | None:
+        return self.session.get(SourceCandidate, candidate_id)
+
+    def list_candidates(
+        self,
+        *,
+        batch_id: int | None = None,
+        candidate_ids: list[int] | None = None,
+        status: str | None = None,
+        validation_status: str | None = None,
+    ) -> list[SourceCandidate]:
+        stmt: Select[tuple[SourceCandidate]] = select(SourceCandidate)
+        if batch_id is not None:
+            stmt = stmt.where(SourceCandidate.batch_id == batch_id)
+        if candidate_ids:
+            stmt = stmt.where(SourceCandidate.id.in_(candidate_ids))
+        if status is not None:
+            stmt = stmt.where(SourceCandidate.status == status)
+        if validation_status is not None:
+            stmt = stmt.where(SourceCandidate.validation_status == validation_status)
+        stmt = stmt.order_by(SourceCandidate.id.asc())
+        return list(self.session.scalars(stmt).all())
+
+    def find_by_normalized_url(self, normalized_url: str) -> SourceCandidate | None:
+        stmt: Select[tuple[SourceCandidate]] = (
+            select(SourceCandidate).where(SourceCandidate.normalized_url == normalized_url).limit(1)
+        )
+        return self.session.execute(stmt).scalar_one_or_none()
+
+    def record_validation_result(
+        self,
+        *,
+        candidate_id: int,
+        result: object,
+    ) -> SourceCandidate:
+        candidate = self.get_candidate(candidate_id)
+        if candidate is None:
+            raise ValueError(f"source candidate not found: {candidate_id}")
+
+        status = self._read_candidate_value(result, "status")
+        detected_type = self._read_optional_value(result, "detected_type")
+        validation_error = self._read_optional_value(result, "validation_error")
+        candidate.validation_status = status
+        candidate.validation_detected_type = detected_type
+        candidate.validation_error = validation_error
+        if detected_type:
+            candidate.candidate_type = detected_type
+        candidate.validation_details = self._build_validation_details(result)
+        candidate.validated_at = datetime.now(UTC)
+        self.session.flush()
+        return candidate
+
+    def update_candidate(
+        self,
+        *,
+        candidate_id: int,
+        raw_input: str | None = None,
+        normalized_url: str | None = None,
+        candidate_type: str | None = None,
+    ) -> SourceCandidate:
+        candidate = self.get_candidate(candidate_id)
+        if candidate is None:
+            raise ValueError(f"source candidate not found: {candidate_id}")
+
+        if normalized_url is not None and normalized_url != candidate.normalized_url:
+            existing = self.find_by_normalized_url(normalized_url)
+            if existing is not None and existing.id != candidate_id:
+                raise ValueError("normalized URL already exists for another candidate")
+            candidate.normalized_url = normalized_url
+        if raw_input is not None:
+            candidate.raw_input = raw_input
+        if candidate_type is not None:
+            candidate.candidate_type = candidate_type
+        self.session.flush()
+        return candidate
+
+    def save_review_update(self, candidate: object) -> SourceCandidate:
+        candidate_id = int(self._read_candidate_value(candidate, "id"))
+        stored = self.get_candidate(candidate_id)
+        if stored is None:
+            raise ValueError(f"source candidate not found: {candidate_id}")
+        for field_name in (
+            "status",
+            "review_note",
+            "duplicate_of_candidate_id",
+            "approved_source_id",
+            "raw_input",
+            "normalized_url",
+            "candidate_type",
+            "validation_status",
+        ):
+            if isinstance(candidate, dict):
+                if field_name not in candidate:
+                    continue
+                value = candidate.get(field_name)
+            else:
+                if not hasattr(candidate, field_name):
+                    continue
+                value = getattr(candidate, field_name)
+            setattr(stored, field_name, value)
+        self.session.flush()
+        return stored
+
+    def find_overlap_groups(
+        self,
+        *,
+        batch_id: int | None = None,
+        candidate_ids: list[int] | None = None,
+    ) -> list[CandidateOverlapGroup]:
+        from app.core.source_onboarding import (  # pylint: disable=import-outside-toplevel
+            group_candidate_overlaps,
+        )
+
+        candidates = self.list_candidates(batch_id=batch_id, candidate_ids=candidate_ids)
+        return cast("list[CandidateOverlapGroup]", group_candidate_overlaps(candidates))
+
+    def summarize_batch(self, *, batch_id: int | None) -> dict[str, int]:
+        candidates = self.list_candidates(batch_id=batch_id)
+        summary = {
+            "batch_id": 0 if batch_id is None else batch_id,
+            "total_candidates": len(candidates),
+            "draft_count": 0,
+            "validated_count": 0,
+            "approved_count": 0,
+            "rejected_count": 0,
+            "duplicate_count": 0,
+            "pending_review_count": 0,
+            "rejected_review_count": 0,
+        }
+        for candidate in candidates:
+            if candidate.status == "draft":
+                summary["draft_count"] += 1
+            if candidate.validation_status == "validated":
+                summary["validated_count"] += 1
+            if candidate.status == "approved":
+                summary["approved_count"] += 1
+            if candidate.status == "rejected":
+                summary["rejected_count"] += 1
+                summary["rejected_review_count"] += 1
+            if candidate.status == "duplicate":
+                summary["duplicate_count"] += 1
+            if candidate.status in {"draft", "validated"}:
+                summary["pending_review_count"] += 1
+        return summary
+
+    @staticmethod
+    def _build_validation_details(result: object) -> str | None:
+        details: dict[str, object] = {}
+        for field_name in ("entry_count", "link_count", "sample_links"):
+            if isinstance(result, dict):
+                value = result.get(field_name)
+            else:
+                value = getattr(result, field_name, None)
+            if value is None:
+                continue
+            details[field_name] = value
+        if not details:
+            return None
+        return json.dumps(details, ensure_ascii=True, sort_keys=True)
+
+    @staticmethod
+    def _read_optional_value(candidate_data: object, field_name: str) -> str | None:
+        if isinstance(candidate_data, dict):
+            value = candidate_data.get(field_name)
+        else:
+            value = getattr(candidate_data, field_name, None)
+        if value is None:
+            return None
+        return str(value)
+
+
+class NewsDigestRepo:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def save_digest(
+        self,
+        *,
+        report_date: date,
+        groups: list[dict[str, Any]],
+    ) -> NewsDigestReport:
+        with self.session.begin_nested():
+            existing = self.get_digest(report_date=report_date)
+            if existing is not None:
+                self.session.delete(existing)
+                self.session.flush()
+
+            report = NewsDigestReport(report_date=report_date)
+            for group_index, group_data in enumerate(groups):
+                group = NewsDigestGroup(
+                    title=str(group_data["title"]),
+                    position=group_index,
+                )
+                for item_index, item_data in enumerate(group_data.get("items", [])):
+                    group.items.append(
+                        NewsDigestItem(
+                            title=str(item_data["title"]),
+                            summary=str(item_data["summary"]),
+                            url=str(item_data["url"]),
+                            position=item_index,
+                        )
+                    )
+                report.groups.append(group)
+
+            self.session.add(report)
+            self.session.flush()
+            return report
+
+    def get_digest(self, *, report_date: date) -> NewsDigestReport | None:
+        stmt: Select[tuple[NewsDigestReport]] = (
+            select(NewsDigestReport)
+            .options(
+                selectinload(NewsDigestReport.groups).selectinload(NewsDigestGroup.items)
+            )
+            .where(NewsDigestReport.report_date == report_date)
+            .limit(1)
+        )
+        return self.session.execute(stmt).scalar_one_or_none()

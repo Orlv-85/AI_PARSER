@@ -14,6 +14,16 @@ def test_web_app_pages_and_update_flow(monkeypatch, tmp_path) -> None:
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()
 
+    class _DummySession:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            del exc_type, exc, tb
+
+    def _session_local():
+        return _DummySession()
+
     class _ArticleRepo:
         def __init__(self, _session) -> None:
             pass
@@ -21,21 +31,31 @@ def test_web_app_pages_and_update_flow(monkeypatch, tmp_path) -> None:
         def list_for_view(self, **_kwargs):
             return []
 
+    class _NewsDigestRepo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def get_digest(self, *, report_date):  # type: ignore[no-untyped-def]
+            del report_date
+
     monkeypatch.setattr(
         "app.web.service.run_fetch_cycle",
-        lambda **kwargs: SimpleNamespace(fetched=3, new=2, duplicates=1, errors=0),
+        lambda **kwargs: SimpleNamespace(source_count=7, fetched=3, new=2, duplicates=1, errors=0),
     )
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
     monkeypatch.setattr(web_app_module, "ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr(web_app_module, "NewsDigestRepo", _NewsDigestRepo)
 
     app = create_app()
     client = TestClient(app)
 
     page = client.get("/")
     assert page.status_code == 200
-    assert "Update" in page.text
-    assert "View" in page.text
+    assert "Daily Digest" in page.text
+    assert 'id="digest-date"' in page.text
+    assert "No digest has been published for this date yet." in page.text
     health = client.get("/health")
     assert health.status_code == 200
     assert health.json() == {"status": "ok"}
@@ -68,6 +88,7 @@ def test_web_app_pages_and_update_flow(monkeypatch, tmp_path) -> None:
 
     assert terminal is not None
     assert terminal["status"] == "finished"
+    assert terminal["source_count"] == 7
     assert terminal["fetched"] == 3
 
     news = client.get("/api/news")
@@ -92,13 +113,33 @@ def test_update_settings_validation_error(monkeypatch, tmp_path) -> None:
     assert response.status_code == 422
 
 
+def test_create_app_skips_sqlite_directory_creation_for_in_memory_database(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("AINEWS_DATABASE_URL", "sqlite+pysqlite:///:memory:")
+    get_settings.cache_clear()
+
+    mkdir_calls: list[tuple[str, bool, bool]] = []
+
+    def _record_mkdir(self, _mode=0o777, parents=False, exist_ok=False):
+        mkdir_calls.append((str(self), parents, exist_ok))
+
+    monkeypatch.setattr("pathlib.Path.mkdir", _record_mkdir)
+
+    app = create_app()
+
+    assert app is not None
+    assert not mkdir_calls
+
+
 def test_second_update_run_is_rejected_when_running(monkeypatch, tmp_path) -> None:
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()
 
     def _slow_cycle(**_kwargs):
         time.sleep(0.2)
-        return SimpleNamespace(fetched=1, new=1, duplicates=0, errors=0)
+        return SimpleNamespace(source_count=2, fetched=1, new=1, duplicates=0, errors=0)
 
     monkeypatch.setattr("app.web.service.run_fetch_cycle", _slow_cycle)
 
@@ -189,7 +230,7 @@ def test_news_article_details_returns_content_and_404_for_missing(
             return object()
 
         def __exit__(self, exc_type, exc, tb) -> None:
-            return None
+            del exc_type, exc, tb
 
     def _session_local():
         return _DummySession()
@@ -248,7 +289,7 @@ def test_news_export_returns_json_attachment_and_include_content(
             return object()
 
         def __exit__(self, exc_type, exc, tb) -> None:
-            return None
+            del exc_type, exc, tb
 
     def _session_local():
         return _DummySession()
@@ -417,16 +458,38 @@ def test_news_template_has_date_range_inputs_and_copy_links_markers(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()
+
+    class _DummySession:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            del exc_type, exc, tb
+
+    def _session_local():
+        return _DummySession()
+
+    class _NewsDigestRepo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def get_digest(self, *, report_date):  # type: ignore[no-untyped-def]
+            del report_date
+
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
+    monkeypatch.setattr(web_app_module, "NewsDigestRepo", _NewsDigestRepo)
+
     app = create_app()
     client = TestClient(app)
 
     page = client.get("/")
     assert page.status_code == 200
-    assert 'id="date_from"' in page.text
-    assert 'id="date_to"' in page.text
-    assert 'id="copy-links"' in page.text
-    assert "navigator.clipboard.writeText" in page.text
-    assert "copy visible links" in page.text.lower()
+    assert 'id="digest-date"' in page.text
+    assert 'type="date"' in page.text
+    assert "Daily Digest" in page.text
+    assert "A public summary of the latest curated AI news." in page.text
 
 
 def test_news_template_has_network_error_handling_and_safe_row_rendering(
@@ -434,11 +497,327 @@ def test_news_template_has_network_error_handling_and_safe_row_rendering(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()
+
+    class _DummySession:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            del exc_type, exc, tb
+
+    def _session_local():
+        return _DummySession()
+
+    class _NewsDigestRepo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def get_digest(self, *, report_date):  # type: ignore[no-untyped-def]
+            del report_date
+
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
+    monkeypatch.setattr(web_app_module, "NewsDigestRepo", _NewsDigestRepo)
+
     app = create_app()
     client = TestClient(app)
 
     page = client.get("/")
     assert page.status_code == 200
-    assert "Unable to load news due to a network error. Please retry." in page.text
-    assert "row.innerHTML" not in page.text
-    assert "titleCell.textContent = item.title;" in page.text
+    assert "No digest has been published for this date yet." in page.text
+    assert "__DIGEST_CONTENT__" not in page.text
+    assert "__REPORT_DATE__" not in page.text
+
+
+def test_public_digest_template_has_selected_date_loading_hooks(monkeypatch, tmp_path) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+
+    class _DummySession:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            del exc_type, exc, tb
+
+    def _session_local():
+        return _DummySession()
+
+    class _NewsDigestRepo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def get_digest(self, *, report_date):  # type: ignore[no-untyped-def]
+            del report_date
+
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
+    monkeypatch.setattr(web_app_module, "NewsDigestRepo", _NewsDigestRepo)
+
+    app = create_app()
+    client = TestClient(app)
+
+    page = client.get("/")
+    assert page.status_code == 200
+    assert 'id="digest-results"' in page.text
+    assert 'id="digest-empty-state"' in page.text
+    assert "async function loadDigest" in page.text
+    assert "/api/news/digests?date=" in page.text
+    assert 'addEventListener("change", async' in page.text
+
+
+def test_admin_route_is_protected_and_public_root_stays_open(monkeypatch, tmp_path) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+
+    monkeypatch.setenv("AINEWS_AUTH_ENABLED", "true")
+    monkeypatch.setenv("AINEWS_AUTH_USERNAME", "operator")
+    auth_module = import_module("app.web.auth")
+    monkeypatch.setenv("AINEWS_AUTH_PASSWORD_HASH", auth_module.hash_password("s3cret-pass"))
+    monkeypatch.setenv("AINEWS_AUTH_SECRET", "0123456789abcdef0123456789abcdef")
+
+    class _DummySession:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            del exc_type, exc, tb
+
+    def _session_local():
+        return _DummySession()
+
+    class _NewsDigestRepo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def get_digest(self, *, report_date):  # type: ignore[no-untyped-def]
+            del report_date
+
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
+    monkeypatch.setattr(web_app_module, "NewsDigestRepo", _NewsDigestRepo)
+
+    app = create_app()
+    client = TestClient(app)
+
+    public_page = client.get("/", follow_redirects=False)
+    admin_page = client.get("/admin", follow_redirects=False)
+
+    assert public_page.status_code == 200
+    assert "Daily Digest" in public_page.text
+    assert admin_page.status_code in {302, 303, 307, 308}
+    assert admin_page.headers["location"].endswith("/login")
+
+
+def test_public_root_hides_admin_controls_while_admin_route_shows_them(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+
+    monkeypatch.setenv("AINEWS_AUTH_ENABLED", "true")
+    monkeypatch.setenv("AINEWS_AUTH_USERNAME", "operator")
+    auth_module = import_module("app.web.auth")
+    monkeypatch.setenv("AINEWS_AUTH_PASSWORD_HASH", auth_module.hash_password("s3cret-pass"))
+    monkeypatch.setenv("AINEWS_AUTH_SECRET", "0123456789abcdef0123456789abcdef")
+
+    class _DummySession:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            del exc_type, exc, tb
+
+    def _session_local():
+        return _DummySession()
+
+    class _NewsDigestRepo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def get_digest(self, *, report_date):  # type: ignore[no-untyped-def]
+            del report_date
+
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
+    monkeypatch.setattr(web_app_module, "NewsDigestRepo", _NewsDigestRepo)
+
+    app = create_app()
+    client = TestClient(app)
+
+    login = client.post(
+        "/api/auth/login",
+        json={"username": "operator", "password": "s3cret-pass"},
+        follow_redirects=False,
+    )
+    assert login.status_code in {200, 204, 302, 303}
+
+    public_page = client.get("/")
+    admin_page = client.get("/admin")
+
+    assert public_page.status_code == 200
+    assert "Daily Digest" in public_page.text
+    assert "Update Sources" not in public_page.text
+    assert "Import Source Candidates" not in public_page.text
+
+    assert admin_page.status_code == 200
+    assert "Update Sources" in admin_page.text
+    assert "Import Source Candidates" in admin_page.text
+
+
+def test_public_and_admin_pages_expose_distinct_shell_markers(monkeypatch, tmp_path) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+
+    monkeypatch.setenv("AINEWS_AUTH_ENABLED", "true")
+    monkeypatch.setenv("AINEWS_AUTH_USERNAME", "operator")
+    auth_module = import_module("app.web.auth")
+    monkeypatch.setenv("AINEWS_AUTH_PASSWORD_HASH", auth_module.hash_password("s3cret-pass"))
+    monkeypatch.setenv("AINEWS_AUTH_SECRET", "0123456789abcdef0123456789abcdef")
+
+    class _DummySession:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            del exc_type, exc, tb
+
+    def _session_local():
+        return _DummySession()
+
+    class _NewsDigestRepo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def get_digest(self, *, report_date):  # type: ignore[no-untyped-def]
+            del report_date
+
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
+    monkeypatch.setattr(web_app_module, "NewsDigestRepo", _NewsDigestRepo)
+
+    client = TestClient(create_app())
+    login = client.post(
+        "/api/auth/login",
+        json={"username": "operator", "password": "s3cret-pass"},
+        follow_redirects=False,
+    )
+    assert login.status_code in {200, 204, 302, 303}
+
+    public_page = client.get("/")
+    admin_page = client.get("/admin")
+
+    assert public_page.status_code == 200
+    assert 'id="public-digest-shell"' in public_page.text
+    assert 'id="admin-shell"' not in public_page.text
+
+    assert admin_page.status_code == 200
+    assert 'id="admin-shell"' in admin_page.text
+    assert 'id="public-digest-shell"' not in admin_page.text
+
+
+def test_public_and_admin_pages_use_distinct_surface_labels(monkeypatch, tmp_path) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+
+    monkeypatch.setenv("AINEWS_AUTH_ENABLED", "true")
+    monkeypatch.setenv("AINEWS_AUTH_USERNAME", "operator")
+    auth_module = import_module("app.web.auth")
+    monkeypatch.setenv("AINEWS_AUTH_PASSWORD_HASH", auth_module.hash_password("s3cret-pass"))
+    monkeypatch.setenv("AINEWS_AUTH_SECRET", "0123456789abcdef0123456789abcdef")
+
+    class _DummySession:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            del exc_type, exc, tb
+
+    def _session_local():
+        return _DummySession()
+
+    class _NewsDigestRepo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def get_digest(self, *, report_date):  # type: ignore[no-untyped-def]
+            del report_date
+
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
+    monkeypatch.setattr(web_app_module, "NewsDigestRepo", _NewsDigestRepo)
+
+    client = TestClient(create_app())
+    login = client.post(
+        "/api/auth/login",
+        json={"username": "operator", "password": "s3cret-pass"},
+        follow_redirects=False,
+    )
+    assert login.status_code in {200, 204, 302, 303}
+
+    public_page = client.get("/")
+    admin_page = client.get("/admin")
+
+    assert "Public Briefing" in public_page.text
+    assert "Operator Console" not in public_page.text
+    assert "Operator Console" in admin_page.text
+    assert "Public Briefing" not in admin_page.text
+
+
+def test_source_onboarding_import_reports_only_new_candidates_for_current_batch(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+
+    app = create_app()
+    client = TestClient(app)
+
+    first = client.post(
+        "/api/source-onboarding/import",
+        json={"raw_text": "https://example.com/blog?utm_source=feed"},
+    )
+    assert first.status_code == 201
+    first_payload = first.json()
+    assert first_payload["batch_id"] == 1
+    assert first_payload["accepted_count"] == 1
+    assert first_payload["candidate_ids"] == [1]
+
+    second = client.post(
+        "/api/source-onboarding/import",
+        json={"raw_text": "https://EXAMPLE.com/blog#top"},
+    )
+    assert second.status_code == 201
+    second_payload = second.json()
+    assert second_payload["batch_id"] == 2
+    assert second_payload["accepted_count"] == 0
+    assert second_payload["rejected_count"] == 1
+    assert second_payload["candidate_ids"] == []
+
+
+def test_source_onboarding_validate_rejects_invalid_identifier_payloads(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+
+    app = create_app()
+    client = TestClient(app, raise_server_exceptions=False)
+
+    bad_batch_id = client.post(
+        "/api/source-onboarding/validate",
+        json={"batch_id": "not-an-int"},
+    )
+    assert bad_batch_id.status_code == 422
+
+    bad_candidate_ids = client.post(
+        "/api/source-onboarding/validate",
+        json={"candidate_ids": ["broken"]},
+    )
+    assert bad_candidate_ids.status_code == 422

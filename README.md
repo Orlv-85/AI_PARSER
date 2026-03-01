@@ -223,6 +223,20 @@ export AINEWS_RESPECT_ROBOTS_TXT="true"
 
 Project includes a starter `sources.yaml` with RSS + HTML sources.
 
+Source management model:
+- The database is the primary operational source registry.
+- `sources.yaml` is a bootstrap/import artifact and an optional deterministic export snapshot.
+- Runtime onboarding/review should happen against DB-backed records; YAML remains useful for seed data, backups, and diffs.
+
+Phase 4 interop helper commands:
+
+```bash
+python scripts/sources_onboarding_helper.py db-bootstrap --sources sources.yaml
+python scripts/sources_onboarding_helper.py db-review --status draft
+python scripts/sources_onboarding_helper.py db-validate --batch-id 1
+python scripts/sources_onboarding_helper.py db-export --output tmp/approved_sources.snapshot.yaml
+```
+
 Source schema:
 
 - `id`

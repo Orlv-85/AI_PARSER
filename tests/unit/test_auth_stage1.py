@@ -9,14 +9,20 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import Settings, get_settings
+from app.storage.models_sql import Base
 from app.web.app import create_app
 
 
 def _build_authenticated_client(monkeypatch, tmp_path) -> TestClient:
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()
+
+    engine = create_engine(f"sqlite:///{tmp_path}/auth-stage1.db", future=True)
+    session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
     auth_module = import_module("app.web.auth")
     password_hash = auth_module.hash_password("s3cret-pass")
@@ -41,7 +47,8 @@ def _build_authenticated_client(monkeypatch, tmp_path) -> TestClient:
             return [(row, "auth-src", "Auth Source")]
 
     web_app_module = import_module("app.web.app")
-    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(web_app_module, "create_all", lambda: Base.metadata.create_all(bind=engine))
+    monkeypatch.setattr(web_app_module, "SessionLocal", session_local)
     monkeypatch.setattr(web_app_module, "ArticleRepo", _ArticleRepo)
 
     return TestClient(create_app())
@@ -84,13 +91,13 @@ def test_unauthenticated_api_news_returns_401(monkeypatch, tmp_path) -> None:
     assert response.status_code == 401
 
 
-def test_unauthenticated_root_redirects_to_login(monkeypatch, tmp_path) -> None:
+def test_unauthenticated_root_stays_public(monkeypatch, tmp_path) -> None:
     client = _build_authenticated_client(monkeypatch, tmp_path)
 
     response = client.get("/", follow_redirects=False)
 
-    assert response.status_code in {302, 303, 307, 308}
-    assert response.headers["location"].endswith("/login")
+    assert response.status_code == 200
+    assert "Daily Digest" in response.text
 
 
 def test_login_success_sets_cookie_and_grants_access(monkeypatch, tmp_path) -> None:
@@ -317,7 +324,7 @@ def test_login_page_redirects_when_session_valid(monkeypatch, tmp_path) -> None:
 
     page = client.get("/login", follow_redirects=False)
     assert page.status_code == 303
-    assert page.headers["location"] == "/"
+    assert page.headers["location"] == "/admin"
 
 
 def test_login_page_renders_login_form_when_not_authenticated(monkeypatch, tmp_path) -> None:
@@ -326,6 +333,7 @@ def test_login_page_renders_login_form_when_not_authenticated(monkeypatch, tmp_p
     page = client.get("/login")
     assert page.status_code == 200
     assert "<form id=\"login-form\">" in page.text
+    assert 'window.location.assign("/admin")' in page.text
 
 
 def test_login_api_returns_ok_when_auth_disabled(monkeypatch, tmp_path) -> None:

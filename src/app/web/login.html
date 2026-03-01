@@ -86,7 +86,7 @@
           body: JSON.stringify(payload)
         });
         if (response.ok) {
-          window.location.assign("/");
+          window.location.assign("/admin");
           return;
         }
         errorNode.textContent = "Invalid username or password";

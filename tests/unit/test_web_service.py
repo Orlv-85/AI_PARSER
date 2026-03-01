@@ -305,6 +305,7 @@ def test_run_offloaded_fetch_cycle_writes_finished_payload_to_queue_and_file(
     assert queue_payloads == [
         {
             "status": "finished",
+            "source_count": 0,
             "fetched": 4,
             "new": 3,
             "duplicates": 1,
