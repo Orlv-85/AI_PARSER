@@ -15,6 +15,43 @@ _DEFAULT_TITLE = "Daily AI News Digest"
 _MAX_GROUPS = 8
 _MAX_ITEMS_PER_GROUP = 6
 _MAX_SUMMARY_LENGTH = 400
+_CATEGORY_ORDER = (
+    "AI Coding",
+    "Agent Frameworks",
+    "RAG & Data Systems",
+    "Security",
+    "Evaluation & Observability",
+    "Automation",
+    "Infrastructure",
+    "Business & Product",
+)
+_CATEGORY_RULES = (
+    ("Security", ("security", "attack", "prompt injection", "vulnerability", "secure", "sast")),
+    (
+        "Evaluation & Observability",
+        ("benchmark", "eval", "evaluation", "observability", "trace", "monitor", "hallucination"),
+    ),
+    (
+        "RAG & Data Systems",
+        ("rag", "retrieval", "vector", "embedding", "weaviate", "database", "search", "index"),
+    ),
+    (
+        "Agent Frameworks",
+        ("agent", "autogen", "llamaindex", "workflow", "multi-agent", "orchestr", "tool loop"),
+    ),
+    (
+        "AI Coding",
+        ("code", "coding", "sdk", "developer", "devtool", "frontend", "react", "copilot"),
+    ),
+    (
+        "Infrastructure",
+        ("gpu", "server", "inference", "latency", "data center", "datacenter", "nvidia", "amd"),
+    ),
+    (
+        "Automation",
+        ("automation", "workflow", "document", "business process", "tutorial", "serverless"),
+    ),
+)
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _ROOT_DIR = _SCRIPT_DIR.parent
 _DEFAULT_PROMPT_PATH = _ROOT_DIR / "automation" / "pocketpaw" / "antigravity_digest_prompt.txt"
@@ -129,7 +166,14 @@ def _fetch_feed_items(*, base_url: str, report_date: str, limit: int) -> list[di
     return items
 
 
-def fetch_bundle(*, base_url: str, report_date: str, limit: int, out_path: Path, prompt_path: Path) -> None:
+def fetch_bundle(
+    *,
+    base_url: str,
+    report_date: str,
+    limit: int,
+    out_path: Path,
+    prompt_path: Path,
+) -> None:
     items = _fetch_feed_items(base_url=base_url, report_date=report_date, limit=limit)
 
     prompt = prompt_path.read_text(encoding="utf-8")
@@ -167,69 +211,123 @@ def _default_feed_summary(*, row: dict[str, Any], report_date: str) -> str:
     return f"Source: {source_name}. Published at {published_at}. Included in the daily digest."
 
 
+def _normalize_feed_rows(items: object) -> tuple[list[dict[str, Any]], list[str]]:
+    if not isinstance(items, list):
+        raise ValueError("news links API did not return a list")
+    if not items:
+        raise ValueError("news links API returned no articles for the requested date")
+
+    feed_by_url: dict[str, dict[str, Any]] = {}
+    ordered_urls: list[str] = []
+    for row in items:
+        if not isinstance(row, dict):
+            raise ValueError("news links API returned an invalid article entry")
+        title = str(row.get("title", "")).strip()
+        url = row.get("url")
+        if not title or not _is_http_url(url):
+            raise ValueError("news links API returned an article without a valid title/url")
+        normalized_url = str(url)
+        normalized_row = dict(row)
+        normalized_row["title"] = title
+        normalized_row["url"] = normalized_url
+        if normalized_url not in feed_by_url:
+            feed_by_url[normalized_url] = normalized_row
+            ordered_urls.append(normalized_url)
+    return [feed_by_url[url] for url in ordered_urls], ordered_urls
+
+
+def categorize_digest_item(*, row: dict[str, Any], summary: str = "") -> str:
+    haystack = " ".join(
+        (
+            str(row.get("title", "")),
+            str(row.get("source_name", "")),
+            str(row.get("url", "")),
+            summary,
+        )
+    ).lower()
+    for category, keywords in _CATEGORY_RULES:
+        if any(keyword in haystack for keyword in keywords):
+            return category
+    return "Business & Product"
+
+
+def build_categorized_digest_payload(
+    *,
+    items: object,
+    report_date: str,
+    summaries_by_url: dict[str, str] | None = None,
+    titles_by_url: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    normalized_rows, ordered_urls = _normalize_feed_rows(items)
+
+    grouped_items: dict[str, list[dict[str, str]]] = {category: [] for category in _CATEGORY_ORDER}
+    row_by_url = {str(row["url"]): row for row in normalized_rows}
+
+    for url in ordered_urls:
+        row = row_by_url[url]
+        title = str((titles_by_url or {}).get(url) or row["title"]).strip()
+        summary = str(
+            (summaries_by_url or {}).get(url)
+            or _default_feed_summary(row=row, report_date=report_date)
+        ).strip()
+        category = categorize_digest_item(row=row, summary=summary)
+        grouped_items[category].append(
+            {
+                "title": title,
+                "summary": summary[:_MAX_SUMMARY_LENGTH],
+                "url": url,
+            }
+        )
+
+    groups = [
+        {"title": category, "items": grouped_items[category]}
+        for category in _CATEGORY_ORDER
+        if grouped_items[category]
+    ]
+    if not groups:
+        raise RuntimeError("categorized digest contains no groups")
+    return {"report_date": report_date, "groups": groups}
+
+
 def repair_digest_coverage(
     *,
     digest: dict[str, Any],
     feed_items: list[dict[str, Any]],
     report_date: str,
 ) -> dict[str, Any]:
-    feed_by_url: dict[str, dict[str, Any]] = {}
-    ordered_urls: list[str] = []
-    for row in feed_items:
-        url = str(row["url"])
-        if url not in feed_by_url:
-            feed_by_url[url] = row
-            ordered_urls.append(url)
-
-    repaired_groups: list[dict[str, Any]] = []
+    normalized_rows, _ = _normalize_feed_rows(feed_items)
+    feed_by_url = {str(row["url"]): row for row in normalized_rows}
+    titles_by_url: dict[str, str] = {}
+    summaries_by_url: dict[str, str] = {}
     seen_urls: set[str] = set()
     for group in digest.get("groups", []):
         if not isinstance(group, dict):
             continue
-        group_title = str(group.get("title", "")).strip() or f"Daily Coverage {len(repaired_groups) + 1}"
-        repaired_items: list[dict[str, str]] = []
         for item in group.get("items", []):
             if not isinstance(item, dict):
                 continue
             url = str(item.get("url", ""))
             if url not in feed_by_url or url in seen_urls:
                 continue
-            title = str(item.get("title", "")).strip() or str(feed_by_url[url].get("title") or "").strip()
+            title = (
+                str(item.get("title", "")).strip()
+                or str(feed_by_url[url].get("title") or "").strip()
+            )
             summary = str(item.get("summary", "")).strip() or _default_feed_summary(
                 row=feed_by_url[url],
                 report_date=report_date,
             )
             if not title or not _is_http_url(url):
                 continue
-            repaired_items.append({"title": title, "summary": summary[:_MAX_SUMMARY_LENGTH], "url": url})
+            titles_by_url[url] = title
+            summaries_by_url[url] = summary[:_MAX_SUMMARY_LENGTH]
             seen_urls.add(url)
-        if repaired_items:
-            repaired_groups.append({"title": group_title, "items": repaired_items})
-
-    missing_items: list[dict[str, str]] = []
-    for url in ordered_urls:
-        if url in seen_urls:
-            continue
-        row = feed_by_url[url]
-        missing_items.append(
-            {
-                "title": str(row["title"]).strip(),
-                "summary": _default_feed_summary(row=row, report_date=report_date)[:_MAX_SUMMARY_LENGTH],
-                "url": url,
-            }
-        )
-
-    for start in range(0, len(missing_items), _MAX_ITEMS_PER_GROUP):
-        repaired_groups.append(
-            {
-                "title": f"Additional Coverage {len(repaired_groups) + 1}",
-                "items": missing_items[start : start + _MAX_ITEMS_PER_GROUP],
-            }
-        )
-
-    if not repaired_groups:
-        raise RuntimeError("repaired digest contains no valid groups")
-    return {"report_date": report_date, "groups": repaired_groups}
+    return build_categorized_digest_payload(
+        items=normalized_rows,
+        report_date=report_date,
+        summaries_by_url=summaries_by_url,
+        titles_by_url=titles_by_url,
+    )
 
 
 def _extract_message_text(payload: object) -> str:
@@ -293,7 +391,11 @@ def publish_antigravity_digest(
                     "You must include every article from the provided list exactly once.\n"
                     "If a story is weak, still include it.\n"
                     "Do not omit any URL.\n\n"
-                    f"Input payload:\n{json.dumps({'report_date': report_date, 'articles': feed_items}, ensure_ascii=False)}"
+                    "Input payload:\n"
+                    + json.dumps(
+                        {"report_date": report_date, "articles": feed_items},
+                        ensure_ascii=False,
+                    )
                 ),
             }
         ],
@@ -314,7 +416,11 @@ def publish_antigravity_digest(
         raise RuntimeError("antigravity returned non-JSON content") from exc
 
     normalized = normalize_digest(generated, report_date=report_date)
-    repaired = repair_digest_coverage(digest=normalized, feed_items=feed_items, report_date=report_date)
+    repaired = repair_digest_coverage(
+        digest=normalized,
+        feed_items=feed_items,
+        report_date=report_date,
+    )
     response = _read_json_response(
         f"{base_url.rstrip('/')}/api/news/digests",
         body=json.dumps(repaired).encode("utf-8"),
@@ -354,36 +460,7 @@ def publish_antigravity_digest(
 
 
 def build_feed_digest_payload(*, items: object, report_date: str) -> dict[str, Any]:
-    if not isinstance(items, list):
-        raise ValueError("news links API did not return a list")
-    if not items:
-        raise ValueError("news links API returned no articles for the requested date")
-
-    normalized_items: list[dict[str, str]] = []
-    for row in items:
-        if not isinstance(row, dict):
-            raise ValueError("news links API returned an invalid article entry")
-        title = str(row.get("title", "")).strip()
-        url = row.get("url")
-        if not title or not _is_http_url(url):
-            raise ValueError("news links API returned an article without a valid title/url")
-        normalized_items.append(
-            {
-                "title": title,
-                "summary": _default_feed_summary(row=row, report_date=report_date),
-                "url": str(url),
-            }
-        )
-
-    groups: list[dict[str, Any]] = []
-    for start in range(0, len(normalized_items), _MAX_ITEMS_PER_GROUP):
-        groups.append(
-            {
-                "title": f"Daily Coverage {len(groups) + 1}",
-                "items": normalized_items[start : start + _MAX_ITEMS_PER_GROUP],
-            }
-        )
-    return {"report_date": report_date, "groups": groups}
+    return build_categorized_digest_payload(items=items, report_date=report_date)
 
 
 def publish_feed_digest(*, base_url: str, report_date: str, limit: int) -> dict[str, Any]:
@@ -431,19 +508,28 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="PocketPaw bridge for AI_PARSER daily digests")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    fetch_parser = subparsers.add_parser("fetch-bundle", help="Fetch article links and write bundle JSON")
+    fetch_parser = subparsers.add_parser(
+        "fetch-bundle",
+        help="Fetch article links and write bundle JSON",
+    )
     fetch_parser.add_argument("--base-url", required=True)
     fetch_parser.add_argument("--report-date", required=True)
     fetch_parser.add_argument("--limit", type=int, default=50)
     fetch_parser.add_argument("--out", required=True)
     fetch_parser.add_argument("--prompt", default=str(_DEFAULT_PROMPT_PATH))
 
-    validate_parser = subparsers.add_parser("validate-digest", help="Validate and normalize digest JSON")
+    validate_parser = subparsers.add_parser(
+        "validate-digest",
+        help="Validate and normalize digest JSON",
+    )
     validate_parser.add_argument("--report-date", required=True)
     validate_parser.add_argument("--input", required=True)
     validate_parser.add_argument("--out", required=False)
 
-    publish_parser = subparsers.add_parser("publish-digest", help="Validate and publish digest JSON")
+    publish_parser = subparsers.add_parser(
+        "publish-digest",
+        help="Validate and publish digest JSON",
+    )
     publish_parser.add_argument("--base-url", required=True)
     publish_parser.add_argument("--report-date", required=True)
     publish_parser.add_argument("--input", required=True)
@@ -458,7 +544,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
     publish_ai_parser = subparsers.add_parser(
         "publish-antigravity-digest",
-        help="Generate a digest via Antigravity, repair coverage, publish it, and verify full link coverage",
+        help=(
+            "Generate a digest via Antigravity, repair coverage, "
+            "publish it, and verify full link coverage"
+        ),
     )
     publish_ai_parser.add_argument("--base-url", required=True)
     publish_ai_parser.add_argument("--report-date", required=True)

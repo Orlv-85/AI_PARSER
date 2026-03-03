@@ -26,8 +26,8 @@ Return exactly this structure:
 }
 
 Rules:
-- Group stories by topic.
-- Prefer these stable group names when they fit:
+- Group every story exactly once.
+- You must use only these group names:
   - AI Coding
   - Agent Frameworks
   - RAG & Data Systems
@@ -35,6 +35,7 @@ Rules:
   - Evaluation & Observability
   - Automation
   - Infrastructure
+  - Business & Product
 - Do not include empty groups.
 - Do not duplicate the same story across groups.
 - Use at most 8 groups.
@@ -50,3 +51,4 @@ Rules:
 - Do not use hype, filler, or generic praise.
 - Do not invent facts that are not supported by the provided article context.
 - The report_date must exactly match the input date.
+- Do not use fallback labels like "Daily Coverage" or "Additional Coverage".

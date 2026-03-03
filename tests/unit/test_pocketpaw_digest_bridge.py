@@ -120,9 +120,11 @@ def test_build_feed_digest_payload_includes_every_link_once() -> None:
     )
 
     urls = [item["url"] for group in payload["groups"] for item in group["items"]]
+    categories = [group["title"] for group in payload["groups"]]
 
     assert payload["report_date"] == "2026-03-01"
     assert urls == ["https://example.com/1", "https://example.com/2"]
+    assert categories == ["Business & Product"]
     assert payload["groups"][0]["items"][0]["summary"].startswith("Source: Tech Source.")
 
 
@@ -180,4 +182,4 @@ def test_repair_digest_coverage_adds_missing_links_without_duplicates() -> None:
     urls = [item["url"] for group in repaired["groups"] for item in group["items"]]
 
     assert urls == ["https://example.com/1", "https://example.com/2"]
-    assert repaired["groups"][-1]["title"].startswith("Additional Coverage")
+    assert repaired["groups"][0]["title"] == "Business & Product"
