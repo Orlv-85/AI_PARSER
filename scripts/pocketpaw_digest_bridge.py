@@ -29,16 +29,29 @@ _CATEGORY_ORDER = (
     "Agent Frameworks",
     "RAG & Data Systems",
     "Security",
-    "Evaluation & Observability",
-    "Automation",
+    "QA & Observability",
     "Infrastructure",
     "Business & Product",
 )
 _CATEGORY_RULES = (
     ("Security", ("security", "attack", "prompt injection", "vulnerability", "secure", "sast")),
     (
-        "Evaluation & Observability",
-        ("benchmark", "eval", "evaluation", "observability", "trace", "monitor", "hallucination"),
+        "QA & Observability",
+        (
+            "benchmark",
+            "eval",
+            "evaluation",
+            "observability",
+            "trace",
+            "monitor",
+            "hallucination",
+            "qa",
+            "quality",
+            "test",
+            "testing",
+            "regression",
+            "verification",
+        ),
     ),
     (
         "RAG & Data Systems",
@@ -55,10 +68,6 @@ _CATEGORY_RULES = (
     (
         "Infrastructure",
         ("gpu", "server", "inference", "latency", "data center", "datacenter", "nvidia", "amd"),
-    ),
-    (
-        "Automation",
-        ("automation", "workflow", "document", "business process", "tutorial", "serverless"),
     ),
 )
 _SCRIPT_DIR = Path(__file__).resolve().parent

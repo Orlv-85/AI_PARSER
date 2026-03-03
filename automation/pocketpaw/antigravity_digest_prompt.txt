@@ -32,8 +32,7 @@ Rules:
   - Agent Frameworks
   - RAG & Data Systems
   - Security
-  - Evaluation & Observability
-  - Automation
+  - QA & Observability
   - Infrastructure
   - Business & Product
 - Do not include empty groups.
