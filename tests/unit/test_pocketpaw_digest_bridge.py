@@ -183,3 +183,14 @@ def test_repair_digest_coverage_adds_missing_links_without_duplicates() -> None:
 
     assert urls == ["https://example.com/1", "https://example.com/2"]
     assert repaired["groups"][0]["title"] == "Business & Product"
+
+
+def test_chunk_feed_items_splits_large_batches() -> None:
+    bridge = _load_bridge_module()
+
+    chunks = bridge.chunk_feed_items(
+        [{"url": f"https://example.com/{index}"} for index in range(5)],
+        chunk_size=2,
+    )
+
+    assert [len(chunk) for chunk in chunks] == [2, 2, 1]

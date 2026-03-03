@@ -15,6 +15,7 @@ _DEFAULT_TITLE = "Daily AI News Digest"
 _MAX_GROUPS = 8
 _MAX_ITEMS_PER_GROUP = 6
 _MAX_SUMMARY_LENGTH = 400
+_DEFAULT_ANTIGRAVITY_CHUNK_SIZE = 12
 _CATEGORY_ORDER = (
     "AI Coding",
     "Agent Frameworks",
@@ -366,20 +367,28 @@ def _fetch_antigravity_proxy_api_key(*, admin_url: str, admin_password: str) -> 
     return api_key
 
 
-def publish_antigravity_digest(
+def chunk_feed_items(
+    feed_items: list[dict[str, Any]],
     *,
-    base_url: str,
-    report_date: str,
-    limit: int,
-    admin_url: str,
-    admin_password: str,
-    model: str,
-    prompt_path: Path,
-) -> dict[str, Any]:
-    feed_items = _fetch_feed_items(base_url=base_url, report_date=report_date, limit=limit)
-    prompt = prompt_path.read_text(encoding="utf-8").strip()
-    api_key = _fetch_antigravity_proxy_api_key(admin_url=admin_url, admin_password=admin_password)
+    chunk_size: int,
+) -> list[list[dict[str, Any]]]:
+    if chunk_size < 1:
+        raise ValueError("chunk_size must be >= 1")
+    return [
+        feed_items[start : start + chunk_size]
+        for start in range(0, len(feed_items), chunk_size)
+    ]
 
+
+def _run_antigravity_chunk(
+    *,
+    admin_url: str,
+    api_key: str,
+    model: str,
+    prompt: str,
+    report_date: str,
+    articles: list[dict[str, Any]],
+) -> dict[str, Any]:
     llm_payload = {
         "model": model,
         "max_tokens": 4000,
@@ -393,7 +402,7 @@ def publish_antigravity_digest(
                     "Do not omit any URL.\n\n"
                     "Input payload:\n"
                     + json.dumps(
-                        {"report_date": report_date, "articles": feed_items},
+                        {"report_date": report_date, "articles": articles},
                         ensure_ascii=False,
                     )
                 ),
@@ -414,10 +423,44 @@ def publish_antigravity_digest(
         generated = json.loads(llm_text)
     except json.JSONDecodeError as exc:
         raise RuntimeError("antigravity returned non-JSON content") from exc
+    return normalize_digest(generated, report_date=report_date)
 
-    normalized = normalize_digest(generated, report_date=report_date)
+
+def publish_antigravity_digest(
+    *,
+    base_url: str,
+    report_date: str,
+    limit: int,
+    admin_url: str,
+    admin_password: str,
+    model: str,
+    prompt_path: Path,
+    chunk_size: int = _DEFAULT_ANTIGRAVITY_CHUNK_SIZE,
+) -> dict[str, Any]:
+    feed_items = _fetch_feed_items(base_url=base_url, report_date=report_date, limit=limit)
+    prompt = prompt_path.read_text(encoding="utf-8").strip()
+    api_key = _fetch_antigravity_proxy_api_key(admin_url=admin_url, admin_password=admin_password)
+    normalized_chunks: list[dict[str, Any]] = []
+    for chunk in chunk_feed_items(feed_items, chunk_size=chunk_size):
+        normalized_chunks.append(
+            _run_antigravity_chunk(
+                admin_url=admin_url,
+                api_key=api_key,
+                model=model,
+                prompt=prompt,
+                report_date=report_date,
+                articles=chunk,
+            )
+        )
+
+    merged_groups: list[dict[str, Any]] = []
+    for chunk_digest in normalized_chunks:
+        groups = chunk_digest.get("groups")
+        if isinstance(groups, list):
+            merged_groups.extend(group for group in groups if isinstance(group, dict))
+
     repaired = repair_digest_coverage(
-        digest=normalized,
+        digest={"report_date": report_date, "groups": merged_groups},
         feed_items=feed_items,
         report_date=report_date,
     )
@@ -456,6 +499,7 @@ def publish_antigravity_digest(
         "group_count": len(saved_groups),
         "model": model,
         "mode": "antigravity",
+        "chunk_count": len(normalized_chunks),
     }
 
 
@@ -561,6 +605,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--antigravity-model",
         default=os.environ.get("ANTIGRAVITY_MODEL", "gemini-3-flash"),
     )
+    publish_ai_parser.add_argument(
+        "--antigravity-chunk-size",
+        type=int,
+        default=int(os.environ.get("ANTIGRAVITY_CHUNK_SIZE", _DEFAULT_ANTIGRAVITY_CHUNK_SIZE)),
+    )
     publish_ai_parser.add_argument("--prompt", default=str(_DEFAULT_PROMPT_PATH))
 
     return parser
@@ -615,6 +664,7 @@ def main() -> int:
                 admin_password=args.antigravity_admin_password,
                 model=args.antigravity_model,
                 prompt_path=Path(args.prompt),
+                chunk_size=args.antigravity_chunk_size,
             )
             sys.stdout.write(json.dumps(response, ensure_ascii=False, indent=2) + "\n")
             return 0
