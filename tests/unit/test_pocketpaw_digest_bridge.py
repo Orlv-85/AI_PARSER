@@ -118,6 +118,28 @@ def test_normalize_summary_batch_keeps_valid_items() -> None:
     assert normalized == {"https://example.com/1": "Short technical summary."}
 
 
+def test_normalize_title_batch_keeps_valid_items() -> None:
+    bridge = _load_bridge_module()
+
+    payload = {
+        "report_date": "2026-03-01",
+        "items": [
+            {
+                "url": "https://example.com/1",
+                "title": "Short headline",
+            },
+            {
+                "url": "not-a-url",
+                "title": "Dropped",
+            },
+        ],
+    }
+
+    normalized = bridge.normalize_title_batch(payload, report_date="2026-03-01")
+
+    assert normalized == {"https://example.com/1": "Short headline"}
+
+
 def test_build_feed_digest_payload_includes_every_link_once() -> None:
     bridge = _load_bridge_module()
 
@@ -478,3 +500,44 @@ def test_run_antigravity_chunk_retries_after_network_timeout() -> None:
         bridge.read_json_response = original
 
     assert normalized == {"https://example.com/1": "Short summary."}
+
+
+def test_run_antigravity_title_chunk_retries_after_non_json_response() -> None:
+    bridge = _load_bridge_module()
+    responses = iter(
+        [
+            {"content": [{"type": "text", "text": "not json"}]},
+            {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": (
+                            '{"report_date":"2026-03-01","items":'
+                            '[{"url":"https://example.com/1","title":"Better headline"}]}'
+                        ),
+                    }
+                ]
+            },
+        ]
+    )
+
+    original = bridge.read_json_response
+    bridge.read_json_response = lambda *args, **kwargs: next(responses)
+    try:
+        normalized = bridge.run_antigravity_title_chunk(
+            admin_url="http://example.test",
+            api_key="key",
+            model="gemini-3-flash",
+            report_date="2026-03-01",
+            articles=[
+                {
+                    "title": "Weak title",
+                    "url": "https://example.com/1",
+                    "summary": "Technical summary",
+                }
+            ],
+        )
+    finally:
+        bridge.read_json_response = original
+
+    assert normalized == {"https://example.com/1": "Better headline"}

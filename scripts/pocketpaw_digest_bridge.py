@@ -17,7 +17,9 @@ _MAX_GROUPS = 8
 _MAX_ITEMS_PER_GROUP = 6
 _MAX_SUMMARY_LENGTH = 400
 _MAX_TITLE_LENGTH = 120
+_MAX_HEADLINE_LENGTH = 84
 _DEFAULT_ANTIGRAVITY_CHUNK_SIZE = 12
+_DEFAULT_ANTIGRAVITY_TITLE_CHUNK_SIZE = 8
 _ANTIGRAVITY_RETRY_SUFFIX = (
     "\n\nYour previous response was invalid.\n"
     "Return valid JSON only.\n"
@@ -378,6 +380,30 @@ def normalize_summary_batch(payload: object, *, report_date: str) -> dict[str, s
     return summaries_by_url
 
 
+def normalize_title_batch(payload: object, *, report_date: str) -> dict[str, str]:
+    if not isinstance(payload, dict):
+        raise ValueError("title payload must be a JSON object")
+    if payload.get("report_date") != report_date:
+        raise ValueError("title report_date does not match requested report_date")
+    items = payload.get("items")
+    if not isinstance(items, list):
+        raise ValueError("title items must be a JSON array")
+
+    titles_by_url: dict[str, str] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        url = item.get("url")
+        title = _truncate_title(str(item.get("title", "")).strip())
+        if not _is_http_url(url) or not title:
+            continue
+        titles_by_url[str(url)] = title
+
+    if not titles_by_url:
+        raise ValueError("title payload contains no valid items")
+    return titles_by_url
+
+
 def _load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -690,6 +716,78 @@ def run_antigravity_chunk(
     )
 
 
+def run_antigravity_title_chunk(
+    *,
+    admin_url: str,
+    api_key: str,
+    model: str,
+    report_date: str,
+    articles: list[dict[str, Any]],
+) -> dict[str, str]:
+    base_content = (
+        "Rewrite weak article titles into short editorial headlines.\n"
+        "Return only JSON.\n"
+        "Use this exact structure:\n"
+        '{"report_date":"YYYY-MM-DD","items":[{"url":"https://...","title":"Short headline"}]}\n'
+        "Rules:\n"
+        "- Include every input URL exactly once.\n"
+        "- Keep each title factual and technical.\n"
+        "- Keep each title concise, ideally under 12 words.\n"
+        "- Do not add markdown or commentary.\n"
+        "- Do not end titles with a period.\n\n"
+        "Input payload:\n"
+        + json.dumps(
+            {"report_date": report_date, "articles": articles},
+            ensure_ascii=False,
+        )
+    )
+
+    errors: list[str] = []
+    for attempt in range(2):
+        content = base_content if attempt == 0 else base_content + _ANTIGRAVITY_RETRY_SUFFIX
+        llm_payload = {
+            "model": model,
+            "max_tokens": 2000,
+            "messages": [{"role": "user", "content": content}],
+        }
+        llm_response: Any | None = None
+        for request_attempt in range(_ANTIGRAVITY_REQUEST_RETRIES):
+            try:
+                llm_response = read_json_response(
+                    f"{admin_url.rstrip('/')}/v1/messages",
+                    body=json.dumps(llm_payload).encode("utf-8"),
+                    headers={
+                        "x-api-key": api_key,
+                        "anthropic-version": "2023-06-01",
+                    },
+                )
+                break
+            except RuntimeError as exc:
+                if not _is_transient_request_error(exc):
+                    raise
+                errors.append(str(exc))
+                if request_attempt + 1 == _ANTIGRAVITY_REQUEST_RETRIES:
+                    llm_response = None
+        if llm_response is None:
+            continue
+        llm_text = _extract_message_text(llm_response)
+        try:
+            generated = json.loads(llm_text)
+        except json.JSONDecodeError:
+            errors.append("non-JSON content")
+            continue
+        try:
+            return normalize_title_batch(generated, report_date=report_date)
+        except ValueError as exc:
+            errors.append(str(exc))
+            continue
+
+    raise RuntimeError(
+        "antigravity returned invalid title content after retry: "
+        + ", ".join(errors or ["unknown error"])
+    )
+
+
 def publish_antigravity_digest(
     *,
     base_url: str,
@@ -716,10 +814,40 @@ def publish_antigravity_digest(
         )
         summaries_by_url.update(chunk_summaries)
 
+    normalized_rows, _ = _normalize_feed_rows(feed_items)
+    title_rewrite_candidates = [
+        {
+            "url": str(row["url"]),
+            "title": str(row["title"]),
+            "summary": str(summaries_by_url.get(str(row["url"]), "")),
+        }
+        for row in normalized_rows
+        if _should_prefer_summary_title(str(row["title"]))
+        and str(summaries_by_url.get(str(row["url"]), "")).strip()
+    ]
+    rewritten_titles_by_url: dict[str, str] = {}
+    for chunk in chunk_feed_items(
+        title_rewrite_candidates,
+        chunk_size=_DEFAULT_ANTIGRAVITY_TITLE_CHUNK_SIZE,
+    ):
+        try:
+            rewritten_titles_by_url.update(
+                run_antigravity_title_chunk(
+                    admin_url=admin_url,
+                    api_key=api_key,
+                    model=model,
+                    report_date=report_date,
+                    articles=chunk,
+                )
+            )
+        except RuntimeError:
+            continue
+
     payload = build_categorized_digest_payload(
         items=feed_items,
         report_date=report_date,
         summaries_by_url=summaries_by_url,
+        titles_by_url=rewritten_titles_by_url,
     )
     response = read_json_response(
         f"{base_url.rstrip('/')}/api/news/digests",
