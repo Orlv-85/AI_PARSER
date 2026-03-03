@@ -60,6 +60,7 @@ _SOURCE_ONBOARDING_OVERLAP_BATCH_QUERY = Query(None, ge=1)
 _SOURCE_ONBOARDING_OVERLAP_CANDIDATE_QUERY = Query(default=[])
 _NEWS_LINKS_DATE_QUERY = Query(alias="date")
 _NEWS_DIGEST_DATE_QUERY = Query(alias="date")
+_OPTIONAL_NEWS_DIGEST_DATE_QUERY = Query(default=None, alias="date")
 
 
 def _render_index() -> str:
@@ -94,6 +95,7 @@ def _render_digest(*, report_date: date, digest: NewsDigestReport | None) -> str
     return (
         _DIGEST_TEMPLATE.read_text(encoding="utf-8")
         .replace("__REPORT_DATE__", report_date.isoformat())
+        .replace("__REPORT_DATE_QUERY__", f"?date={report_date.isoformat()}")
         .replace("__EMPTY_STATE_CLASS__", empty_state_class)
         .replace("__DIGEST_CONTENT__", digest_content)
     )
@@ -227,8 +229,8 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
         return RedirectResponse(url="/login", status_code=303)
 
     @api.get("/", response_class=HTMLResponse)
-    def index() -> str:
-        report_date = datetime.now(UTC).date() - timedelta(days=1)
+    def index(selected_date: date | None = _OPTIONAL_NEWS_DIGEST_DATE_QUERY) -> str:
+        report_date = selected_date or (datetime.now(UTC).date() - timedelta(days=1))
         try:
             create_all()
             with SessionLocal() as session:

@@ -72,6 +72,30 @@ def test_public_digest_page_shows_clean_empty_state_when_digest_missing(
     assert "No digest has been published for this date yet." in response.text
 
 
+def test_public_digest_page_keeps_explicit_query_date_selected(monkeypatch, tmp_path) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+
+    engine = create_engine(f"sqlite:///{tmp_path}/public-digest-query-date.db", future=True)
+    session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+
+    def _create_all_local() -> None:
+        Base.metadata.create_all(bind=engine)
+
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "create_all", _create_all_local)
+    monkeypatch.setattr(web_app_module, "SessionLocal", session_local)
+
+    client = TestClient(create_app())
+
+    response = client.get("/?date=2026-02-27")
+
+    assert response.status_code == 200
+    assert 'value="2026-02-27"' in response.text
+    assert '"?date=2026-02-27"' in response.text
+    assert "history.replaceState" in response.text
+
+
 def test_public_digest_page_stays_public_when_auth_is_enabled(monkeypatch, tmp_path) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("AINEWS_AUTH_ENABLED", "true")

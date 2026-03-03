@@ -251,6 +251,40 @@ def test_build_feed_digest_payload_cleans_noisy_long_titles() -> None:
     assert item["title"] == "Beyond LGTM in the age of AI. Code Review with your rules & standards"
 
 
+def test_build_feed_digest_payload_preserves_known_brand_casing() -> None:
+    bridge = _load_bridge_module()
+
+    payload = bridge.build_feed_digest_payload(
+        items=[
+            {
+                "title": "Building Telco Reasoning Models for Autonomous Networks with NVIDIA NeMo",
+                "url": "https://example.com/nemo",
+                "source_name": "NVIDIA",
+                "published_at": "2026-03-01T10:00:00Z",
+            },
+            {
+                "title": "AI code help with Amazon CodeWhisperer",
+                "url": "https://example.com/codewhisperer",
+                "source_name": "AWS",
+                "published_at": "2026-03-01T11:00:00Z",
+            },
+            {
+                "title": "Workflows Beta: Complex AI Apps with LlamaIndex",
+                "url": "https://example.com/llamaindex",
+                "source_name": "LlamaIndex",
+                "published_at": "2026-03-01T12:00:00Z",
+            },
+        ],
+        report_date="2026-03-01",
+    )
+
+    titles = [item["title"] for group in payload["groups"] for item in group["items"]]
+
+    assert "Building Telco Reasoning Models for Autonomous Networks with NVIDIA NeMo" in titles
+    assert "AI code help with Amazon CodeWhisperer" in titles
+    assert "Workflows Beta: Complex AI Apps with LlamaIndex" in titles
+
+
 def test_repair_digest_coverage_adds_missing_links_without_duplicates() -> None:
     bridge = _load_bridge_module()
 

@@ -130,6 +130,7 @@
       const dateInput = document.getElementById("digest-date");
       const emptyState = document.getElementById("digest-empty-state");
       const results = document.getElementById("digest-results");
+      const initialDigestUrl = "__REPORT_DATE_QUERY__";
 
       function escapeHtml(value) {
         return String(value)
@@ -177,7 +178,13 @@
           return;
         }
         const payload = await response.json();
+        const nextUrl = selectedDate ? "?date=" + encodeURIComponent(selectedDate) : "/";
+        window.history.replaceState({}, "", nextUrl);
         renderDigest(payload);
+      }
+
+      if (window.location.search !== initialDigestUrl) {
+        window.history.replaceState({}, "", initialDigestUrl);
       }
 
       dateInput.addEventListener("change", async () => {

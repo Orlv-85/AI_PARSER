@@ -98,6 +98,11 @@ _UPPERCASE_TITLE_TOKENS = {
     "ui",
     "ux",
 }
+_TITLE_BRAND_REPLACEMENTS = (
+    (r"\bNe Mo\b", "NeMo"),
+    (r"\bCode Whisperer\b", "CodeWhisperer"),
+    (r"\bLlama Index\b", "LlamaIndex"),
+)
 
 
 def read_json_response(
@@ -208,6 +213,8 @@ def _clean_display_title_text(title: str) -> str:
         lambda match: f"{match.group(1)} {match.group(2)}",
         normalized,
     )
+    for pattern, replacement in _TITLE_BRAND_REPLACEMENTS:
+        normalized = re.sub(pattern, replacement, normalized)
     return " ".join(normalized.split()).strip()
 
 
