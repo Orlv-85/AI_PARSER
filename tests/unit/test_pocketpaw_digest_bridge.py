@@ -194,3 +194,39 @@ def test_chunk_feed_items_splits_large_batches() -> None:
     )
 
     assert [len(chunk) for chunk in chunks] == [2, 2, 1]
+
+
+def test_run_antigravity_chunk_retries_after_non_json_response() -> None:
+    bridge = _load_bridge_module()
+    responses = iter(
+        [
+            {"content": [{"type": "text", "text": "not json"}]},
+            {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": (
+                            '{"report_date":"2026-03-01","groups":[{"title":"AI Coding",'
+                            '"items":[{"title":"Item","summary":"Short summary.","url":"https://example.com/1"}]}]}'
+                        ),
+                    }
+                ]
+            },
+        ]
+    )
+
+    original = bridge.read_json_response
+    bridge.read_json_response = lambda *args, **kwargs: next(responses)
+    try:
+        normalized = bridge.run_antigravity_chunk(
+            admin_url="http://example.test",
+            api_key="key",
+            model="gemini-3-flash",
+            prompt="Prompt",
+            report_date="2026-03-01",
+            articles=[{"title": "Item", "url": "https://example.com/1"}],
+        )
+    finally:
+        bridge.read_json_response = original
+
+    assert normalized["groups"][0]["title"] == "AI Coding"

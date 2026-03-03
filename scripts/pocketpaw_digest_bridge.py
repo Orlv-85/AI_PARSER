@@ -16,6 +16,14 @@ _MAX_GROUPS = 8
 _MAX_ITEMS_PER_GROUP = 6
 _MAX_SUMMARY_LENGTH = 400
 _DEFAULT_ANTIGRAVITY_CHUNK_SIZE = 12
+_ANTIGRAVITY_RETRY_SUFFIX = (
+    "\n\nYour previous response was invalid.\n"
+    "Return valid JSON only.\n"
+    "Do not include markdown.\n"
+    "Do not include code fences.\n"
+    "Do not include commentary.\n"
+    "Do not omit any URL.\n"
+)
 _CATEGORY_ORDER = (
     "AI Coding",
     "Agent Frameworks",
@@ -58,7 +66,7 @@ _ROOT_DIR = _SCRIPT_DIR.parent
 _DEFAULT_PROMPT_PATH = _ROOT_DIR / "automation" / "pocketpaw" / "antigravity_digest_prompt.txt"
 
 
-def _read_json_response(
+def read_json_response(
     url: str,
     *,
     body: bytes | None = None,
@@ -157,7 +165,7 @@ def _write_json(path: Path, payload: object) -> None:
 
 def _fetch_feed_items(*, base_url: str, report_date: str, limit: int) -> list[dict[str, Any]]:
     query = urlencode({"date": report_date, "limit": limit})
-    items = _read_json_response(f"{base_url.rstrip('/')}/api/news/links?{query}")
+    items = read_json_response(f"{base_url.rstrip('/')}/api/news/links?{query}")
     if not isinstance(items, list):
         raise RuntimeError("news links API did not return a list")
     if not items:
@@ -197,7 +205,7 @@ def validate_digest(*, report_date: str, input_path: Path, out_path: Path | None
 
 def publish_digest(*, base_url: str, report_date: str, input_path: Path) -> dict[str, Any]:
     normalized = validate_digest(report_date=report_date, input_path=input_path, out_path=None)
-    response = _read_json_response(
+    response = read_json_response(
         f"{base_url.rstrip('/')}/api/news/digests",
         body=json.dumps(normalized).encode("utf-8"),
     )
@@ -352,7 +360,7 @@ def _extract_message_text(payload: object) -> str:
 
 
 def _fetch_antigravity_proxy_api_key(*, admin_url: str, admin_password: str) -> str:
-    config = _read_json_response(
+    config = read_json_response(
         f"{admin_url.rstrip('/')}/api/config",
         headers={"Authorization": admin_password},
     )
@@ -380,7 +388,7 @@ def chunk_feed_items(
     ]
 
 
-def _run_antigravity_chunk(
+def run_antigravity_chunk(
     *,
     admin_url: str,
     api_key: str,
@@ -389,41 +397,46 @@ def _run_antigravity_chunk(
     report_date: str,
     articles: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    llm_payload = {
-        "model": model,
-        "max_tokens": 4000,
-        "messages": [
-            {
-                "role": "user",
-                "content": (
-                    f"{prompt}\n\n"
-                    "You must include every article from the provided list exactly once.\n"
-                    "If a story is weak, still include it.\n"
-                    "Do not omit any URL.\n\n"
-                    "Input payload:\n"
-                    + json.dumps(
-                        {"report_date": report_date, "articles": articles},
-                        ensure_ascii=False,
-                    )
-                ),
-            }
-        ],
-    }
-
-    llm_response = _read_json_response(
-        f"{admin_url.rstrip('/')}/v1/messages",
-        body=json.dumps(llm_payload).encode("utf-8"),
-        headers={
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
-        },
+    base_content = (
+        f"{prompt}\n\n"
+        "You must include every article from the provided list exactly once.\n"
+        "If a story is weak, still include it.\n"
+        "Do not omit any URL.\n\n"
+        "Input payload:\n"
+        + json.dumps(
+            {"report_date": report_date, "articles": articles},
+            ensure_ascii=False,
+        )
     )
-    llm_text = _extract_message_text(llm_response)
-    try:
-        generated = json.loads(llm_text)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError("antigravity returned non-JSON content") from exc
-    return normalize_digest(generated, report_date=report_date)
+
+    errors: list[str] = []
+    for attempt in range(2):
+        content = base_content if attempt == 0 else base_content + _ANTIGRAVITY_RETRY_SUFFIX
+        llm_payload = {
+            "model": model,
+            "max_tokens": 4000,
+            "messages": [{"role": "user", "content": content}],
+        }
+        llm_response = read_json_response(
+            f"{admin_url.rstrip('/')}/v1/messages",
+            body=json.dumps(llm_payload).encode("utf-8"),
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+            },
+        )
+        llm_text = _extract_message_text(llm_response)
+        try:
+            generated = json.loads(llm_text)
+        except json.JSONDecodeError:
+            errors.append("non-JSON content")
+            continue
+        return normalize_digest(generated, report_date=report_date)
+
+    raise RuntimeError(
+        "antigravity returned invalid content after retry: "
+        + ", ".join(errors or ["unknown error"])
+    )
 
 
 def publish_antigravity_digest(
@@ -443,7 +456,7 @@ def publish_antigravity_digest(
     normalized_chunks: list[dict[str, Any]] = []
     for chunk in chunk_feed_items(feed_items, chunk_size=chunk_size):
         normalized_chunks.append(
-            _run_antigravity_chunk(
+            run_antigravity_chunk(
                 admin_url=admin_url,
                 api_key=api_key,
                 model=model,
@@ -464,14 +477,14 @@ def publish_antigravity_digest(
         feed_items=feed_items,
         report_date=report_date,
     )
-    response = _read_json_response(
+    response = read_json_response(
         f"{base_url.rstrip('/')}/api/news/digests",
         body=json.dumps(repaired).encode("utf-8"),
     )
     if not isinstance(response, dict):
         raise RuntimeError("publish response was not a JSON object")
 
-    saved = _read_json_response(f"{base_url.rstrip('/')}/api/news/digests?date={report_date}")
+    saved = read_json_response(f"{base_url.rstrip('/')}/api/news/digests?date={report_date}")
     if not isinstance(saved, dict):
         raise RuntimeError("saved digest response was not a JSON object")
     saved_groups = saved.get("groups")
@@ -509,17 +522,17 @@ def build_feed_digest_payload(*, items: object, report_date: str) -> dict[str, A
 
 def publish_feed_digest(*, base_url: str, report_date: str, limit: int) -> dict[str, Any]:
     query = urlencode({"date": report_date, "limit": limit})
-    items = _read_json_response(f"{base_url.rstrip('/')}/api/news/links?{query}")
+    items = read_json_response(f"{base_url.rstrip('/')}/api/news/links?{query}")
     payload = build_feed_digest_payload(items=items, report_date=report_date)
 
-    response = _read_json_response(
+    response = read_json_response(
         f"{base_url.rstrip('/')}/api/news/digests",
         body=json.dumps(payload).encode("utf-8"),
     )
     if not isinstance(response, dict):
         raise RuntimeError("publish response was not a JSON object")
 
-    saved = _read_json_response(f"{base_url.rstrip('/')}/api/news/digests?date={report_date}")
+    saved = read_json_response(f"{base_url.rstrip('/')}/api/news/digests?date={report_date}")
     if not isinstance(saved, dict):
         raise RuntimeError("saved digest response was not a JSON object")
     saved_groups = saved.get("groups")
