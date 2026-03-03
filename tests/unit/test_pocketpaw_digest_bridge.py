@@ -227,6 +227,30 @@ def test_build_feed_digest_payload_prefixes_source_for_short_titles_without_ai_s
     assert item["title"] == "Together: Medusa"
 
 
+def test_build_feed_digest_payload_cleans_noisy_long_titles() -> None:
+    bridge = _load_bridge_module()
+
+    payload = bridge.build_feed_digest_payload(
+        items=[
+            {
+                "title": (
+                    "Beyond LGTM in the age of AI.\n"
+                    "Code Reviewwith your rules & standards.for complex codebases."
+                    "that continuously learns.with #1 precision & recall."
+                ),
+                "url": "https://example.com/review",
+                "source_name": "Graphite",
+                "published_at": "2026-03-01T10:00:00Z",
+            }
+        ],
+        report_date="2026-03-01",
+    )
+
+    item = payload["groups"][0]["items"][0]
+
+    assert item["title"] == "Beyond LGTM in the age of AI. Code Review with your rules & standards"
+
+
 def test_repair_digest_coverage_adds_missing_links_without_duplicates() -> None:
     bridge = _load_bridge_module()
 

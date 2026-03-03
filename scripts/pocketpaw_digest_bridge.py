@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -196,10 +197,34 @@ def _summary_title_fragment(summary: str) -> str:
     return candidate
 
 
-def _truncate_title(title: str) -> str:
+def _clean_display_title_text(title: str) -> str:
     normalized = " ".join(title.split()).strip()
+    if not normalized:
+        return ""
+    normalized = re.sub(r"([.!?:;,&])([A-Za-z0-9])", r"\1 \2", normalized)
+    normalized = re.sub(r"([a-z])([A-Z])", r"\1 \2", normalized)
+    normalized = re.sub(
+        r"\b([A-Z][a-z]{3,})(with|for|and|of|to|in)\b",
+        lambda match: f"{match.group(1)} {match.group(2)}",
+        normalized,
+    )
+    return " ".join(normalized.split()).strip()
+
+
+def _truncate_title(title: str) -> str:
+    normalized = _clean_display_title_text(title)
     if len(normalized) <= _MAX_TITLE_LENGTH:
         return normalized
+    fragments = [
+        fragment.strip(" .")
+        for fragment in normalized.split(". ")
+        if fragment.strip(" .")
+    ]
+    for fragment_count in (2, 1):
+        if len(fragments) >= fragment_count:
+            candidate = ". ".join(fragments[:fragment_count]).strip()
+            if candidate and len(candidate) <= _MAX_TITLE_LENGTH:
+                return candidate
     return normalized[: _MAX_TITLE_LENGTH - 3].rstrip(" ,.;:-") + "..."
 
 
