@@ -82,18 +82,27 @@ def test_public_digest_page_keeps_explicit_query_date_selected(monkeypatch, tmp_
     def _create_all_local() -> None:
         Base.metadata.create_all(bind=engine)
 
+    class _FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 3, 1, 9, 30, tzinfo=tz or UTC)
+
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", _create_all_local)
     monkeypatch.setattr(web_app_module, "SessionLocal", session_local)
+    monkeypatch.setattr(web_app_module, "datetime", _FrozenDateTime)
 
     client = TestClient(create_app())
 
     response = client.get("/?date=2026-02-27")
 
     assert response.status_code == 200
+    assert "Digest for 2026-02-27" in response.text
     assert 'value="2026-02-27"' in response.text
     assert '"?date=2026-02-27"' in response.text
+    assert '"2026-02-28"' in response.text
     assert "history.replaceState" in response.text
+    assert "updateHeroTitle" in response.text
 
 
 def test_public_digest_page_stays_public_when_auth_is_enabled(monkeypatch, tmp_path) -> None:

@@ -68,6 +68,12 @@ def _render_index() -> str:
 
 
 def _render_digest(*, report_date: date, digest: NewsDigestReport | None) -> str:
+    default_report_date = datetime.now(UTC).date() - timedelta(days=1)
+    hero_title = (
+        "Yesterday's Digest"
+        if report_date == default_report_date
+        else f"Digest for {report_date.isoformat()}"
+    )
     empty_state_class = "empty-state"
     if digest is None or not digest.groups:
         digest_content = ""
@@ -94,8 +100,10 @@ def _render_digest(*, report_date: date, digest: NewsDigestReport | None) -> str
 
     return (
         _DIGEST_TEMPLATE.read_text(encoding="utf-8")
+        .replace("__HERO_TITLE__", hero_title)
         .replace("__REPORT_DATE__", report_date.isoformat())
         .replace("__REPORT_DATE_QUERY__", f"?date={report_date.isoformat()}")
+        .replace("__DEFAULT_REPORT_DATE__", default_report_date.isoformat())
         .replace("__EMPTY_STATE_CLASS__", empty_state_class)
         .replace("__DIGEST_CONTENT__", digest_content)
     )
