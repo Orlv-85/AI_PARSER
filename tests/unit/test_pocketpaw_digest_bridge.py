@@ -252,3 +252,45 @@ def test_run_antigravity_chunk_retries_after_non_json_response() -> None:
         bridge.read_json_response = original
 
     assert normalized == {"https://example.com/1": "Short summary."}
+
+
+def test_run_antigravity_chunk_retries_after_network_timeout() -> None:
+    bridge = _load_bridge_module()
+    responses = iter(
+        [
+            RuntimeError("Network timeout for http://example.test/v1/messages"),
+            {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": (
+                            '{"report_date":"2026-03-01","items":'
+                            '[{"url":"https://example.com/1","summary":"Short summary."}]}'
+                        ),
+                    }
+                ]
+            },
+        ]
+    )
+
+    def fake_read_json_response(*_args, **_kwargs):
+        response = next(responses)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    original = bridge.read_json_response
+    bridge.read_json_response = fake_read_json_response
+    try:
+        normalized = bridge.run_antigravity_chunk(
+            admin_url="http://example.test",
+            api_key="key",
+            model="gemini-3-flash",
+            prompt="Prompt",
+            report_date="2026-03-01",
+            articles=[{"title": "Item", "url": "https://example.com/1"}],
+        )
+    finally:
+        bridge.read_json_response = original
+
+    assert normalized == {"https://example.com/1": "Short summary."}

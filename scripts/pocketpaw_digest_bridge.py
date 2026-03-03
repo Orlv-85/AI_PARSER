@@ -24,6 +24,7 @@ _ANTIGRAVITY_RETRY_SUFFIX = (
     "Do not include commentary.\n"
     "Do not omit any URL.\n"
 )
+_ANTIGRAVITY_REQUEST_RETRIES = 2
 _CATEGORY_ORDER = (
     "AI Coding",
     "Agent Frameworks",
@@ -90,6 +91,8 @@ def read_json_response(
     try:
         with urlopen(request, timeout=30) as response:
             return json.load(response)
+    except TimeoutError as exc:
+        raise RuntimeError(f"Network timeout for {url}") from exc
     except HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"HTTP {exc.code} for {url}: {detail}") from exc
@@ -421,6 +424,11 @@ def chunk_feed_items(
     ]
 
 
+def _is_transient_request_error(exc: RuntimeError) -> bool:
+    message = str(exc).lower()
+    return "network error" in message or "network timeout" in message
+
+
 def run_antigravity_chunk(
     *,
     admin_url: str,
@@ -451,14 +459,26 @@ def run_antigravity_chunk(
             "max_tokens": 4000,
             "messages": [{"role": "user", "content": content}],
         }
-        llm_response = read_json_response(
-            f"{admin_url.rstrip('/')}/v1/messages",
-            body=json.dumps(llm_payload).encode("utf-8"),
-            headers={
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-            },
-        )
+        llm_response: Any | None = None
+        for request_attempt in range(_ANTIGRAVITY_REQUEST_RETRIES):
+            try:
+                llm_response = read_json_response(
+                    f"{admin_url.rstrip('/')}/v1/messages",
+                    body=json.dumps(llm_payload).encode("utf-8"),
+                    headers={
+                        "x-api-key": api_key,
+                        "anthropic-version": "2023-06-01",
+                    },
+                )
+                break
+            except RuntimeError as exc:
+                if not _is_transient_request_error(exc):
+                    raise
+                errors.append(str(exc))
+                if request_attempt + 1 == _ANTIGRAVITY_REQUEST_RETRIES:
+                    llm_response = None
+        if llm_response is None:
+            continue
         llm_text = _extract_message_text(llm_response)
         try:
             generated = json.loads(llm_text)
