@@ -15,6 +15,7 @@ _DEFAULT_TITLE = "Daily AI News Digest"
 _MAX_GROUPS = 8
 _MAX_ITEMS_PER_GROUP = 6
 _MAX_SUMMARY_LENGTH = 400
+_MAX_TITLE_LENGTH = 120
 _DEFAULT_ANTIGRAVITY_CHUNK_SIZE = 12
 _ANTIGRAVITY_RETRY_SUFFIX = (
     "\n\nYour previous response was invalid.\n"
@@ -162,6 +163,77 @@ def _normalize_display_title(*, raw_title: str, url: str) -> str:
     if parsed.scheme in {"http", "https"} and parsed.netloc:
         return _title_from_url(title) or title
     return title
+
+
+def _is_generic_digest_summary(summary: str) -> bool:
+    normalized = summary.strip().lower()
+    return normalized.startswith("source:") and "included in the daily digest" in normalized
+
+
+def _is_weak_display_title(title: str) -> bool:
+    normalized = " ".join(title.split()).strip()
+    if not normalized:
+        return True
+    words = normalized.split()
+    if len(normalized) <= 18 and len(words) <= 3:
+        return True
+    if len(words) == 1 and len(normalized) <= 28:
+        return True
+    return False
+
+
+def _summary_title_fragment(summary: str) -> str:
+    candidate = summary.strip().splitlines()[0].strip()
+    if not candidate:
+        return ""
+    for separator in (". ", "! ", "? ", ":", ";"):
+        if separator in candidate:
+            candidate = candidate.split(separator, 1)[0].strip()
+            break
+    candidate = candidate.strip(" .!?:;-")
+    if len(candidate) > 84:
+        candidate = candidate[:81].rstrip(" ,.;:-") + "..."
+    return candidate
+
+
+def _truncate_title(title: str) -> str:
+    normalized = " ".join(title.split()).strip()
+    if len(normalized) <= _MAX_TITLE_LENGTH:
+        return normalized
+    return normalized[: _MAX_TITLE_LENGTH - 3].rstrip(" ,.;:-") + "..."
+
+
+def _build_display_title(
+    *,
+    row: dict[str, Any],
+    preferred_title: str,
+    summary: str,
+) -> str:
+    base_title = _normalize_display_title(
+        raw_title=preferred_title,
+        url=str(row.get("url", "")),
+    )
+    if not _is_weak_display_title(base_title):
+        return _truncate_title(base_title)
+
+    source_name = str(row.get("source_name") or "").strip()
+    if summary and not _is_generic_digest_summary(summary):
+        fragment = _summary_title_fragment(summary)
+        if fragment:
+            if base_title and len(base_title) <= 24:
+                lowered_fragment = fragment.lower()
+                lowered_base = base_title.lower()
+                if lowered_base not in lowered_fragment:
+                    return _truncate_title(f"{base_title}: {fragment}")
+            return _truncate_title(fragment)
+
+    if source_name and base_title:
+        lowered_source = source_name.lower()
+        lowered_title = base_title.lower()
+        if not lowered_title.startswith(lowered_source):
+            return _truncate_title(f"{source_name}: {base_title}")
+
+    return _truncate_title(base_title)
 
 
 def _validate_group(group: object) -> dict[str, Any] | None:
@@ -367,11 +439,16 @@ def build_categorized_digest_payload(
 
     for url in ordered_urls:
         row = row_by_url[url]
-        title = str((titles_by_url or {}).get(url) or row["title"]).strip()
+        preferred_title = str((titles_by_url or {}).get(url) or row["title"]).strip()
         summary = str(
             (summaries_by_url or {}).get(url)
             or _default_feed_summary(row=row, report_date=report_date)
         ).strip()
+        title = _build_display_title(
+            row=row,
+            preferred_title=preferred_title,
+            summary=summary,
+        )
         category = categorize_digest_item(row=row, summary=summary)
         grouped_items[category].append(
             {

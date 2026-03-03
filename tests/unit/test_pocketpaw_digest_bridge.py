@@ -180,6 +180,53 @@ def test_build_feed_digest_payload_humanizes_url_titles() -> None:
     assert item["title"] == "Together Python SDK 2 0"
 
 
+def test_build_feed_digest_payload_enriches_short_titles_from_summary() -> None:
+    bridge = _load_bridge_module()
+
+    payload = bridge.build_categorized_digest_payload(
+        items=[
+            {
+                "title": "Medusa",
+                "url": "https://www.together.ai/blog/medusa",
+                "source_name": "Together",
+                "published_at": "2026-03-02T10:00:00Z",
+            }
+        ],
+        report_date="2026-03-02",
+        summaries_by_url={
+            "https://www.together.ai/blog/medusa": (
+                "Speculative decoding technique for faster long-context inference in production."
+            )
+        },
+    )
+
+    item = payload["groups"][0]["items"][0]
+
+    assert item["title"] == (
+        "Medusa: Speculative decoding technique for faster long-context inference in production"
+    )
+
+
+def test_build_feed_digest_payload_prefixes_source_for_short_titles_without_ai_summary() -> None:
+    bridge = _load_bridge_module()
+
+    payload = bridge.build_feed_digest_payload(
+        items=[
+            {
+                "title": "Medusa",
+                "url": "https://www.together.ai/blog/medusa",
+                "source_name": "Together",
+                "published_at": "2026-03-02T10:00:00Z",
+            }
+        ],
+        report_date="2026-03-02",
+    )
+
+    item = payload["groups"][0]["items"][0]
+
+    assert item["title"] == "Together: Medusa"
+
+
 def test_repair_digest_coverage_adds_missing_links_without_duplicates() -> None:
     bridge = _load_bridge_module()
 
