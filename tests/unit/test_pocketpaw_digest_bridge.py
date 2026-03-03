@@ -96,6 +96,28 @@ def test_normalize_digest_rejects_when_no_valid_groups_remain() -> None:
         bridge.normalize_digest(payload, report_date="2026-03-01")
 
 
+def test_normalize_summary_batch_keeps_valid_items() -> None:
+    bridge = _load_bridge_module()
+
+    payload = {
+        "report_date": "2026-03-01",
+        "items": [
+            {
+                "url": "https://example.com/1",
+                "summary": "Short technical summary.",
+            },
+            {
+                "url": "not-a-url",
+                "summary": "Dropped.",
+            },
+        ],
+    }
+
+    normalized = bridge.normalize_summary_batch(payload, report_date="2026-03-01")
+
+    assert normalized == {"https://example.com/1": "Short technical summary."}
+
+
 def test_build_feed_digest_payload_includes_every_link_once() -> None:
     bridge = _load_bridge_module()
 
@@ -206,8 +228,8 @@ def test_run_antigravity_chunk_retries_after_non_json_response() -> None:
                     {
                         "type": "text",
                         "text": (
-                            '{"report_date":"2026-03-01","groups":[{"title":"AI Coding",'
-                            '"items":[{"title":"Item","summary":"Short summary.","url":"https://example.com/1"}]}]}'
+                            '{"report_date":"2026-03-01","items":'
+                            '[{"url":"https://example.com/1","summary":"Short summary."}]}'
                         ),
                     }
                 ]
@@ -229,4 +251,4 @@ def test_run_antigravity_chunk_retries_after_non_json_response() -> None:
     finally:
         bridge.read_json_response = original
 
-    assert normalized["groups"][0]["title"] == "AI Coding"
+    assert normalized == {"https://example.com/1": "Short summary."}

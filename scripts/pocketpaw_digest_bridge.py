@@ -163,6 +163,30 @@ def normalize_digest(payload: object, *, report_date: str) -> dict[str, Any]:
     }
 
 
+def normalize_summary_batch(payload: object, *, report_date: str) -> dict[str, str]:
+    if not isinstance(payload, dict):
+        raise ValueError("summary payload must be a JSON object")
+    if payload.get("report_date") != report_date:
+        raise ValueError("summary report_date does not match requested report_date")
+    items = payload.get("items")
+    if not isinstance(items, list):
+        raise ValueError("summary items must be a JSON array")
+
+    summaries_by_url: dict[str, str] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        url = item.get("url")
+        summary = str(item.get("summary", "")).strip()
+        if not _is_http_url(url) or not summary:
+            continue
+        summaries_by_url[str(url)] = summary[:_MAX_SUMMARY_LENGTH]
+
+    if not summaries_by_url:
+        raise ValueError("summary payload contains no valid items")
+    return summaries_by_url
+
+
 def _load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -405,12 +429,13 @@ def run_antigravity_chunk(
     prompt: str,
     report_date: str,
     articles: list[dict[str, Any]],
-) -> dict[str, Any]:
+) -> dict[str, str]:
     base_content = (
         f"{prompt}\n\n"
-        "You must include every article from the provided list exactly once.\n"
-        "If a story is weak, still include it.\n"
-        "Do not omit any URL.\n\n"
+        "You must return only per-article summaries for the provided list.\n"
+        "Do not group the articles.\n"
+        "Do not omit any URL.\n"
+        "Every returned item must include the original URL and a concise technical summary.\n\n"
         "Input payload:\n"
         + json.dumps(
             {"report_date": report_date, "articles": articles},
@@ -440,7 +465,11 @@ def run_antigravity_chunk(
         except json.JSONDecodeError:
             errors.append("non-JSON content")
             continue
-        return normalize_digest(generated, report_date=report_date)
+        try:
+            return normalize_summary_batch(generated, report_date=report_date)
+        except ValueError as exc:
+            errors.append(str(exc))
+            continue
 
     raise RuntimeError(
         "antigravity returned invalid content after retry: "
@@ -462,33 +491,26 @@ def publish_antigravity_digest(
     feed_items = _fetch_feed_items(base_url=base_url, report_date=report_date, limit=limit)
     prompt = prompt_path.read_text(encoding="utf-8").strip()
     api_key = _fetch_antigravity_proxy_api_key(admin_url=admin_url, admin_password=admin_password)
-    normalized_chunks: list[dict[str, Any]] = []
+    summaries_by_url: dict[str, str] = {}
     for chunk in chunk_feed_items(feed_items, chunk_size=chunk_size):
-        normalized_chunks.append(
-            run_antigravity_chunk(
-                admin_url=admin_url,
-                api_key=api_key,
-                model=model,
-                prompt=prompt,
-                report_date=report_date,
-                articles=chunk,
-            )
+        chunk_summaries = run_antigravity_chunk(
+            admin_url=admin_url,
+            api_key=api_key,
+            model=model,
+            prompt=prompt,
+            report_date=report_date,
+            articles=chunk,
         )
+        summaries_by_url.update(chunk_summaries)
 
-    merged_groups: list[dict[str, Any]] = []
-    for chunk_digest in normalized_chunks:
-        groups = chunk_digest.get("groups")
-        if isinstance(groups, list):
-            merged_groups.extend(group for group in groups if isinstance(group, dict))
-
-    repaired = repair_digest_coverage(
-        digest={"report_date": report_date, "groups": merged_groups},
-        feed_items=feed_items,
+    payload = build_categorized_digest_payload(
+        items=feed_items,
         report_date=report_date,
+        summaries_by_url=summaries_by_url,
     )
     response = read_json_response(
         f"{base_url.rstrip('/')}/api/news/digests",
-        body=json.dumps(repaired).encode("utf-8"),
+        body=json.dumps(payload).encode("utf-8"),
     )
     if not isinstance(response, dict):
         raise RuntimeError("publish response was not a JSON object")
@@ -521,7 +543,7 @@ def publish_antigravity_digest(
         "group_count": len(saved_groups),
         "model": model,
         "mode": "antigravity",
-        "chunk_count": len(normalized_chunks),
+        "chunk_count": len(chunk_feed_items(feed_items, chunk_size=chunk_size)),
     }
 
 
