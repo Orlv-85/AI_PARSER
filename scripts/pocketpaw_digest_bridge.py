@@ -282,11 +282,6 @@ def _build_display_title(
                     if lowered_base not in lowered_fragment:
                         return _truncate_title(f"{base_title}: {fragment}")
                 return _truncate_title(fragment)
-            if base_title and len(base_title) <= 24:
-                lowered_fragment = fragment.lower()
-                lowered_base = base_title.lower()
-                if lowered_base not in lowered_fragment:
-                    return _truncate_title(f"{base_title}: {fragment}")
 
     if not _is_weak_display_title(base_title):
         return _truncate_title(base_title)
