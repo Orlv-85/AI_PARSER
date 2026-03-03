@@ -160,6 +160,26 @@ def test_build_feed_digest_payload_rejects_invalid_feed_row() -> None:
         )
 
 
+def test_build_feed_digest_payload_humanizes_url_titles() -> None:
+    bridge = _load_bridge_module()
+
+    payload = bridge.build_feed_digest_payload(
+        items=[
+            {
+                "title": "https://www.together.ai/blog/together-python-sdk-2-0",
+                "url": "https://www.together.ai/blog/together-python-sdk-2-0",
+                "source_name": "Together",
+                "published_at": "2026-03-02T10:00:00Z",
+            }
+        ],
+        report_date="2026-03-02",
+    )
+
+    item = payload["groups"][0]["items"][0]
+
+    assert item["title"] == "Together Python SDK 2 0"
+
+
 def test_repair_digest_coverage_adds_missing_links_without_duplicates() -> None:
     bridge = _load_bridge_module()
 

@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode, urlparse
+from urllib.parse import unquote, urlencode, urlparse
 from urllib.request import Request, urlopen
 
 _DEFAULT_TITLE = "Daily AI News Digest"
@@ -74,6 +74,28 @@ _CATEGORY_RULES = (
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _ROOT_DIR = _SCRIPT_DIR.parent
 _DEFAULT_PROMPT_PATH = _ROOT_DIR / "automation" / "pocketpaw" / "antigravity_digest_prompt.txt"
+_UPPERCASE_TITLE_TOKENS = {
+    "ai",
+    "api",
+    "apis",
+    "ci",
+    "cpu",
+    "css",
+    "gpu",
+    "gpus",
+    "html",
+    "http",
+    "https",
+    "json",
+    "llm",
+    "llms",
+    "qa",
+    "rag",
+    "sdk",
+    "sql",
+    "ui",
+    "ux",
+}
 
 
 def read_json_response(
@@ -105,6 +127,41 @@ def _is_http_url(value: object) -> bool:
         return False
     parsed = urlparse(value)
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
+def _title_case_url_token(token: str) -> str:
+    if not token:
+        return ""
+    if token.isdigit():
+        return token
+    lowered = token.lower()
+    if lowered in _UPPERCASE_TITLE_TOKENS:
+        return lowered.upper()
+    if any(char.isdigit() for char in token):
+        return token.upper() if len(token) <= 4 else token[0].upper() + token[1:]
+    return token.capitalize()
+
+
+def _title_from_url(url: str) -> str:
+    parsed = urlparse(url)
+    path_parts = [part for part in parsed.path.split("/") if part]
+    candidate = unquote(path_parts[-1] if path_parts else parsed.netloc)
+    candidate = candidate.rsplit(".", 1)[0]
+    candidate = candidate.replace("_", " ").replace("-", " ").replace(".", " ")
+    words = [_title_case_url_token(word) for word in candidate.split() if word]
+    return " ".join(words).strip()
+
+
+def _normalize_display_title(*, raw_title: str, url: str) -> str:
+    title = raw_title.strip()
+    if _is_http_url(title):
+        return _title_from_url(title) or title
+    if "://" not in title:
+        return title
+    parsed = urlparse(title)
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        return _title_from_url(title) or title
+    return title
 
 
 def _validate_group(group: object) -> dict[str, Any] | None:
@@ -273,7 +330,7 @@ def _normalize_feed_rows(items: object) -> tuple[list[dict[str, Any]], list[str]
             raise ValueError("news links API returned an article without a valid title/url")
         normalized_url = str(url)
         normalized_row = dict(row)
-        normalized_row["title"] = title
+        normalized_row["title"] = _normalize_display_title(raw_title=title, url=normalized_url)
         normalized_row["url"] = normalized_url
         if normalized_url not in feed_by_url:
             feed_by_url[normalized_url] = normalized_row
