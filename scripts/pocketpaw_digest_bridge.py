@@ -188,6 +188,32 @@ def _is_weak_display_title(title: str) -> bool:
     return False
 
 
+def _should_prefer_summary_title(title: str) -> bool:
+    normalized = _clean_display_title_text(title)
+    lowered = normalized.lower()
+    if not normalized:
+        return True
+    if _is_weak_display_title(normalized):
+        return True
+    if re.match(r"^[A-Z][a-z]+ \d{4} .*update$", normalized):
+        return True
+    if lowered.endswith(" pricing update") or lowered.endswith(" release notes"):
+        return True
+    if len(normalized) > 72 and any(
+        phrase in lowered
+        for phrase in (
+            " is ",
+            " are ",
+            " designed to ",
+            " used to ",
+            " using ",
+            " with guarantees",
+        )
+    ):
+        return True
+    return False
+
+
 def _summary_title_fragment(summary: str) -> str:
     candidate = summary.strip().splitlines()[0].strip()
     if not candidate:
@@ -245,19 +271,25 @@ def _build_display_title(
         raw_title=preferred_title,
         url=str(row.get("url", "")),
     )
-    if not _is_weak_display_title(base_title):
-        return _truncate_title(base_title)
-
     source_name = str(row.get("source_name") or "").strip()
     if summary and not _is_generic_digest_summary(summary):
         fragment = _summary_title_fragment(summary)
         if fragment:
+            if _should_prefer_summary_title(base_title):
+                if base_title and len(base_title) <= 24:
+                    lowered_fragment = fragment.lower()
+                    lowered_base = base_title.lower()
+                    if lowered_base not in lowered_fragment:
+                        return _truncate_title(f"{base_title}: {fragment}")
+                return _truncate_title(fragment)
             if base_title and len(base_title) <= 24:
                 lowered_fragment = fragment.lower()
                 lowered_base = base_title.lower()
                 if lowered_base not in lowered_fragment:
                     return _truncate_title(f"{base_title}: {fragment}")
-            return _truncate_title(fragment)
+
+    if not _is_weak_display_title(base_title):
+        return _truncate_title(base_title)
 
     if source_name and base_title:
         lowered_source = source_name.lower()

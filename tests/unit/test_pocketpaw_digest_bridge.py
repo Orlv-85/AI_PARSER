@@ -285,6 +285,65 @@ def test_build_feed_digest_payload_preserves_known_brand_casing() -> None:
     assert "Workflows Beta: Complex AI Apps with LlamaIndex" in titles
 
 
+def test_build_feed_digest_payload_rewrites_generic_update_titles_from_summary() -> None:
+    bridge = _load_bridge_module()
+
+    payload = bridge.build_categorized_digest_payload(
+        items=[
+            {
+                "title": "August 2023 Pricing Update",
+                "url": "https://example.com/pricing-update",
+                "source_name": "Together AI Blog",
+                "published_at": "2026-03-02T10:00:00Z",
+            }
+        ],
+        report_date="2026-03-02",
+        summaries_by_url={
+            "https://example.com/pricing-update": (
+                "Together AI revised inference and fine-tuning pricing to improve cost-efficiency "
+                "for developers deploying models at scale."
+            )
+        },
+    )
+
+    item = payload["groups"][0]["items"][0]
+
+    assert item["title"] == (
+        "Together AI revised inference and fine-tuning pricing to improve cost-efficiency..."
+    )
+
+
+def test_build_feed_digest_payload_rewrites_sentence_like_titles_from_summary() -> None:
+    bridge = _load_bridge_module()
+
+    payload = bridge.build_categorized_digest_payload(
+        items=[
+            {
+                "title": (
+                    "Minions is an architecture designed to deploy specialized, smaller models "
+                    "for sub-task execution"
+                ),
+                "url": "https://example.com/minions",
+                "source_name": "Together AI Blog",
+                "published_at": "2026-03-02T10:00:00Z",
+            }
+        ],
+        report_date="2026-03-02",
+        summaries_by_url={
+            "https://example.com/minions": (
+                "Modular architecture for specialized smaller models in larger autonomous "
+                "agent workflows."
+            )
+        },
+    )
+
+    item = payload["groups"][0]["items"][0]
+
+    assert item["title"] == (
+        "Modular architecture for specialized smaller models in larger autonomous agent wo..."
+    )
+
+
 def test_repair_digest_coverage_adds_missing_links_without_duplicates() -> None:
     bridge = _load_bridge_module()
 
