@@ -366,6 +366,51 @@ def test_build_feed_digest_payload_rewrites_sentence_like_titles_from_summary() 
     )
 
 
+def test_categorize_digest_item_prefers_rag_for_true_rag_signals() -> None:
+    bridge = _load_bridge_module()
+
+    category = bridge.categorize_digest_item(
+        row={
+            "title": "Hybrid search with reranking for enterprise RAG",
+            "source_name": "Docs",
+            "url": "https://example.com/rag",
+        },
+        summary="Combines vector retrieval with reranking for knowledge base grounding.",
+    )
+
+    assert category == "RAG & Data Systems"
+
+
+def test_categorize_digest_item_keeps_infra_out_of_rag_bucket() -> None:
+    bridge = _load_bridge_module()
+
+    category = bridge.categorize_digest_item(
+        row={
+            "title": "High-throughput GPU kernel design for H100 inference",
+            "source_name": "Infra Blog",
+            "url": "https://example.com/gpu",
+        },
+        summary="Optimizes CUDA kernels and throughput on H100 hardware.",
+    )
+
+    assert category == "Infrastructure"
+
+
+def test_categorize_digest_item_keeps_eval_out_of_rag_bucket() -> None:
+    bridge = _load_bridge_module()
+
+    category = bridge.categorize_digest_item(
+        row={
+            "title": "Benchmarking semantic retrieval quality",
+            "source_name": "Eval Lab",
+            "url": "https://example.com/eval",
+        },
+        summary="Evaluation harness for retrieval quality and regression tracking.",
+    )
+
+    assert category == "QA & Observability"
+
+
 def test_repair_digest_coverage_adds_missing_links_without_duplicates() -> None:
     bridge = _load_bridge_module()
 

@@ -38,6 +38,40 @@ _CATEGORY_ORDER = (
     "Infrastructure",
     "Business & Product",
 )
+_RAG_STRONG_KEYWORDS = (
+    "rag",
+    "retrieval",
+    "embedding",
+    "embeddings",
+    "vector database",
+    "vector db",
+    "vector search",
+    "rerank",
+    "re-ranking",
+    "hybrid search",
+    "knowledge base",
+    "weaviate",
+)
+_RAG_WEAK_KEYWORDS = (
+    "vector",
+    "database",
+)
+_RAG_NEGATIVE_KEYWORDS = (
+    "gpu",
+    "h100",
+    "cuda",
+    "latency",
+    "throughput",
+    "kernel",
+    "benchmark",
+    "eval",
+    "evaluation",
+    "observability",
+    "trace",
+    "monitor",
+    "testing",
+    "regression",
+)
 _CATEGORY_RULES = (
     ("Security", ("security", "attack", "prompt injection", "vulnerability", "secure", "sast")),
     (
@@ -57,10 +91,6 @@ _CATEGORY_RULES = (
             "regression",
             "verification",
         ),
-    ),
-    (
-        "RAG & Data Systems",
-        ("rag", "retrieval", "vector", "embedding", "weaviate", "database", "search", "index"),
     ),
     (
         "Agent Frameworks",
@@ -244,6 +274,11 @@ def _clean_display_title_text(title: str) -> str:
     for pattern, replacement in _TITLE_BRAND_REPLACEMENTS:
         normalized = re.sub(pattern, replacement, normalized)
     return " ".join(normalized.split()).strip()
+
+
+def _has_keyword(haystack: str, keyword: str) -> bool:
+    pattern = r"(?<![a-z0-9])" + re.escape(keyword).replace(r"\ ", r"\s+") + r"(?![a-z0-9])"
+    return re.search(pattern, haystack) is not None
 
 
 def _truncate_title(title: str) -> str:
@@ -504,8 +539,25 @@ def categorize_digest_item(*, row: dict[str, Any], summary: str = "") -> str:
             summary,
         )
     ).lower()
+    has_rag_negative = any(
+        _has_keyword(haystack, keyword) for keyword in _RAG_NEGATIVE_KEYWORDS
+    )
+    if (
+        any(_has_keyword(haystack, keyword) for keyword in _RAG_STRONG_KEYWORDS)
+        and not has_rag_negative
+    ):
+        return "RAG & Data Systems"
+    if (
+        any(_has_keyword(haystack, keyword) for keyword in _RAG_WEAK_KEYWORDS)
+        and not has_rag_negative
+        and any(
+            _has_keyword(haystack, signal)
+            for signal in ("retrieval", "embedding", "knowledge", "semantic")
+        )
+    ):
+        return "RAG & Data Systems"
     for category, keywords in _CATEGORY_RULES:
-        if any(keyword in haystack for keyword in keywords):
+        if any(_has_keyword(haystack, keyword) for keyword in keywords):
             return category
     return "Business & Product"
 
