@@ -209,7 +209,7 @@ elif command -v bash >/dev/null 2>&1; then
   shell_args=(-lc)
 else
   shell_bin="$(command -v sh)"
-  shell_args=(-lc)
+  shell_args=(-c)
 fi
 
 validate_json_handoff() {
