@@ -1286,7 +1286,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     publish_feed_weekly_parser.add_argument("--base-url", required=True)
     publish_feed_weekly_parser.add_argument("--report-date", required=True)
-    publish_feed_weekly_parser.add_argument("--limit", type=int, default=500)
+    publish_feed_weekly_parser.add_argument("--limit", type=int, default=200)
 
     publish_ai_parser = subparsers.add_parser(
         "publish-antigravity-digest",
