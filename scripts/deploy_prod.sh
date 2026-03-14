@@ -21,6 +21,9 @@ AUTO_UPDATE_RSS_EXTRACT_FULL_TEXT="${AUTO_UPDATE_RSS_EXTRACT_FULL_TEXT:-0}"
 AINEWS_DIGEST_CRON_ENABLED="${AINEWS_DIGEST_CRON_ENABLED:-1}"
 AINEWS_DIGEST_CRON_SCHEDULE="${AINEWS_DIGEST_CRON_SCHEDULE:-0 2 * * *}"
 AINEWS_DIGEST_LOG_PATH="${AINEWS_DIGEST_LOG_PATH:-$ROOT_DIR/logs/daily-digest.log}"
+AINEWS_WEEKLY_CRON_ENABLED="${AINEWS_WEEKLY_CRON_ENABLED:-1}"
+AINEWS_WEEKLY_CRON_SCHEDULE="${AINEWS_WEEKLY_CRON_SCHEDULE:-15 2 * * 1}"
+AINEWS_WEEKLY_LOG_PATH="${AINEWS_WEEKLY_LOG_PATH:-$ROOT_DIR/logs/weekly-analytics.log}"
 ANTIGRAVITY_ENABLED="${ANTIGRAVITY_ENABLED:-1}"
 ANTIGRAVITY_PORT="${ANTIGRAVITY_PORT:-8045}"
 POCKETPAW_ENABLED="${POCKETPAW_ENABLED:-1}"
@@ -197,6 +200,44 @@ install_daily_digest_cron() {
   cleanup_cron_tmp
 }
 
+install_weekly_analytics_cron() {
+  if ! command -v crontab >/dev/null 2>&1; then
+    echo "crontab command not found; skipping weekly analytics cron installation" >&2
+    return 0
+  fi
+
+  begin_marker="# BEGIN AI_NEWS_WEEKLY_ANALYTICS"
+  end_marker="# END AI_NEWS_WEEKLY_ANALYTICS"
+
+  tmp_existing="$(mktemp)"
+  tmp_new="$(mktemp)"
+  cleanup_cron_tmp() {
+    rm -f "$tmp_existing" "$tmp_new"
+  }
+  trap cleanup_cron_tmp EXIT INT TERM
+
+  crontab -l >"$tmp_existing" 2>/dev/null || true
+  sed "/^${begin_marker}\$/,/^${end_marker}\$/d" "$tmp_existing" >"$tmp_new"
+
+  if is_enabled "$AINEWS_WEEKLY_CRON_ENABLED"; then
+    {
+      printf '\n%s\n' "$begin_marker"
+      printf '# Managed by scripts/deploy_prod.sh\n'
+      printf 'CRON_TZ=UTC\n'
+      printf '%s cd %s && ./scripts/run_weekly_analytics_job.sh >> %s 2>&1\n' \
+        "$AINEWS_WEEKLY_CRON_SCHEDULE" "$ROOT_DIR" "$AINEWS_WEEKLY_LOG_PATH"
+      printf '%s\n' "$end_marker"
+    } >>"$tmp_new"
+    echo "Installed/updated weekly analytics cron (${AINEWS_WEEKLY_CRON_SCHEDULE} UTC)"
+  else
+    echo "AINEWS_WEEKLY_CRON_ENABLED=0; removed managed weekly analytics cron block (if present)"
+  fi
+
+  crontab "$tmp_new"
+  trap - EXIT INT TERM
+  cleanup_cron_tmp
+}
+
 echo "Starting PostgreSQL..."
 docker compose -f "$COMPOSE_FILE" up -d db
 
@@ -285,6 +326,7 @@ fi
 
 install_auto_update_cron
 install_daily_digest_cron
+install_weekly_analytics_cron
 
 printf '%s\n' "$CURRENT_COMMIT" > "$LAST_DEPLOY_FILE"
 printf '%s\n' "$APP_IMAGE" > "$LAST_DEPLOY_IMAGE_FILE"

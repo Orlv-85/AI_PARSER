@@ -6,6 +6,7 @@ import json
 import os
 import re
 import sys
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -458,6 +459,30 @@ def _fetch_feed_items(*, base_url: str, report_date: str, limit: int) -> list[di
     if not all(isinstance(item, dict) for item in items):
         raise RuntimeError("news links API returned an invalid article entry")
     return items
+
+
+def _fetch_news_export_range(
+    *,
+    base_url: str,
+    date_from: str,
+    date_to: str,
+    limit: int,
+) -> list[dict[str, Any]]:
+    query = urlencode(
+        {
+            "date_from": date_from,
+            "date_to": date_to,
+            "limit": limit,
+            "sort": "rank",
+            "include_content": "true",
+        }
+    )
+    rows = read_json_response(f"{base_url.rstrip('/')}/api/news/export?{query}")
+    if not isinstance(rows, list):
+        raise RuntimeError("news export API did not return a list")
+    if not all(isinstance(row, dict) for row in rows):
+        raise RuntimeError("news export API returned an invalid article entry")
+    return rows
 
 
 def fetch_bundle(
@@ -985,6 +1010,217 @@ def publish_feed_digest(*, base_url: str, report_date: str, limit: int) -> dict[
     }
 
 
+def _parse_iso_dt(value: str) -> datetime:
+    normalized = value.strip()
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    parsed = datetime.fromisoformat(normalized)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _weekly_best_by_title(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        title = str(row.get("title", "")).strip()
+        url = str(row.get("url", "")).strip()
+        if not title or not _is_http_url(url):
+            continue
+        try:
+            published_at = _parse_iso_dt(str(row.get("published_at", "")))
+        except ValueError:
+            continue
+        try:
+            rank_score = float(row.get("rank_score", 0.0))
+        except (TypeError, ValueError):
+            rank_score = 0.0
+        normalized = {
+            "title": title,
+            "summary": str(
+                row.get("summary")
+                or row.get("content")
+                or "No summary available."
+            ).strip(),
+            "url": url,
+            "published_at": published_at,
+            "rank_score": rank_score,
+        }
+        current = grouped.get(title)
+        if current is None or (rank_score, published_at) > (
+            float(current["rank_score"]),
+            current["published_at"],
+        ):
+            grouped[title] = normalized
+    return grouped
+
+
+def _weekly_to_items(
+    rows: list[dict[str, Any]],
+    *,
+    sort_key: str,
+    limit: int = 3,
+) -> list[dict[str, str]]:
+    if sort_key == "published_at":
+        ordered = sorted(rows, key=lambda row: row["published_at"], reverse=True)
+    else:
+        ordered = sorted(
+            rows,
+            key=lambda row: (float(row["rank_score"]), row["published_at"]),
+            reverse=True,
+        )
+    return [
+        {
+            "title": str(row["title"]),
+            "summary": str(row["summary"]),
+            "url": str(row["url"]),
+        }
+        for row in ordered[:limit]
+    ]
+
+
+def _weekly_build_summary(
+    *,
+    date_from: date,
+    date_to: date,
+    recent_rows: list[dict[str, Any]],
+    prior_rows: list[dict[str, Any]],
+) -> str:
+    recent_count = len(recent_rows)
+    prior_count = len(prior_rows)
+    if recent_count == 0:
+        return f"No AI news signals between {date_from.isoformat()} and {date_to.isoformat()}."
+    delta = recent_count - prior_count
+    if delta > 0:
+        trend = "Momentum increased versus the previous week."
+    elif delta < 0:
+        trend = "Momentum cooled versus the previous week."
+    else:
+        trend = "Momentum held steady versus the previous week."
+    return (
+        f"Weekly summary for {date_from.isoformat()} to {date_to.isoformat()}: "
+        f"{recent_count} notable AI stories surfaced. {trend} "
+        f"Current attention centers on {recent_rows[0]['title']}."
+    )
+
+
+def build_feed_weekly_payload(
+    *,
+    recent_items: list[dict[str, Any]],
+    prior_items: list[dict[str, Any]],
+    report_date: str,
+) -> dict[str, Any]:
+    report_date_obj = date.fromisoformat(report_date)
+    date_from = report_date_obj - timedelta(days=6)
+    date_to = report_date_obj
+    prior_date_to = date_from - timedelta(days=1)
+    prior_date_from = prior_date_to - timedelta(days=6)
+
+    recent_by_title = _weekly_best_by_title(recent_items)
+    prior_by_title = _weekly_best_by_title(prior_items)
+
+    new_rows = [
+        row
+        for title, row in recent_by_title.items()
+        if title not in prior_by_title
+    ]
+    trending_up_rows = [
+        row
+        for title, row in recent_by_title.items()
+        if title in prior_by_title and float(row["rank_score"]) > float(prior_by_title[title]["rank_score"])
+    ]
+    trending_down_rows: list[dict[str, Any]] = []
+    for title, prior_row in prior_by_title.items():
+        recent_row = recent_by_title.get(title)
+        if recent_row is None:
+            trending_down_rows.append(prior_row)
+            continue
+        if float(recent_row["rank_score"]) < float(prior_row["rank_score"]):
+            trending_down_rows.append(prior_row)
+
+    summary = _weekly_build_summary(
+        date_from=date_from,
+        date_to=date_to,
+        recent_rows=list(recent_by_title.values()),
+        prior_rows=list(prior_by_title.values()),
+    )
+
+    return {
+        "report_date": report_date,
+        "date_from": date_from.isoformat(),
+        "date_to": date_to.isoformat(),
+        "summary": summary,
+        "new": _weekly_to_items(new_rows, sort_key="published_at"),
+        "trending_up": _weekly_to_items(trending_up_rows, sort_key="rank_score"),
+        "trending_down": _weekly_to_items(trending_down_rows, sort_key="rank_score"),
+        "window": {
+            "recent_date_from": date_from.isoformat(),
+            "recent_date_to": date_to.isoformat(),
+            "prior_date_from": prior_date_from.isoformat(),
+            "prior_date_to": prior_date_to.isoformat(),
+        },
+    }
+
+
+def publish_feed_weekly(
+    *,
+    base_url: str,
+    report_date: str,
+    limit: int,
+) -> dict[str, Any]:
+    report_date_obj = date.fromisoformat(report_date)
+    date_from = report_date_obj - timedelta(days=6)
+    prior_date_to = date_from - timedelta(days=1)
+    prior_date_from = prior_date_to - timedelta(days=6)
+
+    recent_items = _fetch_news_export_range(
+        base_url=base_url,
+        date_from=date_from.isoformat(),
+        date_to=report_date,
+        limit=limit,
+    )
+    prior_items = _fetch_news_export_range(
+        base_url=base_url,
+        date_from=prior_date_from.isoformat(),
+        date_to=prior_date_to.isoformat(),
+        limit=limit,
+    )
+    payload = build_feed_weekly_payload(
+        recent_items=recent_items,
+        prior_items=prior_items,
+        report_date=report_date,
+    )
+    window = payload.pop("window", {})
+
+    response = read_json_response(
+        f"{base_url.rstrip('/')}/api/news/weekly-analytics",
+        body=json.dumps(payload).encode("utf-8"),
+    )
+    if not isinstance(response, dict):
+        raise RuntimeError("publish weekly response was not a JSON object")
+
+    saved = read_json_response(f"{base_url.rstrip('/')}/api/news/weekly-analytics?date={report_date}")
+    if not isinstance(saved, dict):
+        raise RuntimeError("saved weekly response was not a JSON object")
+
+    return {
+        "report_date": report_date,
+        "recent_fetched_count": len(recent_items),
+        "prior_fetched_count": len(prior_items),
+        "saved_new_count": len(saved.get("new", [])) if isinstance(saved.get("new"), list) else 0,
+        "saved_trending_up_count": (
+            len(saved.get("trending_up", [])) if isinstance(saved.get("trending_up"), list) else 0
+        ),
+        "saved_trending_down_count": (
+            len(saved.get("trending_down", []))
+            if isinstance(saved.get("trending_down"), list)
+            else 0
+        ),
+        "window": window,
+        "mode": "feed_weekly",
+    }
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="PocketPaw bridge for AI_PARSER daily digests")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1022,6 +1258,17 @@ def _build_parser() -> argparse.ArgumentParser:
     publish_feed_parser.add_argument("--base-url", required=True)
     publish_feed_parser.add_argument("--report-date", required=True)
     publish_feed_parser.add_argument("--limit", type=int, default=200)
+
+    publish_feed_weekly_parser = subparsers.add_parser(
+        "publish-feed-weekly",
+        help=(
+            "Build weekly analytics from news export ranges, publish to weekly endpoint, "
+            "and verify saved payload"
+        ),
+    )
+    publish_feed_weekly_parser.add_argument("--base-url", required=True)
+    publish_feed_weekly_parser.add_argument("--report-date", required=True)
+    publish_feed_weekly_parser.add_argument("--limit", type=int, default=500)
 
     publish_ai_parser = subparsers.add_parser(
         "publish-antigravity-digest",
@@ -1084,6 +1331,14 @@ def main() -> int:
             return 0
         if args.command == "publish-feed-digest":
             response = publish_feed_digest(
+                base_url=args.base_url,
+                report_date=args.report_date,
+                limit=args.limit,
+            )
+            sys.stdout.write(json.dumps(response, ensure_ascii=False, indent=2) + "\n")
+            return 0
+        if args.command == "publish-feed-weekly":
+            response = publish_feed_weekly(
                 base_url=args.base_url,
                 report_date=args.report_date,
                 limit=args.limit,

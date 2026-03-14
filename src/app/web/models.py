@@ -104,6 +104,18 @@ class WeeklyAnalyticsResponse(BaseModel):
     trending_down: list[NewsDigestItemPayload]
 
 
+class WeeklyAnalyticsPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    report_date: date
+    date_from: date
+    date_to: date
+    summary: str = Field(min_length=1, max_length=4000)
+    new: list[NewsDigestItemPayload] = Field(default_factory=list)
+    trending_up: list[NewsDigestItemPayload] = Field(default_factory=list)
+    trending_down: list[NewsDigestItemPayload] = Field(default_factory=list)
+
+
 class WeeklyAnalyticsReportListItem(BaseModel):
     report_date: date
     date_from: date

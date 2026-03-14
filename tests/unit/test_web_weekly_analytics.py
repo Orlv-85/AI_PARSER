@@ -18,7 +18,7 @@ def test_public_digest_page_links_to_weekly_ai_analytics(monkeypatch, tmp_path) 
 
     class _DummySession:
         def __enter__(self):
-            return object()
+            return self
 
         def __exit__(self, exc_type, exc, tb) -> None:
             del exc_type, exc, tb
@@ -163,7 +163,7 @@ def test_weekly_ai_analytics_page_defaults_to_latest_published_report_date(
 
     class _DummySession:
         def __enter__(self):
-            return object()
+            return self
 
         def __exit__(self, exc_type, exc, tb) -> None:
             del exc_type, exc, tb
@@ -233,7 +233,7 @@ def test_weekly_ai_analytics_api_returns_report_sections_for_last_7_days(
 
     class _DummySession:
         def __enter__(self):
-            return object()
+            return self
 
         def __exit__(self, exc_type, exc, tb) -> None:
             del exc_type, exc, tb
@@ -279,6 +279,69 @@ def test_weekly_ai_analytics_api_returns_report_sections_for_last_7_days(
             }
         ],
     }
+
+
+def test_weekly_ai_analytics_api_can_save_report_payload(monkeypatch, tmp_path) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+
+    captured: dict[str, object] = {}
+
+    class _WeeklyAnalyticsRepo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def save_weekly_report(self, **kwargs):  # type: ignore[no-untyped-def]
+            captured["saved"] = kwargs
+
+        def get_weekly_report(self, *, report_date: date):
+            return SimpleNamespace(
+                report_date=report_date,
+                date_from=date(2026, 3, 2),
+                date_to=date(2026, 3, 8),
+                summary="Weekly summary for 2026-03-02 to 2026-03-08.",
+                new=[],
+                trending_up=[],
+                trending_down=[],
+            )
+
+    class _DummySession:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            del exc_type, exc, tb
+
+        def commit(self) -> None:
+            return None
+
+    def _session_local():
+        return _DummySession()
+
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
+    monkeypatch.setattr(web_app_module, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo, raising=False)
+
+    client = TestClient(create_app())
+    response = client.post(
+        "/api/news/weekly-analytics",
+        json={
+            "report_date": "2026-03-08",
+            "date_from": "2026-03-02",
+            "date_to": "2026-03-08",
+            "summary": "Weekly summary for 2026-03-02 to 2026-03-08.",
+            "new": [],
+            "trending_up": [],
+            "trending_down": [],
+        },
+    )
+
+    assert response.status_code == 200
+    saved = captured["saved"]
+    assert isinstance(saved, dict)
+    assert saved["report_date"] == date(2026, 3, 8)
+    assert response.json()["report_date"] == "2026-03-08"
 
 
 def test_weekly_ai_analytics_reports_api_returns_published_list(

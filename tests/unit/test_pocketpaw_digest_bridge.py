@@ -366,6 +366,70 @@ def test_build_feed_digest_payload_rewrites_sentence_like_titles_from_summary() 
     )
 
 
+def test_build_feed_weekly_payload_computes_sections() -> None:
+    bridge = _load_bridge_module()
+
+    payload = bridge.build_feed_weekly_payload(
+        recent_items=[
+            {
+                "title": "AI Browser Launches",
+                "url": "https://example.com/new",
+                "summary": "New browser story.",
+                "published_at": "2026-03-08T10:00:00Z",
+                "rank_score": 0.8,
+            },
+            {
+                "title": "Coding Agents Expand",
+                "url": "https://example.com/up-recent",
+                "summary": "Coding agents accelerating.",
+                "published_at": "2026-03-07T10:00:00Z",
+                "rank_score": 0.9,
+            },
+        ],
+        prior_items=[
+            {
+                "title": "Coding Agents Expand",
+                "url": "https://example.com/up-prior",
+                "summary": "Prior baseline lower score.",
+                "published_at": "2026-02-28T10:00:00Z",
+                "rank_score": 0.5,
+            },
+            {
+                "title": "Standalone Vector DBs Cool Off",
+                "url": "https://example.com/down-prior",
+                "summary": "Prior topic disappeared.",
+                "published_at": "2026-02-27T10:00:00Z",
+                "rank_score": 0.7,
+            },
+        ],
+        report_date="2026-03-08",
+    )
+
+    assert payload["report_date"] == "2026-03-08"
+    assert payload["date_from"] == "2026-03-02"
+    assert payload["date_to"] == "2026-03-08"
+    assert [item["title"] for item in payload["new"]] == ["AI Browser Launches"]
+    assert [item["title"] for item in payload["trending_up"]] == ["Coding Agents Expand"]
+    assert [item["title"] for item in payload["trending_down"]] == [
+        "Standalone Vector DBs Cool Off"
+    ]
+
+
+def test_build_feed_weekly_payload_handles_empty_recent_window() -> None:
+    bridge = _load_bridge_module()
+
+    payload = bridge.build_feed_weekly_payload(
+        recent_items=[],
+        prior_items=[],
+        report_date="2026-03-08",
+    )
+
+    assert payload["new"] == []
+    assert payload["trending_up"] == []
+    assert payload["trending_down"] == []
+    assert payload["summary"] == "No AI news signals between 2026-03-02 and 2026-03-08."
+
+
 def test_categorize_digest_item_prefers_rag_for_true_rag_signals() -> None:
     bridge = _load_bridge_module()
 

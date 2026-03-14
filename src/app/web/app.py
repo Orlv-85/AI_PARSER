@@ -1,3 +1,4 @@
+# pylint: disable=too-many-lines
 import logging
 from datetime import UTC, date, datetime, timedelta
 from html import escape
@@ -52,6 +53,7 @@ from app.web.models import (
     SourceOnboardingRejectResponse,
     UpdateStatus,
     WebUpdateSettings,
+    WeeklyAnalyticsPayload,
     WeeklyAnalyticsReportListItem,
     WeeklyAnalyticsReportListResponse,
     WeeklyAnalyticsResponse,
@@ -656,6 +658,52 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
         return _build_weekly_analytics_response(
             report_date=report_date,
             weekly_report=weekly_report,
+        )
+
+    @api.post("/api/news/weekly-analytics", response_model=WeeklyAnalyticsResponse)
+    def save_weekly_ai_analytics(payload: WeeklyAnalyticsPayload) -> WeeklyAnalyticsResponse:
+        try:
+            create_all()
+            with SessionLocal() as session:
+                repo = WeeklyAnalyticsRepo(session)
+                repo.save_weekly_report(
+                    report_date=payload.report_date,
+                    date_from=payload.date_from,
+                    date_to=payload.date_to,
+                    summary=payload.summary,
+                    new=[
+                        {
+                            "title": item.title,
+                            "summary": item.summary,
+                            "url": str(item.url),
+                        }
+                        for item in payload.new
+                    ],
+                    trending_up=[
+                        {
+                            "title": item.title,
+                            "summary": item.summary,
+                            "url": str(item.url),
+                        }
+                        for item in payload.trending_up
+                    ],
+                    trending_down=[
+                        {
+                            "title": item.title,
+                            "summary": item.summary,
+                            "url": str(item.url),
+                        }
+                        for item in payload.trending_down
+                    ],
+                )
+                session.commit()
+                stored = repo.get_weekly_report(report_date=payload.report_date)
+        except SQLAlchemyError as exc:
+            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+
+        return _build_weekly_analytics_response(
+            report_date=payload.report_date,
+            weekly_report=stored,
         )
 
     @api.get(
