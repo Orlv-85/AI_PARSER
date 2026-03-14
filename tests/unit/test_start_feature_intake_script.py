@@ -24,6 +24,7 @@ set -euo pipefail
 mkdir -p specs/001-test-feature
 spec_file="$(pwd)/specs/001-test-feature/spec.md"
 touch "$spec_file"
+echo "Switched to a new branch '001-test-feature'"
 printf '{"BRANCH_NAME":"001-test-feature","SPEC_FILE":"%s","FEATURE_NUM":"001"}\n' "$spec_file"
 """,
         encoding="utf-8",
@@ -37,6 +38,7 @@ set -euo pipefail
 mkdir -p specs/001-test-feature
 plan_file="$(pwd)/specs/001-test-feature/plan.md"
 touch "$plan_file"
+echo "Copied plan template to $plan_file"
 printf '{"IMPL_PLAN":"%s"}\n' "$plan_file"
 """,
         encoding="utf-8",

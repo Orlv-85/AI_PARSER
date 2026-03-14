@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Weekly AI Analytics</title>
+    <style>
+      :root {
+        --bg-top: #f2f7f4;
+        --bg-bottom: #fbfcfa;
+        --surface: #ffffff;
+        --border: #dbe7de;
+        --text: #173126;
+        --muted: #5f7468;
+        --accent: #1f6f50;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        color: var(--text);
+        background: linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+      }
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 48px 20px 64px;
+      }
+      .hero,
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
+      }
+      .hero {
+        padding: 28px;
+      }
+      .panel {
+        margin-top: 18px;
+        padding: 22px;
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: clamp(2rem, 4vw, 3rem);
+      }
+      h2 {
+        margin: 0 0 14px;
+      }
+      .lede,
+      .muted {
+        color: var(--muted);
+      }
+      .hero-nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+      .hero-link {
+        color: var(--accent);
+        font-weight: 600;
+        text-decoration: none;
+      }
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 0.95rem;
+        color: var(--muted);
+      }
+      input[type="date"] {
+        width: min(240px, 100%);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px 14px;
+        font: inherit;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+        margin-top: 18px;
+      }
+      .item-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .item-list li + li {
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid var(--border);
+      }
+      .item-list a {
+        color: var(--accent);
+        font-weight: 600;
+        text-decoration: none;
+      }
+      .empty {
+        margin: 0;
+        color: var(--muted);
+      }
+      @media (max-width: 800px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+        .hero-nav {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="weekly-analytics-shell">
+      <section class="hero">
+        <div class="hero-nav">
+          <a class="hero-link" href="/__REPORT_DATE_QUERY__">Back to Daily Digest</a>
+          <span class="muted">Antigravity weekly management briefing</span>
+        </div>
+        <p class="lede" style="margin-bottom: 8px; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent);">
+          Weekly Management View
+        </p>
+        <h1>Weekly AI Analytics</h1>
+        <p class="lede">Seven days of AI news condensed into an Antigravity summary with new, trending up, and trending down sections.</p>
+        <label for="weekly-report-date">Report Date</label>
+        <input id="weekly-report-date" type="date" value="__REPORT_DATE__" max="__DEFAULT_REPORT_DATE__" />
+      </section>
+
+      <section class="panel">
+        <h2>Management Summary</h2>
+        <p id="weekly-summary" class="muted">Loading weekly analytics...</p>
+      </section>
+
+      <section class="grid">
+        <section class="panel">
+          <h2>New</h2>
+          <ul id="weekly-new" class="item-list"><li class="empty">Loading...</li></ul>
+        </section>
+        <section class="panel">
+          <h2>Trending Up</h2>
+          <ul id="weekly-trending-up" class="item-list"><li class="empty">Loading...</li></ul>
+        </section>
+        <section class="panel">
+          <h2>Trending Down</h2>
+          <ul id="weekly-trending-down" class="item-list"><li class="empty">Loading...</li></ul>
+        </section>
+      </section>
+    </main>
+    <script>
+      const reportDateInput = document.getElementById("weekly-report-date");
+      const summaryNode = document.getElementById("weekly-summary");
+      const newNode = document.getElementById("weekly-new");
+      const trendingUpNode = document.getElementById("weekly-trending-up");
+      const trendingDownNode = document.getElementById("weekly-trending-down");
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function renderList(node, items) {
+        if (!items.length) {
+          node.innerHTML = '<li class="empty">No items for this section yet.</li>';
+          return;
+        }
+        node.innerHTML = items
+          .map(
+            (item) => `
+              <li>
+                <a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>
+                <p class="muted">${escapeHtml(item.summary)}</p>
+              </li>
+            `,
+          )
+          .join("");
+      }
+
+      async function loadWeeklyAnalytics(selectedDate) {
+        const response = await fetch("/api/news/weekly-analytics?date=" + encodeURIComponent(selectedDate));
+        if (!response.ok) {
+          summaryNode.textContent = "Weekly analytics are unavailable right now.";
+          newNode.innerHTML = '<li class="empty">Unavailable.</li>';
+          trendingUpNode.innerHTML = '<li class="empty">Unavailable.</li>';
+          trendingDownNode.innerHTML = '<li class="empty">Unavailable.</li>';
+          return;
+        }
+        const payload = await response.json();
+        window.history.replaceState({}, "", "?date=" + encodeURIComponent(selectedDate));
+        summaryNode.textContent = payload.summary;
+        renderList(newNode, payload.new);
+        renderList(trendingUpNode, payload.trending_up);
+        renderList(trendingDownNode, payload.trending_down);
+      }
+
+      reportDateInput.addEventListener("change", async () => {
+        await loadWeeklyAnalytics(reportDateInput.value);
+      });
+
+      void loadWeeklyAnalytics(reportDateInput.value);
+    </script>
+  </body>
+</html>

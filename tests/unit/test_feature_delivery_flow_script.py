@@ -57,6 +57,50 @@ PY
     path.chmod(0o755)
 
 
+def _write_mock_start_script_multiline_json_with_noise(path: Path) -> None:
+    path.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+repo=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -C)
+      repo="$2"
+      shift 2
+      ;;
+    --json)
+      shift
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+echo "Switched to a new branch '001-test-feature'"
+python3 - "$repo" <<'PY'
+import json
+import sys
+repo = sys.argv[1]
+payload = {
+    "status": "ok",
+    "branch": "001-test-feature",
+    "feature_num": "001",
+    "spec_file": f"{repo}/specs/001-test-feature/spec.md",
+    "plan_file": f"{repo}/specs/001-test-feature/plan.md",
+    "tasks_file": f"{repo}/specs/001-test-feature/tasks.md",
+    "intake_json": f"{repo}/tmp/feature_intake/x/intake.json",
+    "intake_md": f"{repo}/tmp/feature_intake/x/intake.md",
+    "spec_intake": f"{repo}/specs/001-test-feature/spec-intake.md",
+    "execution_packet": f"{repo}/specs/001-test-feature/execution_packet.md",
+}
+print(json.dumps(payload, indent=2))
+PY
+""",
+        encoding="utf-8",
+    )
+    path.chmod(0o755)
+
+
 def _write_mock_multiagent_script(path: Path) -> None:
     path.write_text(
         """#!/usr/bin/env bash
@@ -112,6 +156,38 @@ def test_flow_bootstrap_stores_latest_state(tmp_path: Path) -> None:
     payload = json.loads(result.stdout)
     assert payload["branch"] == "001-test-feature"
     assert (fake_repo / "tmp" / "feature_flow" / "latest_bootstrap.json").exists()
+
+
+def test_flow_bootstrap_parses_multiline_json_with_noise(tmp_path: Path) -> None:
+    script = _repo_root() / "scripts" / "feature_delivery_flow.sh"
+    fake_repo = tmp_path / "repo"
+    fake_repo.mkdir()
+
+    mock_start = tmp_path / "mock_start_multiline.sh"
+    mock_run = tmp_path / "mock_run.sh"
+    _write_mock_start_script_multiline_json_with_noise(mock_start)
+    _write_mock_multiagent_script(mock_run)
+
+    result = subprocess.run(
+        [
+            str(script),
+            "bootstrap",
+            "-C",
+            str(fake_repo),
+            "--json",
+            "--start-script",
+            str(mock_start),
+            "--multiagent-script",
+            str(mock_run),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["branch"] == "001-test-feature"
 
 
 def test_flow_run_requires_explicit_approval(tmp_path: Path) -> None:

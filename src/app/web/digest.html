@@ -27,6 +27,7 @@
         padding: 48px 20px 64px;
       }
       .hero,
+      .weekly-preview,
       .digest-group,
       .empty-state {
         background: var(--surface);
@@ -61,7 +62,18 @@
       .digest-shell {
         margin-top: 20px;
       }
+      .hero-nav {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 20px;
+      }
+      .hero-link {
+        color: var(--accent);
+        font-weight: 600;
+        text-decoration: none;
+      }
       .digest-group,
+      .weekly-preview,
       .empty-state {
         margin-top: 18px;
       }
@@ -98,6 +110,48 @@
         color: var(--muted);
         text-align: center;
       }
+      .weekly-preview {
+        padding: 22px;
+      }
+      .preview-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+        margin-top: 18px;
+      }
+      .preview-card {
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: rgba(15, 118, 110, 0.04);
+      }
+      .preview-card h3 {
+        margin: 0 0 10px;
+        font-size: 1rem;
+      }
+      .preview-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .preview-list li + li {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid var(--border);
+      }
+      .preview-list a {
+        color: var(--accent);
+        font-weight: 600;
+        text-decoration: none;
+      }
+      .preview-list p {
+        margin: 6px 0 0;
+        color: var(--muted);
+      }
+      .preview-empty {
+        margin: 0;
+        color: var(--muted);
+      }
       @media (max-width: 700px) {
         main {
           padding-top: 28px;
@@ -105,12 +159,18 @@
         .hero {
           padding: 22px;
         }
+        .preview-grid {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
   <body>
     <main id="public-digest-shell">
       <section class="hero">
+        <div class="hero-nav">
+          <a class="hero-link" href="/weekly-ai-analytics__REPORT_DATE_QUERY__">Weekly AI Analytics</a>
+        </div>
         <p class="lede" style="margin-bottom: 8px; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent);">
           Public Briefing
         </p>
@@ -125,12 +185,47 @@
           <div id="digest-results">__DIGEST_CONTENT__</div>
         </div>
       </section>
+
+      <section id="weekly-analytics-preview" class="weekly-preview">
+        <p class="lede" style="margin-bottom: 8px; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent);">
+          Weekly Management View
+        </p>
+        <h2 style="margin: 0 0 12px;">Weekly AI Analytics</h2>
+        <p class="lede">Management Summary</p>
+        <p id="weekly-preview-summary" class="lede">
+          Loading the Antigravity weekly summary for this digest date...
+        </p>
+        <div class="preview-grid">
+          <section class="preview-card">
+            <h3>New</h3>
+            <ul id="weekly-preview-new" class="preview-list">
+              <li class="preview-empty">Loading...</li>
+            </ul>
+          </section>
+          <section class="preview-card">
+            <h3>Trending Up</h3>
+            <ul id="weekly-preview-trending-up" class="preview-list">
+              <li class="preview-empty">Loading...</li>
+            </ul>
+          </section>
+          <section class="preview-card">
+            <h3>Trending Down</h3>
+            <ul id="weekly-preview-trending-down" class="preview-list">
+              <li class="preview-empty">Loading...</li>
+            </ul>
+          </section>
+        </div>
+      </section>
     </main>
     <script>
       const dateInput = document.getElementById("digest-date");
       const heroTitle = document.getElementById("digest-hero-title");
       const emptyState = document.getElementById("digest-empty-state");
       const results = document.getElementById("digest-results");
+      const weeklySummary = document.getElementById("weekly-preview-summary");
+      const weeklyNew = document.getElementById("weekly-preview-new");
+      const weeklyTrendingUp = document.getElementById("weekly-preview-trending-up");
+      const weeklyTrendingDown = document.getElementById("weekly-preview-trending-down");
       const initialDigestUrl = "__REPORT_DATE_QUERY__";
       const defaultReportDate = "__DEFAULT_REPORT_DATE__";
 
@@ -174,11 +269,46 @@
           .join("");
       }
 
+      function renderWeeklyPreviewList(node, items) {
+        if (!items.length) {
+          node.innerHTML = '<li class="preview-empty">No items yet.</li>';
+          return;
+        }
+
+        node.innerHTML = items
+          .map(
+            (item) => `
+              <li>
+                <a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>
+                <p>${escapeHtml(item.summary)}</p>
+              </li>
+            `,
+          )
+          .join("");
+      }
+
       function updateHeroTitle(selectedDate) {
         heroTitle.textContent =
           selectedDate === defaultReportDate
             ? "Yesterday's Digest"
             : "Digest for " + selectedDate;
+      }
+
+      async function loadWeeklyPreview(selectedDate) {
+        const response = await fetch("/api/news/weekly-analytics?date=" + encodeURIComponent(selectedDate));
+        if (!response.ok) {
+          weeklySummary.textContent = "Weekly analytics are unavailable right now.";
+          weeklyNew.innerHTML = '<li class="preview-empty">Unavailable.</li>';
+          weeklyTrendingUp.innerHTML = '<li class="preview-empty">Unavailable.</li>';
+          weeklyTrendingDown.innerHTML = '<li class="preview-empty">Unavailable.</li>';
+          return;
+        }
+
+        const payload = await response.json();
+        weeklySummary.textContent = payload.summary;
+        renderWeeklyPreviewList(weeklyNew, payload.new);
+        renderWeeklyPreviewList(weeklyTrendingUp, payload.trending_up);
+        renderWeeklyPreviewList(weeklyTrendingDown, payload.trending_down);
       }
 
       async function loadDigest(selectedDate) {
@@ -191,12 +321,14 @@
         window.history.replaceState({}, "", nextUrl);
         updateHeroTitle(selectedDate);
         renderDigest(payload);
+        await loadWeeklyPreview(selectedDate);
       }
 
       if (window.location.search !== initialDigestUrl) {
         window.history.replaceState({}, "", initialDigestUrl);
       }
       updateHeroTitle(dateInput.value);
+      void loadWeeklyPreview(dateInput.value);
 
       dateInput.addEventListener("change", async () => {
         await loadDigest(dateInput.value);

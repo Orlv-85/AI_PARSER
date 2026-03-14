@@ -172,6 +172,10 @@ text = re.sub(r"-+", "-", text).strip("-")
 print(text or "feature")
 PY
 )"
+resolved_short_name="$short_name"
+if [[ -z "$resolved_short_name" ]]; then
+  resolved_short_name="$slug"
+fi
 
 run_id="$(date -u +%Y%m%dT%H%M%SZ)_${slug}_$$"
 intake_dir="$repo/tmp/feature_intake/$run_id"
@@ -228,15 +232,34 @@ cat > "$intake_md" <<EOF_MD
 EOF_MD
 
 create_cmd=("$repo/.specify/scripts/bash/create-new-feature.sh" --json)
-if [[ -n "$short_name" ]]; then
-  create_cmd+=(--short-name "$short_name")
-fi
+create_cmd+=(--short-name "$resolved_short_name")
 if [[ -n "$number" ]]; then
   create_cmd+=(--number "$number")
 fi
 create_cmd+=("$title")
 
-create_json="$(cd "$repo" && "${create_cmd[@]}")"
+create_raw="$(cd "$repo" && "${create_cmd[@]}")"
+create_json="$(python3 - "$create_raw" <<'PY'
+import json
+import sys
+
+raw = sys.argv[1]
+lines = [line.strip() for line in raw.splitlines() if line.strip()]
+
+for line in reversed(lines):
+    if not (line.startswith("{") and line.endswith("}")):
+        continue
+    try:
+        payload = json.loads(line)
+    except Exception:
+        continue
+    if {"BRANCH_NAME", "SPEC_FILE", "FEATURE_NUM"} <= set(payload.keys()):
+        print(json.dumps(payload))
+        raise SystemExit(0)
+
+raise SystemExit("Failed to parse create-new-feature JSON output")
+PY
+)"
 
 branch_name="$(python3 - "$create_json" <<'PY'
 import json
@@ -259,7 +282,28 @@ print(json.loads(sys.argv[1])["FEATURE_NUM"])
 PY
 )"
 
-plan_json="$(cd "$repo" && .specify/scripts/bash/setup-plan.sh --json)"
+plan_raw="$(cd "$repo" && .specify/scripts/bash/setup-plan.sh --json)"
+plan_json="$(python3 - "$plan_raw" <<'PY'
+import json
+import sys
+
+raw = sys.argv[1]
+lines = [line.strip() for line in raw.splitlines() if line.strip()]
+
+for line in reversed(lines):
+    if not (line.startswith("{") and line.endswith("}")):
+        continue
+    try:
+        payload = json.loads(line)
+    except Exception:
+        continue
+    if "IMPL_PLAN" in payload:
+        print(json.dumps(payload))
+        raise SystemExit(0)
+
+raise SystemExit("Failed to parse setup-plan JSON output")
+PY
+)"
 plan_file="$(python3 - "$plan_json" <<'PY'
 import json
 import sys

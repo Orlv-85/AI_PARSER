@@ -26,6 +26,9 @@ from app.storage.repos import (
     NewsDigestRepo,
     SourceCandidateRepo,
     SourceImportBatchRepo,
+    WeeklyAnalyticsItem,
+    WeeklyAnalyticsRepo,
+    WeeklyAnalyticsReport,
 )
 from app.web.auth import SessionSigner, verify_password
 from app.web.models import (
@@ -48,6 +51,7 @@ from app.web.models import (
     SourceOnboardingRejectResponse,
     UpdateStatus,
     WebUpdateSettings,
+    WeeklyAnalyticsResponse,
 )
 from app.web.service import SourceOnboardingService, UpdateRunService
 from app.web.settings_store import UpdateSettingsStore
@@ -55,12 +59,14 @@ from app.web.settings_store import UpdateSettingsStore
 _TEMPLATE = Path(__file__).with_name("index.html")
 _DIGEST_TEMPLATE = Path(__file__).with_name("digest.html")
 _LOGIN_TEMPLATE = Path(__file__).with_name("login.html")
+_WEEKLY_ANALYTICS_TEMPLATE = Path(__file__).with_name("weekly_analytics.html")
 _LOGGER = logging.getLogger(__name__)
 _SOURCE_ONBOARDING_OVERLAP_BATCH_QUERY = Query(None, ge=1)
 _SOURCE_ONBOARDING_OVERLAP_CANDIDATE_QUERY = Query(default=[])
 _NEWS_LINKS_DATE_QUERY = Query(alias="date")
 _NEWS_DIGEST_DATE_QUERY = Query(alias="date")
 _OPTIONAL_NEWS_DIGEST_DATE_QUERY = Query(default=None, alias="date")
+_OPTIONAL_WEEKLY_ANALYTICS_DATE_QUERY = Query(default=None, alias="date")
 
 
 def _render_index() -> str:
@@ -113,6 +119,16 @@ def _render_login() -> str:
     return _LOGIN_TEMPLATE.read_text(encoding="utf-8")
 
 
+def _render_weekly_analytics(*, report_date: date) -> str:
+    default_report_date = datetime.now(UTC).date() - timedelta(days=1)
+    return (
+        _WEEKLY_ANALYTICS_TEMPLATE.read_text(encoding="utf-8")
+        .replace("__REPORT_DATE__", report_date.isoformat())
+        .replace("__REPORT_DATE_QUERY__", f"?date={report_date.isoformat()}")
+        .replace("__DEFAULT_REPORT_DATE__", default_report_date.isoformat())
+    )
+
+
 def _build_digest_response(
     *,
     report_date: date,
@@ -137,6 +153,45 @@ def _build_digest_response(
             )
             for group in digest.groups
         ],
+    )
+
+
+def _build_weekly_analytics_response(
+    *,
+    report_date: date,
+    weekly_report: WeeklyAnalyticsReport | None,
+) -> WeeklyAnalyticsResponse:
+    if weekly_report is None:
+        date_to = report_date
+        date_from = report_date - timedelta(days=6)
+        return WeeklyAnalyticsResponse(
+            report_date=report_date,
+            date_from=date_from,
+            date_to=date_to,
+            summary="Antigravity found no AI news signals for this week.",
+            new=[],
+            trending_up=[],
+            trending_down=[],
+        )
+
+    def _serialize_items(items: list[WeeklyAnalyticsItem]) -> list[NewsDigestItemPayload]:
+        return [
+            NewsDigestItemPayload(
+                title=item.title,
+                summary=item.summary,
+                url=item.url,
+            )
+            for item in items
+        ]
+
+    return WeeklyAnalyticsResponse(
+        report_date=weekly_report.report_date,
+        date_from=weekly_report.date_from,
+        date_to=weekly_report.date_to,
+        summary=weekly_report.summary,
+        new=_serialize_items(weekly_report.new),
+        trending_up=_serialize_items(weekly_report.trending_up),
+        trending_down=_serialize_items(weekly_report.trending_down),
     )
 
 
@@ -217,10 +272,18 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
 
         path = request.url.path
         is_auth_route = path in {"/login", "/api/auth/login", "/api/auth/logout"}
-        is_public_digest_api = path in {"/api/news/links", "/api/news/digests"}
-        is_unprotected = path == "/health" or path == "/" or is_auth_route or is_public_digest_api
+        is_public_news_api = path in {
+            "/api/news/links",
+            "/api/news/digests",
+            "/api/news/weekly-analytics",
+        }
+        is_unprotected = (
+            path in {"/health", "/", "/weekly-ai-analytics"}
+            or is_auth_route
+            or is_public_news_api
+        )
         is_protected_ui = path == "/admin"
-        is_protected_api = path.startswith("/api/") and not is_public_digest_api
+        is_protected_api = path.startswith("/api/") and not is_public_news_api
         is_protected = is_protected_api or is_protected_ui
 
         if not is_protected or is_unprotected:
@@ -247,6 +310,13 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
             raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
 
         return _render_digest(report_date=report_date, digest=digest)
+
+    @api.get("/weekly-ai-analytics", response_class=HTMLResponse)
+    def weekly_ai_analytics(
+        selected_date: date | None = _OPTIONAL_WEEKLY_ANALYTICS_DATE_QUERY,
+    ) -> str:
+        report_date = selected_date or (datetime.now(UTC).date() - timedelta(days=1))
+        return _render_weekly_analytics(report_date=report_date)
 
     @api.get("/admin", response_class=HTMLResponse)
     def admin_index() -> str:
@@ -505,6 +575,26 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
             raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
 
         return _build_digest_response(report_date=target_date, digest=digest)
+
+    @api.get("/api/news/weekly-analytics", response_model=WeeklyAnalyticsResponse)
+    def get_weekly_ai_analytics(
+        *,
+        target_date: date | None = _OPTIONAL_WEEKLY_ANALYTICS_DATE_QUERY,
+    ) -> WeeklyAnalyticsResponse:
+        report_date = target_date or (datetime.now(UTC).date() - timedelta(days=1))
+        try:
+            create_all()
+            with SessionLocal() as session:
+                weekly_report = WeeklyAnalyticsRepo(session).get_weekly_report(
+                    report_date=report_date
+                )
+        except SQLAlchemyError as exc:
+            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+
+        return _build_weekly_analytics_response(
+            report_date=report_date,
+            weekly_report=weekly_report,
+        )
 
     @api.get("/api/news/{article_id}", response_model=NewsArticleDetail)
     def get_news_article(article_id: int) -> NewsArticleDetail:

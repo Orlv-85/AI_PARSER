@@ -1,9 +1,14 @@
+# pylint: disable=too-many-lines
 import json
+import logging
+import os
 import re
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlsplit
 
+import httpx
 from sqlalchemy import Select, delete, desc, select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -23,6 +28,27 @@ from app.storage.models_sql import (
 
 if TYPE_CHECKING:
     from app.core.source_onboarding import CandidateOverlapGroup
+
+
+_LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(slots=True)
+class WeeklyAnalyticsItem:
+    title: str
+    summary: str
+    url: str
+
+
+@dataclass(slots=True)
+class WeeklyAnalyticsReport:
+    report_date: date
+    date_from: date
+    date_to: date
+    summary: str
+    new: list[WeeklyAnalyticsItem]
+    trending_up: list[WeeklyAnalyticsItem]
+    trending_down: list[WeeklyAnalyticsItem]
 
 
 class SourceRepo:
@@ -574,6 +600,325 @@ class ArticleRepo:
         self.session.execute(delete(ArticleAlias).where(ArticleAlias.article_id.in_(old_article_ids)))
         self.session.execute(delete(Article).where(Article.published_at < cutoff))
         return deleted_articles, deleted_aliases
+
+
+class WeeklyAnalyticsRepo:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def get_weekly_report(self, *, report_date: date) -> WeeklyAnalyticsReport:
+        date_to = report_date
+        date_from = report_date - timedelta(days=6)
+        prior_date_to = date_from - timedelta(days=1)
+        prior_date_from = prior_date_to - timedelta(days=6)
+
+        recent_rows = self._list_articles(date_from=date_from, date_to=date_to)
+        prior_rows = self._list_articles(date_from=prior_date_from, date_to=prior_date_to)
+        fallback_report = self._build_fallback_report(
+            report_date=report_date,
+            date_from=date_from,
+            date_to=date_to,
+            recent_rows=recent_rows,
+            prior_rows=prior_rows,
+        )
+        if not recent_rows:
+            return fallback_report
+
+        try:
+            payload = self._generate_antigravity_report(
+                report_date=report_date,
+                date_from=date_from,
+                date_to=date_to,
+                recent_rows=recent_rows,
+                prior_rows=prior_rows,
+            )
+            return self._build_report_from_payload(
+                report_date=report_date,
+                date_from=date_from,
+                date_to=date_to,
+                payload=payload,
+            )
+        except TimeoutError as exc:
+            _LOGGER.warning("weekly_analytics_antigravity_timeout: %s", exc)
+        except (ValueError, httpx.HTTPError) as exc:
+            _LOGGER.warning("weekly_analytics_antigravity_fallback: %s", exc)
+
+        return fallback_report
+
+    def _build_fallback_report(
+        self,
+        *,
+        report_date: date,
+        date_from: date,
+        date_to: date,
+        recent_rows: list[Article],
+        prior_rows: list[Article],
+    ) -> WeeklyAnalyticsReport:
+        section_rows = self._build_section_rows(recent_rows=recent_rows, prior_rows=prior_rows)
+        return WeeklyAnalyticsReport(
+            report_date=report_date,
+            date_from=date_from,
+            date_to=date_to,
+            summary=self._build_summary(
+                date_from=date_from,
+                date_to=date_to,
+                recent_rows=recent_rows,
+                prior_rows=prior_rows,
+            ),
+            new=self._to_items(section_rows["new"], sort_key="published_at"),
+            trending_up=self._to_items(section_rows["trending_up"], sort_key="rank_score"),
+            trending_down=self._to_items(section_rows["trending_down"], sort_key="rank_score"),
+        )
+
+    def _list_articles(
+        self,
+        *,
+        date_from: date,
+        date_to: date,
+        limit: int = 5,
+    ) -> list[Article]:
+        start_at = datetime.combine(date_from, time.min, tzinfo=UTC)
+        end_at = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=UTC)
+        stmt: Select[tuple[Article]] = (
+            select(Article)
+            .where(Article.published_at >= start_at)
+            .where(Article.published_at < end_at)
+            .order_by(Article.rank_score.desc(), Article.published_at.desc())
+            .limit(limit)
+        )
+        return list(self.session.scalars(stmt).all())
+
+    @staticmethod
+    def _to_items(
+        rows: list[Article],
+        *,
+        sort_key: str,
+        limit: int = 3,
+        reverse: bool = True,
+    ) -> list[WeeklyAnalyticsItem]:
+        if sort_key == "published_at":
+            ordered = sorted(rows, key=lambda row: row.published_at, reverse=reverse)
+        else:
+            ordered = sorted(
+                rows,
+                key=lambda row: (row.rank_score, row.published_at),
+                reverse=reverse,
+            )
+        return [
+            WeeklyAnalyticsItem(
+                title=row.title,
+                summary=(row.summary or row.content or "No summary available.").strip(),
+                url=row.url,
+            )
+            for row in ordered[:limit]
+        ]
+
+    @classmethod
+    def _build_section_rows(
+        cls,
+        *,
+        recent_rows: list[Article],
+        prior_rows: list[Article],
+    ) -> dict[str, list[Article]]:
+        recent_topics = cls._group_topics_by_title(recent_rows)
+        prior_topics = cls._group_topics_by_title(prior_rows)
+
+        new_rows = [
+            topic["recent"]
+            for title, topic in recent_topics.items()
+            if title not in prior_topics
+        ]
+        trending_up_rows = [
+            topic["recent"]
+            for title, topic in recent_topics.items()
+            if title in prior_topics
+            and topic["recent"].rank_score > prior_topics[title]["recent"].rank_score
+        ]
+        trending_down_rows = []
+        for title, topic in prior_topics.items():
+            recent_topic = recent_topics.get(title)
+            if recent_topic is None:
+                trending_down_rows.append(topic["recent"])
+                continue
+            if recent_topic["recent"].rank_score < topic["recent"].rank_score:
+                trending_down_rows.append(topic["recent"])
+
+        return {
+            "new": new_rows,
+            "trending_up": trending_up_rows,
+            "trending_down": trending_down_rows,
+        }
+
+    @staticmethod
+    def _group_topics_by_title(rows: list[Article]) -> dict[str, dict[str, Article]]:
+        grouped: dict[str, dict[str, Article]] = {}
+        for row in rows:
+            existing = grouped.get(row.title)
+            if existing is None:
+                grouped[row.title] = {"recent": row}
+                continue
+            current = existing["recent"]
+            if (row.rank_score, row.published_at) > (current.rank_score, current.published_at):
+                existing["recent"] = row
+        return grouped
+
+    @staticmethod
+    def _build_summary(
+        *,
+        date_from: date,
+        date_to: date,
+        recent_rows: list[Article],
+        prior_rows: list[Article],
+    ) -> str:
+        recent_count = len(recent_rows)
+        prior_count = len(prior_rows)
+        if recent_count == 0:
+            return (
+                f"Antigravity found no AI news signals between {date_from.isoformat()} "
+                f"and {date_to.isoformat()}."
+            )
+        delta = recent_count - prior_count
+        if delta > 0:
+            trend = "Momentum increased versus the previous week."
+        elif delta < 0:
+            trend = "Momentum cooled versus the previous week."
+        else:
+            trend = "Momentum held steady versus the previous week."
+        return (
+            f"Antigravity summary for {date_from.isoformat()} to {date_to.isoformat()}: "
+            f"{recent_count} notable AI stories surfaced. {trend} "
+            f"Current attention centers on {recent_rows[0].title}."
+        )
+
+    def _generate_antigravity_report(
+        self,
+        *,
+        report_date: date,
+        date_from: date,
+        date_to: date,
+        recent_rows: list[Article],
+        prior_rows: list[Article],
+    ) -> dict[str, object]:
+        api_url = os.getenv("AINEWS_ANTIGRAVITY_API_URL", "").strip()
+        if not api_url:
+            raise ValueError("AINEWS_ANTIGRAVITY_API_URL is not configured")
+
+        request_payload = {
+            "report_date": report_date.isoformat(),
+            "date_from": date_from.isoformat(),
+            "date_to": date_to.isoformat(),
+            "instructions": (
+                "Return JSON with keys summary, new, trending_up, trending_down. "
+                "Each section list item must include title, summary, url."
+            ),
+            "recent_articles": self._serialize_articles(recent_rows),
+            "prior_articles": self._serialize_articles(prior_rows),
+        }
+        headers = {"Content-Type": "application/json"}
+        api_key = os.getenv("AINEWS_ANTIGRAVITY_API_KEY", "").strip()
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        timeout_seconds = self._get_antigravity_timeout_seconds()
+        with httpx.Client(timeout=timeout_seconds, follow_redirects=True) as client:
+            response = client.post(api_url, json=request_payload, headers=headers)
+            response.raise_for_status()
+            payload = response.json()
+
+        if not isinstance(payload, dict):
+            raise ValueError("Antigravity response must be a JSON object")
+        return cast(dict[str, object], payload)
+
+    @staticmethod
+    def _serialize_articles(rows: list[Article]) -> list[dict[str, object]]:
+        return [
+            {
+                "title": row.title,
+                "summary": (row.summary or row.content or "No summary available.").strip(),
+                "url": row.url,
+                "published_at": row.published_at.isoformat(),
+                "rank_score": row.rank_score,
+            }
+            for row in rows
+        ]
+
+    @staticmethod
+    def _get_antigravity_timeout_seconds() -> float:
+        raw_value = os.getenv("AINEWS_ANTIGRAVITY_TIMEOUT_SECONDS", "60").strip()
+        try:
+            timeout_seconds = float(raw_value)
+        except ValueError as exc:
+            raise ValueError("AINEWS_ANTIGRAVITY_TIMEOUT_SECONDS must be numeric") from exc
+        if timeout_seconds <= 0:
+            raise ValueError("AINEWS_ANTIGRAVITY_TIMEOUT_SECONDS must be greater than 0")
+        return min(timeout_seconds, 60.0)
+
+    def _build_report_from_payload(
+        self,
+        *,
+        report_date: date,
+        date_from: date,
+        date_to: date,
+        payload: dict[str, object],
+    ) -> WeeklyAnalyticsReport:
+        summary = payload.get("summary")
+        if not isinstance(summary, str) or not summary.strip():
+            raise ValueError("Antigravity response must include a non-empty summary")
+
+        return WeeklyAnalyticsReport(
+            report_date=report_date,
+            date_from=date_from,
+            date_to=date_to,
+            summary=summary.strip(),
+            new=self._validate_payload_items(payload.get("new"), section_name="new"),
+            trending_up=self._validate_payload_items(
+                payload.get("trending_up"),
+                section_name="trending_up",
+            ),
+            trending_down=self._validate_payload_items(
+                payload.get("trending_down"),
+                section_name="trending_down",
+            ),
+        )
+
+    @staticmethod
+    def _validate_payload_items(
+        raw_items: object,
+        *,
+        section_name: str,
+    ) -> list[WeeklyAnalyticsItem]:
+        if not isinstance(raw_items, list):
+            raise ValueError(f"Antigravity response section {section_name} must be a list")
+
+        items: list[WeeklyAnalyticsItem] = []
+        for index, raw_item in enumerate(raw_items):
+            if not isinstance(raw_item, dict):
+                raise ValueError(
+                    f"Antigravity response item {section_name}[{index}] must be an object"
+                )
+            title = raw_item.get("title")
+            summary = raw_item.get("summary")
+            url = raw_item.get("url")
+            if not isinstance(title, str) or not title.strip():
+                raise ValueError(
+                    f"Antigravity response item {section_name}[{index}] is missing title"
+                )
+            if not isinstance(summary, str) or not summary.strip():
+                raise ValueError(
+                    f"Antigravity response item {section_name}[{index}] is missing summary"
+                )
+            if not isinstance(url, str) or not url.strip():
+                raise ValueError(
+                    f"Antigravity response item {section_name}[{index}] is missing url"
+                )
+            items.append(
+                WeeklyAnalyticsItem(
+                    title=title.strip(),
+                    summary=summary.strip(),
+                    url=url.strip(),
+                )
+            )
+        return items
 
 
 class SourceImportBatchRepo:

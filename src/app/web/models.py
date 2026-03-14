@@ -94,6 +94,16 @@ class NewsDigestResponse(BaseModel):
     groups: list[NewsDigestGroupPayload]
 
 
+class WeeklyAnalyticsResponse(BaseModel):
+    report_date: date
+    date_from: date
+    date_to: date
+    summary: str
+    new: list[NewsDigestItemPayload]
+    trending_up: list[NewsDigestItemPayload]
+    trending_down: list[NewsDigestItemPayload]
+
+
 class SourceOnboardingCandidateView(BaseModel):
     candidate_id: int
     batch_id: int | None = None

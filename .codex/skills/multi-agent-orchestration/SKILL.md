@@ -268,6 +268,9 @@ Notes:
 ## Strict JSON Templates (Schema 1.0)
 
 Wrapper validates handoffs strictly (`missing keys`, `extra keys`, `type mismatch` => FAIL).
+Canonical `status`: `PASS`, `FAIL`, `NEEDS_WORK`.
+Wrapper normalizes common aliases automatically (`OK`, `DONE`, `COMPLETED`, `SUCCESS`, `BLOCKED`).
+Unknown status values are normalized to `NEEDS_WORK` with a warning (no hard-stop).
 
 Tester (`tmp/tester_out.json`):
 ```json

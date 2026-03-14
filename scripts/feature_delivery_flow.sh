@@ -26,11 +26,14 @@ run options:
   --task TEXT                 Current scoped task/slice description
   --allow TEXT                Allowed file scope description for prompts
   --approved                  Explicit Gate A confirmation (required)
+  --stream                    Stream nested agent logs in this terminal
   --sandbox MODE              Sandbox for nested codex (default: workspace-write)
   --retries N                 Retries for wrapper (default: 3)
   --backoff CSV               Backoff list for wrapper (default: 5,10,20)
   --coverage-cmd CMD          Optional coverage command for wrapper gate
   --coverage-fail-under N     Optional coverage threshold
+  --final-gate                Run final repo-wide gate:
+                              make lint PYTHON=./venv1/bin/python && ./venv1/bin/pytest
 
 Examples:
   ./scripts/feature_delivery_flow.sh bootstrap
@@ -40,6 +43,8 @@ Examples:
     --task "Implement endpoint validation errors" \
     --allow "src/app/web,tests/unit" \
     --approved \
+    --stream \
+    --final-gate \
     --coverage-cmd "./venv1/bin/pytest --cov=src/app/web --cov-report=term-missing" \
     --coverage-fail-under 100
 USAGE
@@ -117,13 +122,45 @@ run_bootstrap() {
   if [[ ${#rest_args[@]} -gt 0 ]]; then
     forward=("${rest_args[@]}")
   fi
+  local output_raw
   local output
 
   if [[ ${#forward[@]} -gt 0 ]]; then
-    output="$(cd "$repo" && "$start_script" -C "$repo" --json "${forward[@]}")"
+    output_raw="$(cd "$repo" && "$start_script" -C "$repo" --json "${forward[@]}")"
   else
-    output="$(cd "$repo" && "$start_script" -C "$repo" --json)"
+    output_raw="$(cd "$repo" && "$start_script" -C "$repo" --json)"
   fi
+
+  output="$(python3 -c '
+import json,sys
+raw=sys.argv[1]
+required={"status","branch","spec_file","plan_file","tasks_file","execution_packet"}
+def ok(p):
+    return isinstance(p,dict) and required <= set(p.keys())
+try:
+    p=json.loads(raw)
+    if ok(p):
+        print(json.dumps(p)); raise SystemExit(0)
+except Exception:
+    pass
+s=raw.find("{"); e=raw.rfind("}")
+if s!=-1 and e!=-1 and e>s:
+    try:
+        p=json.loads(raw[s:e+1])
+        if ok(p):
+            print(json.dumps(p)); raise SystemExit(0)
+    except Exception:
+        pass
+for line in reversed([ln.strip() for ln in raw.splitlines() if ln.strip()]):
+    if line.startswith("{") and line.endswith("}"):
+        try:
+            p=json.loads(line)
+            if ok(p):
+                print(json.dumps(p)); raise SystemExit(0)
+        except Exception:
+            pass
+raise SystemExit("Failed to parse bootstrap JSON output")
+' "$output_raw")"
 
   local branch
   local spec_file
@@ -188,6 +225,8 @@ run_execute() {
   local sandbox="workspace-write"
   local retries="3"
   local backoff="5,10,20"
+  local stream=0
+  local final_gate=0
   local coverage_cmd=""
   local coverage_fail_under=""
 
@@ -207,6 +246,12 @@ run_execute() {
         ;;
       --approved)
         approved=1
+        ;;
+      --stream)
+        stream=1
+        ;;
+      --final-gate)
+        final_gate=1
         ;;
       --sandbox)
         i=$((i + 1)); sandbox="${args[$i]:-}"
@@ -284,6 +329,16 @@ Scope restrictions:
 Deliverable:
 - Write strict JSON handoff to tmp/tester_out.json using schema_version=1.0 and role=tester.
 - Include failing_reasons and coverage object keys: command, percent, target_percent, uncovered_lines.
+- status MUST be exactly one of: PASS, FAIL, NEEDS_WORK.
+- Use EXACT keys only (no extras, no omissions):
+  schema_version, role, status, summary, changed_files, checks, artifacts, next_action, failing_reasons, coverage
+- Minimal valid skeleton:
+  {
+    "schema_version":"1.0","role":"tester","status":"NEEDS_WORK",
+    "summary":"...","changed_files":[],"checks":[],"artifacts":["tmp/tester_out.json"],
+    "next_action":"...","failing_reasons":[],
+    "coverage":{"command":"...","percent":0,"target_percent":100,"uncovered_lines":[]}
+  }
 EOF_TESTER
 
   cat > "$generator_prompt_file" <<EOF_GENERATOR
@@ -309,6 +364,9 @@ Validation before completion:
 Deliverable:
 - Write strict JSON handoff to tmp/generator_out.json using schema_version=1.0 and role=generator.
 - Include implementation_notes and coverage object keys: command, percent, target_percent, uncovered_lines.
+- status MUST be exactly one of: PASS, FAIL, NEEDS_WORK.
+- Use EXACT keys only:
+  schema_version, role, status, summary, changed_files, checks, artifacts, next_action, implementation_notes, coverage
 EOF_GENERATOR
 
   cat > "$reviewer_prompt_file" <<EOF_REVIEWER
@@ -332,6 +390,9 @@ Deliverables:
 - Write strict JSON handoff to tmp/reviewer_out.json using schema_version=1.0 and role=reviewer.
 - verdict must be PASS or FAIL, include concise reason and requirement checks.
 - Write tmp/agent_audit.txt line1=PASS|FAIL, line2=one short reason.
+- status MUST be exactly one of: PASS, FAIL, NEEDS_WORK.
+- Use EXACT keys only:
+  schema_version, role, status, summary, changed_files, checks, artifacts, next_action, verdict, reason, requirements
 EOF_REVIEWER
 
   local tester_prompt generator_prompt reviewer_prompt
@@ -350,6 +411,9 @@ EOF_REVIEWER
     --backoff "$backoff"
     --tag "featureflow"
   )
+  if [[ "$stream" -eq 1 ]]; then
+    run_cmd+=(--stream-logs)
+  fi
 
   if [[ -n "$coverage_cmd" ]]; then
     run_cmd+=(--coverage-cmd "$coverage_cmd")
@@ -360,12 +424,53 @@ EOF_REVIEWER
 
   "${run_cmd[@]}"
 
+  if [[ "$final_gate" -eq 1 ]]; then
+    local lint_log="$flow_dir/final_gate_lint.log"
+    local pytest_log="$flow_dir/final_gate_pytest.log"
+
+    echo "[final-gate] running lint..."
+    if [[ "$stream" -eq 1 ]]; then
+      set +e
+      (cd "$repo" && make lint PYTHON=./venv1/bin/python) 2>&1 | tee "$lint_log"
+      local lint_rc=${PIPESTATUS[0]}
+      set -e
+      if [[ "$lint_rc" -ne 0 ]]; then
+        echo "[final-gate] FAILED: make lint (see $lint_log)" >&2
+        return 1
+      fi
+    else
+      if ! (cd "$repo" && make lint PYTHON=./venv1/bin/python) >"$lint_log" 2>&1; then
+        echo "[final-gate] FAILED: make lint (see $lint_log)" >&2
+        return 1
+      fi
+    fi
+
+    echo "[final-gate] running full pytest..."
+    if [[ "$stream" -eq 1 ]]; then
+      set +e
+      (cd "$repo" && ./venv1/bin/pytest) 2>&1 | tee "$pytest_log"
+      local pytest_rc=${PIPESTATUS[0]}
+      set -e
+      if [[ "$pytest_rc" -ne 0 ]]; then
+        echo "[final-gate] FAILED: pytest (see $pytest_log)" >&2
+        return 1
+      fi
+    else
+      if ! (cd "$repo" && ./venv1/bin/pytest) >"$pytest_log" 2>&1; then
+        echo "[final-gate] FAILED: pytest (see $pytest_log)" >&2
+        return 1
+      fi
+    fi
+
+    echo "[final-gate] PASS"
+  fi
+
   local meta_file="$flow_dir/run_meta.json"
-  python3 - "$meta_file" "$feature_dir" "$task" "$allow_scope" "$sandbox" "$retries" "$backoff" <<'PY'
+  python3 - "$meta_file" "$feature_dir" "$task" "$allow_scope" "$sandbox" "$retries" "$backoff" "$final_gate" <<'PY'
 import json
 import sys
 
-meta_path, feature_dir, task, allow_scope, sandbox, retries, backoff = sys.argv[1:]
+meta_path, feature_dir, task, allow_scope, sandbox, retries, backoff, final_gate = sys.argv[1:]
 payload = {
     "status": "ok",
     "feature_dir": feature_dir,
@@ -374,6 +479,7 @@ payload = {
     "sandbox": sandbox,
     "retries": int(retries),
     "backoff": backoff,
+    "final_gate": bool(int(final_gate)),
 }
 with open(meta_path, "w", encoding="utf-8") as fh:
     json.dump(payload, fh, indent=2)
