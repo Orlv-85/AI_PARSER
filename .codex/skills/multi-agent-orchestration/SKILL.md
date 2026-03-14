@@ -33,9 +33,9 @@ Default pattern:
 - Define exact files each agent may modify.
 - Define validation criteria for reviewer (PASS/FAIL + short reason).
 - Define handoff files in `tmp/`:
-  - `tmp/tester_out.md`
-  - `tmp/generator_out.md`
-  - `tmp/reviewer_out.md`
+  - `tmp/tester_out.json`
+  - `tmp/generator_out.json`
+  - `tmp/reviewer_out.json`
 - Define a scoped coverage target up front (default: `100%` for touched files / target modules in this task).
 - Define the exact coverage command and report format to avoid ambiguity.
 - Avoid prompts like "fix everything" without scope.
@@ -43,14 +43,14 @@ Default pattern:
 ### 2) Run Tester
 
 ```bash
-/bin/zsh -f -lc 'codex exec -C /ABS/PATH/TO/REPO --sandbox workspace-write "TESTER_TASK. Modify only tests and write tmp/tester_out.md."'
+/bin/zsh -f -lc 'codex exec -C /ABS/PATH/TO/REPO --sandbox workspace-write "TESTER_TASK. Modify only tests and write tmp/tester_out.json."'
 ```
 
 Tester responsibilities (explicit):
 - Start with failing tests for the requested behavior.
 - After generator reaches green once, add strengthening tests for edge cases and regressions.
 - Drive coverage to the agreed scoped target (default `100%`).
-- Write in `tmp/tester_out.md`:
+- Write in `tmp/tester_out.json`:
   - tests added,
   - current failing reason(s),
   - coverage command,
@@ -66,7 +66,7 @@ Constraints:
 - Run test command and make lint before finishing
 - Run full repository test suite (`pytest`) before finishing, unless user explicitly approves scoped-only testing
 - Run the scoped coverage command before finishing
-- Write handoff summary to tmp/generator_out.md
+- Write handoff summary to tmp/generator_out.json
 Output:
 - Apply changes directly
 ```
@@ -80,7 +80,7 @@ Generator completion rule (important):
   - lint passes (or clearly documented pre-existing unrelated failures),
   - scoped coverage meets target.
 
-Recommended generator handoff fields in `tmp/generator_out.md`:
+Recommended generator handoff fields in `tmp/generator_out.json`:
 - full test suite command + result
 - test command + result
 - lint command + result
@@ -104,7 +104,7 @@ Return to Generator after Tester updates tests and records:
 ### 4) Run Reviewer
 
 ```bash
-/bin/zsh -f -lc 'codex exec -C /ABS/PATH/TO/REPO --sandbox workspace-write "Validate RESULTS against REQUIREMENTS. Write tmp/reviewer_out.md and tmp/agent_audit.txt with PASS or FAIL on line 1 and one short reason on line 2. Do not modify files outside tmp/."'
+/bin/zsh -f -lc 'codex exec -C /ABS/PATH/TO/REPO --sandbox workspace-write "Validate RESULTS against REQUIREMENTS. Write tmp/reviewer_out.json and tmp/agent_audit.txt with PASS or FAIL on line 1 and one short reason on line 2. Do not modify files outside tmp/."'
 ```
 
 Reviewer prompt template:
@@ -115,7 +115,7 @@ Validation:
 - Requirement 1
 - Requirement 2
 Output file:
-- tmp/reviewer_out.md
+- tmp/reviewer_out.json
 - tmp/agent_audit.txt
 Format:
 - Line 1: PASS or FAIL
@@ -151,6 +151,58 @@ Coverage policy (default):
 
 ## Reusable Command Blocks
 
+### Feature Intake + Spec Kit Bootstrap
+
+Use this before new feature delivery when scope is still raw and you want deterministic intake artifacts:
+
+```bash
+./scripts/start_feature_intake.sh
+```
+
+Automation-friendly mode:
+
+```bash
+./scripts/start_feature_intake.sh --non-interactive --json \
+  --title "FEATURE_TITLE" \
+  --problem "PROBLEM_STATEMENT" \
+  --users "TARGET_USERS" \
+  --in-scope "IN_SCOPE" \
+  --out-of-scope "OUT_OF_SCOPE" \
+  --acceptance "ACCEPTANCE_CRITERIA" \
+  --constraints "CONSTRAINTS" \
+  --non-functional "NON_FUNCTIONAL_REQUIREMENTS" \
+  --risks "RISKS" \
+  --done "DEFINITION_OF_DONE"
+```
+
+### End-to-End Feature Flow (with Gate A)
+
+Bootstrap:
+
+```bash
+./scripts/feature_delivery_flow.sh bootstrap --non-interactive --json \
+  --title "FEATURE_TITLE" \
+  --problem "PROBLEM_STATEMENT" \
+  --users "TARGET_USERS" \
+  --in-scope "IN_SCOPE" \
+  --out-of-scope "OUT_OF_SCOPE" \
+  --acceptance "ACCEPTANCE_CRITERIA" \
+  --constraints "CONSTRAINTS" \
+  --non-functional "NON_FUNCTIONAL_REQUIREMENTS" \
+  --risks "RISKS" \
+  --done "DEFINITION_OF_DONE"
+```
+
+Run implementation slice (requires explicit approval):
+
+```bash
+./scripts/feature_delivery_flow.sh run \
+  --feature-dir specs/XXX-feature \
+  --task "TASK_SLICE" \
+  --allow "src/app,tests" \
+  --approved
+```
+
 ### Minimal single nested run
 
 ```bash
@@ -160,7 +212,7 @@ Coverage policy (default):
 ### Tester + Generator + Reviewer wrapper
 
 ```bash
-~/.codex/skills/multi-agent-orchestration/scripts/run_executor_reviewer.sh \
+./scripts/run_multiagent.sh \
   -C /ABS/PATH/TO/REPO \
   -t "TESTER_TASK" \
   -g "GENERATOR_TASK" \
@@ -199,7 +251,7 @@ Consider multi-agent task complete only when all are true:
 Use bundled wrapper when you want one command for tester+generator+reviewer:
 
 ```bash
-~/.codex/skills/multi-agent-orchestration/scripts/run_executor_reviewer.sh \
+./scripts/run_multiagent.sh \
   -C /ABS/PATH/TO/REPO \
   -t "TESTER_TASK" \
   -g "GENERATOR_TASK" \
@@ -210,5 +262,99 @@ Notes:
 - Script runs tester, generator, then reviewer (legacy executor/reviewer mode remains available via `-e`).
 - Default sandbox is `workspace-write` (override with `--sandbox`).
 - Script uses retries + backoff and `zsh -f` for nested stability.
-- If reviewer writes `tmp/reviewer_out.md` or `tmp/agent_audit.txt`, script prints handoff/audit.
+- If reviewer writes `tmp/reviewer_out.json` or `tmp/agent_audit.txt`, script prints handoff/audit.
 - Orchestrator checks (`pytest`, `make lint`, `git diff`) are still mandatory.
+
+## Strict JSON Templates (Schema 1.0)
+
+Wrapper validates handoffs strictly (`missing keys`, `extra keys`, `type mismatch` => FAIL).
+
+Tester (`tmp/tester_out.json`):
+```json
+{
+  "schema_version": "1.0",
+  "role": "tester",
+  "status": "NEEDS_WORK",
+  "summary": "Added failing tests for X.",
+  "changed_files": ["tests/test_x.py"],
+  "checks": ["pytest -q tests/test_x.py: fail"],
+  "artifacts": ["tmp/tester_out.json"],
+  "next_action": "Generator should implement X.",
+  "failing_reasons": ["expected 400, got 500"],
+  "coverage": {
+    "command": "pytest --cov=src/x --cov-report=term-missing",
+    "percent": 72,
+    "target_percent": 100,
+    "uncovered_lines": ["src/x/service.py:44-61"]
+  }
+}
+```
+
+Generator (`tmp/generator_out.json`):
+```json
+{
+  "schema_version": "1.0",
+  "role": "generator",
+  "status": "PASS",
+  "summary": "Implemented X and stabilized tests.",
+  "changed_files": ["src/x/service.py"],
+  "checks": ["pytest -q: pass", "make lint: pass"],
+  "artifacts": ["tmp/generator_out.json"],
+  "next_action": "Reviewer validates requirements.",
+  "implementation_notes": ["Added explicit null guard for config."],
+  "coverage": {
+    "command": "pytest --cov=src/x --cov-report=term-missing",
+    "percent": 100,
+    "target_percent": 100,
+    "uncovered_lines": []
+  }
+}
+```
+
+Reviewer (`tmp/reviewer_out.json`):
+```json
+{
+  "schema_version": "1.0",
+  "role": "reviewer",
+  "status": "PASS",
+  "summary": "Requirements validated.",
+  "changed_files": [],
+  "checks": ["requirements review: pass"],
+  "artifacts": ["tmp/reviewer_out.json", "tmp/agent_audit.txt"],
+  "next_action": "Orchestrator runs final checks.",
+  "verdict": "PASS",
+  "reason": "All acceptance checks satisfied.",
+  "requirements": ["R1=PASS", "R2=PASS"]
+}
+```
+
+## Coverage Auto-Gate
+
+Use wrapper-level coverage enforcement when you need deterministic gate behavior:
+
+```bash
+./scripts/run_multiagent.sh \
+  -C /ABS/PATH/TO/REPO \
+  -t "TESTER_TASK" \
+  -g "GENERATOR_TASK" \
+  -r "REVIEWER_TASK" \
+  --coverage-cmd "pytest --cov=src/app/services/x --cov-report=term-missing" \
+  --coverage-fail-under 100
+```
+
+Behavior:
+- Runs coverage command right after generator step.
+- Fails run if command exits non-zero.
+- If `--coverage-fail-under` is set, parses coverage percent from log and fails when below threshold.
+- Stores coverage log and gate summary in `tmp/runs/<run_id>/logs/coverage.log` and `tmp/runs/<run_id>/handoffs/coverage_gate.json`.
+
+## Pattern Testing
+
+Recommended checks for the orchestration pattern:
+- Deterministic local smoke in pytest with mocked `codex` binary (no network/auth dependency).
+- Optional live readiness probe by running one tiny real `codex exec` task and validating handoff files.
+
+Live readiness probe command:
+```bash
+./scripts/check_codex_ready.sh -C /ABS/PATH/TO/REPO --timeout-sec 90
+```
