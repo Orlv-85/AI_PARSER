@@ -461,27 +461,29 @@ def _fetch_feed_items(*, base_url: str, report_date: str, limit: int) -> list[di
     return items
 
 
-def _fetch_news_export_range(
+def _fetch_news_links_range(
     *,
     base_url: str,
     date_from: str,
     date_to: str,
     limit: int,
 ) -> list[dict[str, Any]]:
-    query = urlencode(
-        {
-            "date_from": date_from,
-            "date_to": date_to,
-            "limit": limit,
-            "sort": "rank",
-            "include_content": "true",
-        }
-    )
-    rows = read_json_response(f"{base_url.rstrip('/')}/api/news/export?{query}")
-    if not isinstance(rows, list):
-        raise RuntimeError("news export API did not return a list")
-    if not all(isinstance(row, dict) for row in rows):
-        raise RuntimeError("news export API returned an invalid article entry")
+    start = date.fromisoformat(date_from)
+    end = date.fromisoformat(date_to)
+    if start > end:
+        raise ValueError("date_from must be <= date_to")
+
+    rows: list[dict[str, Any]] = []
+    current = start
+    while current <= end:
+        query = urlencode({"date": current.isoformat(), "limit": limit})
+        daily_rows = read_json_response(f"{base_url.rstrip('/')}/api/news/links?{query}")
+        if not isinstance(daily_rows, list):
+            raise RuntimeError("news links API did not return a list")
+        if not all(isinstance(row, dict) for row in daily_rows):
+            raise RuntimeError("news links API returned an invalid article entry")
+        rows.extend(daily_rows)
+        current += timedelta(days=1)
     return rows
 
 
@@ -1022,19 +1024,23 @@ def _parse_iso_dt(value: str) -> datetime:
 
 def _weekly_best_by_title(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     grouped: dict[str, dict[str, Any]] = {}
+    counts: dict[str, int] = {}
     for row in rows:
         title = str(row.get("title", "")).strip()
         url = str(row.get("url", "")).strip()
         if not title or not _is_http_url(url):
             continue
+        counts[title] = counts.get(title, 0) + 1
         try:
             published_at = _parse_iso_dt(str(row.get("published_at", "")))
         except ValueError:
             continue
         try:
-            rank_score = float(row.get("rank_score", 0.0))
+            raw_rank_score = float(row.get("rank_score", 0.0))
         except (TypeError, ValueError):
-            rank_score = 0.0
+            raw_rank_score = 0.0
+        has_explicit_rank = raw_rank_score > 0.0
+        rank_score = raw_rank_score if has_explicit_rank else float(counts[title])
         normalized = {
             "title": title,
             "summary": str(
@@ -1045,6 +1051,7 @@ def _weekly_best_by_title(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any
             "url": url,
             "published_at": published_at,
             "rank_score": rank_score,
+            "has_explicit_rank": has_explicit_rank,
         }
         current = grouped.get(title)
         if current is None or (rank_score, published_at) > (
@@ -1052,6 +1059,13 @@ def _weekly_best_by_title(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any
             current["published_at"],
         ):
             grouped[title] = normalized
+        else:
+            if not bool(current.get("has_explicit_rank", False)):
+                current["rank_score"] = max(float(current["rank_score"]), float(counts[title]))
+
+    for title, item in grouped.items():
+        if not bool(item.get("has_explicit_rank", False)):
+            item["rank_score"] = max(float(item["rank_score"]), float(counts.get(title, 1)))
     return grouped
 
 
@@ -1127,7 +1141,9 @@ def build_feed_weekly_payload(
     trending_up_rows = [
         row
         for title, row in recent_by_title.items()
-        if title in prior_by_title and float(row["rank_score"]) > float(prior_by_title[title]["rank_score"])
+        if title in prior_by_title
+        and float(row["rank_score"])
+        > float(prior_by_title[title]["rank_score"])
     ]
     trending_down_rows: list[dict[str, Any]] = []
     for title, prior_row in prior_by_title.items():
@@ -1173,13 +1189,13 @@ def publish_feed_weekly(
     prior_date_to = date_from - timedelta(days=1)
     prior_date_from = prior_date_to - timedelta(days=6)
 
-    recent_items = _fetch_news_export_range(
+    recent_items = _fetch_news_links_range(
         base_url=base_url,
         date_from=date_from.isoformat(),
         date_to=report_date,
         limit=limit,
     )
-    prior_items = _fetch_news_export_range(
+    prior_items = _fetch_news_links_range(
         base_url=base_url,
         date_from=prior_date_from.isoformat(),
         date_to=prior_date_to.isoformat(),
@@ -1199,7 +1215,9 @@ def publish_feed_weekly(
     if not isinstance(response, dict):
         raise RuntimeError("publish weekly response was not a JSON object")
 
-    saved = read_json_response(f"{base_url.rstrip('/')}/api/news/weekly-analytics?date={report_date}")
+    saved = read_json_response(
+        f"{base_url.rstrip('/')}/api/news/weekly-analytics?date={report_date}"
+    )
     if not isinstance(saved, dict):
         raise RuntimeError("saved weekly response was not a JSON object")
 
