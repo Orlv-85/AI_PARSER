@@ -199,6 +199,19 @@ ln -sfn "$run_dir" "$repo/$runs_dir_rel/latest"
 
 IFS=',' read -r -a backoff_values <<< "$backoff_csv"
 
+shell_bin=""
+shell_args=()
+if command -v zsh >/dev/null 2>&1; then
+  shell_bin="$(command -v zsh)"
+  shell_args=(-f -lc)
+elif command -v bash >/dev/null 2>&1; then
+  shell_bin="$(command -v bash)"
+  shell_args=(-lc)
+else
+  shell_bin="$(command -v sh)"
+  shell_args=(-lc)
+fi
+
 validate_json_handoff() {
   local role="$1"
   local handoff_abs="$2"
@@ -362,7 +375,7 @@ run_coverage_gate() {
 
   echo "[coverage] running coverage gate..."
   set +e
-  /bin/zsh -f -lc "cd '$repo' && $coverage_cmd" >"$log_abs" 2>&1
+  "$shell_bin" "${shell_args[@]}" "cd '$repo' && $coverage_cmd" >"$log_abs" 2>&1
   local rc=$?
   set -e
 
@@ -426,11 +439,11 @@ run_agent() {
     set +e
     local rc=0
     if [[ "$stream_logs" -eq 1 ]]; then
-      /bin/zsh -f -lc "codex exec -C '$repo' --sandbox '$sandbox' --output-last-message '$message_rel' \"\$(cat '$prompt_abs')\"" \
+      "$shell_bin" "${shell_args[@]}" "codex exec -C '$repo' --sandbox '$sandbox' --output-last-message '$message_rel' \"\$(cat '$prompt_abs')\"" \
         2>&1 | tee "$log_abs"
       rc=${PIPESTATUS[0]}
     else
-      /bin/zsh -f -lc "codex exec -C '$repo' --sandbox '$sandbox' --output-last-message '$message_rel' \"\$(cat '$prompt_abs')\"" \
+      "$shell_bin" "${shell_args[@]}" "codex exec -C '$repo' --sandbox '$sandbox' --output-last-message '$message_rel' \"\$(cat '$prompt_abs')\"" \
         >"$log_abs" 2>&1
       rc=$?
     fi
