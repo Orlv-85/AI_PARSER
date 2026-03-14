@@ -203,10 +203,10 @@ shell_bin=""
 shell_args=()
 if command -v zsh >/dev/null 2>&1; then
   shell_bin="$(command -v zsh)"
-  shell_args=(-f -lc)
+  shell_args=(-f -c)
 elif command -v bash >/dev/null 2>&1; then
   shell_bin="$(command -v bash)"
-  shell_args=(-lc)
+  shell_args=(-c)
 else
   shell_bin="$(command -v sh)"
   shell_args=(-c)
