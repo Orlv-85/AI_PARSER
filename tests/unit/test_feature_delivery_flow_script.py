@@ -125,6 +125,63 @@ printf 'PASS\nmock\n' > "$repo/tmp/agent_audit.txt"
     path.chmod(0o755)
 
 
+def _write_mock_multiagent_script_fail_then_pass(path: Path) -> None:
+    path.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+repo=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -C)
+      repo="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+mkdir -p "$repo/tmp"
+counter_file="$repo/tmp/mock_multiagent_counter.txt"
+count=0
+if [[ -f "$counter_file" ]]; then
+  count="$(cat "$counter_file")"
+fi
+count=$((count + 1))
+printf '%s' "$count" > "$counter_file"
+if [[ "$count" -lt 3 ]]; then
+  printf 'FAIL\\nneeds retry\\n' > "$repo/tmp/agent_audit.txt"
+  python3 - "$repo" <<'PY'
+import json
+import pathlib
+import sys
+repo = pathlib.Path(sys.argv[1])
+payload = {
+    "schema_version": "1.0",
+    "role": "reviewer",
+    "status": "FAIL",
+    "summary": "fail",
+    "changed_files": [],
+    "checks": [],
+    "artifacts": [],
+    "next_action": "retry",
+    "verdict": "FAIL",
+    "reason": "missing requirement",
+    "requirements": [],
+}
+(repo / "tmp" / "reviewer_out.json").write_text(
+    json.dumps(payload, ensure_ascii=False) + "\\n", encoding="utf-8"
+)
+PY
+  exit 0
+fi
+printf 'PASS\\nok\\n' > "$repo/tmp/agent_audit.txt"
+""",
+        encoding="utf-8",
+    )
+    path.chmod(0o755)
+
+
 def test_flow_bootstrap_stores_latest_state(tmp_path: Path) -> None:
     script = _repo_root() / "scripts" / "feature_delivery_flow.sh"
     fake_repo = tmp_path / "repo"
@@ -277,3 +334,48 @@ def test_flow_run_executes_with_approval(tmp_path: Path) -> None:
     assert "run: ok" in result.stdout
     flow_dirs = list((fake_repo / "tmp" / "feature_flow").glob("*_flow_*"))
     assert flow_dirs
+
+
+def test_flow_run_retries_until_pass_by_default(tmp_path: Path) -> None:
+    script = _repo_root() / "scripts" / "feature_delivery_flow.sh"
+    fake_repo = tmp_path / "repo"
+    fake_repo.mkdir()
+
+    feature_dir = fake_repo / "specs" / "001-test-feature"
+    feature_dir.mkdir(parents=True)
+    (feature_dir / "spec.md").write_text("# spec\n", encoding="utf-8")
+    (feature_dir / "plan.md").write_text("# plan\n", encoding="utf-8")
+    (feature_dir / "tasks.md").write_text("# tasks\n", encoding="utf-8")
+    (feature_dir / "execution_packet.md").write_text("# packet\n", encoding="utf-8")
+
+    mock_start = tmp_path / "mock_start.sh"
+    mock_run = tmp_path / "mock_run.sh"
+    _write_mock_start_script(mock_start)
+    _write_mock_multiagent_script_fail_then_pass(mock_run)
+
+    result = subprocess.run(
+        [
+            str(script),
+            "run",
+            "-C",
+            str(fake_repo),
+            "--feature-dir",
+            str(feature_dir),
+            "--task",
+            "Implement X",
+            "--allow",
+            "src/app,tests",
+            "--approved",
+            "--start-script",
+            str(mock_start),
+            "--multiagent-script",
+            str(mock_run),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "iterations: 3/3" in result.stdout
+    assert (fake_repo / "tmp" / "mock_multiagent_counter.txt").read_text(encoding="utf-8") == "3"

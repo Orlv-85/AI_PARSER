@@ -104,6 +104,18 @@ class WeeklyAnalyticsResponse(BaseModel):
     trending_down: list[NewsDigestItemPayload]
 
 
+class WeeklyAnalyticsReportListItem(BaseModel):
+    report_date: date
+    date_from: date
+    date_to: date
+    summary: str
+    created_at: datetime
+
+
+class WeeklyAnalyticsReportListResponse(BaseModel):
+    items: list[WeeklyAnalyticsReportListItem]
+
+
 class SourceOnboardingCandidateView(BaseModel):
     candidate_id: int
     batch_id: int | None = None

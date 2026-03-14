@@ -58,6 +58,11 @@
         gap: 16px;
         margin-bottom: 18px;
       }
+      .hero-links {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
       .hero-link {
         color: var(--accent);
         font-weight: 600;
@@ -116,7 +121,10 @@
     <main id="weekly-analytics-shell">
       <section class="hero">
         <div class="hero-nav">
-          <a class="hero-link" href="/__REPORT_DATE_QUERY__">Back to Daily Digest</a>
+          <div class="hero-links">
+            <a class="hero-link" href="/weekly-ai-analytics/reports">All Weekly Reports</a>
+            <a class="hero-link" href="/__REPORT_DATE_QUERY__">Back to Daily Digest</a>
+          </div>
           <span class="muted">Antigravity weekly management briefing</span>
         </div>
         <p class="lede" style="margin-bottom: 8px; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent);">

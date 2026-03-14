@@ -1,5 +1,5 @@
 # pylint: disable=too-many-lines
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from types import SimpleNamespace
 from typing import Any, ClassVar, Literal
 
@@ -2372,3 +2372,60 @@ def test_run_fetch_cycle_batch_upsert_does_not_advance_rss_known_streak_for_in_r
     assert summary.new == 2
     assert summary.duplicates == 1
     assert summary.early_stop_hits == 0
+
+
+def test_run_fetch_cycle_publishes_previous_monday_sunday_weekly_report_on_monday(
+    monkeypatch,
+) -> None:
+    logger = _Logger()
+    session = _Session()
+    publish_calls: list[date] = []
+
+    class _FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 3, 9, 8, 0, tzinfo=tz or UTC)
+
+    class _WeeklyAnalyticsRepo:
+        def __init__(self, current_session) -> None:
+            assert current_session is session
+
+        def save_weekly_report(self, *, report_date: date, **_kwargs) -> None:
+            publish_calls.append(report_date)
+
+    configs = [
+        SourceConfig(
+            id="rss_weekly_publish",
+            name="RSS Weekly Publish",
+            type="rss",
+            url="https://example.com/rss-weekly-publish.xml",
+            enabled=True,
+        )
+    ]
+
+    monkeypatch.setattr("app.core.pipeline.datetime", _FrozenDateTime)
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.pipeline.SessionLocal", lambda: session)
+    monkeypatch.setattr("app.core.pipeline.SourceRepo", _SourceRepo)
+    monkeypatch.setattr("app.core.pipeline.ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr(
+        "app.core.pipeline.WeeklyAnalyticsRepo",
+        _WeeklyAnalyticsRepo,
+        raising=False,
+    )
+    monkeypatch.setattr("app.core.pipeline.fetch_rss", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("app.core.pipeline.fetch_html", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("app.core.pipeline.canonicalize_url", lambda u: f"c:{u}")
+    monkeypatch.setattr("app.core.pipeline.canonical_url_hash", lambda u: f"h:{u}")
+    monkeypatch.setattr("app.core.pipeline.ai_relevance_score", lambda _item: 0.5)
+    monkeypatch.setattr("app.core.pipeline.freshness_score", lambda _dt: 0.5)
+    monkeypatch.setattr("app.core.pipeline.rank_score", lambda **_kwargs: 0.5)
+
+    summary = run_fetch_cycle(settings=Settings(sources_path="sources.yaml"), logger=logger)
+
+    assert summary.fetched == 0
+    assert summary.new == 0
+    assert summary.duplicates == 0
+    assert summary.errors == 0
+    assert publish_calls == [date(2026, 3, 8)]

@@ -379,6 +379,57 @@ def test_weekly_report_uses_antigravity_output_for_selected_seven_day_window(
     assert [item.title for item in report.trending_down] == ["Standalone Vector DBs Cool Off"]
 
 
+def test_get_weekly_report_returns_saved_published_report_for_matching_week() -> None:
+    engine = create_engine("sqlite:///:memory:", future=True)
+    models_sql.Base.metadata.create_all(engine)
+    session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    target_date = date(2026, 3, 8)
+
+    with session_local() as write_session:
+        _seed_weekly_analytics_articles(write_session)
+        repos.WeeklyAnalyticsRepo(write_session).save_weekly_report(
+            report_date=target_date,
+            date_from=date(2026, 3, 2),
+            date_to=target_date,
+            summary="Published weekly management snapshot for the completed Monday-Sunday week.",
+            new=[
+                {
+                    "title": "AI Browser Launches",
+                    "summary": "Saved weekly section items should be served from storage.",
+                    "url": "https://example.com/ai-browser-recent",
+                }
+            ],
+            trending_up=[
+                {
+                    "title": "Coding Agents Expand",
+                    "summary": "Published reports should preserve the reviewed trend narrative.",
+                    "url": "https://example.com/coding-agents-recent",
+                }
+            ],
+            trending_down=[
+                {
+                    "title": "Standalone Vector DBs Cool Off",
+                    "summary": "Published reports should keep the stored comparison section.",
+                    "url": "https://example.com/vector-dbs-prior",
+                }
+            ],
+        )
+        write_session.commit()
+
+    with session_local() as read_session:
+        report = repos.WeeklyAnalyticsRepo(read_session).get_weekly_report(report_date=target_date)
+
+    assert report.report_date == target_date
+    assert report.date_from == date(2026, 3, 2)
+    assert report.date_to == target_date
+    assert report.summary == (
+        "Published weekly management snapshot for the completed Monday-Sunday week."
+    )
+    assert [item.title for item in report.new] == ["AI Browser Launches"]
+    assert [item.title for item in report.trending_up] == ["Coding Agents Expand"]
+    assert [item.title for item in report.trending_down] == ["Standalone Vector DBs Cool Off"]
+
+
 def test_weekly_report_falls_back_when_antigravity_times_out(monkeypatch) -> None:
     session = _session()
     _seed_weekly_analytics_articles(session)

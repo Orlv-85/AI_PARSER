@@ -218,5 +218,41 @@ class NewsDigestItem(Base):
     group: Mapped[NewsDigestGroup] = relationship(back_populates="items")
 
 
+class WeeklyAnalyticsStoredReport(Base):
+    __tablename__ = "weekly_analytics_reports"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    report_date: Mapped[date] = mapped_column(Date, unique=True, index=True)
+    date_from: Mapped[date] = mapped_column(Date)
+    date_to: Mapped[date] = mapped_column(Date)
+    summary: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+    items: Mapped[list[WeeklyAnalyticsStoredItem]] = relationship(
+        back_populates="report",
+        cascade="all, delete-orphan",
+        order_by="WeeklyAnalyticsStoredItem.position",
+    )
+
+
+class WeeklyAnalyticsStoredItem(Base):
+    __tablename__ = "weekly_analytics_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    report_id: Mapped[int] = mapped_column(
+        ForeignKey("weekly_analytics_reports.id"),
+        index=True,
+    )
+    section_name: Mapped[str] = mapped_column(String(32), index=True)
+    title: Mapped[str] = mapped_column(String(512))
+    summary: Mapped[str] = mapped_column(Text)
+    url: Mapped[str] = mapped_column(String(2048))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+
+    report: Mapped[WeeklyAnalyticsStoredReport] = relationship(back_populates="items")
+
+
 Index("ix_articles_published_at_desc", Article.published_at.desc())
 Index("ix_articles_rank_score_desc", Article.rank_score.desc())

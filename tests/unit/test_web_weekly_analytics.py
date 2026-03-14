@@ -43,8 +43,29 @@ def test_public_digest_page_links_to_weekly_ai_analytics(monkeypatch, tmp_path) 
     response = client.get("/?date=2026-03-07")
 
     assert response.status_code == 200
-    assert 'href="/weekly-ai-analytics?date=2026-03-07"' in response.text
-    assert "Weekly AI Analytics" in response.text
+    assert 'href="/weekly-ai-analytics/reports"' in response.text
+    assert "Weekly Reports" in response.text
+
+
+def test_weekly_reports_page_renders(monkeypatch, tmp_path) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+
+    class _FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 3, 11, 9, 0, tzinfo=tz or UTC)
+
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "datetime", _FrozenDateTime)
+
+    client = TestClient(create_app())
+
+    response = client.get("/weekly-ai-analytics/reports")
+
+    assert response.status_code == 200
+    assert "Weekly AI Reports" in response.text
+    assert 'href="/?date=2026-03-10"' in response.text
 
 
 def test_weekly_ai_analytics_page_renders_shell_with_requested_date(
@@ -119,6 +140,50 @@ def test_weekly_ai_analytics_page_back_link_preserves_default_previous_utc_day(
 
     assert response.status_code == 200
     assert 'href="/?date=2026-03-07"' in response.text
+
+
+def test_weekly_ai_analytics_page_defaults_to_latest_published_report_date(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+
+    class _FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            # Wednesday after Monday autopublish of previous Mon-Sun week.
+            return cls(2026, 3, 11, 9, 0, tzinfo=tz or UTC)
+
+    class _WeeklyAnalyticsRepo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def get_latest_report_date(self) -> date:
+            return date(2026, 3, 8)
+
+    class _DummySession:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            del exc_type, exc, tb
+
+    def _session_local():
+        return _DummySession()
+
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
+    monkeypatch.setattr(web_app_module, "datetime", _FrozenDateTime)
+    monkeypatch.setattr(web_app_module, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo, raising=False)
+
+    client = TestClient(create_app())
+
+    response = client.get("/weekly-ai-analytics")
+
+    assert response.status_code == 200
+    assert 'value="2026-03-08"' in response.text
+    assert 'href="/?date=2026-03-08"' in response.text
 
 
 def test_weekly_ai_analytics_api_returns_report_sections_for_last_7_days(
@@ -216,6 +281,60 @@ def test_weekly_ai_analytics_api_returns_report_sections_for_last_7_days(
     }
 
 
+def test_weekly_ai_analytics_reports_api_returns_published_list(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+
+    class _WeeklyAnalyticsRepo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def list_stored_reports(self, *, limit: int):
+            assert limit == 52
+            return [
+                SimpleNamespace(
+                    report_date=date(2026, 3, 8),
+                    date_from=date(2026, 3, 2),
+                    date_to=date(2026, 3, 8),
+                    summary="Saved management weekly summary",
+                    created_at=datetime(2026, 3, 10, 6, 30, tzinfo=UTC),
+                )
+            ]
+
+    class _DummySession:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            del exc_type, exc, tb
+
+    def _session_local():
+        return _DummySession()
+
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
+    monkeypatch.setattr(web_app_module, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo, raising=False)
+
+    client = TestClient(create_app())
+    response = client.get("/api/news/weekly-analytics/reports")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "items": [
+            {
+                "report_date": "2026-03-08",
+                "date_from": "2026-03-02",
+                "date_to": "2026-03-08",
+                "summary": "Saved management weekly summary",
+                "created_at": "2026-03-10T06:30:00Z",
+            }
+        ]
+    }
+
+
 def test_weekly_ai_analytics_api_defaults_to_previous_utc_day(
     monkeypatch, tmp_path
 ) -> None:
@@ -278,6 +397,72 @@ def test_weekly_ai_analytics_api_defaults_to_previous_utc_day(
     }
 
 
+def test_weekly_ai_analytics_api_defaults_to_latest_published_report_date(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+
+    captured: dict[str, object] = {}
+
+    class _FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            # Wednesday after Monday autopublish of previous Mon-Sun week.
+            return cls(2026, 3, 11, 9, 0, tzinfo=tz or UTC)
+
+    class _WeeklyAnalyticsRepo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def get_latest_report_date(self) -> date:
+            return date(2026, 3, 8)
+
+        def get_weekly_report(self, *, report_date: date):
+            captured["report_date"] = report_date
+            return SimpleNamespace(
+                report_date=report_date,
+                date_from=date(2026, 3, 2),
+                date_to=date(2026, 3, 8),
+                summary="Saved Monday-published weekly report.",
+                new=[],
+                trending_up=[],
+                trending_down=[],
+            )
+
+    class _DummySession:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            del exc_type, exc, tb
+
+    def _session_local():
+        return _DummySession()
+
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
+    monkeypatch.setattr(web_app_module, "datetime", _FrozenDateTime)
+    monkeypatch.setattr(web_app_module, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo, raising=False)
+
+    client = TestClient(create_app())
+
+    response = client.get("/api/news/weekly-analytics")
+
+    assert response.status_code == 200
+    assert captured == {"report_date": date(2026, 3, 8)}
+    assert response.json() == {
+        "report_date": "2026-03-08",
+        "date_from": "2026-03-02",
+        "date_to": "2026-03-08",
+        "summary": "Saved Monday-published weekly report.",
+        "new": [],
+        "trending_up": [],
+        "trending_down": [],
+    }
+
+
 def test_public_digest_page_renders_weekly_ai_analytics_section(monkeypatch, tmp_path) -> None:
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()
@@ -309,7 +494,7 @@ def test_public_digest_page_renders_weekly_ai_analytics_section(monkeypatch, tmp
     response = client.get("/")
 
     assert response.status_code == 200
-    assert 'href="/weekly-ai-analytics?date=' in response.text
+    assert 'href="/weekly-ai-analytics/reports"' in response.text
     assert 'id="weekly-analytics-preview"' in response.text
     assert "Weekly Management View" in response.text
     assert "Management Summary" in response.text

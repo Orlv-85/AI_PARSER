@@ -1,6 +1,6 @@
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from logging import Logger
 from threading import BoundedSemaphore
 from typing import Any, cast
@@ -18,7 +18,7 @@ from app.ingest.html import (
 )
 from app.ingest.rss import fetch_rss, fetch_rss_with_metadata
 from app.storage import SessionLocal, create_all
-from app.storage.repos import ArticleRepo, SourceRepo
+from app.storage.repos import ArticleRepo, SourceRepo, WeeklyAnalyticsRepo
 
 _DEFAULT_FETCH_RSS_WITH_METADATA = fetch_rss_with_metadata
 _DEFAULT_FETCH_HTML = fetch_html
@@ -447,6 +447,45 @@ def _upsert_article_rows(
             duplicate_count += 1
     return new_count, duplicate_count
 
+
+def _weekly_report_date_to_publish(today: date) -> date | None:
+    if today.weekday() != 0:
+        return None
+    return today - timedelta(days=1)
+
+
+def _publish_weekly_analytics_if_due(
+    *,
+    session: object,
+    logger: Logger,
+    run_id: str,
+) -> None:
+    report_date = _weekly_report_date_to_publish(datetime.now(UTC).date())
+    if report_date is None:
+        return
+
+    try:
+        WeeklyAnalyticsRepo(cast(Any, session)).save_weekly_report(report_date=report_date)
+    except Exception as exc:  # pragma: no cover - defensive logging path
+        logger.error(
+            "weekly_analytics_publish_failed",
+            {
+                "run_id": run_id,
+                "report_date": report_date.isoformat(),
+                "error_type": type(exc).__name__,
+                "error_message": str(exc),
+            },
+        )
+        return
+
+    logger.info(
+        "weekly_analytics_published",
+        {
+            "run_id": run_id,
+            "report_date": report_date.isoformat(),
+        },
+    )
+
 # pylint: disable=too-many-branches,too-many-statements
 def _process_html_links_two_stage(
     *,
@@ -856,6 +895,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                 enabled=bool(getattr(settings, "fetch_emit_source_metrics", True)),
             )
 
+        _publish_weekly_analytics_if_due(session=session, logger=logger, run_id=run_id)
         session.commit()
 
     logger.info(

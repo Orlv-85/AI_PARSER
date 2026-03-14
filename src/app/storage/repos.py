@@ -24,6 +24,8 @@ from app.storage.models_sql import (
     Source,
     SourceCandidate,
     SourceImportBatch,
+    WeeklyAnalyticsStoredItem,
+    WeeklyAnalyticsStoredReport,
 )
 
 if TYPE_CHECKING:
@@ -49,6 +51,15 @@ class WeeklyAnalyticsReport:
     new: list[WeeklyAnalyticsItem]
     trending_up: list[WeeklyAnalyticsItem]
     trending_down: list[WeeklyAnalyticsItem]
+
+
+@dataclass(slots=True)
+class WeeklyAnalyticsReportIndexEntry:
+    report_date: date
+    date_from: date
+    date_to: date
+    summary: str
+    created_at: datetime
 
 
 class SourceRepo:
@@ -607,6 +618,103 @@ class WeeklyAnalyticsRepo:
         self.session = session
 
     def get_weekly_report(self, *, report_date: date) -> WeeklyAnalyticsReport:
+        stored_report = self._get_stored_report(report_date=report_date)
+        if stored_report is not None:
+            return self._hydrate_stored_report(stored_report)
+
+        return self._generate_report(report_date=report_date)
+
+    def get_latest_report_date(self) -> date | None:
+        stmt = (
+            select(WeeklyAnalyticsStoredReport.report_date)
+            .order_by(WeeklyAnalyticsStoredReport.report_date.desc())
+            .limit(1)
+        )
+        value = self.session.execute(stmt).scalar_one_or_none()
+        if value is None or isinstance(value, date):
+            return value
+        raise TypeError(f"Expected date or None for report_date, got {type(value)!r}")
+
+    def list_stored_reports(self, *, limit: int = 52) -> list[WeeklyAnalyticsReportIndexEntry]:
+        stmt: Select[tuple[WeeklyAnalyticsStoredReport]] = (
+            select(WeeklyAnalyticsStoredReport)
+            .order_by(WeeklyAnalyticsStoredReport.report_date.desc())
+            .limit(limit)
+        )
+        rows = self.session.execute(stmt).scalars().all()
+        return [
+            WeeklyAnalyticsReportIndexEntry(
+                report_date=row.report_date,
+                date_from=row.date_from,
+                date_to=row.date_to,
+                summary=row.summary,
+                created_at=row.created_at,
+            )
+            for row in rows
+        ]
+
+    def save_weekly_report(
+        self,
+        *,
+        report_date: date,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        summary: str | None = None,
+        new: list[dict[str, str] | WeeklyAnalyticsItem] | None = None,
+        trending_up: list[dict[str, str] | WeeklyAnalyticsItem] | None = None,
+        trending_down: list[dict[str, str] | WeeklyAnalyticsItem] | None = None,
+    ) -> WeeklyAnalyticsReport:
+        should_generate = any(
+            value is None
+            for value in (date_from, date_to, summary, new, trending_up, trending_down)
+        )
+        report = (
+            self._generate_report(report_date=report_date)
+            if should_generate
+            else WeeklyAnalyticsReport(
+                report_date=report_date,
+                date_from=(date_from if date_from is not None else report_date - timedelta(days=6)),
+                date_to=(date_to if date_to is not None else report_date),
+                summary=(summary or "").strip(),
+                new=self._coerce_items(new or []),
+                trending_up=self._coerce_items(trending_up or []),
+                trending_down=self._coerce_items(trending_down or []),
+            )
+        )
+
+        with self.session.begin_nested():
+            existing = self._get_stored_report(report_date=report.report_date)
+            if existing is not None:
+                self.session.delete(existing)
+                self.session.flush()
+
+            stored_report = WeeklyAnalyticsStoredReport(
+                report_date=report.report_date,
+                date_from=report.date_from,
+                date_to=report.date_to,
+                summary=report.summary,
+            )
+            for section_name, items in (
+                ("new", report.new),
+                ("trending_up", report.trending_up),
+                ("trending_down", report.trending_down),
+            ):
+                for position, item in enumerate(items):
+                    stored_report.items.append(
+                        WeeklyAnalyticsStoredItem(
+                            section_name=section_name,
+                            title=item.title,
+                            summary=item.summary,
+                            url=item.url,
+                            position=position,
+                        )
+                    )
+            self.session.add(stored_report)
+            self.session.flush()
+
+        return report
+
+    def _generate_report(self, *, report_date: date) -> WeeklyAnalyticsReport:
         date_to = report_date
         date_from = report_date - timedelta(days=6)
         prior_date_to = date_from - timedelta(days=1)
@@ -644,6 +752,44 @@ class WeeklyAnalyticsRepo:
             _LOGGER.warning("weekly_analytics_antigravity_fallback: %s", exc)
 
         return fallback_report
+
+    def _get_stored_report(self, *, report_date: date) -> WeeklyAnalyticsStoredReport | None:
+        stmt: Select[tuple[WeeklyAnalyticsStoredReport]] = (
+            select(WeeklyAnalyticsStoredReport)
+            .where(WeeklyAnalyticsStoredReport.report_date == report_date)
+            .options(selectinload(WeeklyAnalyticsStoredReport.items))
+        )
+        return self.session.execute(stmt).scalar_one_or_none()
+
+    @staticmethod
+    def _hydrate_stored_report(
+        stored_report: WeeklyAnalyticsStoredReport,
+    ) -> WeeklyAnalyticsReport:
+        sections: dict[str, list[WeeklyAnalyticsItem]] = {
+            "new": [],
+            "trending_up": [],
+            "trending_down": [],
+        }
+        for item in stored_report.items:
+            if item.section_name not in sections:
+                continue
+            sections[item.section_name].append(
+                WeeklyAnalyticsItem(
+                    title=item.title,
+                    summary=item.summary,
+                    url=item.url,
+                )
+            )
+
+        return WeeklyAnalyticsReport(
+            report_date=stored_report.report_date,
+            date_from=stored_report.date_from,
+            date_to=stored_report.date_to,
+            summary=stored_report.summary,
+            new=sections["new"],
+            trending_up=sections["trending_up"],
+            trending_down=sections["trending_down"],
+        )
 
     def _build_fallback_report(
         self,
@@ -916,6 +1062,24 @@ class WeeklyAnalyticsRepo:
                     title=title.strip(),
                     summary=summary.strip(),
                     url=url.strip(),
+                )
+            )
+        return items
+
+    @staticmethod
+    def _coerce_items(
+        raw_items: list[dict[str, str] | WeeklyAnalyticsItem],
+    ) -> list[WeeklyAnalyticsItem]:
+        items: list[WeeklyAnalyticsItem] = []
+        for raw_item in raw_items:
+            if isinstance(raw_item, WeeklyAnalyticsItem):
+                items.append(raw_item)
+                continue
+            items.append(
+                WeeklyAnalyticsItem(
+                    title=str(raw_item["title"]).strip(),
+                    summary=str(raw_item["summary"]).strip(),
+                    url=str(raw_item["url"]).strip(),
                 )
             )
         return items
