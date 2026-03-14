@@ -1,14 +1,12 @@
 # pylint: disable=too-many-lines
 import json
 import logging
-import os
 import re
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlsplit
 
-import httpx
 from sqlalchemy import Select, delete, desc, select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -729,28 +727,6 @@ class WeeklyAnalyticsRepo:
             recent_rows=recent_rows,
             prior_rows=prior_rows,
         )
-        if not recent_rows:
-            return fallback_report
-
-        try:
-            payload = self._generate_antigravity_report(
-                report_date=report_date,
-                date_from=date_from,
-                date_to=date_to,
-                recent_rows=recent_rows,
-                prior_rows=prior_rows,
-            )
-            return self._build_report_from_payload(
-                report_date=report_date,
-                date_from=date_from,
-                date_to=date_to,
-                payload=payload,
-            )
-        except TimeoutError as exc:
-            _LOGGER.warning("weekly_analytics_antigravity_timeout: %s", exc)
-        except (ValueError, httpx.HTTPError) as exc:
-            _LOGGER.warning("weekly_analytics_antigravity_fallback: %s", exc)
-
         return fallback_report
 
     def _get_stored_report(self, *, report_date: date) -> WeeklyAnalyticsStoredReport | None:
@@ -920,7 +896,7 @@ class WeeklyAnalyticsRepo:
         prior_count = len(prior_rows)
         if recent_count == 0:
             return (
-                f"Antigravity found no AI news signals between {date_from.isoformat()} "
+                f"No AI news signals between {date_from.isoformat()} "
                 f"and {date_to.isoformat()}."
             )
         delta = recent_count - prior_count
@@ -931,140 +907,10 @@ class WeeklyAnalyticsRepo:
         else:
             trend = "Momentum held steady versus the previous week."
         return (
-            f"Antigravity summary for {date_from.isoformat()} to {date_to.isoformat()}: "
+            f"Weekly summary for {date_from.isoformat()} to {date_to.isoformat()}: "
             f"{recent_count} notable AI stories surfaced. {trend} "
             f"Current attention centers on {recent_rows[0].title}."
         )
-
-    def _generate_antigravity_report(
-        self,
-        *,
-        report_date: date,
-        date_from: date,
-        date_to: date,
-        recent_rows: list[Article],
-        prior_rows: list[Article],
-    ) -> dict[str, object]:
-        api_url = os.getenv("AINEWS_ANTIGRAVITY_API_URL", "").strip()
-        if not api_url:
-            raise ValueError("AINEWS_ANTIGRAVITY_API_URL is not configured")
-
-        request_payload = {
-            "report_date": report_date.isoformat(),
-            "date_from": date_from.isoformat(),
-            "date_to": date_to.isoformat(),
-            "instructions": (
-                "Return JSON with keys summary, new, trending_up, trending_down. "
-                "Each section list item must include title, summary, url."
-            ),
-            "recent_articles": self._serialize_articles(recent_rows),
-            "prior_articles": self._serialize_articles(prior_rows),
-        }
-        headers = {"Content-Type": "application/json"}
-        api_key = os.getenv("AINEWS_ANTIGRAVITY_API_KEY", "").strip()
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
-
-        timeout_seconds = self._get_antigravity_timeout_seconds()
-        with httpx.Client(timeout=timeout_seconds, follow_redirects=True) as client:
-            response = client.post(api_url, json=request_payload, headers=headers)
-            response.raise_for_status()
-            payload = response.json()
-
-        if not isinstance(payload, dict):
-            raise ValueError("Antigravity response must be a JSON object")
-        return cast(dict[str, object], payload)
-
-    @staticmethod
-    def _serialize_articles(rows: list[Article]) -> list[dict[str, object]]:
-        return [
-            {
-                "title": row.title,
-                "summary": (row.summary or row.content or "No summary available.").strip(),
-                "url": row.url,
-                "published_at": row.published_at.isoformat(),
-                "rank_score": row.rank_score,
-            }
-            for row in rows
-        ]
-
-    @staticmethod
-    def _get_antigravity_timeout_seconds() -> float:
-        raw_value = os.getenv("AINEWS_ANTIGRAVITY_TIMEOUT_SECONDS", "60").strip()
-        try:
-            timeout_seconds = float(raw_value)
-        except ValueError as exc:
-            raise ValueError("AINEWS_ANTIGRAVITY_TIMEOUT_SECONDS must be numeric") from exc
-        if timeout_seconds <= 0:
-            raise ValueError("AINEWS_ANTIGRAVITY_TIMEOUT_SECONDS must be greater than 0")
-        return min(timeout_seconds, 60.0)
-
-    def _build_report_from_payload(
-        self,
-        *,
-        report_date: date,
-        date_from: date,
-        date_to: date,
-        payload: dict[str, object],
-    ) -> WeeklyAnalyticsReport:
-        summary = payload.get("summary")
-        if not isinstance(summary, str) or not summary.strip():
-            raise ValueError("Antigravity response must include a non-empty summary")
-
-        return WeeklyAnalyticsReport(
-            report_date=report_date,
-            date_from=date_from,
-            date_to=date_to,
-            summary=summary.strip(),
-            new=self._validate_payload_items(payload.get("new"), section_name="new"),
-            trending_up=self._validate_payload_items(
-                payload.get("trending_up"),
-                section_name="trending_up",
-            ),
-            trending_down=self._validate_payload_items(
-                payload.get("trending_down"),
-                section_name="trending_down",
-            ),
-        )
-
-    @staticmethod
-    def _validate_payload_items(
-        raw_items: object,
-        *,
-        section_name: str,
-    ) -> list[WeeklyAnalyticsItem]:
-        if not isinstance(raw_items, list):
-            raise ValueError(f"Antigravity response section {section_name} must be a list")
-
-        items: list[WeeklyAnalyticsItem] = []
-        for index, raw_item in enumerate(raw_items):
-            if not isinstance(raw_item, dict):
-                raise ValueError(
-                    f"Antigravity response item {section_name}[{index}] must be an object"
-                )
-            title = raw_item.get("title")
-            summary = raw_item.get("summary")
-            url = raw_item.get("url")
-            if not isinstance(title, str) or not title.strip():
-                raise ValueError(
-                    f"Antigravity response item {section_name}[{index}] is missing title"
-                )
-            if not isinstance(summary, str) or not summary.strip():
-                raise ValueError(
-                    f"Antigravity response item {section_name}[{index}] is missing summary"
-                )
-            if not isinstance(url, str) or not url.strip():
-                raise ValueError(
-                    f"Antigravity response item {section_name}[{index}] is missing url"
-                )
-            items.append(
-                WeeklyAnalyticsItem(
-                    title=title.strip(),
-                    summary=summary.strip(),
-                    url=url.strip(),
-                )
-            )
-        return items
 
     @staticmethod
     def _coerce_items(

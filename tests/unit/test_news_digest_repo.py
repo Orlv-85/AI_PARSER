@@ -1,5 +1,4 @@
 from datetime import UTC, date, datetime
-from typing import Any
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -317,63 +316,17 @@ def test_save_digest_preserves_existing_report_when_replacement_fails() -> None:
     assert [item.title for item in fetched.groups[0].items] == ["Keep Me"]
 
 
-def test_weekly_report_uses_antigravity_output_for_selected_seven_day_window(
-    monkeypatch,
-) -> None:
+def test_weekly_report_builds_local_summary_for_selected_seven_day_window() -> None:
     session = _session()
     _seed_weekly_analytics_articles(session)
     target_date = date(2026, 3, 7)
-    captured: dict[str, Any] = {}
-
-    def fake_generate(self, *args, **kwargs):  # type: ignore[no-untyped-def]
-        del self, args
-        captured.update(kwargs)
-        return {
-            "summary": "Antigravity management summary for the selected week.",
-            "new": [
-                {
-                    "title": "AI Browser Launches",
-                    "summary": "A net-new browser launch stood out in the selected week.",
-                    "url": "https://example.com/ai-browser-recent",
-                }
-            ],
-            "trending_up": [
-                {
-                    "title": "Coding Agents Expand",
-                    "summary": "Coding agents accelerated week over week.",
-                    "url": "https://example.com/coding-agents-recent",
-                }
-            ],
-            "trending_down": [
-                {
-                    "title": "Standalone Vector DBs Cool Off",
-                    "summary": "The prior-week topic lost momentum in the selected week.",
-                    "url": "https://example.com/vector-dbs-prior",
-                }
-            ],
-        }
-
-    monkeypatch.setattr(
-        repos.WeeklyAnalyticsRepo,
-        "_generate_antigravity_report",
-        fake_generate,
-        raising=False,
-    )
 
     report = repos.WeeklyAnalyticsRepo(session).get_weekly_report(report_date=target_date)
 
-    assert captured["report_date"] == target_date
-    assert captured["date_from"] == date(2026, 3, 1)
-    assert captured["date_to"] == target_date
-    assert {row.title for row in captured["recent_rows"]} == {
-        "AI Browser Launches",
-        "Coding Agents Expand",
-    }
-    assert {row.title for row in captured["prior_rows"]} == {
-        "Coding Agents Expand",
-        "Standalone Vector DBs Cool Off",
-    }
-    assert report.summary == "Antigravity management summary for the selected week."
+    assert report.report_date == target_date
+    assert report.date_from == date(2026, 3, 1)
+    assert report.date_to == target_date
+    assert report.summary.startswith("Weekly summary for 2026-03-01 to 2026-03-07:")
     assert [item.title for item in report.new] == ["AI Browser Launches"]
     assert [item.title for item in report.trending_up] == ["Coding Agents Expand"]
     assert [item.title for item in report.trending_down] == ["Standalone Vector DBs Cool Off"]
@@ -428,140 +381,3 @@ def test_get_weekly_report_returns_saved_published_report_for_matching_week() ->
     assert [item.title for item in report.new] == ["AI Browser Launches"]
     assert [item.title for item in report.trending_up] == ["Coding Agents Expand"]
     assert [item.title for item in report.trending_down] == ["Standalone Vector DBs Cool Off"]
-
-
-def test_weekly_report_falls_back_when_antigravity_times_out(monkeypatch) -> None:
-    session = _session()
-    _seed_weekly_analytics_articles(session)
-    target_date = date(2026, 3, 7)
-    attempts = {"count": 0}
-
-    def fake_generate(self, *args, **kwargs):  # type: ignore[no-untyped-def]
-        del self, args, kwargs
-        attempts["count"] += 1
-        raise TimeoutError("Antigravity timed out after 60 seconds")
-
-    monkeypatch.setattr(
-        repos.WeeklyAnalyticsRepo,
-        "_generate_antigravity_report",
-        fake_generate,
-        raising=False,
-    )
-
-    repo = repos.WeeklyAnalyticsRepo(session)
-    report = repo.get_weekly_report(report_date=target_date)
-    recent_rows = repo._list_articles(date_from=date(2026, 3, 1), date_to=target_date)  # pylint: disable=protected-access
-    prior_rows = repo._list_articles(  # pylint: disable=protected-access
-        date_from=date(2026, 2, 22), date_to=date(2026, 2, 28)
-    )
-
-    assert attempts["count"] == 1
-    assert report.summary == repo._build_summary(  # pylint: disable=protected-access
-        date_from=date(2026, 3, 1),
-        date_to=target_date,
-        recent_rows=recent_rows,
-        prior_rows=prior_rows,
-    )
-    assert [item.title for item in report.new] == ["AI Browser Launches"]
-    assert [item.title for item in report.trending_up] == ["Coding Agents Expand"]
-    assert [item.title for item in report.trending_down] == ["Standalone Vector DBs Cool Off"]
-
-
-def test_weekly_report_falls_back_when_antigravity_payload_is_invalid(monkeypatch) -> None:
-    session = _session()
-    _seed_weekly_analytics_articles(session)
-    target_date = date(2026, 3, 7)
-    attempts = {"count": 0}
-
-    def fake_generate(self, *args, **kwargs):  # type: ignore[no-untyped-def]
-        del self, args, kwargs
-        attempts["count"] += 1
-        return {
-            "summary": "Broken payload",
-            "new": "not-a-list",
-            "trending_up": [],
-            "trending_down": [],
-        }
-
-    monkeypatch.setattr(
-        repos.WeeklyAnalyticsRepo,
-        "_generate_antigravity_report",
-        fake_generate,
-        raising=False,
-    )
-
-    repo = repos.WeeklyAnalyticsRepo(session)
-    report = repo.get_weekly_report(report_date=target_date)
-
-    assert attempts["count"] == 1
-    assert report.summary.startswith("Antigravity summary for 2026-03-01 to 2026-03-07:")
-    assert [item.title for item in report.new] == ["AI Browser Launches"]
-    assert [item.title for item in report.trending_up] == ["Coding Agents Expand"]
-    assert [item.title for item in report.trending_down] == ["Standalone Vector DBs Cool Off"]
-
-
-def test_weekly_report_logs_timeout_warning_before_fallback(
-    monkeypatch, caplog
-) -> None:
-    session = _session()
-    _seed_weekly_analytics_articles(session)
-    target_date = date(2026, 3, 7)
-
-    def fake_generate(self, *args, **kwargs):  # type: ignore[no-untyped-def]
-        del self, args, kwargs
-        raise TimeoutError("Antigravity timed out after 60 seconds")
-
-    monkeypatch.setattr(
-        repos.WeeklyAnalyticsRepo,
-        "_generate_antigravity_report",
-        fake_generate,
-        raising=False,
-    )
-
-    caplog.set_level("WARNING", logger="app.storage.repos")
-
-    report = repos.WeeklyAnalyticsRepo(session).get_weekly_report(report_date=target_date)
-
-    assert report.summary.startswith("Antigravity summary for 2026-03-01 to 2026-03-07:")
-    assert "weekly_analytics_antigravity_timeout" in caplog.text
-    assert "Antigravity timed out after 60 seconds" in caplog.text
-
-
-def test_weekly_report_falls_back_when_antigravity_item_is_invalid(
-    monkeypatch, caplog
-) -> None:
-    session = _session()
-    _seed_weekly_analytics_articles(session)
-    target_date = date(2026, 3, 7)
-
-    def fake_generate(self, *args, **kwargs):  # type: ignore[no-untyped-def]
-        del self, args, kwargs
-        return {
-            "summary": "Broken payload",
-            "new": [
-                {
-                    "title": "AI Browser Launches",
-                    "summary": "A section item without a URL must be rejected.",
-                }
-            ],
-            "trending_up": [],
-            "trending_down": [],
-        }
-
-    monkeypatch.setattr(
-        repos.WeeklyAnalyticsRepo,
-        "_generate_antigravity_report",
-        fake_generate,
-        raising=False,
-    )
-
-    caplog.set_level("WARNING", logger="app.storage.repos")
-
-    report = repos.WeeklyAnalyticsRepo(session).get_weekly_report(report_date=target_date)
-
-    assert report.summary.startswith("Antigravity summary for 2026-03-01 to 2026-03-07:")
-    assert [item.title for item in report.new] == ["AI Browser Launches"]
-    assert [item.title for item in report.trending_up] == ["Coding Agents Expand"]
-    assert [item.title for item in report.trending_down] == ["Standalone Vector DBs Cool Off"]
-    assert "weekly_analytics_antigravity_fallback" in caplog.text
-    assert "new[0] is missing url" in caplog.text

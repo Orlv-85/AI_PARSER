@@ -191,7 +191,7 @@ def _build_weekly_analytics_response(
             report_date=report_date,
             date_from=date_from,
             date_to=date_to,
-            summary="Antigravity found no AI news signals for this week.",
+            summary="No AI news signals for this week.",
             new=[],
             trending_up=[],
             trending_down=[],
