@@ -381,3 +381,33 @@ def test_get_weekly_report_returns_saved_published_report_for_matching_week() ->
     assert [item.title for item in report.new] == ["AI Browser Launches"]
     assert [item.title for item in report.trending_up] == ["Coding Agents Expand"]
     assert [item.title for item in report.trending_down] == ["Standalone Vector DBs Cool Off"]
+
+
+def test_save_weekly_report_truncates_oversized_titles_for_storage_limits() -> None:
+    engine = create_engine("sqlite:///:memory:", future=True)
+    models_sql.Base.metadata.create_all(engine)
+    session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    target_date = date(2026, 3, 8)
+    long_title = "A" * 700
+
+    with session_local() as session:
+        repo = repos.WeeklyAnalyticsRepo(session)
+        report = repo.save_weekly_report(
+            report_date=target_date,
+            date_from=date(2026, 3, 2),
+            date_to=target_date,
+            summary="Stored report with oversized source title.",
+            new=[
+                {
+                    "title": long_title,
+                    "summary": "Long title should be truncated before persistence.",
+                    "url": "https://example.com/very-long-title",
+                }
+            ],
+            trending_up=[],
+            trending_down=[],
+        )
+        session.commit()
+
+    assert len(report.new) == 1
+    assert len(report.new[0].title) == 512

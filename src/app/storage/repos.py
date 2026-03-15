@@ -615,6 +615,9 @@ class ArticleRepo:
 
 
 class WeeklyAnalyticsRepo:
+    _TITLE_MAX_LEN = 512
+    _URL_MAX_LEN = 2048
+
     def __init__(self, session: Session) -> None:
         self.session = session
 
@@ -922,13 +925,19 @@ class WeeklyAnalyticsRepo:
         items: list[WeeklyAnalyticsItem] = []
         for raw_item in raw_items:
             if isinstance(raw_item, WeeklyAnalyticsItem):
-                items.append(raw_item)
+                items.append(
+                    WeeklyAnalyticsItem(
+                        title=raw_item.title.strip()[:WeeklyAnalyticsRepo._TITLE_MAX_LEN],
+                        summary=raw_item.summary.strip(),
+                        url=raw_item.url.strip()[:WeeklyAnalyticsRepo._URL_MAX_LEN],
+                    )
+                )
                 continue
             items.append(
                 WeeklyAnalyticsItem(
-                    title=str(raw_item["title"]).strip(),
+                    title=str(raw_item["title"]).strip()[:WeeklyAnalyticsRepo._TITLE_MAX_LEN],
                     summary=str(raw_item["summary"]).strip(),
-                    url=str(raw_item["url"]).strip(),
+                    url=str(raw_item["url"]).strip()[:WeeklyAnalyticsRepo._URL_MAX_LEN],
                 )
             )
         return items
