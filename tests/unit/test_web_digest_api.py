@@ -59,6 +59,7 @@ def test_news_links_filters_to_requested_date_and_returns_article_metadata(
     assert captured == {
         "hours": None,
         "limit": 25,
+        "offset": 0,
         "query": None,
         "days": 1,
         "sort": "published",

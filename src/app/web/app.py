@@ -562,6 +562,7 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
         *,
         target_date: date = _NEWS_LINKS_DATE_QUERY,
         limit: int = Query(30, ge=1, le=200),
+        offset: int = Query(0, ge=0),
         min_ai_relevance: float = Query(0.2, ge=0.0, le=1.0),
     ) -> list[DigestLinkFeedItem]:
         try:
@@ -571,6 +572,7 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
                 rows = repo.list_for_agent(
                     hours=None,
                     limit=limit,
+                    offset=offset,
                     query=None,
                     days=1,
                     sort="published",

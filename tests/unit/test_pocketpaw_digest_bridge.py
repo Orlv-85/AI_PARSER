@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -428,6 +429,45 @@ def test_build_feed_weekly_payload_handles_empty_recent_window() -> None:
     assert payload["trending_up"] == []
     assert payload["trending_down"] == []
     assert payload["summary"] == "No AI news signals between 2026-03-02 and 2026-03-08."
+
+
+def test_fetch_news_links_range_paginates_daily_results() -> None:
+    bridge = _load_bridge_module()
+    captured_queries: list[dict[str, str]] = []
+
+    def fake_read_json_response(url: str, **_kwargs):
+        parsed = urlparse(url)
+        query = {key: values[0] for key, values in parse_qs(parsed.query).items()}
+        captured_queries.append(query)
+        if query.get("date") != "2026-03-08":
+            return []
+        if query.get("offset") == "0":
+            return [
+                {
+                    "title": "A",
+                    "url": "https://example.com/a",
+                    "published_at": "2026-03-08T10:00:00Z",
+                }
+            ]
+        return []
+
+    original = bridge.read_json_response
+    bridge.read_json_response = fake_read_json_response
+    try:
+        rows = bridge._fetch_news_links_range(  # type: ignore[attr-defined]
+            base_url="http://example.test",
+            date_from="2026-03-08",
+            date_to="2026-03-08",
+            limit=1,
+        )
+    finally:
+        bridge.read_json_response = original
+
+    assert len(rows) == 1
+    assert captured_queries == [
+        {"date": "2026-03-08", "limit": "1", "offset": "0"},
+        {"date": "2026-03-08", "limit": "1", "offset": "1"},
+    ]
 
 
 def test_categorize_digest_item_prefers_rag_for_true_rag_signals() -> None:

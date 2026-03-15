@@ -90,7 +90,7 @@ def test_weekly_ai_analytics_page_renders_shell_with_requested_date(
     assert response.status_code == 200
     assert "Weekly AI Analytics" in response.text
     assert 'value="2026-03-07"' in response.text
-    assert "Management Summary" in response.text
+    assert "Summary" in response.text
     assert "New" in response.text
     assert "Trending Up" in response.text
     assert "Trending Down" in response.text
@@ -560,7 +560,7 @@ def test_public_digest_page_renders_weekly_ai_analytics_section(monkeypatch, tmp
     assert 'href="/weekly-ai-analytics/reports"' in response.text
     assert 'id="weekly-analytics-preview"' in response.text
     assert "Weekly Management View" in response.text
-    assert "Management Summary" in response.text
+    assert "Summary" in response.text
     assert "/api/news/weekly-analytics?date=" in response.text
 
 

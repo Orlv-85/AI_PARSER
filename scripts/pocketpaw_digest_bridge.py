@@ -476,13 +476,20 @@ def _fetch_news_links_range(
     rows: list[dict[str, Any]] = []
     current = start
     while current <= end:
-        query = urlencode({"date": current.isoformat(), "limit": limit})
-        daily_rows = read_json_response(f"{base_url.rstrip('/')}/api/news/links?{query}")
-        if not isinstance(daily_rows, list):
-            raise RuntimeError("news links API did not return a list")
-        if not all(isinstance(row, dict) for row in daily_rows):
-            raise RuntimeError("news links API returned an invalid article entry")
-        rows.extend(daily_rows)
+        offset = 0
+        while True:
+            query = urlencode(
+                {"date": current.isoformat(), "limit": limit, "offset": offset}
+            )
+            daily_rows = read_json_response(f"{base_url.rstrip('/')}/api/news/links?{query}")
+            if not isinstance(daily_rows, list):
+                raise RuntimeError("news links API did not return a list")
+            if not all(isinstance(row, dict) for row in daily_rows):
+                raise RuntimeError("news links API returned an invalid article entry")
+            rows.extend(daily_rows)
+            if len(daily_rows) < limit:
+                break
+            offset += limit
         current += timedelta(days=1)
     return rows
 

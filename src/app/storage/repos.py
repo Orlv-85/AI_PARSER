@@ -486,6 +486,7 @@ class ArticleRepo:
         *,
         hours: int | None,
         limit: int,
+        offset: int = 0,
         query: str | None,
         days: int,
         sort: str,
@@ -499,7 +500,6 @@ class ArticleRepo:
             select(Article, Source.source_key, Source.name)
             .outerjoin(Source, Article.source_id == Source.id)
             .where(Article.ai_relevance_score >= min_ai_relevance)
-            .limit(limit)
         )
         has_date_range = date_from is not None or date_to is not None
         if has_date_range:
@@ -544,6 +544,7 @@ class ArticleRepo:
                     Article.rank_score.desc(),
                     Article.published_at.desc(),
                 )
+        base_stmt = base_stmt.limit(limit).offset(offset)
         return [
             (row[0], row[1], row[2])
             for row in self.session.execute(base_stmt).all()
@@ -554,6 +555,7 @@ class ArticleRepo:
         *,
         hours: int | None,
         limit: int,
+        offset: int = 0,
         query: str | None,
         days: int,
         sort: str,
@@ -565,6 +567,7 @@ class ArticleRepo:
         kwargs: dict[str, Any] = {
             "hours": hours,
             "limit": limit,
+            "offset": offset,
             "query": query,
             "days": days,
             "sort": sort,
