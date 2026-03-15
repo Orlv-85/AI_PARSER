@@ -1029,6 +1029,28 @@ def _parse_iso_dt(value: str) -> datetime:
     return parsed.astimezone(UTC)
 
 
+def _weekly_item_fallback_summary(*, row: dict[str, Any]) -> str:
+    source_name = str(row.get("source_name") or "unknown source").strip() or "unknown source"
+    published_raw = str(row.get("published_at") or "").strip()
+    published_on = ""
+    if published_raw:
+        try:
+            published_on = _parse_iso_dt(published_raw).date().isoformat()
+        except ValueError:
+            published_on = published_raw
+    if published_on:
+        return f"Reported by {source_name} on {published_on}."
+    return f"Reported by {source_name}."
+
+
+def _weekly_item_summary(*, row: dict[str, Any]) -> str:
+    for key in ("summary", "content"):
+        candidate = str(row.get(key) or "").strip()
+        if candidate and candidate.lower() != "no summary available.":
+            return candidate
+    return _weekly_item_fallback_summary(row=row)
+
+
 def _weekly_best_by_title(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     grouped: dict[str, dict[str, Any]] = {}
     counts: dict[str, int] = {}
@@ -1050,11 +1072,7 @@ def _weekly_best_by_title(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any
         rank_score = raw_rank_score if has_explicit_rank else float(counts[title])
         normalized = {
             "title": title,
-            "summary": str(
-                row.get("summary")
-                or row.get("content")
-                or "No summary available."
-            ).strip(),
+            "summary": _weekly_item_summary(row=row),
             "url": url,
             "published_at": published_at,
             "rank_score": rank_score,
@@ -1106,6 +1124,9 @@ def _weekly_build_summary(
     date_to: date,
     recent_rows: list[dict[str, Any]],
     prior_rows: list[dict[str, Any]],
+    new_rows: list[dict[str, Any]],
+    trending_up_rows: list[dict[str, Any]],
+    trending_down_rows: list[dict[str, Any]],
 ) -> str:
     recent_count = len(recent_rows)
     prior_count = len(prior_rows)
@@ -1118,10 +1139,14 @@ def _weekly_build_summary(
         trend = "Momentum cooled versus the previous week."
     else:
         trend = "Momentum held steady versus the previous week."
+    change = f"+{delta}" if delta > 0 else str(delta)
+    top_titles = [str(row["title"]) for row in recent_rows[:2]]
+    top_focus = ", ".join(top_titles) if top_titles else "no dominant topic"
     return (
         f"Weekly summary for {date_from.isoformat()} to {date_to.isoformat()}: "
-        f"{recent_count} notable AI stories surfaced. {trend} "
-        f"Current attention centers on {recent_rows[0]['title']}."
+        f"{recent_count} notable AI stories ({change} vs previous week). {trend} "
+        f"Signals: {len(new_rows)} new, {len(trending_up_rows)} trending up, "
+        f"{len(trending_down_rows)} trending down. Top focus: {top_focus}."
     )
 
 
@@ -1166,6 +1191,9 @@ def build_feed_weekly_payload(
         date_to=date_to,
         recent_rows=list(recent_by_title.values()),
         prior_rows=list(prior_by_title.values()),
+        new_rows=new_rows,
+        trending_up_rows=trending_up_rows,
+        trending_down_rows=trending_down_rows,
     )
 
     return {

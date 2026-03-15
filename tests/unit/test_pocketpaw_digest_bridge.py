@@ -414,6 +414,8 @@ def test_build_feed_weekly_payload_computes_sections() -> None:
     assert [item["title"] for item in payload["trending_down"]] == [
         "Standalone Vector DBs Cool Off"
     ]
+    assert "Signals: 1 new, 1 trending up, 1 trending down." in payload["summary"]
+    assert "Top focus: AI Browser Launches, Coding Agents Expand." in payload["summary"]
 
 
 def test_build_feed_weekly_payload_handles_empty_recent_window() -> None:
@@ -429,6 +431,27 @@ def test_build_feed_weekly_payload_handles_empty_recent_window() -> None:
     assert payload["trending_up"] == []
     assert payload["trending_down"] == []
     assert payload["summary"] == "No AI news signals between 2026-03-02 and 2026-03-08."
+
+
+def test_build_feed_weekly_payload_uses_source_fallback_for_missing_item_summary() -> None:
+    bridge = _load_bridge_module()
+
+    payload = bridge.build_feed_weekly_payload(
+        recent_items=[
+            {
+                "title": "DeepSeek Can Buy Nvidia H200 AI Chips",
+                "url": "https://example.com/h200",
+                "summary": "",
+                "published_at": "2026-03-08T10:00:00Z",
+                "source_name": "AI Wire",
+                "rank_score": 0.9,
+            }
+        ],
+        prior_items=[],
+        report_date="2026-03-08",
+    )
+
+    assert payload["new"][0]["summary"] == "Reported by AI Wire on 2026-03-08."
 
 
 def test_fetch_news_links_range_paginates_daily_results() -> None:
