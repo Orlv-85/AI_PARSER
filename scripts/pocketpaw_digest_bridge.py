@@ -8,7 +8,7 @@ import re
 import sys
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.error import HTTPError, URLError
 from urllib.parse import unquote, urlencode, urlparse
 from urllib.request import Request, urlopen
@@ -136,6 +136,47 @@ _TITLE_BRAND_REPLACEMENTS = (
     (r"\bCode Whisperer\b", "CodeWhisperer"),
     (r"\bLlama Index\b", "LlamaIndex"),
 )
+_TOPIC_STOPWORDS = frozenset(
+    {
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "by",
+        "for",
+        "from",
+        "how",
+        "in",
+        "into",
+        "is",
+        "new",
+        "of",
+        "on",
+        "or",
+        "that",
+        "the",
+        "this",
+        "to",
+        "what",
+        "week",
+        "weeks",
+        "with",
+        "story",
+        "stories",
+        "recent",
+        "prior",
+        "trending",
+        "trend",
+        "latest",
+        "up",
+        "down",
+    }
+)
+_TOPIC_TOKEN_MAX = 6
+_TOPIC_MATCH_MIN_OVERLAP = 0.5
+_TOPIC_MATCH_MIN_COMMON_TOKENS = 3
 
 
 def read_json_response(
@@ -1051,6 +1092,76 @@ def _weekly_item_summary(*, row: dict[str, Any]) -> str:
     return _weekly_item_fallback_summary(row=row)
 
 
+def _normalize_topic_token(token: str) -> str:
+    normalized = token.lower().strip()
+    if len(normalized) <= 2:
+        return normalized
+    for suffix in ("ing", "ed", "es", "s"):
+        if normalized.endswith(suffix) and len(normalized) > len(suffix) + 2:
+            normalized = normalized[: -len(suffix)]
+            break
+    return normalized
+
+
+def _topic_tokens_from_title(title: str) -> list[str]:
+    words = re.findall(r"[a-z0-9]+", title.lower())
+    tokens: list[str] = []
+    seen: set[str] = set()
+    for raw in words:
+        token = _normalize_topic_token(raw)
+        if (
+            not token
+            or token in _TOPIC_STOPWORDS
+            or (len(token) <= 2 and not token.isdigit())
+            or token in seen
+        ):
+            continue
+        seen.add(token)
+        tokens.append(token)
+        if len(tokens) >= _TOPIC_TOKEN_MAX:
+            break
+    if tokens:
+        return tokens
+    fallback = " ".join(words).strip() or title.lower().strip()
+    return [fallback]
+
+
+def _topic_overlap_score(left_tokens: set[str], right_tokens: set[str]) -> tuple[int, float]:
+    if not left_tokens or not right_tokens:
+        return (0, 0.0)
+    common_count = len(left_tokens & right_tokens)
+    smaller_len = float(min(len(left_tokens), len(right_tokens)))
+    return (common_count, common_count / smaller_len)
+
+
+def _find_best_topic_match(
+    *,
+    recent_tokens: set[str],
+    prior_topics: dict[str, dict[str, Any]],
+    excluded_keys: set[str],
+) -> str | None:
+    best_key: str | None = None
+    best_common = 0
+    best_ratio = 0.0
+    for prior_key, prior_topic in prior_topics.items():
+        if prior_key in excluded_keys:
+            continue
+        common_count, overlap_ratio = _topic_overlap_score(
+            recent_tokens,
+            set(cast(list[str], prior_topic["tokens"])),
+        )
+        if (
+            common_count < _TOPIC_MATCH_MIN_COMMON_TOKENS
+            or overlap_ratio < _TOPIC_MATCH_MIN_OVERLAP
+        ):
+            continue
+        if (common_count, overlap_ratio) > (best_common, best_ratio):
+            best_key = prior_key
+            best_common = common_count
+            best_ratio = overlap_ratio
+    return best_key
+
+
 def _weekly_best_by_title(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     grouped: dict[str, dict[str, Any]] = {}
     counts: dict[str, int] = {}
@@ -1059,7 +1170,9 @@ def _weekly_best_by_title(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any
         url = str(row.get("url", "")).strip()
         if not title or not _is_http_url(url):
             continue
-        counts[title] = counts.get(title, 0) + 1
+        topic_tokens = set(_topic_tokens_from_title(title))
+        topic_key = " ".join(sorted(topic_tokens))
+        counts[topic_key] = counts.get(topic_key, 0) + 1
         try:
             published_at = _parse_iso_dt(str(row.get("published_at", "")))
         except ValueError:
@@ -1069,7 +1182,7 @@ def _weekly_best_by_title(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any
         except (TypeError, ValueError):
             raw_rank_score = 0.0
         has_explicit_rank = raw_rank_score > 0.0
-        rank_score = raw_rank_score if has_explicit_rank else float(counts[title])
+        rank_score = raw_rank_score if has_explicit_rank else float(counts[topic_key])
         normalized = {
             "title": title,
             "summary": _weekly_item_summary(row=row),
@@ -1077,20 +1190,27 @@ def _weekly_best_by_title(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any
             "published_at": published_at,
             "rank_score": rank_score,
             "has_explicit_rank": has_explicit_rank,
+            "tokens": list(topic_tokens),
         }
-        current = grouped.get(title)
+        current = grouped.get(topic_key)
         if current is None or (rank_score, published_at) > (
             float(current["rank_score"]),
             current["published_at"],
         ):
-            grouped[title] = normalized
+            grouped[topic_key] = normalized
         else:
             if not bool(current.get("has_explicit_rank", False)):
-                current["rank_score"] = max(float(current["rank_score"]), float(counts[title]))
+                current["rank_score"] = max(
+                    float(current["rank_score"]),
+                    float(counts[topic_key]),
+                )
 
-    for title, item in grouped.items():
+    for topic_key, item in grouped.items():
         if not bool(item.get("has_explicit_rank", False)):
-            item["rank_score"] = max(float(item["rank_score"]), float(counts.get(title, 1)))
+            item["rank_score"] = max(
+                float(item["rank_score"]),
+                float(counts.get(topic_key, 1)),
+            )
     return grouped
 
 
@@ -1165,25 +1285,25 @@ def build_feed_weekly_payload(
     recent_by_title = _weekly_best_by_title(recent_items)
     prior_by_title = _weekly_best_by_title(prior_items)
 
-    new_rows = [
-        row
-        for title, row in recent_by_title.items()
-        if title not in prior_by_title
-    ]
-    trending_up_rows = [
-        row
-        for title, row in recent_by_title.items()
-        if title in prior_by_title
-        and float(row["rank_score"])
-        > float(prior_by_title[title]["rank_score"])
-    ]
-    trending_down_rows: list[dict[str, Any]] = []
-    for title, prior_row in prior_by_title.items():
-        recent_row = recent_by_title.get(title)
-        if recent_row is None:
-            trending_down_rows.append(prior_row)
+    new_rows: list[dict[str, Any]] = []
+    trending_up_rows: list[dict[str, Any]] = []
+    matched_prior_keys: set[str] = set()
+    for _, recent_row in recent_by_title.items():
+        prior_key = _find_best_topic_match(
+            recent_tokens=set(cast(list[str], recent_row["tokens"])),
+            prior_topics=prior_by_title,
+            excluded_keys=matched_prior_keys,
+        )
+        if prior_key is None:
+            new_rows.append(recent_row)
             continue
-        if float(recent_row["rank_score"]) < float(prior_row["rank_score"]):
+        matched_prior_keys.add(prior_key)
+        if float(recent_row["rank_score"]) > float(prior_by_title[prior_key]["rank_score"]):
+            trending_up_rows.append(recent_row)
+
+    trending_down_rows: list[dict[str, Any]] = []
+    for prior_key, prior_row in prior_by_title.items():
+        if prior_key not in matched_prior_keys:
             trending_down_rows.append(prior_row)
 
     summary = _weekly_build_summary(

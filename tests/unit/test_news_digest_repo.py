@@ -332,6 +332,56 @@ def test_weekly_report_builds_local_summary_for_selected_seven_day_window() -> N
     assert [item.title for item in report.trending_down] == ["Standalone Vector DBs Cool Off"]
 
 
+def test_weekly_report_matches_topic_when_titles_vary_between_weeks() -> None:
+    session = _session()
+    source = models_sql.Source(
+        source_key="weekly-variant-source",
+        name="Weekly Variant Source",
+        type="rss",
+        url="https://example.com/weekly-variant",
+    )
+    session.add(source)
+    session.flush()
+    session.add_all(
+        [
+            models_sql.Article(
+                source_id=source.id,
+                title="Adaptive Inference in NVIDIA TensorRT for RTX optimization",
+                summary="Prior week wording of the same topic.",
+                content=None,
+                url="https://example.com/prior-topic",
+                url_canonical="https://example.com/prior-topic",
+                url_canonical_hash="prior-topic",
+                published_at=datetime(2026, 2, 28, 10, 0, tzinfo=UTC),
+                ai_relevance_score=0.6,
+                freshness_score=0.4,
+                rank_score=0.31,
+            ),
+            models_sql.Article(
+                source_id=source.id,
+                title="NVIDIA TensorRT automatically optimizes inference for RTX",
+                summary="Recent week variant with stronger momentum.",
+                content=None,
+                url="https://example.com/recent-topic",
+                url_canonical="https://example.com/recent-topic",
+                url_canonical_hash="recent-topic",
+                published_at=datetime(2026, 3, 7, 11, 0, tzinfo=UTC),
+                ai_relevance_score=0.92,
+                freshness_score=0.9,
+                rank_score=0.95,
+            ),
+        ]
+    )
+    session.commit()
+
+    report = repos.WeeklyAnalyticsRepo(session).get_weekly_report(report_date=date(2026, 3, 8))
+
+    assert report.new == []
+    assert [item.title for item in report.trending_up] == [
+        "NVIDIA TensorRT automatically optimizes inference for RTX"
+    ]
+
+
 def test_get_weekly_report_returns_saved_published_report_for_matching_week() -> None:
     engine = create_engine("sqlite:///:memory:", future=True)
     models_sql.Base.metadata.create_all(engine)

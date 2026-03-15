@@ -433,6 +433,37 @@ def test_build_feed_weekly_payload_handles_empty_recent_window() -> None:
     assert payload["summary"] == "No AI news signals between 2026-03-02 and 2026-03-08."
 
 
+def test_build_feed_weekly_payload_matches_same_topic_with_title_variants() -> None:
+    bridge = _load_bridge_module()
+
+    payload = bridge.build_feed_weekly_payload(
+        recent_items=[
+            {
+                "title": "NVIDIA TensorRT automatically optimizes inference for RTX",
+                "url": "https://example.com/recent-topic",
+                "summary": "Recent week variant with stronger momentum.",
+                "published_at": "2026-03-08T10:00:00Z",
+                "rank_score": 0.92,
+            }
+        ],
+        prior_items=[
+            {
+                "title": "Adaptive Inference in NVIDIA TensorRT for RTX optimization",
+                "url": "https://example.com/prior-topic",
+                "summary": "Prior week wording of the same topic.",
+                "published_at": "2026-03-01T10:00:00Z",
+                "rank_score": 0.31,
+            }
+        ],
+        report_date="2026-03-08",
+    )
+
+    assert payload["new"] == []
+    assert [item["title"] for item in payload["trending_up"]] == [
+        "NVIDIA TensorRT automatically optimizes inference for RTX"
+    ]
+
+
 def test_build_feed_weekly_payload_uses_source_fallback_for_missing_item_summary() -> None:
     bridge = _load_bridge_module()
 

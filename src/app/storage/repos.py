@@ -617,6 +617,47 @@ class ArticleRepo:
 class WeeklyAnalyticsRepo:
     _TITLE_MAX_LEN = 512
     _URL_MAX_LEN = 2048
+    _TOPIC_STOPWORDS = frozenset(
+        {
+            "a",
+            "an",
+            "and",
+            "are",
+            "as",
+            "at",
+            "by",
+            "for",
+            "from",
+            "how",
+            "in",
+            "into",
+            "is",
+            "new",
+            "of",
+            "on",
+            "or",
+            "that",
+            "the",
+            "this",
+            "to",
+            "what",
+            "week",
+            "weeks",
+            "with",
+            "story",
+            "stories",
+            "recent",
+            "prior",
+            "trending",
+            "trend",
+            "latest",
+            "up",
+            "down",
+        }
+    )
+    _TOPIC_TOKEN_MAX = 6
+    _TOPIC_MATCH_MIN_OVERLAP = 0.5
+    _TOPIC_MATCH_MIN_COMMON_TOKENS = 3
 
     def __init__(self, session: Session) -> None:
         self.session = session
@@ -851,25 +892,26 @@ class WeeklyAnalyticsRepo:
         recent_topics = cls._group_topics_by_title(recent_rows)
         prior_topics = cls._group_topics_by_title(prior_rows)
 
-        new_rows = [
-            topic["recent"]
-            for title, topic in recent_topics.items()
-            if title not in prior_topics
-        ]
-        trending_up_rows = [
-            topic["recent"]
-            for title, topic in recent_topics.items()
-            if title in prior_topics
-            and topic["recent"].rank_score > prior_topics[title]["recent"].rank_score
-        ]
-        trending_down_rows = []
-        for title, topic in prior_topics.items():
-            recent_topic = recent_topics.get(title)
-            if recent_topic is None:
-                trending_down_rows.append(topic["recent"])
+        new_rows: list[Article] = []
+        trending_up_rows: list[Article] = []
+        matched_prior_keys: set[str] = set()
+        for _, recent_topic in recent_topics.items():
+            prior_key = cls._find_best_topic_match(
+                recent_tokens=recent_topic["tokens"],
+                prior_topics=prior_topics,
+                excluded_keys=matched_prior_keys,
+            )
+            if prior_key is None:
+                new_rows.append(recent_topic["recent"])
                 continue
-            if recent_topic["recent"].rank_score < topic["recent"].rank_score:
-                trending_down_rows.append(topic["recent"])
+            matched_prior_keys.add(prior_key)
+            if recent_topic["recent"].rank_score > prior_topics[prior_key]["recent"].rank_score:
+                trending_up_rows.append(recent_topic["recent"])
+
+        trending_down_rows: list[Article] = []
+        for prior_key, prior_topic in prior_topics.items():
+            if prior_key not in matched_prior_keys:
+                trending_down_rows.append(prior_topic["recent"])
 
         return {
             "new": new_rows,
@@ -878,12 +920,89 @@ class WeeklyAnalyticsRepo:
         }
 
     @staticmethod
-    def _group_topics_by_title(rows: list[Article]) -> dict[str, dict[str, Article]]:
-        grouped: dict[str, dict[str, Article]] = {}
+    def _normalize_topic_token(token: str) -> str:
+        normalized = token.lower().strip()
+        if len(normalized) <= 2:
+            return normalized
+        for suffix in ("ing", "ed", "es", "s"):
+            if normalized.endswith(suffix) and len(normalized) > len(suffix) + 2:
+                normalized = normalized[: -len(suffix)]
+                break
+        return normalized
+
+    @classmethod
+    def _topic_tokens_from_title(cls, title: str) -> list[str]:
+        words = re.findall(r"[a-z0-9]+", title.lower())
+        tokens: list[str] = []
+        seen: set[str] = set()
+        for raw in words:
+            token = cls._normalize_topic_token(raw)
+            if (
+                not token
+                or token in cls._TOPIC_STOPWORDS
+                or (len(token) <= 2 and not token.isdigit())
+                or token in seen
+            ):
+                continue
+            seen.add(token)
+            tokens.append(token)
+            if len(tokens) >= cls._TOPIC_TOKEN_MAX:
+                break
+        if tokens:
+            return tokens
+        fallback = " ".join(words).strip() or title.lower().strip()
+        return [fallback]
+
+    @classmethod
+    def _topic_overlap_score(
+        cls,
+        left_tokens: set[str],
+        right_tokens: set[str],
+    ) -> tuple[int, float]:
+        if not left_tokens or not right_tokens:
+            return (0, 0.0)
+        common_count = len(left_tokens & right_tokens)
+        smaller_len = float(min(len(left_tokens), len(right_tokens)))
+        return (common_count, common_count / smaller_len)
+
+    @classmethod
+    def _find_best_topic_match(
+        cls,
+        *,
+        recent_tokens: set[str],
+        prior_topics: dict[str, dict[str, Any]],
+        excluded_keys: set[str],
+    ) -> str | None:
+        best_key: str | None = None
+        best_common = 0
+        best_ratio = 0.0
+        for prior_key, prior_topic in prior_topics.items():
+            if prior_key in excluded_keys:
+                continue
+            common_count, overlap_ratio = cls._topic_overlap_score(
+                recent_tokens,
+                cast(set[str], prior_topic["tokens"]),
+            )
+            if (
+                common_count < cls._TOPIC_MATCH_MIN_COMMON_TOKENS
+                or overlap_ratio < cls._TOPIC_MATCH_MIN_OVERLAP
+            ):
+                continue
+            if (common_count, overlap_ratio) > (best_common, best_ratio):
+                best_key = prior_key
+                best_common = common_count
+                best_ratio = overlap_ratio
+        return best_key
+
+    @classmethod
+    def _group_topics_by_title(cls, rows: list[Article]) -> dict[str, dict[str, Any]]:
+        grouped: dict[str, dict[str, Any]] = {}
         for row in rows:
-            existing = grouped.get(row.title)
+            tokens = set(cls._topic_tokens_from_title(row.title))
+            topic_key = " ".join(sorted(tokens))
+            existing = grouped.get(topic_key)
             if existing is None:
-                grouped[row.title] = {"recent": row}
+                grouped[topic_key] = {"recent": row, "tokens": tokens}
                 continue
             current = existing["recent"]
             if (row.rank_score, row.published_at) > (current.rank_score, current.published_at):
