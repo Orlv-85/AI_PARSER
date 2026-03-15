@@ -27,6 +27,7 @@ def test_list_for_agent_delegates_to_list_for_view(monkeypatch) -> None:
     assert captured == {
         "hours": 24,
         "limit": 10,
+        "offset": 0,
         "query": "ai",
         "days": 7,
         "sort": "rank",

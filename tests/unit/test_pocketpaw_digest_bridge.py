@@ -454,7 +454,8 @@ def test_fetch_news_links_range_paginates_daily_results() -> None:
     original = bridge.read_json_response
     bridge.read_json_response = fake_read_json_response
     try:
-        rows = bridge._fetch_news_links_range(  # type: ignore[attr-defined]
+        fetch_range = bridge.__dict__["_fetch_news_links_range"]
+        rows = fetch_range(
             base_url="http://example.test",
             date_from="2026-03-08",
             date_to="2026-03-08",
