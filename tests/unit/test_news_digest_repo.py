@@ -376,7 +376,7 @@ def test_weekly_report_matches_topic_when_titles_vary_between_weeks() -> None:
 
     report = repos.WeeklyAnalyticsRepo(session).get_weekly_report(report_date=date(2026, 3, 8))
 
-    assert report.new == []
+    assert not report.new
     assert [item.title for item in report.trending_up] == [
         "NVIDIA TensorRT automatically optimizes inference for RTX"
     ]
