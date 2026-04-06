@@ -657,7 +657,7 @@ class WeeklyAnalyticsRepo:
     )
     _TOPIC_TOKEN_MAX = 6
     _TOPIC_MATCH_MIN_OVERLAP = 0.5
-    _TOPIC_MATCH_MIN_COMMON_TOKENS = 3
+    _TOPIC_MATCH_MIN_COMMON_TOKENS = 2
 
     def __init__(self, session: Session) -> None:
         self.session = session
