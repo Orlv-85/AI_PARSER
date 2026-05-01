@@ -1,4 +1,4 @@
-ARG RUNTIME_BASE_IMAGE
+ARG RUNTIME_BASE_IMAGE=ai-news-runtime-base:latest
 
 FROM ${RUNTIME_BASE_IMAGE} AS runtime
 
