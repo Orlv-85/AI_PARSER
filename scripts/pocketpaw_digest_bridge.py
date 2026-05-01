@@ -1218,7 +1218,7 @@ def _weekly_to_items(
     rows: list[dict[str, Any]],
     *,
     sort_key: str,
-    limit: int = 3,
+    limit: int = 10,
 ) -> list[dict[str, str]]:
     if sort_key == "published_at":
         ordered = sorted(rows, key=lambda row: row["published_at"], reverse=True)

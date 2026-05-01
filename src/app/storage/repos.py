@@ -862,7 +862,7 @@ class WeeklyAnalyticsRepo:
         rows: list[Article],
         *,
         sort_key: str,
-        limit: int = 3,
+        limit: int = 10,
         reverse: bool = True,
     ) -> list[WeeklyAnalyticsItem]:
         if sort_key == "published_at":

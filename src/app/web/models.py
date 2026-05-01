@@ -128,6 +128,21 @@ class WeeklyAnalyticsReportListResponse(BaseModel):
     items: list[WeeklyAnalyticsReportListItem]
 
 
+class WeeklyAnalyticsFreshnessResponse(BaseModel):
+    report_date: date
+    date_from: date
+    date_to: date
+    article_count: int
+    latest_fetch_run_id: str | None = None
+    latest_fetch_status: str | None = None
+    latest_fetch_started_at: datetime | None = None
+    latest_fetch_finished_at: datetime | None = None
+    latest_fetch_fetched: int = 0
+    latest_fetch_new: int = 0
+    latest_fetch_duplicates: int = 0
+    latest_fetch_errors: int = 0
+
+
 class SourceOnboardingCandidateView(BaseModel):
     candidate_id: int
     batch_id: int | None = None

@@ -1,6 +1,6 @@
 # pylint: disable=too-many-lines
 import logging
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from html import escape
 from pathlib import Path
 from typing import SupportsIndex, SupportsInt, cast
@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi import Path as FastAPIPath
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
@@ -21,7 +21,7 @@ from app.core.source_onboarding import (
     run_source_validation_batch,
 )
 from app.storage import SessionLocal, create_all
-from app.storage.models_sql import Base, NewsDigestReport
+from app.storage.models_sql import Article, Base, FetchRun, NewsDigestReport
 from app.storage.repos import (
     ArticleRepo,
     NewsDigestRepo,
@@ -53,6 +53,7 @@ from app.web.models import (
     SourceOnboardingRejectResponse,
     UpdateStatus,
     WebUpdateSettings,
+    WeeklyAnalyticsFreshnessResponse,
     WeeklyAnalyticsPayload,
     WeeklyAnalyticsReportListItem,
     WeeklyAnalyticsReportListResponse,
@@ -723,6 +724,61 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
         except SQLAlchemyError as exc:
             raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
         return _build_weekly_report_list_response(items=items)
+
+    @api.get(
+        "/api/news/weekly-analytics/freshness",
+        response_model=WeeklyAnalyticsFreshnessResponse,
+    )
+    def get_weekly_ai_analytics_freshness(
+        *,
+        target_date: date | None = _OPTIONAL_WEEKLY_ANALYTICS_DATE_QUERY,
+    ) -> WeeklyAnalyticsFreshnessResponse:
+        try:
+            create_all()
+            with SessionLocal() as session:
+                repo = WeeklyAnalyticsRepo(session)
+                report_date = target_date or _resolve_weekly_default_report_date(
+                    repo=repo,
+                    today=datetime.now(UTC).date(),
+                )
+                date_from = report_date - timedelta(days=6)
+                date_to = report_date
+                start_at = datetime.combine(date_from, time.min, tzinfo=UTC)
+                end_at = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=UTC)
+                article_count = (
+                    session.query(Article.id)
+                    .where(Article.published_at >= start_at)
+                    .where(Article.published_at < end_at)
+                    .count()
+                )
+                latest_fetch_run = session.execute(
+                    select(FetchRun).order_by(FetchRun.started_at.desc()).limit(1)
+                ).scalar_one_or_none()
+        except SQLAlchemyError as exc:
+            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+
+        if latest_fetch_run is None:
+            return WeeklyAnalyticsFreshnessResponse(
+                report_date=report_date,
+                date_from=date_from,
+                date_to=date_to,
+                article_count=cast(int, article_count),
+            )
+
+        return WeeklyAnalyticsFreshnessResponse(
+            report_date=report_date,
+            date_from=date_from,
+            date_to=date_to,
+            article_count=cast(int, article_count),
+            latest_fetch_run_id=latest_fetch_run.run_id,
+            latest_fetch_status=latest_fetch_run.status,
+            latest_fetch_started_at=latest_fetch_run.started_at,
+            latest_fetch_finished_at=latest_fetch_run.finished_at,
+            latest_fetch_fetched=latest_fetch_run.fetched_count,
+            latest_fetch_new=latest_fetch_run.new_count,
+            latest_fetch_duplicates=latest_fetch_run.duplicate_count,
+            latest_fetch_errors=latest_fetch_run.error_count,
+        )
 
     @api.get("/api/news/{article_id}", response_model=NewsArticleDetail)
     def get_news_article(article_id: int) -> NewsArticleDetail:

@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import get_settings
-from app.storage.models_sql import Article, Base, Source
+from app.storage.models_sql import Article, Base, FetchRun, Source
 from app.storage.repos import WeeklyAnalyticsRepo
 from app.web.app import create_app
 
@@ -342,6 +342,95 @@ def test_weekly_ai_analytics_api_can_save_report_payload(monkeypatch, tmp_path) 
     assert isinstance(saved, dict)
     assert saved["report_date"] == date(2026, 3, 8)
     assert response.json()["report_date"] == "2026-03-08"
+
+
+def test_weekly_ai_analytics_freshness_api_returns_article_and_fetch_counts(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+
+    engine = create_engine(f"sqlite:///{tmp_path}/weekly-freshness.db", future=True)
+    session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+
+    with session_local() as session:
+        Base.metadata.create_all(bind=engine)
+        source = Source(
+            source_key="weekly-source",
+            name="Weekly Source",
+            type="rss",
+            url="https://example.com/feed",
+        )
+        session.add(source)
+        session.flush()
+        session.add_all(
+            [
+                Article(
+                    source_id=source.id,
+                    title="Current week story",
+                    summary="Inside the requested weekly window.",
+                    content=None,
+                    url="https://example.com/current",
+                    url_canonical="https://example.com/current",
+                    url_canonical_hash="current",
+                    published_at=datetime(2026, 3, 7, 10, 0, tzinfo=UTC),
+                    ai_relevance_score=0.9,
+                    freshness_score=0.8,
+                    rank_score=0.95,
+                ),
+                Article(
+                    source_id=source.id,
+                    title="Outside week story",
+                    summary="Outside the requested weekly window.",
+                    content=None,
+                    url="https://example.com/outside",
+                    url_canonical="https://example.com/outside",
+                    url_canonical_hash="outside",
+                    published_at=datetime(2026, 2, 20, 10, 0, tzinfo=UTC),
+                    ai_relevance_score=0.9,
+                    freshness_score=0.8,
+                    rank_score=0.95,
+                ),
+                FetchRun(
+                    run_id="20260308020000",
+                    started_at=datetime(2026, 3, 8, 2, 0, tzinfo=UTC),
+                    finished_at=datetime(2026, 3, 8, 2, 3, tzinfo=UTC),
+                    status="finished",
+                    fetched_count=40,
+                    new_count=12,
+                    duplicate_count=27,
+                    error_count=1,
+                ),
+            ]
+        )
+        session.commit()
+
+    def _create_all_local() -> None:
+        Base.metadata.create_all(bind=engine)
+
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "create_all", _create_all_local)
+    monkeypatch.setattr(web_app_module, "SessionLocal", session_local)
+
+    client = TestClient(create_app())
+
+    response = client.get("/api/news/weekly-analytics/freshness?date=2026-03-07")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "report_date": "2026-03-07",
+        "date_from": "2026-03-01",
+        "date_to": "2026-03-07",
+        "article_count": 1,
+        "latest_fetch_run_id": "20260308020000",
+        "latest_fetch_status": "finished",
+        "latest_fetch_started_at": "2026-03-08T02:00:00",
+        "latest_fetch_finished_at": "2026-03-08T02:03:00",
+        "latest_fetch_fetched": 40,
+        "latest_fetch_new": 12,
+        "latest_fetch_duplicates": 27,
+        "latest_fetch_errors": 1,
+    }
 
 
 def test_weekly_ai_analytics_reports_api_returns_published_list(

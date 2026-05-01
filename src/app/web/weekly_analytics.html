@@ -106,9 +106,33 @@
         margin: 0;
         color: var(--muted);
       }
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .metric {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px;
+        background: #f8fbf8;
+      }
+      .metric span {
+        display: block;
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+      .metric strong {
+        display: block;
+        margin-top: 4px;
+        font-size: 1.2rem;
+      }
       @media (max-width: 800px) {
         .grid {
           grid-template-columns: 1fr;
+        }
+        .metrics {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
         }
         .hero-nav {
           flex-direction: column;
@@ -141,6 +165,18 @@
         <p id="weekly-summary" class="muted">Loading weekly analytics...</p>
       </section>
 
+      <section class="panel">
+        <h2>Freshness</h2>
+        <div class="metrics">
+          <div class="metric"><span>Articles</span><strong id="freshness-articles">...</strong></div>
+          <div class="metric"><span>Fetched</span><strong id="freshness-fetched">...</strong></div>
+          <div class="metric"><span>New</span><strong id="freshness-new">...</strong></div>
+          <div class="metric"><span>Duplicates</span><strong id="freshness-duplicates">...</strong></div>
+          <div class="metric"><span>Errors</span><strong id="freshness-errors">...</strong></div>
+        </div>
+        <p id="freshness-run" class="muted">Loading latest fetch run...</p>
+      </section>
+
       <section class="grid">
         <section class="panel">
           <h2>New</h2>
@@ -162,6 +198,12 @@
       const newNode = document.getElementById("weekly-new");
       const trendingUpNode = document.getElementById("weekly-trending-up");
       const trendingDownNode = document.getElementById("weekly-trending-down");
+      const freshnessArticlesNode = document.getElementById("freshness-articles");
+      const freshnessFetchedNode = document.getElementById("freshness-fetched");
+      const freshnessNewNode = document.getElementById("freshness-new");
+      const freshnessDuplicatesNode = document.getElementById("freshness-duplicates");
+      const freshnessErrorsNode = document.getElementById("freshness-errors");
+      const freshnessRunNode = document.getElementById("freshness-run");
 
       function escapeHtml(value) {
         return String(value)
@@ -206,11 +248,30 @@
         renderList(trendingDownNode, payload.trending_down);
       }
 
+      async function loadFreshness(selectedDate) {
+        const response = await fetch("/api/news/weekly-analytics/freshness?date=" + encodeURIComponent(selectedDate));
+        if (!response.ok) {
+          freshnessRunNode.textContent = "Freshness data is unavailable right now.";
+          return;
+        }
+        const payload = await response.json();
+        freshnessArticlesNode.textContent = payload.article_count;
+        freshnessFetchedNode.textContent = payload.latest_fetch_fetched;
+        freshnessNewNode.textContent = payload.latest_fetch_new;
+        freshnessDuplicatesNode.textContent = payload.latest_fetch_duplicates;
+        freshnessErrorsNode.textContent = payload.latest_fetch_errors;
+        freshnessRunNode.textContent = payload.latest_fetch_run_id
+          ? `Latest fetch: ${payload.latest_fetch_run_id} (${payload.latest_fetch_status})`
+          : "No fetch run has been recorded yet.";
+      }
+
       reportDateInput.addEventListener("change", async () => {
         await loadWeeklyAnalytics(reportDateInput.value);
+        await loadFreshness(reportDateInput.value);
       });
 
       void loadWeeklyAnalytics(reportDateInput.value);
+      void loadFreshness(reportDateInput.value);
     </script>
   </body>
 </html>
