@@ -24,6 +24,17 @@ pip install -e ".[dev]"
 docker build -f build/Dockerfile -t ai-news-collector:latest .
 ```
 
+To mirror the release workflow with a reusable dependency base:
+
+```bash
+DEP_HASH="$(./scripts/docker_dependency_fingerprint.sh)"
+docker build -f build/Dockerfile --target runtime-base -t "ai-news-runtime-base:${DEP_HASH}" .
+docker build \
+  -f build/Dockerfile.runtime \
+  --build-arg "RUNTIME_BASE_IMAGE=ai-news-runtime-base:${DEP_HASH}" \
+  -t ai-news-collector:latest .
+```
+
 ### Run container
 
 ```bash
@@ -103,8 +114,9 @@ What this does:
 - starts/updates PostgreSQL container
 - runs `alembic upgrade head`
 - starts/updates app container + Caddy reverse proxy (HTTPS)
-  - rebuilds image only when build inputs changed (`build/Dockerfile`, `Dockerfile`, `requirements*.txt`, `pyproject.toml`, `poetry.lock`)
-  - otherwise runs `docker compose up -d app caddy` without rebuild
+  - tagged release builds use a reusable `runtime-base-<hash>` dependency image
+  - dependency base hash is computed from `build/Dockerfile`, `build/Dockerfile.runtime`, `build/requirements*.txt`, and `pyproject.toml`
+  - if that base image already exists in GHCR, CI builds only the thin app/code image
 - runs retention cleanup (`ai-news prune --older-than-days 100` by default)
 - verifies app health
 

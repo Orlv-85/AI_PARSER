@@ -57,17 +57,52 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push runtime image
+      - name: Compute dependency base image
+        id: deps
+        run: |
+          DEP_HASH="$(./scripts/docker_dependency_fingerprint.sh)"
+          BASE_IMAGE="ghcr.io/orlv-85/ai-parser:runtime-base-${DEP_HASH}"
+          echo "hash=${DEP_HASH}" >> "$GITHUB_OUTPUT"
+          echo "base_image=${BASE_IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "Dependency base image: ${BASE_IMAGE}"
+
+      - name: Check dependency base image
+        id: base
+        run: |
+          if docker buildx imagetools inspect "${{ steps.deps.outputs.base_image }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Using existing dependency base image"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Dependency base image is missing and will be built"
+          fi
+
+      - name: Build and push dependency base image
+        if: steps.base.outputs.exists != 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
           file: build/Dockerfile
-          target: runtime
+          target: runtime-base
+          push: true
+          tags: ${{ steps.deps.outputs.base_image }}
+          build-args: |
+            PYTHON_IMAGE=python:3.14-slim
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push app image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: build/Dockerfile.runtime
           push: true
           tags: |
             ghcr.io/orlv-85/ai-parser:${{ github.ref_name }}
             ghcr.io/orlv-85/ai-parser:sha-${{ github.sha }}
             ghcr.io/orlv-85/ai-parser:latest
+          build-args: |
+            RUNTIME_BASE_IMAGE=${{ steps.deps.outputs.base_image }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -199,19 +234,26 @@ jobs:
           for page in pages:
               versions.extend(page)
 
-          tagged = []
+          release_tagged = []
+          base_tagged = []
           for version in versions:
               tags = (((version.get("metadata") or {}).get("container") or {}).get("tags") or [])
-              if tags:
-                  tagged.append(version)
+              if any(tag.startswith("runtime-base-") for tag in tags):
+                  base_tagged.append(version)
+              elif tags:
+                  release_tagged.append(version)
 
           def _created(v):
               return datetime.fromisoformat(v["created_at"].replace("Z", "+00:00"))
 
-          tagged.sort(key=_created, reverse=True)
+          release_tagged.sort(key=_created, reverse=True)
           keep = 5
-          to_delete = tagged[keep:]
-          print(f"Found {len(tagged)} tagged versions, keeping {min(keep, len(tagged))}, deleting {len(to_delete)}")
+          to_delete = release_tagged[keep:]
+          print(
+              f"Found {len(release_tagged)} release image versions, "
+              f"keeping {min(keep, len(release_tagged))}, deleting {len(to_delete)}. "
+              f"Dependency base versions kept: {len(base_tagged)}"
+          )
 
           for version in to_delete:
               version_id = version["id"]

@@ -1,6 +1,6 @@
 ARG PYTHON_IMAGE=python:3.14-slim
 
-FROM ${PYTHON_IMAGE} AS base
+FROM ${PYTHON_IMAGE} AS os-base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -18,17 +18,21 @@ RUN apt-get update \
 
 COPY build/requirements.txt ./build/requirements.txt
 COPY build/requirements-dev.txt ./build/requirements-dev.txt
+
+FROM os-base AS runtime-base
+
+RUN pip install --upgrade pip \
+    && pip install -r ./build/requirements.txt
+
+FROM runtime-base AS runtime
+
 COPY pyproject.toml README.md alembic.ini Makefile ./
 COPY src ./src
 COPY sources.yaml ./sources.yaml
 COPY scripts ./scripts
 COPY run_web.sh ./run_web.sh
 
-FROM base AS runtime
-
-RUN pip install --upgrade pip \
-    && pip install -r ./build/requirements.txt \
-    && pip install --no-deps .
+RUN pip install --no-deps .
 
 RUN mkdir -p /app/data
 
@@ -39,13 +43,21 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 
 CMD ["ai-news", "serve", "--host", "0.0.0.0", "--port", "8010"]
 
-FROM base AS test
-
-COPY tests ./tests
+FROM os-base AS test-base
 
 RUN pip install --upgrade pip \
-    && pip install -r ./build/requirements-dev.txt \
-    && pip install --no-deps -e .
+    && pip install -r ./build/requirements-dev.txt
+
+FROM test-base AS test
+
+COPY pyproject.toml README.md alembic.ini Makefile ./
+COPY src ./src
+COPY sources.yaml ./sources.yaml
+COPY scripts ./scripts
+COPY run_web.sh ./run_web.sh
+COPY tests ./tests
+
+RUN pip install --no-deps -e .
 
 CMD ["./scripts/run_tests_with_coverage.sh"]
 
