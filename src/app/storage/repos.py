@@ -7,7 +7,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlsplit
 
-from sqlalchemy import Select, delete, desc, select
+from sqlalchemy import Select, delete, desc, func, select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session, selectinload
@@ -16,6 +16,7 @@ from app.config.sources import SourceConfig
 from app.storage.models_sql import (
     Article,
     ArticleAlias,
+    FetchRun,
     NewsDigestGroup,
     NewsDigestItem,
     NewsDigestReport,
@@ -58,6 +59,18 @@ class WeeklyAnalyticsReportIndexEntry:
     date_to: date
     summary: str
     created_at: datetime
+
+
+@dataclass(slots=True)
+class ArticleDailyStats:  # pylint: disable=too-many-instance-attributes
+    stat_date: date
+    published_count: int
+    discovered_count: int
+    fetch_run_count: int
+    fetched_count: int
+    new_count: int
+    duplicate_count: int
+    error_count: int
 
 
 class SourceRepo:
@@ -612,6 +625,101 @@ class ArticleRepo:
         self.session.execute(delete(ArticleAlias).where(ArticleAlias.article_id.in_(old_article_ids)))
         self.session.execute(delete(Article).where(Article.published_at < cutoff))
         return deleted_articles, deleted_aliases
+
+    def daily_stats(self, *, date_from: date, date_to: date) -> list[ArticleDailyStats]:
+        start_at = datetime.combine(date_from, time.min, tzinfo=UTC)
+        end_at = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=UTC)
+
+        published_counts = self._daily_article_counts(
+            field=Article.published_at,
+            start_at=start_at,
+            end_at=end_at,
+        )
+        discovered_counts = self._daily_article_counts(
+            field=Article.discovered_at,
+            start_at=start_at,
+            end_at=end_at,
+        )
+        fetch_stats = self._daily_fetch_stats(start_at=start_at, end_at=end_at)
+
+        result: list[ArticleDailyStats] = []
+        current = date_from
+        while current <= date_to:
+            fetch_row = fetch_stats.get(current, {})
+            result.append(
+                ArticleDailyStats(
+                    stat_date=current,
+                    published_count=published_counts.get(current, 0),
+                    discovered_count=discovered_counts.get(current, 0),
+                    fetch_run_count=fetch_row.get("fetch_run_count", 0),
+                    fetched_count=fetch_row.get("fetched_count", 0),
+                    new_count=fetch_row.get("new_count", 0),
+                    duplicate_count=fetch_row.get("duplicate_count", 0),
+                    error_count=fetch_row.get("error_count", 0),
+                )
+            )
+            current += timedelta(days=1)
+        return result
+
+    def _daily_article_counts(  # pylint: disable=not-callable
+        self,
+        *,
+        field: Any,
+        start_at: datetime,
+        end_at: datetime,
+    ) -> dict[date, int]:
+        day_expr = func.date(field)
+        stmt = (
+            select(day_expr, func.count(Article.id))
+            .where(field >= start_at)
+            .where(field < end_at)
+            .group_by(day_expr)
+        )
+        return {
+            self._coerce_stat_date(row[0]): int(row[1] or 0)
+            for row in self.session.execute(stmt).all()
+        }
+
+    def _daily_fetch_stats(  # pylint: disable=not-callable
+        self,
+        *,
+        start_at: datetime,
+        end_at: datetime,
+    ) -> dict[date, dict[str, int]]:
+        day_expr = func.date(FetchRun.started_at)
+        stmt = (
+            select(
+                day_expr,
+                func.count(FetchRun.id),
+                func.coalesce(func.sum(FetchRun.fetched_count), 0),
+                func.coalesce(func.sum(FetchRun.new_count), 0),
+                func.coalesce(func.sum(FetchRun.duplicate_count), 0),
+                func.coalesce(func.sum(FetchRun.error_count), 0),
+            )
+            .where(FetchRun.started_at >= start_at)
+            .where(FetchRun.started_at < end_at)
+            .group_by(day_expr)
+        )
+        return {
+            self._coerce_stat_date(row[0]): {
+                "fetch_run_count": int(row[1] or 0),
+                "fetched_count": int(row[2] or 0),
+                "new_count": int(row[3] or 0),
+                "duplicate_count": int(row[4] or 0),
+                "error_count": int(row[5] or 0),
+            }
+            for row in self.session.execute(stmt).all()
+        }
+
+    @staticmethod
+    def _coerce_stat_date(value: object) -> date:
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, date):
+            return value
+        if isinstance(value, str):
+            return date.fromisoformat(value[:10])
+        raise TypeError(f"Expected date-like daily stat value, got {type(value)!r}")
 
 
 class WeeklyAnalyticsRepo:

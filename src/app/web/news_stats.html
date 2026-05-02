@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>News Stats</title>
+    <style>
+      :root {
+        --bg-top: #eef4f7;
+        --bg-bottom: #f8fafc;
+        --surface: #ffffff;
+        --border: #d7e1ea;
+        --text: #102a43;
+        --muted: #5c6f82;
+        --accent: #0f766e;
+        --warning: #b45309;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        color: var(--text);
+        background: linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+      }
+      main {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 48px 20px 64px;
+      }
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
+        padding: 24px;
+      }
+      .panel + .panel {
+        margin-top: 18px;
+      }
+      .hero-nav {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        align-items: center;
+      }
+      .hero-links {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      a {
+        color: var(--accent);
+        font-weight: 600;
+        text-decoration: none;
+      }
+      h1 {
+        margin: 14px 0 8px;
+        font-size: clamp(1.9rem, 3.6vw, 2.8rem);
+      }
+      h2 {
+        margin: 0 0 14px;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .filters {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        align-items: end;
+        margin-top: 18px;
+      }
+      label {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--muted);
+      }
+      input[type="date"] {
+        width: 180px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 11px 12px;
+        font: inherit;
+      }
+      button {
+        border: 0;
+        border-radius: 12px;
+        padding: 12px 16px;
+        background: var(--accent);
+        color: white;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .metric {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 16px;
+      }
+      .metric-value {
+        display: block;
+        margin-top: 8px;
+        font-size: 1.8rem;
+        font-weight: 800;
+      }
+      .chart {
+        display: grid;
+        gap: 10px;
+      }
+      .bar-row {
+        display: grid;
+        grid-template-columns: 104px minmax(0, 1fr) 76px;
+        gap: 12px;
+        align-items: center;
+      }
+      .bar-track {
+        min-width: 0;
+        height: 18px;
+        border-radius: 999px;
+        background: #e5edf4;
+        overflow: hidden;
+      }
+      .bar {
+        height: 100%;
+        min-width: 2px;
+        border-radius: inherit;
+        background: var(--accent);
+      }
+      .bar.zero {
+        min-width: 0;
+        background: var(--warning);
+      }
+      .count {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .table-wrap {
+        overflow-x: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 760px;
+      }
+      th,
+      td {
+        border-bottom: 1px solid var(--border);
+        padding: 10px;
+        text-align: right;
+      }
+      th:first-child,
+      td:first-child {
+        text-align: left;
+      }
+      tr.zero-day td {
+        color: var(--warning);
+        font-weight: 700;
+      }
+      .hidden {
+        display: none;
+      }
+      @media (max-width: 760px) {
+        main {
+          padding-top: 28px;
+        }
+        .hero-nav {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+        .summary-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .bar-row {
+          grid-template-columns: 92px minmax(0, 1fr) 58px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="panel">
+        <div class="hero-nav">
+          <a href="/__DAILY_DIGEST_QUERY__">Back to Daily Digest</a>
+          <div class="hero-links">
+            <a href="/weekly-ai-analytics/reports">Weekly Reports</a>
+            <a href="/weekly-ai-analytics">Weekly AI Analytics</a>
+          </div>
+        </div>
+        <h1>News Stats</h1>
+        <p class="muted">Daily publication and fetch volume for production diagnostics.</p>
+        <form id="stats-form" class="filters">
+          <div>
+            <label for="date-from">From</label>
+            <input id="date-from" type="date" value="__DATE_FROM__" />
+          </div>
+          <div>
+            <label for="date-to">To</label>
+            <input id="date-to" type="date" value="__DATE_TO__" />
+          </div>
+          <button type="submit">Refresh</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div id="summary" class="summary-grid"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Published Articles By Date</h2>
+        <div id="chart" class="chart"></div>
+        <p id="empty-chart" class="muted hidden">No daily stats are available for this range.</p>
+      </section>
+
+      <section class="panel">
+        <h2>Daily Detail</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Published</th>
+                <th>Discovered</th>
+                <th>Fetch Runs</th>
+                <th>Fetched</th>
+                <th>New</th>
+                <th>Duplicates</th>
+                <th>Errors</th>
+              </tr>
+            </thead>
+            <tbody id="stats-table"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <script>
+      const form = document.getElementById("stats-form");
+      const dateFrom = document.getElementById("date-from");
+      const dateTo = document.getElementById("date-to");
+      const summary = document.getElementById("summary");
+      const chart = document.getElementById("chart");
+      const emptyChart = document.getElementById("empty-chart");
+      const table = document.getElementById("stats-table");
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function sum(items, key) {
+        return items.reduce((total, item) => total + Number(item[key] || 0), 0);
+      }
+
+      function renderSummary(items) {
+        const zeroDays = items.filter((item) => item.published_count === 0).length;
+        const metrics = [
+          ["Published", sum(items, "published_count")],
+          ["Discovered", sum(items, "discovered_count")],
+          ["Fetch New", sum(items, "new_count")],
+          ["Zero Days", zeroDays],
+        ];
+        summary.innerHTML = metrics
+          .map(
+            ([label, value]) => `
+              <div class="metric">
+                <span class="muted">${escapeHtml(label)}</span>
+                <span class="metric-value">${escapeHtml(value)}</span>
+              </div>
+            `,
+          )
+          .join("");
+      }
+
+      function renderChart(items) {
+        const maxPublished = Math.max(...items.map((item) => item.published_count), 0);
+        if (!items.length) {
+          chart.innerHTML = "";
+          emptyChart.classList.remove("hidden");
+          return;
+        }
+        emptyChart.classList.add("hidden");
+        chart.innerHTML = items
+          .map((item) => {
+            const width = maxPublished > 0 ? Math.round((item.published_count / maxPublished) * 100) : 0;
+            const zeroClass = item.published_count === 0 ? " zero" : "";
+            return `
+              <div class="bar-row">
+                <span class="muted">${escapeHtml(item.stat_date)}</span>
+                <div class="bar-track">
+                  <div class="bar${zeroClass}" style="width: ${width}%"></div>
+                </div>
+                <span class="count">${escapeHtml(item.published_count)}</span>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      function renderTable(items) {
+        table.innerHTML = items
+          .map(
+            (item) => `
+              <tr class="${item.published_count === 0 ? "zero-day" : ""}">
+                <td>${escapeHtml(item.stat_date)}</td>
+                <td>${escapeHtml(item.published_count)}</td>
+                <td>${escapeHtml(item.discovered_count)}</td>
+                <td>${escapeHtml(item.fetch_run_count)}</td>
+                <td>${escapeHtml(item.fetched_count)}</td>
+                <td>${escapeHtml(item.new_count)}</td>
+                <td>${escapeHtml(item.duplicate_count)}</td>
+                <td>${escapeHtml(item.error_count)}</td>
+              </tr>
+            `,
+          )
+          .join("");
+      }
+
+      async function loadStats() {
+        const params = new URLSearchParams({
+          date_from: dateFrom.value,
+          date_to: dateTo.value,
+        });
+        const response = await fetch("/api/news/stats/daily?" + params.toString());
+        if (!response.ok) {
+          summary.innerHTML = '<p class="muted">Stats are unavailable right now.</p>';
+          chart.innerHTML = "";
+          table.innerHTML = "";
+          return;
+        }
+        const payload = await response.json();
+        const items = payload.items || [];
+        window.history.replaceState({}, "", "/news-stats?" + params.toString());
+        renderSummary(items);
+        renderChart(items);
+        renderTable(items);
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        await loadStats();
+      });
+
+      void loadStats();
+    </script>
+  </body>
+</html>

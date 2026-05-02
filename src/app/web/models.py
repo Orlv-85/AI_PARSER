@@ -143,6 +143,23 @@ class WeeklyAnalyticsFreshnessResponse(BaseModel):
     latest_fetch_errors: int = 0
 
 
+class NewsDailyStatsItem(BaseModel):
+    stat_date: date
+    published_count: int
+    discovered_count: int
+    fetch_run_count: int
+    fetched_count: int
+    new_count: int
+    duplicate_count: int
+    error_count: int
+
+
+class NewsDailyStatsResponse(BaseModel):
+    date_from: date
+    date_to: date
+    items: list[NewsDailyStatsItem]
+
+
 class SourceOnboardingCandidateView(BaseModel):
     candidate_id: int
     batch_id: int | None = None

@@ -281,6 +281,68 @@ def test_weekly_ai_analytics_api_returns_report_sections_for_last_7_days(
     }
 
 
+def test_weekly_ai_analytics_api_sanitizes_stored_items_for_public_schema(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+
+    long_title = "A" * 320
+    long_summary = "B" * 2500
+
+    class _WeeklyAnalyticsRepo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def get_weekly_report(self, *, report_date: date):
+            return SimpleNamespace(
+                report_date=report_date,
+                date_from=date(2026, 4, 20),
+                date_to=date(2026, 4, 26),
+                summary="Saved weekly report.",
+                new=[
+                    SimpleNamespace(
+                        title=long_title,
+                        summary=long_summary,
+                        url="https://example.com/long-weekly-item",
+                    ),
+                    SimpleNamespace(
+                        title="Invalid URL item",
+                        summary="This item should not break the whole weekly response.",
+                        url="mailto:news@example.com",
+                    ),
+                ],
+                trending_up=[],
+                trending_down=[],
+            )
+
+    class _DummySession:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            del exc_type, exc, tb
+
+    def _session_local():
+        return _DummySession()
+
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
+    monkeypatch.setattr(web_app_module, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo, raising=False)
+
+    client = TestClient(create_app())
+
+    response = client.get("/api/news/weekly-analytics?date=2026-04-26")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload["new"]) == 1
+    assert len(payload["new"][0]["title"]) == 255
+    assert len(payload["new"][0]["summary"]) == 2000
+    assert payload["new"][0]["url"] == "https://example.com/long-weekly-item"
+
+
 def test_weekly_ai_analytics_api_can_save_report_payload(monkeypatch, tmp_path) -> None:
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()

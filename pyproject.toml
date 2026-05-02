@@ -52,6 +52,7 @@ where = ["src"]
   "digest.html",
   "index.html",
   "login.html",
+  "news_stats.html",
   "weekly_analytics.html",
   "weekly_analytics_reports.html",
 ]

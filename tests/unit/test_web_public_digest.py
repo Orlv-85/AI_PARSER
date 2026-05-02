@@ -40,6 +40,7 @@ def test_public_digest_page_renders_digest_shell_with_yesterday_selected(
     assert "Yesterday&#39;s Digest" in response.text or "Yesterday's Digest" in response.text
     assert 'type="date"' in response.text
     assert 'value="2026-02-28"' in response.text
+    assert 'href="/news-stats"' in response.text
 
 
 def test_public_digest_page_shows_clean_empty_state_when_digest_missing(
