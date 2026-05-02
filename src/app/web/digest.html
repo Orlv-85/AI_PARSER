@@ -112,6 +112,23 @@
         color: var(--muted);
         text-align: center;
       }
+      .raw-link-list {
+        list-style: none;
+        margin: 16px auto 0;
+        max-width: 640px;
+        padding: 0;
+        text-align: left;
+      }
+      .raw-link-list li + li {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid var(--border);
+      }
+      .raw-link-list a {
+        color: var(--accent);
+        font-weight: 600;
+        text-decoration: none;
+      }
       .weekly-preview {
         padding: 22px;
       }
@@ -149,6 +166,10 @@
       .preview-list p {
         margin: 6px 0 0;
         color: var(--muted);
+        display: -webkit-box;
+        -webkit-line-clamp: 6;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
       }
       .preview-empty {
         margin: 0;
@@ -183,7 +204,10 @@
         <input id="digest-date" type="date" value="__REPORT_DATE__" />
         <div class="digest-shell">
           <div id="digest-empty-state" class="__EMPTY_STATE_CLASS__">
-            No digest has been published for this date yet.
+            <p id="digest-empty-text" class="lede" style="margin: 0;">
+              No digest has been published for this date yet.
+            </p>
+            <ul id="daily-link-list" class="raw-link-list"></ul>
           </div>
           <div id="digest-results">__DIGEST_CONTENT__</div>
         </div>
@@ -224,6 +248,8 @@
       const dateInput = document.getElementById("digest-date");
       const heroTitle = document.getElementById("digest-hero-title");
       const emptyState = document.getElementById("digest-empty-state");
+      const emptyText = document.getElementById("digest-empty-text");
+      const dailyLinkList = document.getElementById("daily-link-list");
       const results = document.getElementById("digest-results");
       const weeklySummary = document.getElementById("weekly-preview-summary");
       const weeklyNew = document.getElementById("weekly-preview-new");
@@ -245,10 +271,12 @@
         if (!payload.groups.length) {
           results.innerHTML = "";
           emptyState.classList.remove("hidden");
+          void loadDailyLinks(payload.report_date);
           return;
         }
 
         emptyState.classList.add("hidden");
+        dailyLinkList.innerHTML = "";
         results.innerHTML = payload.groups
           .map((group) => {
             const items = group.items
@@ -278,16 +306,21 @@
           return;
         }
 
-        node.innerHTML = items
+        node.innerHTML = items.slice(0, 3)
           .map(
             (item) => `
               <li>
                 <a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>
-                <p>${escapeHtml(item.summary)}</p>
+                <p>${escapeHtml(truncateText(item.summary, 360))}</p>
               </li>
             `,
           )
           .join("");
+      }
+
+      function truncateText(value, maxLength) {
+        const text = String(value || "").replace(/\s+/g, " ").trim();
+        return text.length > maxLength ? text.slice(0, maxLength - 1) + "…" : text;
       }
 
       function updateHeroTitle(selectedDate) {
@@ -314,6 +347,30 @@
         renderWeeklyPreviewList(weeklyTrendingDown, payload.trending_down);
       }
 
+      async function loadDailyLinks(selectedDate) {
+        dailyLinkList.innerHTML = "";
+        emptyText.textContent = "No digest has been published for this date yet.";
+        const response = await fetch("/api/news/links?date=" + encodeURIComponent(selectedDate) + "&limit=20");
+        if (!response.ok) {
+          return;
+        }
+        const items = await response.json();
+        if (!items.length) {
+          return;
+        }
+        emptyText.textContent =
+          items.length + " articles are available for this date, but the daily digest has not been published yet.";
+        dailyLinkList.innerHTML = items
+          .map(
+            (item) => `
+              <li>
+                <a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>
+              </li>
+            `,
+          )
+          .join("");
+      }
+
       async function loadDigest(selectedDate) {
         const response = await fetch("/api/news/digests?date=" + encodeURIComponent(selectedDate));
         if (!response.ok) {
@@ -332,6 +389,9 @@
       }
       updateHeroTitle(dateInput.value);
       void loadWeeklyPreview(dateInput.value);
+      if (!emptyState.classList.contains("hidden")) {
+        void loadDailyLinks(dateInput.value);
+      }
 
       dateInput.addEventListener("change", async () => {
         await loadDigest(dateInput.value);

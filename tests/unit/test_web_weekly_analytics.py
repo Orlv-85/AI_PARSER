@@ -288,7 +288,7 @@ def test_weekly_ai_analytics_api_sanitizes_stored_items_for_public_schema(
     get_settings.cache_clear()
 
     long_title = "A" * 320
-    long_summary = "B" * 2500
+    long_summary = f"<p>{'B' * 2500}</p>"
 
     class _WeeklyAnalyticsRepo:
         def __init__(self, _session) -> None:
@@ -340,6 +340,7 @@ def test_weekly_ai_analytics_api_sanitizes_stored_items_for_public_schema(
     assert len(payload["new"]) == 1
     assert len(payload["new"][0]["title"]) == 255
     assert len(payload["new"][0]["summary"]) == 2000
+    assert "<p>" not in payload["new"][0]["summary"]
     assert payload["new"][0]["url"] == "https://example.com/long-weekly-item"
 
 

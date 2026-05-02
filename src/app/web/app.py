@@ -1,7 +1,8 @@
 # pylint: disable=too-many-lines
 import logging
+import re
 from datetime import UTC, date, datetime, time, timedelta
-from html import escape
+from html import escape, unescape
 from pathlib import Path
 from typing import SupportsIndex, SupportsInt, cast
 
@@ -71,6 +72,7 @@ _NEWS_STATS_TEMPLATE = Path(__file__).with_name("news_stats.html")
 _WEEKLY_ANALYTICS_TEMPLATE = Path(__file__).with_name("weekly_analytics.html")
 _WEEKLY_ANALYTICS_REPORTS_TEMPLATE = Path(__file__).with_name("weekly_analytics_reports.html")
 _LOGGER = logging.getLogger(__name__)
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
 _SOURCE_ONBOARDING_OVERLAP_BATCH_QUERY = Query(None, ge=1)
 _SOURCE_ONBOARDING_OVERLAP_CANDIDATE_QUERY = Query(default=[])
 _NEWS_LINKS_DATE_QUERY = Query(alias="date")
@@ -217,8 +219,8 @@ def _build_weekly_analytics_response(
         for item in items:
             if not item.url.startswith(("http://", "https://")):
                 continue
-            title = item.title.strip()[:255]
-            summary = item.summary.strip()[:2000]
+            title = _plain_text(item.title, max_length=255)
+            summary = _plain_text(item.summary, max_length=2000)
             if not title or not summary:
                 continue
             payload.append(
@@ -239,6 +241,11 @@ def _build_weekly_analytics_response(
         trending_up=_serialize_items(weekly_report.trending_up),
         trending_down=_serialize_items(weekly_report.trending_down),
     )
+
+
+def _plain_text(value: str, *, max_length: int) -> str:
+    text = _HTML_TAG_RE.sub(" ", unescape(value))
+    return " ".join(text.split())[:max_length]
 
 
 def _build_weekly_report_list_response(
