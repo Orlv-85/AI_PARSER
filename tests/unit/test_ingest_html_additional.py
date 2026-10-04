@@ -69,6 +69,34 @@ def _html_source() -> SourceConfig:
     )
 
 
+def test_html_title_excludes_embedded_styles_scripts_and_templates(monkeypatch) -> None:
+    monkeypatch.setattr("app.ingest.html.extract_article_text", lambda **_kwargs: "content")
+    article = _build_html_article(
+        source=_html_source(),
+        url="https://keploy.io/",
+        article_html=(
+            "<h1><style>" + ".khl-ai{color:red}" * 100 + "</style>"
+            "AI writes code <script>alert('bad')</script>"
+            "Keploy catches what breaks <template>Hidden text</template></h1>"
+        ),
+    )
+
+    assert article is not None
+    assert article.title == "AI writes code Keploy catches what breaks"
+
+
+def test_html_empty_heading_uses_url(monkeypatch) -> None:
+    monkeypatch.setattr("app.ingest.html.extract_article_text", lambda **_kwargs: "content")
+    article = _build_html_article(
+        source=_html_source(),
+        url="https://example.com/story",
+        article_html="<h1><style>.headline{color:red}</style></h1>",
+    )
+
+    assert article is not None
+    assert article.title == "https://example.com/story"
+
+
 def test_extract_article_text_handles_trafilatura_and_unknown_strategy(monkeypatch) -> None:
     monkeypatch.setattr("app.ingest.html.trafilatura.extract", lambda html, url: "  body  ")
 

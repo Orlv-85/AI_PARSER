@@ -1,4 +1,5 @@
 # pylint: disable=too-many-lines
+from contextlib import nullcontext
 from datetime import UTC, date, datetime
 from types import SimpleNamespace
 from typing import Any, ClassVar, Literal
@@ -33,6 +34,9 @@ class _Session:
 
     def commit(self) -> None:
         self.committed = True
+
+    def begin_nested(self):
+        return nullcontext()
 
 
 class _SourceRepo:

@@ -311,6 +311,8 @@ class SourceRepo:
 
 
 class ArticleRepo:
+    _TITLE_MAX_LEN = 512
+
     def __init__(self, session: Session) -> None:
         self.session = session
 
@@ -347,6 +349,7 @@ class ArticleRepo:
                 existing_row["rank_score"] = row["rank_score"]
                 continue
             normalized_by_hash[canonical_hash] = dict(row)
+            normalized_by_hash[canonical_hash]["title"] = str(row["title"])[:self._TITLE_MAX_LEN]
 
         normalized_rows = list(normalized_by_hash.values())
         canonical_hashes = list(normalized_by_hash)
@@ -412,7 +415,7 @@ class ArticleRepo:
 
         article = Article(
             source_id=source_id,
-            title=title,
+            title=title[:self._TITLE_MAX_LEN],
             summary=summary,
             content=content,
             url=url,
