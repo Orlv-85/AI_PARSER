@@ -136,7 +136,7 @@ install_auto_update_cron() {
   sed "/^${begin_marker}\$/,/^${end_marker}\$/d" "$tmp_existing" >"$tmp_new"
 
   if is_enabled "$AUTO_UPDATE_ENABLED"; then
-    cron_cmd="cd $ROOT_DIR && "
+    cron_cmd="cd $ROOT_DIR && APP_IMAGE=$APP_IMAGE "
     if [ -n "$flock_bin" ]; then
       cron_cmd="${cron_cmd}${flock_bin} -n /tmp/ai-news-auto-update.lock "
     fi
