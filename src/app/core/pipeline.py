@@ -1004,18 +1004,29 @@ def _process_html_links_two_stage(
                 continue
 
             html_known_streak = 0
+            exclusions: list[str] = []
+            fetch_options: dict[str, Any] = {}
+            if admission_enabled:
+                fetch_options["on_exclusion"] = exclusions.append
             try:
                 item = fetch_html_article(
                     source=config,
                     url=str(link),
                     timeout_seconds=settings.request_timeout_seconds,
                     fetcher=fetcher,
+                    **fetch_options,
                 )
             except Exception:
                 if quality_flags is not None:
                     quality_flags.append("article_failure")
                 continue
             if item is None:
+                if exclusions:
+                    _settle_placeholders(
+                        article_repo.session, current_key=ph_key,
+                        old_key=placeholder_key if placeholder_hash == canonical_hash else None,
+                    )
+                    continue
                 if quality_flags is not None:
                     quality_flags.append("parser_failure")
                 continue

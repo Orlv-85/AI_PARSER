@@ -14,6 +14,7 @@ from app.config.sources import SourceConfig
 from app.core.jev import JevRelevanceScorer
 from app.core.models import Article
 from app.core.pipeline import HtmlLinkFetchResult, run_fetch_cycle
+from app.ingest.html import fetch_html_article
 from app.storage.admission import PAUSED_MESSAGE, set_collection_paused
 from app.storage.models_sql import (
     AdmissionDecision,
@@ -269,6 +270,37 @@ def test_html_article_failure_retains_retry_and_continues(
     pending = [r for r in scenario.rows(AdmissionDecision) if r.provider_status == "pending"]
     assert len(pending) == 1
     assert json.loads(pending[0].payload)["candidate"]["url"] == first_url
+    monkeypatch.setattr("app.core.pipeline.fetch_html_article", original_fetch)
+    scenario.not_modified = True
+    assert scenario.run().new == 1
+    assert not [r for r in scenario.rows(AdmissionDecision) if r.provider_status == "pending"]
+
+
+@pytest.mark.parametrize("batch", [False, True])
+def test_confirmed_html_exclusion_settles_before_304(monkeypatch, tmp_path, batch):
+    scenario = Scenario(tmp_path, monkeypatch, "two_stage_html", batch)
+    url = "https://example.com/products/ai-tool"
+    scenario.items = [Article(source_key="s1", title="AI Platform", url=url)]
+    downloads = []
+
+    def fetch_text(_fetcher, *, source_id, url):
+        assert source_id == "s1"
+        downloads.append(url)
+        return "<h1>AI Platform</h1><h2>Features</h2><a>Request a demo</a>"
+
+    monkeypatch.setattr("app.core.pipeline.fetch_html_article", fetch_html_article)
+    monkeypatch.setattr("app.ingest.fetcher.Fetcher.fetch_text", fetch_text)
+    first = scenario.run()
+    assert first.new == 0 and first.screening_paused == 0
+    assert not [r for r in scenario.rows(AdmissionDecision) if r.provider_status == "pending"]
+    attempt = scenario.rows(WeeklyCoverageAttempt)[0]
+    assert attempt.outcome == "empty" and attempt.complete
+    scenario.not_modified = True
+    second = scenario.run()
+    assert second.not_modified_sources == 1
+    assert downloads == [url]
+    assert not scenario.requests
+    assert not scenario.rows(StoredArticle)
 
 
 def test_cache_only_retry_does_not_claim_provider_recovery(monkeypatch, tmp_path):

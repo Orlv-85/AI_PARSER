@@ -297,6 +297,8 @@ replayed per cycle. Rejects and insufficient-evidence decisions are cached until
 the sent evidence, model, policy or prompt version changes. The pause notice
 clears after a fresh successful assessment; empty or cache-only retries retain it.
 Apply the Alembic migration before enabling admission on an existing database.
+Confirmed exclusions from the HTML page filter settle their pending URL and do
+not replay after a 304. Temporary loading/parsing failures remain pending.
 Connections and repeated-text results are reused within each cycle. Only bounded
 title/summary/content text is sent. The key is masked in settings and is never
 included in fallback logs.
@@ -305,6 +307,12 @@ Production Compose passes the Jev key and settings from the server's private
 `.env` into the app container. Set `JEV_API_KEY` and `AINEWS_JEV_ENABLED=true`
 on the server and recreate the app container to enable classification for future
 RSS/HTML ingestion. Tag deployments preserve these server-side settings.
+To enable article admission as well, set `AINEWS_SEMANTIC_ADMISSION_ENABLED=true`
+in that server `.env` after applying the migration, then recreate the app
+container. Compose defaults this flag to `false`. It also forwards
+`AINEWS_SEMANTIC_ADMISSION_POLICY_VERSION` and
+`AINEWS_SEMANTIC_ADMISSION_PROMPT_VERSION`; their defaults match `Settings`.
+Change the relevant version when changing admission policy or prompt.
 
 Stored categories and confidence are included in `/api/news`, the digest link
 feed and exports when available. The news page supports filtering by category
