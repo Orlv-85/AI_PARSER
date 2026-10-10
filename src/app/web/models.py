@@ -30,6 +30,13 @@ class UpdateStatus(BaseModel):
     duplicates: int = 0
     errors: int = 0
     error_message: str | None = None
+    screening_paused: bool = False
+    screening_message: str | None = None
+
+
+class NewsCollectionStatusResponse(BaseModel):
+    paused: bool
+    message: str | None = None
 
 
 class NewsItem(BaseModel):

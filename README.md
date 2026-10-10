@@ -276,13 +276,30 @@ seven existing digest sections. Jev's relevance probability feeds the existing
 ranking formula. Categories are saved only when confidence meets
 `AINEWS_JEV_CATEGORY_MIN_CONFIDENCE` (default `0.7`). Uncertain, unknown, or
 invalid categories fall back to existing digest rules, independently of relevance.
-It does not generate summaries or discard articles. Without
-`AINEWS_JEV_ENABLED=true`, the existing keyword scoring remains the default.
-If the key is missing, the API fails, or the answer is invalid, ingestion uses
-keyword scoring. After an API failure, no more Jev calls are made during that
-fetch cycle; the next cycle tries again. Connections and repeated-text results
-are reused within each cycle. Only bounded title/summary/content text is sent.
-The key is masked in settings and is never included in fallback logs.
+It does not generate summaries or discard articles by default. Optional
+semantic admission is gated by `AINEWS_SEMANTIC_ADMISSION_ENABLED=true` and
+requires JEV. When enabled, AI-screening outages pause collection for the cycle,
+and unchecked candidates remain available for retry. AI-central news, research,
+substantive reviews, tutorials and evergreen guides
+are eligible. Advertising landings, About pages, non-AI topics and incidental
+AI mentions are excluded. Admission is categorical; category confidence and
+ranking probability are independent and do not act as admission thresholds.
+Already accepted articles persist; unchecked candidates remain in a durable
+ledger, and never fall back to keyword admission. The exact public notice is:
+`News collection is paused because AI screening is unavailable. Admin: please
+check the AI providers and configuration.` Without semantic admission, existing
+keyword scoring remains the default. If JEV is disabled or the API fails while
+admission is enabled, no keyword fallback is used. After an API failure, no more
+JEV calls are made during that fetch cycle; the next cycle retries pending work.
+Pending work is replayed before checking the current feed/list, including after
+a 304 response or list rotation. Up to 50 pending candidates per source are
+replayed per cycle. Rejects and insufficient-evidence decisions are cached until
+the sent evidence, model, policy or prompt version changes. The pause notice
+clears after a fresh successful assessment; empty or cache-only retries retain it.
+Apply the Alembic migration before enabling admission on an existing database.
+Connections and repeated-text results are reused within each cycle. Only bounded
+title/summary/content text is sent. The key is masked in settings and is never
+included in fallback logs.
 
 Production Compose passes the Jev key and settings from the server's private
 `.env` into the app container. Set `JEV_API_KEY` and `AINEWS_JEV_ENABLED=true`

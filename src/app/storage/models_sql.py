@@ -127,6 +127,40 @@ class SourceCandidate(Base):
     )
 
 
+class AdmissionDecision(Base):
+    __tablename__ = "admission_decisions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    key: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    url_canonical_hash: Mapped[str] = mapped_column(String(64), index=True)
+    source_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    payload: Mapped[str] = mapped_column(Text)
+    evidence_hash: Mapped[str] = mapped_column(String(64))
+    policy_version: Mapped[str] = mapped_column(String(64))
+    model: Mapped[str] = mapped_column(String(64))
+    decision: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    provider_status: Mapped[str] = mapped_column(String(32), default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+
+class CollectionStatus(Base):
+    __tablename__ = "collection_status"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    paused: Mapped[bool] = mapped_column(Boolean, default=False)
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+
 class Article(Base):
     __tablename__ = "articles"
 

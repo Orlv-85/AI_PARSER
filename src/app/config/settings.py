@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     jev_category_min_confidence: float = Field(
         default=0.7, ge=0, le=1, allow_inf_nan=False,
     )
+    semantic_admission_enabled: bool = False
+    semantic_admission_policy_version: str = "semantic-admission-2026-10-10"
+    semantic_admission_prompt_version: str = "semantic-admission-prompt-1"
     ds_api_key: SecretStr | None = Field(
         default=None, validation_alias=AliasChoices("DS_API_KEY", "AINEWS_DS_API_KEY"),
     )

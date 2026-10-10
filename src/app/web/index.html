@@ -455,6 +455,7 @@
       const pageView = $("page-view");
       const pageOnboarding = $("page-onboarding");
       let pollTimer = null;
+      let pollInterval = null;
       let sourceCheckTimer = null;
       let sourceCheckCompleted = -1;
       let sourceCheckRunning = false;
@@ -607,7 +608,6 @@
       }
 
       async function runUpdate() {
-        setStatus("run-error", "");
         const response = await fetch("/api/update/run", { method: "POST" });
         if (response.status === 409) {
           setStatus("run-error", "Update is already running.", "error");
@@ -620,6 +620,8 @@
         await refreshStatus();
       }
 
+      let activeScreeningMessage = "";
+
       function renderRunStatus(status) {
         $("run-id").textContent = status.run_id || "-";
         $("run-started").textContent = status.started_at || "-";
@@ -630,20 +632,29 @@
         $("run-duplicates").textContent = status.duplicates;
         $("run-errors").textContent = status.errors;
         const line = `Status: ${status.status}`;
-        if (status.status === "failed" && status.error_message) {
-          setStatus("run-status", `${line}; ${status.error_message}`, "error");
+        if (status.screening_paused) {
+          activeScreeningMessage = status.screening_message || "";
+          setStatus("run-error", activeScreeningMessage, "error");
+          setStatus("run-status", line, "error");
         } else {
-          setStatus("run-status", line, status.status === "finished" ? "success" : "");
+          if (activeScreeningMessage) {
+            setStatus("run-error", "", "");
+            activeScreeningMessage = "";
+          }
+          if (status.status === "failed" && status.error_message) {
+            setStatus("run-status", `${line}; ${status.error_message}`, "error");
+          } else {
+            setStatus("run-status", line, status.status === "finished" ? "success" : "");
+          }
         }
       }
 
       function syncPolling(status) {
-        if (status === "running" && pollTimer === null) {
-          pollTimer = setInterval(refreshStatus, 1500);
-        }
-        if (status !== "running" && pollTimer !== null) {
-          clearInterval(pollTimer);
-          pollTimer = null;
+        const interval = status === "running" ? 1500 : 15000;
+        if (pollInterval !== interval) {
+          if (pollTimer !== null) clearInterval(pollTimer);
+          pollInterval = interval;
+          pollTimer = setInterval(refreshStatus, interval);
         }
       }
 
