@@ -17,6 +17,7 @@ EXPORT_TABLES = (
     "news_digest_items", "weekly_analytics_reports", "weekly_analytics_items",
     "weekly_input_observations", "weekly_decisions", "weekly_jobs", "weekly_snapshots",
     "weekly_publications",
+    "admission_decisions", "collection_status",
 )
 
 
@@ -70,7 +71,10 @@ def _reference_ids(value: Any, urls: dict[str, int], ids: set[int],
     if value.startswith("article-") and value[8:].isdigit() and int(value[8:]) in ids:
         return {int(value[8:])}
     if value.startswith(("http://", "https://")):
-        matched = urls.get(canonicalize_url(value))
+        try:
+            matched = urls.get(canonicalize_url(value))
+        except ValueError:
+            return set()
         return {matched} if matched is not None else set()
     return set()
 

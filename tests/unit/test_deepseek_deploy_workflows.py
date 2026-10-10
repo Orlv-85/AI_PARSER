@@ -63,6 +63,7 @@ def test_deploy_transports_deepseek_secret_privately(
         "AINEWS_WEEKLY_V2_ENABLED": "false",
         "AINEWS_JEV_ENABLED": "true",
         "AINEWS_SEMANTIC_ADMISSION_ENABLED": "true",
+        "RETENTION_DAYS": "800",
     }
     result = subprocess.run(
         ["bash", "-c", run], env=environment, capture_output=True, text=True, check=False
@@ -77,7 +78,7 @@ def test_deploy_transports_deepseek_secret_privately(
     assert values["AINEWS_SEMANTIC_ADMISSION_ENABLED"] == "true"
     assert stat.S_IMODE(env_path.stat().st_mode) == 0o600
     deploy = next(step for step in steps if "retry sshpass" in step.get("run", ""))
-    assert "|DS_API_KEY|AINEWS_DIGEST_MODEL)=" in deploy["run"]
+    assert "|DS_API_KEY|AINEWS_DIGEST_MODEL|RETENTION_DAYS)=" in deploy["run"]
     assert "chmod 600 .env.next" in deploy["run"]
     assert "AINEWS_WEEKLY_CRON_ENABLED=0 APP_IMAGE=" in deploy["run"]
     assert "POCKETPAW_ENABLED=" not in deploy["run"]
@@ -88,7 +89,7 @@ def test_deploy_transports_deepseek_secret_privately(
     previous_env.write_text(
         f"AINEWS_WEEKLY_V2_ENABLED={previous_weekly_enabled}\n"
         "AINEWS_JEV_ENABLED=false\nAINEWS_SEMANTIC_ADMISSION_ENABLED=false\n"
-        "JEV_API_KEY=test-only-jev\n", encoding="utf-8")
+        "JEV_API_KEY=test-only-jev\nRETENTION_DAYS=100\n", encoding="utf-8")
     filtered = subprocess.run(["grep", "-vE", pattern[1], str(previous_env)],
                               capture_output=True, text=True, check=True)
     merged = filtered.stdout + env_path.read_text(encoding="utf-8")
@@ -96,6 +97,7 @@ def test_deploy_transports_deepseek_secret_privately(
         "AINEWS_WEEKLY_V2_ENABLED": "false",
         "AINEWS_JEV_ENABLED": "true",
         "AINEWS_SEMANTIC_ADMISSION_ENABLED": "true",
+        "RETENTION_DAYS": "800",
     }.items():
         assert merged.count(name + "=") == 1
         assert f"{name}={value}\n" in merged

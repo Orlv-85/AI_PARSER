@@ -6,7 +6,10 @@ ROOT_DIR="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
 cd "$ROOT_DIR"
 
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
-RETENTION_DAYS="${RETENTION_DAYS:-100}"
+if [ -z "${RETENTION_DAYS:-}" ] && [ -f .env ]; then
+  RETENTION_DAYS="$(sed -nE "s/^[[:space:]]*(export[[:space:]]+)?RETENTION_DAYS[[:space:]]*=[[:space:]]*['\"]?([0-9]+)['\"]?([[:space:]]*#.*)?[[:space:]]*$/\\2/p" .env | tail -n 1)"
+fi
+RETENTION_DAYS="${RETENTION_DAYS:-800}"
 DB_MAX_SIZE_GB="${DB_MAX_SIZE_GB:-5}"
 DB_TARGET_SIZE_GB="${DB_TARGET_SIZE_GB:-4}"
 DB_RETENTION_STEP_DAYS="${DB_RETENTION_STEP_DAYS:-7}"

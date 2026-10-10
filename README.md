@@ -145,7 +145,10 @@ What this does:
   - tagged release builds use a reusable `runtime-base-<hash>` dependency image
   - dependency base hash is computed from `build/Dockerfile`, `build/Dockerfile.runtime`, `build/requirements*.txt`, and `pyproject.toml`
   - if that base image already exists in GHCR, CI builds only the thin app/code image
-- runs retention cleanup (`ai-news prune --older-than-days 100` by default)
+- runs retention cleanup (`ai-news prune --older-than-days 800` by default)
+- deploy and maintenance use explicit `RETENTION_DAYS`, then the server `.env`,
+  then the 800-day default; GitHub workflows persist and pass the repository
+  `RETENTION_DAYS` variable (default 800) so deploys preserve the configured policy
 - verifies app health
 
 If schema didn't change, migration step is a no-op.
@@ -537,8 +540,8 @@ Typical agent flow:
 ### Prune old news
 
 ```bash
-ai-news prune --older-than-days 100
-ai-news prune --older-than-days 100 --dry-run
+ai-news prune --older-than-days 800
+ai-news prune --older-than-days 800 --dry-run
 ```
 
 ## What the MVP does

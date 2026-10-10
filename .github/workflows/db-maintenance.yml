@@ -33,6 +33,7 @@ jobs:
           DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
           DEPLOY_USER: ${{ vars.DEPLOY_USER }}
           DEPLOY_APP_DIR: ${{ vars.DEPLOY_APP_DIR || '/opt/ai-news' }}
+          RETENTION_DAYS: ${{ vars.RETENTION_DAYS || '800' }}
           SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
         run: |
-          sshpass -p "${SERVER_PASSWORD}" ssh -o StrictHostKeyChecking=accept-new "${DEPLOY_USER}@${DEPLOY_HOST}" "cd '${DEPLOY_APP_DIR}' && ./scripts/db_maintenance.sh && ./scripts/db_backup.sh"
+          sshpass -p "${SERVER_PASSWORD}" ssh -o StrictHostKeyChecking=accept-new "${DEPLOY_USER}@${DEPLOY_HOST}" "cd '${DEPLOY_APP_DIR}' && RETENTION_DAYS='${RETENTION_DAYS}' ./scripts/db_maintenance.sh && ./scripts/db_backup.sh"
