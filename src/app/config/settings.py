@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import model_validator
+from pydantic import AliasChoices, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -35,6 +35,16 @@ class Settings(BaseSettings):
     html_known_streak_stop: int = 20
     html_max_links_per_source: int | None = 50
     article_batch_upsert_enabled: bool = False
+    jev_enabled: bool = False
+    jev_api_key: SecretStr | None = Field(
+        default=None,
+        validation_alias=AliasChoices("JEV_API_KEY", "AINEWS_JEV_API_KEY", "jev_api_key"),
+    )
+    jev_model: str = "jev-1.13.0"
+    jev_timeout_seconds: float = Field(default=3.0, gt=0, allow_inf_nan=False)
+    jev_category_min_confidence: float = Field(
+        default=0.7, ge=0, le=1, allow_inf_nan=False,
+    )
     respect_robots_txt: bool = True
     auth_enabled: bool = False
     auth_username: str | None = None

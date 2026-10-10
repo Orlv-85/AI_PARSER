@@ -62,6 +62,49 @@ def test_settings_reads_fetch_optimization_flags_from_env(monkeypatch) -> None:
     assert settings.article_batch_upsert_enabled is True
 
 
+def test_settings_read_jev_key_from_dotenv_and_mask_it(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("JEV_API_KEY", raising=False)
+    monkeypatch.delenv("AINEWS_JEV_API_KEY", raising=False)
+    monkeypatch.delenv("AINEWS_JEV_ENABLED", raising=False)
+    env_file = tmp_path / ".env"
+    env_file.write_text("JEV_API_KEY=test-private-key\nAINEWS_JEV_ENABLED=true\n")
+    settings = Settings(_env_file=env_file)
+    assert settings.jev_enabled is True
+    assert settings.jev_api_key is not None
+    assert settings.jev_api_key.get_secret_value() == "test-private-key"
+    assert "test-private-key" not in repr(settings)
+    assert "test-private-key" not in settings.model_dump_json()
+
+
+def test_settings_jev_environment_overrides_dotenv(tmp_path, monkeypatch) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text("JEV_API_KEY=file-key\nAINEWS_JEV_ENABLED=true\n")
+    monkeypatch.setenv("JEV_API_KEY", "environment-key")
+    monkeypatch.setenv("AINEWS_JEV_ENABLED", "false")
+    monkeypatch.setenv("AINEWS_JEV_MODEL", "jev-latest")
+    monkeypatch.setenv("AINEWS_JEV_TIMEOUT_SECONDS", "1.5")
+    monkeypatch.setenv("AINEWS_JEV_CATEGORY_MIN_CONFIDENCE", "0.85")
+    settings = Settings(_env_file=env_file)
+    assert settings.jev_enabled is False
+    assert settings.jev_api_key is not None
+    assert settings.jev_api_key.get_secret_value() == "environment-key"
+    assert settings.jev_model == "jev-latest"
+    assert settings.jev_timeout_seconds == 1.5
+    assert settings.jev_category_min_confidence == 0.85
+
+
+@pytest.mark.parametrize("confidence", [-0.1, 1.1, float("nan"), float("inf")])
+def test_settings_reject_invalid_jev_category_confidence(confidence) -> None:
+    with pytest.raises(ValidationError):
+        Settings(jev_category_min_confidence=confidence, _env_file=None)
+
+
+@pytest.mark.parametrize("timeout", [0, -1, float("nan"), float("inf")])
+def test_settings_reject_invalid_jev_timeout(timeout) -> None:
+    with pytest.raises(ValidationError):
+        Settings(jev_timeout_seconds=timeout, _env_file=None)
+
+
 def test_settings_validation_rejects_short_auth_secret() -> None:
     with pytest.raises(ValidationError, match="at least 32 characters long"):
         Settings(

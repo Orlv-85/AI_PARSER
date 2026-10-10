@@ -259,6 +259,48 @@ export AINEWS_PER_SOURCE_MIN_INTERVAL_SECONDS="1.0"
 export AINEWS_RESPECT_ROBOTS_TXT="true"
 ```
 
+Optional Jev relevance scoring runs after RSS/HTML text extraction and before
+article persistence. Set these values in the repository root's private `.env`
+or export them in the process environment:
+
+```dotenv
+JEV_API_KEY=your-typesafe-api-key
+AINEWS_JEV_ENABLED=true
+AINEWS_JEV_MODEL=jev-1.13.0
+AINEWS_JEV_TIMEOUT_SECONDS=3
+AINEWS_JEV_CATEGORY_MIN_CONFIDENCE=0.7
+```
+
+The same Jev request returns relevance and a primary thematic category from the
+seven existing digest sections. Jev's relevance probability feeds the existing
+ranking formula. Categories are saved only when confidence meets
+`AINEWS_JEV_CATEGORY_MIN_CONFIDENCE` (default `0.7`). Uncertain, unknown, or
+invalid categories fall back to existing digest rules, independently of relevance.
+It does not generate summaries or discard articles. Without
+`AINEWS_JEV_ENABLED=true`, the existing keyword scoring remains the default.
+If the key is missing, the API fails, or the answer is invalid, ingestion uses
+keyword scoring. After an API failure, no more Jev calls are made during that
+fetch cycle; the next cycle tries again. Connections and repeated-text results
+are reused within each cycle. Only bounded title/summary/content text is sent.
+The key is masked in settings and is never included in fallback logs.
+
+Stored categories and confidence are included in `/api/news`, the digest link
+feed and exports when available. The news page supports filtering by category
+and `sort=category` (existing category order, then rank and freshness).
+Digest generation uses the stored category first, with keyword rules for old or
+unclassified articles, and ranks articles inside each group. A failed or disabled
+Jev run does not erase previously accepted categories. Old articles are not
+automatically reclassified and existing published digests are not rewritten.
+
+For an existing database, apply the additive migration before starting this code:
+
+```bash
+./venv1/bin/alembic upgrade head
+```
+
+To keep local tests independent of a configured live API, run them with
+`AINEWS_JEV_ENABLED=false ./venv1/bin/pytest`.
+
 ### 2) Source list (`sources.yaml`)
 
 Project includes a starter `sources.yaml` with RSS + HTML sources.
