@@ -572,6 +572,94 @@ def test_categorize_digest_item_keeps_eval_out_of_rag_bucket() -> None:
     assert category == "QA & Observability"
 
 
+@pytest.mark.parametrize(
+    ("title", "summary", "expected"),
+    [
+        (
+            "Do AI Websites Rank on Google? I Tested a 4-Page Build",
+            "Testing a four-page AI-built bookstore site shows no automatic ranking "
+            "penalty or boost. Client-side rendering can leave crawlers with an empty shell.",
+            "Business & Product",
+        ),
+        (
+            "Google's new Synth ID website can identify AI-generated media",
+            "Article text was unavailable, so no details on the new SynthID verification "
+            "site can be summarized beyond the supplied summary.",
+            "Security",
+        ),
+        ("SynthID identifies AI-generated media", "", "Security"),
+        ("Content provenance for generated images", "", "Security"),
+        ("Testing an AI bookstore's search ranking", "", "Business & Product"),
+        ("Improving the quality of AI-generated images", "", "Business & Product"),
+        ("Identity verification for online shoppers", "", "Business & Product"),
+        ("AI monitors social media trends", "", "Business & Product"),
+        ("Benchmark results for NVIDIA H100 GPUs", "", "Infrastructure"),
+        ("Testing generated code", "", "QA & Observability"),
+        ("Unit tests for a new feature", "", "QA & Observability"),
+        ("Integration testing", "Adds integration tests for a new feature.", "QA & Observability"),
+        ("Test automation for AI apps", "", "QA & Observability"),
+        ("LLM response quality", "", "QA & Observability"),
+        ("Improving response quality", "Verifies LLM outputs in production.", "QA & Observability"),
+        ("Monitoring an API in production", "", "QA & Observability"),
+        ("Verification of model outputs", "", "QA & Observability"),
+        ("Tracing agent tool calls", "", "QA & Observability"),
+        ("Benchmarking LLM responses", "", "QA & Observability"),
+        ("Quality assurance for AI apps", "", "QA & Observability"),
+        ("Observability for production applications", "", "QA & Observability"),
+        ("Regression detection for chatbots", "", "QA & Observability"),
+        ("Testing a fashion modeling business", "", "Business & Product"),
+    ],
+)
+def test_categorize_digest_item_requires_qa_topic(
+    title: str, summary: str, expected: str
+) -> None:
+    bridge = _load_bridge_module()
+
+    assert bridge.categorize_digest_item(row={"title": title}, summary=summary) == expected
+
+
+@pytest.mark.parametrize("keyword", ["qa", "eval", "testing", "verification", "llm"])
+def test_categorize_digest_item_ignores_qa_keywords_in_source_metadata(keyword: str) -> None:
+    bridge = _load_bridge_module()
+
+    category = bridge.categorize_digest_item(
+        row={
+            "title": "AI bookstore launch",
+            "source_name": f"{keyword} News",
+            "url": f"https://{keyword}.example.com/news/bookstore",
+        },
+        summary="Testing a new bookstore selling AI-generated stories.",
+    )
+
+    assert category == "Business & Product"
+
+
+def test_build_categorized_digest_payload_routes_reported_qa_false_positives() -> None:
+    bridge = _load_bridge_module()
+    seo_url = "https://example.com/ai-bookstore"
+    synthid_url = "https://example.com/synthid"
+
+    payload = bridge.build_categorized_digest_payload(
+        items=[
+            {"title": "Do AI Websites Rank on Google? I Tested a 4-Page Build", "url": seo_url},
+            {"title": "Google's new Synth ID verification site", "url": synthid_url},
+        ],
+        report_date="2026-10-10",
+        summaries_by_url={
+            seo_url: "Testing an AI-built bookstore shows no automatic ranking penalty.",
+            synthid_url: "Article text was unavailable; no details can be summarized.",
+        },
+    )
+
+    urls_by_category = {
+        group["title"]: [item["url"] for item in group["items"]] for group in payload["groups"]
+    }
+    assert urls_by_category == {
+        "Security": [synthid_url],
+        "Business & Product": [seo_url],
+    }
+
+
 def test_repair_digest_coverage_adds_missing_links_without_duplicates() -> None:
     bridge = _load_bridge_module()
 
