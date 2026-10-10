@@ -278,6 +278,16 @@ class SourceRepo:
         return (key or "source-candidate")[:64]
 
     def _source_name_for_candidate(self, candidate: object, *, default: str | None = None) -> str:
+        raw_input = getattr(candidate, "raw_input", "")
+        if isinstance(raw_input, str) and raw_input.startswith("{"):
+            try:
+                metadata = json.loads(raw_input)
+                if isinstance(metadata, dict) and isinstance(metadata.get("name"), str):
+                    name = metadata["name"].strip()[:128]
+                    if name:
+                        return str(name)
+            except ValueError:
+                pass
         source_url = self._read_object_value(candidate, "normalized_url")
         host = (urlsplit(source_url).hostname or "").lower()
         if host:

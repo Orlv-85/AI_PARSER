@@ -159,6 +159,13 @@
       .action-group {
         min-width: 240px;
       }
+      #onboarding-table { table-layout: fixed; }
+      #onboarding-table td { overflow-wrap: anywhere; vertical-align: top; }
+      #onboarding-table .action-group { min-width: 0; }
+      #onboarding-summary-box { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+      #source-review-filters { margin-top: 16px; }
+      #source-review-filters summary { cursor: pointer; color: var(--muted); }
+      .btn:disabled { opacity: 0.5; cursor: wait; }
       @media (max-width: 900px) {
         .layout { grid-template-columns: 1fr; }
         .sidebar { padding: 12px; }
@@ -337,27 +344,44 @@
 
         <section id="page-onboarding" class="hidden">
           <div class="card">
-            <h2>Import Source Candidates</h2>
+            <h2>Add news sources</h2>
+            <p>Upload JSON or paste source URLs. We check availability, duplicates and AI coverage.
+              Then connect the recommended sources with one click.</p>
             <p class="status" id="onboarding-import-status"></p>
             <div class="field">
-              <label>Candidate URLs or notes with embedded links</label>
+              <label for="onboarding-json-file">JSON file (up to 200 sources, 1 MB)</label>
+              <input id="onboarding-json-file" type="file" accept=".json,application/json" />
+            </div>
+            <div class="field">
+              <label>JSON with a sources array, or source URLs</label>
               <textarea
                 id="onboarding-import-raw-text"
-                rows="6"
-                placeholder="Paste URLs, markdown links, or mixed notes here"
+                rows="4"
+                placeholder='{"sources": [{"name": "AI Blog", "type": "rss", "url": "https://example.com/feed.xml"}]}'
               ></textarea>
             </div>
             <div style="margin-top: 12px">
-              <button class="btn btn-primary" id="import-onboarding-batch">Import batch</button>
+              <button class="btn btn-primary" id="import-onboarding-batch">Import &amp; check</button>
             </div>
           </div>
-          <div class="card">
-            <h2>Source Onboarding Review</h2>
+          <div class="card" id="source-check-results">
+            <h2>Check results</h2>
+            <p>Ready sources can be connected. Review means more evidence is needed.
+              Failed checks and duplicates stay out of collection.</p>
             <p class="status" id="onboarding-status"></p>
+            <p class="status" id="onboarding-check-status"></p>
+            <div style="margin-top: 12px">
+              <button class="btn btn-primary" id="approve-ready-sources" disabled>Connect recommended</button>
+              <button class="btn btn-secondary" id="validate-onboarding-batch">Check this batch</button>
+              <button class="btn btn-secondary" id="load-onboarding">Refresh results</button>
+              <button class="btn btn-secondary" id="load-onboarding-summary">Refresh summary</button>
+            </div>
+            <details id="source-review-filters">
+              <summary>Other batches and filters</summary>
             <div class="row">
               <div class="field">
                 <label>Batch ID</label>
-                <input id="onboarding-batch-id" type="number" value="7" min="1" />
+                <input id="onboarding-batch-id" type="number" min="1" />
               </div>
               <div class="field">
                 <label>Candidate status</label>
@@ -385,11 +409,7 @@
                 <textarea id="onboarding-review-note" rows="3" placeholder="Optional reviewer note"></textarea>
               </div>
             </div>
-            <div style="margin-top: 12px">
-              <button class="btn btn-primary" id="load-onboarding">Load review queue</button>
-              <button class="btn btn-secondary" id="validate-onboarding-batch">Validate current batch</button>
-              <button class="btn btn-secondary" id="load-onboarding-summary">Refresh batch summary</button>
-            </div>
+            </details>
             <div class="status-box" id="onboarding-summary-box">
               <div>Batch: <span id="onboarding-summary-batch">-</span></div>
               <div>Parsed: <span id="onboarding-summary-parsed">-</span></div>
@@ -402,14 +422,18 @@
             </div>
           </div>
           <div class="card">
-            <h3>Draft Candidates</h3>
+            <h3>Sources and decisions</h3>
             <div class="empty hidden" id="onboarding-empty">No candidates match the selected filters.</div>
             <table id="onboarding-table">
+              <colgroup>
+                <col style="width: 5%" /><col style="width: 10%" /><col style="width: 24%" />
+                <col style="width: 14%" /><col style="width: 24%" /><col style="width: 23%" />
+              </colgroup>
               <thead>
                 <tr>
                   <th>ID</th>
                   <th>Status</th>
-                  <th>Validation</th>
+                  <th>Decision</th>
                   <th>Type / Details</th>
                   <th>URL</th>
                   <th>Actions</th>
@@ -431,6 +455,9 @@
       const pageView = $("page-view");
       const pageOnboarding = $("page-onboarding");
       let pollTimer = null;
+      let sourceCheckTimer = null;
+      let sourceCheckCompleted = -1;
+      let sourceCheckRunning = false;
       let visibleNewsItems = [];
 
       function setStatus(id, text, level = "") {
@@ -747,7 +774,7 @@
 
       function currentOnboardingBatchId() {
         const batchId = Number($("onboarding-batch-id").value);
-        return Number.isFinite(batchId) && batchId > 0 ? batchId : 7;
+        return Number.isInteger(batchId) && batchId > 0 ? batchId : null;
       }
 
       function currentOnboardingFilters() {
@@ -771,6 +798,7 @@
 
       async function loadOnboardingSummary() {
         const batchId = currentOnboardingBatchId();
+        if (!batchId) return;
         try {
           const response = await fetch(`/api/source-onboarding/batches/${batchId}/summary`);
           if (!response.ok) {
@@ -784,6 +812,10 @@
       }
 
       async function importOnboardingBatch() {
+        if (sourceCheckRunning) {
+          setStatus("onboarding-import-status", "Wait for the current source checks to finish.", "error");
+          return;
+        }
         const rawText = $("onboarding-import-raw-text").value.trim();
         if (!rawText) {
           setStatus("onboarding-import-status", "Paste at least one URL to import.", "error");
@@ -813,12 +845,18 @@
           $("onboarding-batch-id").value = String(payload.batch_id);
           setStatus(
             "onboarding-import-status",
-            `Imported batch ${payload.batch_id}: accepted=${payload.accepted_count}, rejected=${payload.rejected_count}.`,
+            `Batch ${payload.batch_id}: ${payload.accepted_count} new sources, ${payload.rejected_count} already known or invalid.`,
             "success",
           );
           setStatus("onboarding-status", `Loaded imported batch ${payload.batch_id}.`, "success");
           await loadOnboardingSummary();
           await loadOnboardingCandidates();
+          if (payload.accepted_count > 0) {
+            await validateOnboardingBatch();
+            $("source-check-results").scrollIntoView({ behavior: "smooth", block: "start" });
+          } else {
+            setStatus("onboarding-status", "No new sources to check. Earlier candidate results are preserved; select their batch to review them.");
+          }
         } catch (_error) {
           setStatus("onboarding-import-status", "Failed to import candidate batch.", "error");
         }
@@ -826,12 +864,14 @@
 
       async function validateOnboardingBatch() {
         const batchId = currentOnboardingBatchId();
-        setStatus("onboarding-status", `Validating batch ${batchId}...`);
+        if (!batchId) {
+          setStatus("onboarding-status", "Import sources or select a batch first.", "error");
+          return;
+        }
+        setStatus("onboarding-status", `Starting checks for batch ${batchId}...`);
         try {
-          const response = await fetch("/api/source-onboarding/validate", {
+          const response = await fetch(`/api/source-onboarding/batches/${batchId}/check`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ batch_id: batchId }),
           });
           if (!response.ok) {
             let detail = "Failed to validate batch.";
@@ -845,16 +885,80 @@
             return;
           }
 
-          const payload = await response.json();
-          setStatus(
-            "onboarding-status",
-            `Validated ${payload.validated_count} candidates for batch ${batchId}.`,
-            "success",
-          );
-          await loadOnboardingSummary();
-          await loadOnboardingCandidates();
+          sourceCheckCompleted = -1;
+          await refreshSourceCheck();
         } catch (_error) {
           setStatus("onboarding-status", "Failed to validate batch.", "error");
+        }
+      }
+
+      async function refreshSourceCheck() {
+        try {
+          const response = await fetch("/api/source-onboarding/check-status");
+          if (!response.ok) throw new Error("Unable to read check progress");
+          const job = await response.json();
+          const running = job.status === "running";
+          sourceCheckRunning = running;
+          $("import-onboarding-batch").disabled = running;
+          $("validate-onboarding-batch").disabled = running;
+          if (running) $("approve-ready-sources").disabled = true;
+          if (job.batch_id) {
+            setStatus("onboarding-check-status",
+              `Batch ${job.batch_id}: ${job.completed || 0}/${job.total || 0} checked. ${job.status}`,
+              job.status === "failed" ? "error" : "");
+            if (job.error) setStatus("onboarding-status", job.error, "error");
+          }
+          if (job.batch_id === currentOnboardingBatchId() &&
+              (job.completed !== sourceCheckCompleted || !running)) {
+            sourceCheckCompleted = job.completed;
+            await loadOnboardingSummary();
+            await loadOnboardingCandidates();
+            if (running) $("approve-ready-sources").disabled = true;
+          }
+          if (running && !sourceCheckTimer) {
+            sourceCheckTimer = setInterval(refreshSourceCheck, 3000);
+          } else if (!running && sourceCheckTimer) {
+            clearInterval(sourceCheckTimer);
+            sourceCheckTimer = null;
+          }
+          if (job.status === "finished") {
+            setStatus("onboarding-status", "Checks complete. Review results and connect recommended sources.", "success");
+          }
+        } catch (error) {
+          setStatus("onboarding-check-status", error.message, "error");
+        }
+      }
+
+      async function connectRecommendedSources() {
+        const batchId = currentOnboardingBatchId();
+        if (!batchId) return;
+        $("approve-ready-sources").disabled = true;
+        try {
+          const payload = await sendOnboardingAction(`/api/source-onboarding/batches/${batchId}/approve-ready`);
+          setStatus("onboarding-status", `Connected ${payload.approved_count} sources. Use Update > Run update to collect news.`, "success");
+          await loadOnboardingSummary();
+          await loadOnboardingCandidates();
+        } catch (error) {
+          setStatus("onboarding-status", error.message, "error");
+          await loadOnboardingCandidates();
+        }
+      }
+
+      async function loadLatestSourceBatch() {
+        try {
+          const response = await fetch("/api/source-onboarding/latest");
+          if (!response.ok) throw new Error("Unable to load the latest source batch");
+          const payload = await response.json();
+          if (payload.batch_id) {
+            $("onboarding-batch-id").value = String(payload.batch_id);
+            await loadOnboardingSummary();
+            await loadOnboardingCandidates();
+          } else {
+            setStatus("onboarding-status", "Upload your first source JSON to get started.");
+          }
+          await refreshSourceCheck();
+        } catch (error) {
+          setStatus("onboarding-status", error.message, "error");
         }
       }
 
@@ -912,6 +1016,7 @@
         tbody.innerHTML = "";
         $("onboarding-empty").classList.add("hidden");
         const filters = currentOnboardingFilters();
+        if (!filters.batch_id) return;
         const params = new URLSearchParams({ batch_id: String(filters.batch_id) });
         if (filters.status) params.set("status", filters.status);
         if (filters.validation_status) params.set("validation_status", filters.validation_status);
@@ -925,6 +1030,15 @@
           const payload = await response.json();
           renderOnboardingSummary(payload.summary || {});
           const items = Array.isArray(payload.items) ? payload.items : [];
+          let readyCount = 0;
+          for (const item of items) {
+            try {
+              const review = JSON.parse(item.validation_details || "{}").source_review;
+              if (item.status === "draft" && item.validation_status === "validated" && review?.decision === "ready") readyCount++;
+            } catch (_ignored) {}
+          }
+          $("approve-ready-sources").textContent = `Connect recommended (${readyCount})`;
+          $("approve-ready-sources").disabled = readyCount === 0 || sourceCheckRunning;
           if (items.length === 0) {
             $("onboarding-empty").classList.remove("hidden");
             return;
@@ -944,7 +1058,18 @@
             row.appendChild(statusCell);
 
             const validationCell = document.createElement("td");
-            validationCell.textContent = item.validation_status;
+            let sourceReview = {};
+            try {
+              sourceReview = JSON.parse(item.validation_details || "{}").source_review || {};
+            } catch (_ignored) {}
+            const decisionNames = {ready: "Ready to connect", review: "Needs review", reject: "Not suitable", duplicate: "Already known"};
+            validationCell.textContent = decisionNames[sourceReview.decision] || item.validation_status;
+            if (sourceReview.reason) {
+              const reason = document.createElement("div");
+              reason.className = "note";
+              reason.textContent = sourceReview.reason;
+              validationCell.appendChild(reason);
+            }
             if (item.validated_at) {
               const validationMeta = document.createElement("div");
               validationMeta.className = "note";
@@ -1018,7 +1143,7 @@
             duplicateInput.value = item.duplicate_of_candidate_id || "";
             duplicateInput.placeholder = "Duplicate of candidate ID";
 
-            actionsCell.appendChild(buildOnboardingActionButton("Approve", async () => {
+            const approveButton = buildOnboardingActionButton("Approve", async () => {
               try {
                 await sendOnboardingAction(`/api/source-onboarding/candidates/${item.candidate_id}/approve`);
                 setStatus("onboarding-status", `Candidate ${item.candidate_id} approved.`, "success");
@@ -1026,7 +1151,9 @@
               } catch (error) {
                 setStatus("onboarding-status", error.message, "error");
               }
-            }));
+            });
+            approveButton.disabled = item.validation_status !== "validated" || item.status === "approved" || item.status === "duplicate";
+            actionsCell.appendChild(approveButton);
             if (item.approved_source_id) {
               actionsCell.appendChild(buildOnboardingActionButton("Disable", async () => {
                 try {
@@ -1102,6 +1229,23 @@
       $("load-news").addEventListener("click", loadNews);
       $("copy-links").addEventListener("click", copyVisibleLinks);
       $("import-onboarding-batch").addEventListener("click", importOnboardingBatch);
+      $("approve-ready-sources").addEventListener("click", connectRecommendedSources);
+      $("onboarding-json-file").addEventListener("change", async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        if (file.size > 1000000) {
+          setStatus("onboarding-import-status", "JSON file must be smaller than 1 MB.", "error");
+          return;
+        }
+        try {
+          const text = await file.text();
+          JSON.parse(text);
+          $("onboarding-import-raw-text").value = text;
+          await importOnboardingBatch();
+        } catch (_error) {
+          setStatus("onboarding-import-status", "Choose a valid JSON file.", "error");
+        }
+      });
       $("load-onboarding").addEventListener("click", loadOnboardingCandidates);
       $("validate-onboarding-batch").addEventListener("click", validateOnboardingBatch);
       $("load-onboarding-summary").addEventListener("click", loadOnboardingSummary);
@@ -1109,8 +1253,7 @@
       loadSettings();
       refreshStatus();
       loadNews();
-      loadOnboardingSummary();
-      loadOnboardingCandidates();
+      loadLatestSourceBatch();
     </script>
   </body>
 </html>
