@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Weekly AI Reports</title>
+    <style>
+      :root {
+        --bg-top: #f4f7fb;
+        --bg-bottom: #fbfcff;
+        --surface: #ffffff;
+        --border: #d8e2ee;
+        --text: #0f2d46;
+        --muted: #5f7385;
+        --accent: #0f766e;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        color: var(--text);
+        background: linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+      }
+      main {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 48px 20px 64px;
+      }
+      .hero,
+      .report-list,
+      .empty-state {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
+      }
+      .hero,
+      .report-list,
+      .empty-state {
+        padding: 24px;
+      }
+      .hero-nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 14px;
+      }
+      .hero-link {
+        color: var(--accent);
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      h1 {
+        margin: 12px 0 8px;
+        font-size: clamp(1.8rem, 3.6vw, 2.8rem);
+      }
+      .report-list {
+        margin-top: 18px;
+      }
+      .reports {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .report-item + .report-item {
+        border-top: 1px solid var(--border);
+      }
+      .report-item {
+        padding: 16px 0;
+      }
+      .report-item:first-child {
+        padding-top: 0;
+      }
+      .report-item:last-child {
+        padding-bottom: 0;
+      }
+      .report-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: baseline;
+      }
+      .report-range {
+        margin: 0;
+        font-weight: 600;
+      }
+      .report-meta {
+        margin: 8px 0;
+      }
+      .report-summary {
+        margin: 0;
+      }
+      .report-actions {
+        margin-top: 10px;
+      }
+      .open-link {
+        color: var(--accent);
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .empty-state {
+        margin-top: 18px;
+        text-align: center;
+        color: var(--muted);
+      }
+      .hidden {
+        display: none;
+      }
+      @media (max-width: 700px) {
+        .hero-nav,
+        .report-head {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <div class="hero-nav">
+          <a class="hero-link" href="/__DAILY_DIGEST_QUERY__">Back to Daily Digest</a>
+          <span class="muted">Published Monday reports</span>
+        </div>
+        <h1>Weekly AI Reports</h1>
+        <p class="muted">Select any published weekly report and open the full analytics page.</p>
+      </section>
+
+      <section id="reports-container" class="report-list hidden">
+        <ul id="reports-list" class="reports"></ul>
+      </section>
+      <section id="reports-empty" class="empty-state">
+        Weekly reports are not published yet.
+      </section>
+    </main>
+
+    <script>
+      const reportsContainer = document.getElementById("reports-container");
+      const reportsList = document.getElementById("reports-list");
+      const reportsEmpty = document.getElementById("reports-empty");
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function renderReports(items) {
+        if (!items.length) {
+          reportsContainer.classList.add("hidden");
+          reportsEmpty.classList.remove("hidden");
+          return;
+        }
+
+        reportsEmpty.classList.add("hidden");
+        reportsContainer.classList.remove("hidden");
+
+        reportsList.innerHTML = items
+          .map(
+            (item) => `
+              <li class="report-item">
+                <div class="report-head">
+                  <p class="report-range">${escapeHtml(item.date_from)} to ${escapeHtml(item.date_to)}</p>
+                  <span class="muted">Published: ${escapeHtml(item.created_at.slice(0, 10))}</span>
+                </div>
+                <p class="report-meta muted">Report date: ${escapeHtml(item.report_date)}</p>
+                <p class="report-summary muted">${escapeHtml(item.summary)}</p>
+                <div class="report-actions">
+                  <a class="open-link" href="/weekly-ai-analytics?date=${encodeURIComponent(item.report_date)}">Open report</a>
+                </div>
+              </li>
+            `,
+          )
+          .join("");
+      }
+
+      async function loadReports() {
+        const response = await fetch("/api/news/weekly-analytics/reports");
+        if (!response.ok) {
+          reportsEmpty.textContent = "Weekly reports are unavailable right now.";
+          return;
+        }
+        const payload = await response.json();
+        renderReports(payload.items || []);
+      }
+
+      void loadReports();
+    </script>
+  </body>
+</html>

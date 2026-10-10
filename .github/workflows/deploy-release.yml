@@ -15,10 +15,10 @@ permissions:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Build test image (Python 3.14)
         run: docker build -f build/Dockerfile --target test --build-arg PYTHON_IMAGE=python:3.14-slim -t ai-news-test:${{ github.sha }} .
@@ -27,10 +27,10 @@ jobs:
         run: docker run --rm ai-news-test:${{ github.sha }} make lint PYTHON=python
 
   tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Build test image (Python 3.14)
         run: docker build -f build/Dockerfile --target test --build-arg PYTHON_IMAGE=python:3.14-slim -t ai-news-test:${{ github.sha }} .
@@ -42,41 +42,79 @@ jobs:
     needs:
       - lint
       - tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push runtime image
-        uses: docker/build-push-action@v6
+      - name: Compute dependency base image
+        id: deps
+        run: |
+          DEP_HASH="$(./scripts/docker_dependency_fingerprint.sh)"
+          BASE_IMAGE="ghcr.io/orlv-85/ai-parser:runtime-base-${DEP_HASH}"
+          echo "hash=${DEP_HASH}" >> "$GITHUB_OUTPUT"
+          echo "base_image=${BASE_IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "Dependency base image: ${BASE_IMAGE}"
+
+      - name: Check dependency base image
+        id: base
+        run: |
+          if docker buildx imagetools inspect "${{ steps.deps.outputs.base_image }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Using existing dependency base image"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Dependency base image is missing and will be built"
+          fi
+
+      - name: Build and push dependency base image
+        if: steps.base.outputs.exists != 'true'
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: build/Dockerfile
-          target: runtime
+          target: runtime-base
+          push: true
+          tags: ${{ steps.deps.outputs.base_image }}
+          build-args: |
+            PYTHON_IMAGE=python:3.14-slim
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push app image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: build/Dockerfile.runtime
           push: true
           tags: |
             ghcr.io/orlv-85/ai-parser:${{ github.ref_name }}
             ghcr.io/orlv-85/ai-parser:sha-${{ github.sha }}
             ghcr.io/orlv-85/ai-parser:latest
+          build-args: |
+            RUNTIME_BASE_IMAGE=${{ steps.deps.outputs.base_image }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   deploy:
     needs: build-image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Validate deploy config
+        env:
+          DS_API_KEY: ${{ secrets.DS_API_KEY }}
         run: |
+          test -n "${DS_API_KEY}" || { echo 'DS_API_KEY repository secret is required'; exit 1; }
           test -n "${{ vars.DEPLOY_HOST }}"
           test -n "${{ vars.DEPLOY_USER }}"
           test -n "${{ secrets.SERVER_PASSWORD }}"
@@ -99,6 +137,8 @@ jobs:
 
       - name: Prepare runtime env payload
         env:
+          DS_API_KEY: ${{ secrets.DS_API_KEY }}
+          AINEWS_DIGEST_MODEL: ${{ vars.AINEWS_DIGEST_MODEL || 'deepseek-flash' }}
           AINEWS_AUTH_PASSWORD_HASH: ${{ secrets.AINEWS_AUTH_PASSWORD_HASH }}
           AINEWS_AUTH_SECRET: ${{ secrets.AINEWS_AUTH_SECRET }}
           AINEWS_AUTH_USERNAME: ${{ vars.AINEWS_AUTH_USERNAME || 'operator' }}
@@ -107,7 +147,7 @@ jobs:
           AINEWS_AUTH_COOKIE_SECURE: ${{ vars.AINEWS_AUTH_COOKIE_SECURE || 'true' }}
           AINEWS_MCP_AUTH_ENABLED: ${{ vars.AINEWS_MCP_AUTH_ENABLED || 'false' }}
           AINEWS_MCP_AUTH_TOKEN: ${{ secrets.AINEWS_MCP_AUTH_TOKEN }}
-          ANTIGRAVITY_ENABLED: ${{ vars.ANTIGRAVITY_ENABLED || 'true' }}
+          ANTIGRAVITY_ENABLED: ${{ vars.ANTIGRAVITY_ENABLED || 'false' }}
           ANTIGRAVITY_IMAGE: ${{ vars.ANTIGRAVITY_IMAGE || 'lbjlaq/antigravity-manager:latest' }}
           ANTIGRAVITY_PORT: ${{ vars.ANTIGRAVITY_PORT || '8045' }}
           ANTIGRAVITY_WEB_PASSWORD: ${{ secrets.ANTIGRAVITY_WEB_PASSWORD }}
@@ -115,6 +155,8 @@ jobs:
           ANTIGRAVITY_ACCOUNT_PASSWORD: ${{ secrets.ANTIGRAVITY_ACCOUNT_PASSWORD }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
+          umask 077
+          DS_API_KEY_ESCAPED="$(printf '%s' "${DS_API_KEY}" | sed 's/[$]/$$/g')"
           AINEWS_AUTH_PASSWORD_HASH_ESCAPED="$(printf '%s' "${AINEWS_AUTH_PASSWORD_HASH}" | sed 's/[$]/$$/g')"
           AINEWS_AUTH_SECRET_ESCAPED="$(printf '%s' "${AINEWS_AUTH_SECRET}" | sed 's/[$]/$$/g')"
           AINEWS_MCP_AUTH_TOKEN_ESCAPED="$(printf '%s' "${AINEWS_MCP_AUTH_TOKEN}" | sed 's/[$]/$$/g')"
@@ -123,6 +165,8 @@ jobs:
           ANTIGRAVITY_ACCOUNT_PASSWORD_ESCAPED="$(printf '%s' "${ANTIGRAVITY_ACCOUNT_PASSWORD}" | sed 's/[$]/$$/g')"
           ANTHROPIC_API_KEY_ESCAPED="$(printf '%s' "${ANTHROPIC_API_KEY}" | sed 's/[$]/$$/g')"
           {
+            printf 'DS_API_KEY=%s\n' "${DS_API_KEY_ESCAPED}"
+            printf 'AINEWS_DIGEST_MODEL=%s\n' "${AINEWS_DIGEST_MODEL}"
             printf 'AINEWS_AUTH_ENABLED=%s\n' "${AINEWS_AUTH_ENABLED}"
             printf 'AINEWS_AUTH_USERNAME=%s\n' "${AINEWS_AUTH_USERNAME}"
             printf 'AINEWS_AUTH_PASSWORD_HASH=%s\n' "${AINEWS_AUTH_PASSWORD_HASH_ESCAPED}"
@@ -176,11 +220,11 @@ jobs:
           }
           retry sshpass -p "${SERVER_PASSWORD}" scp ${SSH_OPTS} /tmp/ai_news_auth.env "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/ai_news_auth.env"
           retry sshpass -p "${SERVER_PASSWORD}" scp ${SSH_OPTS} /tmp/ai_news_ghcr.token "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/ai_news_ghcr.token"
-          retry sshpass -p "${SERVER_PASSWORD}" ssh ${SSH_OPTS} "${DEPLOY_USER}@${DEPLOY_HOST}" "cd '${DEPLOY_APP_DIR}' && touch .env && grep -vE '^(AINEWS_AUTH_ENABLED|AINEWS_AUTH_USERNAME|AINEWS_AUTH_PASSWORD_HASH|AINEWS_AUTH_SECRET|AINEWS_AUTH_SESSION_TTL_SECONDS|AINEWS_AUTH_COOKIE_SECURE|AINEWS_MCP_AUTH_ENABLED|AINEWS_MCP_AUTH_TOKEN|ANTIGRAVITY_ENABLED|ANTIGRAVITY_IMAGE|ANTIGRAVITY_PORT|ANTIGRAVITY_WEB_PASSWORD|ANTIGRAVITY_ACCOUNT_EMAIL|ANTIGRAVITY_ACCOUNT_PASSWORD|ANTHROPIC_API_KEY)=' .env > .env.next || true && cat /tmp/ai_news_auth.env >> .env.next && mv .env.next .env && rm -f /tmp/ai_news_auth.env && cat /tmp/ai_news_ghcr.token | docker login ghcr.io -u 'orlv-85' --password-stdin && rm -f /tmp/ai_news_ghcr.token && git fetch --force origin '+refs/tags/*:refs/tags/*' && git checkout --force '${DEPLOY_TAG}' && POCKETPAW_ENABLED='${POCKETPAW_ENABLED}' POCKETPAW_VERSION='${POCKETPAW_VERSION}' APP_IMAGE='ghcr.io/orlv-85/ai-parser:${DEPLOY_TAG}' ./scripts/deploy_prod.sh '${DEPLOY_TAG}'"
+          retry sshpass -p "${SERVER_PASSWORD}" ssh ${SSH_OPTS} "${DEPLOY_USER}@${DEPLOY_HOST}" "cd '${DEPLOY_APP_DIR}' && touch .env && grep -vE '^(AINEWS_AUTH_ENABLED|AINEWS_AUTH_USERNAME|AINEWS_AUTH_PASSWORD_HASH|AINEWS_AUTH_SECRET|AINEWS_AUTH_SESSION_TTL_SECONDS|AINEWS_AUTH_COOKIE_SECURE|AINEWS_MCP_AUTH_ENABLED|AINEWS_MCP_AUTH_TOKEN|ANTIGRAVITY_ENABLED|ANTIGRAVITY_IMAGE|ANTIGRAVITY_PORT|ANTIGRAVITY_WEB_PASSWORD|ANTIGRAVITY_ACCOUNT_EMAIL|ANTIGRAVITY_ACCOUNT_PASSWORD|ANTHROPIC_API_KEY|DS_API_KEY|AINEWS_DIGEST_MODEL)=' .env > .env.next || true && cat /tmp/ai_news_auth.env >> .env.next && chmod 600 .env.next && mv .env.next .env && cat /tmp/ai_news_ghcr.token | docker login ghcr.io -u 'orlv-85' --password-stdin && git fetch --force origin '+refs/tags/*:refs/tags/*' && git checkout --force '${DEPLOY_TAG}' && POCKETPAW_ENABLED='${POCKETPAW_ENABLED}' POCKETPAW_VERSION='${POCKETPAW_VERSION}' APP_IMAGE='ghcr.io/orlv-85/ai-parser:${DEPLOY_TAG}' ./scripts/deploy_prod.sh '${DEPLOY_TAG}' && rm -f /tmp/ai_news_auth.env /tmp/ai_news_ghcr.token"
 
   cleanup-ghcr:
     needs: deploy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Delete old GHCR image versions (keep 5)
         env:
@@ -199,19 +243,26 @@ jobs:
           for page in pages:
               versions.extend(page)
 
-          tagged = []
+          release_tagged = []
+          base_tagged = []
           for version in versions:
               tags = (((version.get("metadata") or {}).get("container") or {}).get("tags") or [])
-              if tags:
-                  tagged.append(version)
+              if any(tag.startswith("runtime-base-") for tag in tags):
+                  base_tagged.append(version)
+              elif tags:
+                  release_tagged.append(version)
 
           def _created(v):
               return datetime.fromisoformat(v["created_at"].replace("Z", "+00:00"))
 
-          tagged.sort(key=_created, reverse=True)
+          release_tagged.sort(key=_created, reverse=True)
           keep = 5
-          to_delete = tagged[keep:]
-          print(f"Found {len(tagged)} tagged versions, keeping {min(keep, len(tagged))}, deleting {len(to_delete)}")
+          to_delete = release_tagged[keep:]
+          print(
+              f"Found {len(release_tagged)} release image versions, "
+              f"keeping {min(keep, len(release_tagged))}, deleting {len(to_delete)}. "
+              f"Dependency base versions kept: {len(base_tagged)}"
+          )
 
           for version in to_delete:
               version_id = version["id"]

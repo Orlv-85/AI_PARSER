@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -169,7 +170,9 @@ def test_build_feed_digest_payload_includes_every_link_once() -> None:
     assert payload["report_date"] == "2026-03-01"
     assert urls == ["https://example.com/1", "https://example.com/2"]
     assert categories == ["Business & Product"]
-    assert payload["groups"][0]["items"][0]["summary"].startswith("Source: Tech Source.")
+    assert payload["groups"][0]["items"][0]["summary"] == (
+        "Article text is unavailable; read the original report from Tech Source."
+    )
 
 
 def test_build_feed_digest_payload_rejects_invalid_feed_row() -> None:
@@ -364,6 +367,164 @@ def test_build_feed_digest_payload_rewrites_sentence_like_titles_from_summary() 
     assert item["title"] == (
         "Modular architecture for specialized smaller models in larger autonomous agent wo..."
     )
+
+
+def test_build_feed_weekly_payload_computes_sections() -> None:
+    bridge = _load_bridge_module()
+
+    payload = bridge.build_feed_weekly_payload(
+        recent_items=[
+            {
+                "title": "AI Browser Launches",
+                "url": "https://example.com/new",
+                "summary": "New browser story.",
+                "published_at": "2026-03-08T10:00:00Z",
+                "rank_score": 0.8,
+            },
+            {
+                "title": "Coding Agents Expand",
+                "url": "https://example.com/up-recent",
+                "summary": "Coding agents accelerating.",
+                "published_at": "2026-03-07T10:00:00Z",
+                "rank_score": 0.9,
+            },
+        ],
+        prior_items=[
+            {
+                "title": "Coding Agents Expand",
+                "url": "https://example.com/up-prior",
+                "summary": "Prior baseline lower score.",
+                "published_at": "2026-02-28T10:00:00Z",
+                "rank_score": 0.5,
+            },
+            {
+                "title": "Standalone Vector DBs Cool Off",
+                "url": "https://example.com/down-prior",
+                "summary": "Prior topic disappeared.",
+                "published_at": "2026-02-27T10:00:00Z",
+                "rank_score": 0.7,
+            },
+        ],
+        report_date="2026-03-08",
+    )
+
+    assert payload["report_date"] == "2026-03-08"
+    assert payload["date_from"] == "2026-03-02"
+    assert payload["date_to"] == "2026-03-08"
+    assert [item["title"] for item in payload["new"]] == ["AI Browser Launches"]
+    assert [item["title"] for item in payload["trending_up"]] == ["Coding Agents Expand"]
+    assert [item["title"] for item in payload["trending_down"]] == [
+        "Standalone Vector DBs Cool Off"
+    ]
+    assert "Signals: 1 new, 1 trending up, 1 trending down." in payload["summary"]
+    assert "Top focus: AI Browser Launches, Coding Agents Expand." in payload["summary"]
+
+
+def test_build_feed_weekly_payload_handles_empty_recent_window() -> None:
+    bridge = _load_bridge_module()
+
+    payload = bridge.build_feed_weekly_payload(
+        recent_items=[],
+        prior_items=[],
+        report_date="2026-03-08",
+    )
+
+    assert payload["new"] == []
+    assert payload["trending_up"] == []
+    assert payload["trending_down"] == []
+    assert payload["summary"] == "No AI news signals between 2026-03-02 and 2026-03-08."
+
+
+def test_build_feed_weekly_payload_matches_same_topic_with_title_variants() -> None:
+    bridge = _load_bridge_module()
+
+    payload = bridge.build_feed_weekly_payload(
+        recent_items=[
+            {
+                "title": "NVIDIA TensorRT automatically optimizes inference for RTX",
+                "url": "https://example.com/recent-topic",
+                "summary": "Recent week variant with stronger momentum.",
+                "published_at": "2026-03-08T10:00:00Z",
+                "rank_score": 0.92,
+            }
+        ],
+        prior_items=[
+            {
+                "title": "Adaptive Inference in NVIDIA TensorRT for RTX optimization",
+                "url": "https://example.com/prior-topic",
+                "summary": "Prior week wording of the same topic.",
+                "published_at": "2026-03-01T10:00:00Z",
+                "rank_score": 0.31,
+            }
+        ],
+        report_date="2026-03-08",
+    )
+
+    assert payload["new"] == []
+    assert [item["title"] for item in payload["trending_up"]] == [
+        "NVIDIA TensorRT automatically optimizes inference for RTX"
+    ]
+
+
+def test_build_feed_weekly_payload_uses_source_fallback_for_missing_item_summary() -> None:
+    bridge = _load_bridge_module()
+
+    payload = bridge.build_feed_weekly_payload(
+        recent_items=[
+            {
+                "title": "DeepSeek Can Buy Nvidia H200 AI Chips",
+                "url": "https://example.com/h200",
+                "summary": "",
+                "published_at": "2026-03-08T10:00:00Z",
+                "source_name": "AI Wire",
+                "rank_score": 0.9,
+            }
+        ],
+        prior_items=[],
+        report_date="2026-03-08",
+    )
+
+    assert payload["new"][0]["summary"] == "Reported by AI Wire on 2026-03-08."
+
+
+def test_fetch_news_links_range_paginates_daily_results() -> None:
+    bridge = _load_bridge_module()
+    captured_queries: list[dict[str, str]] = []
+
+    def fake_read_json_response(url: str, **_kwargs):
+        parsed = urlparse(url)
+        query = {key: values[0] for key, values in parse_qs(parsed.query).items()}
+        captured_queries.append(query)
+        if query.get("date") != "2026-03-08":
+            return []
+        if query.get("offset") == "0":
+            return [
+                {
+                    "title": "A",
+                    "url": "https://example.com/a",
+                    "published_at": "2026-03-08T10:00:00Z",
+                }
+            ]
+        return []
+
+    original = bridge.read_json_response
+    bridge.read_json_response = fake_read_json_response
+    try:
+        fetch_range = bridge.__dict__["_fetch_news_links_range"]
+        rows = fetch_range(
+            base_url="http://example.test",
+            date_from="2026-03-08",
+            date_to="2026-03-08",
+            limit=1,
+        )
+    finally:
+        bridge.read_json_response = original
+
+    assert len(rows) == 1
+    assert captured_queries == [
+        {"date": "2026-03-08", "limit": "1", "offset": "0", "include_content": "true"},
+        {"date": "2026-03-08", "limit": "1", "offset": "1", "include_content": "true"},
+    ]
 
 
 def test_categorize_digest_item_prefers_rag_for_true_rag_signals() -> None:

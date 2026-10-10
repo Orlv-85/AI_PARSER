@@ -65,6 +65,8 @@ class DigestLinkFeedItem(BaseModel):
     source_id: int | None = None
     source_key: str | None = None
     source_name: str | None = None
+    summary: str | None = None
+    content: str | None = None
 
 
 class NewsDigestItemPayload(BaseModel):
@@ -92,6 +94,72 @@ class NewsDigestPayload(BaseModel):
 class NewsDigestResponse(BaseModel):
     report_date: date
     groups: list[NewsDigestGroupPayload]
+
+
+class WeeklyAnalyticsResponse(BaseModel):
+    report_date: date
+    date_from: date
+    date_to: date
+    summary: str
+    new: list[NewsDigestItemPayload]
+    trending_up: list[NewsDigestItemPayload]
+    trending_down: list[NewsDigestItemPayload]
+
+
+class WeeklyAnalyticsPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    report_date: date
+    date_from: date
+    date_to: date
+    summary: str = Field(min_length=1, max_length=4000)
+    new: list[NewsDigestItemPayload] = Field(default_factory=list)
+    trending_up: list[NewsDigestItemPayload] = Field(default_factory=list)
+    trending_down: list[NewsDigestItemPayload] = Field(default_factory=list)
+
+
+class WeeklyAnalyticsReportListItem(BaseModel):
+    report_date: date
+    date_from: date
+    date_to: date
+    summary: str
+    created_at: datetime
+
+
+class WeeklyAnalyticsReportListResponse(BaseModel):
+    items: list[WeeklyAnalyticsReportListItem]
+
+
+class WeeklyAnalyticsFreshnessResponse(BaseModel):
+    report_date: date
+    date_from: date
+    date_to: date
+    article_count: int
+    latest_fetch_run_id: str | None = None
+    latest_fetch_status: str | None = None
+    latest_fetch_started_at: datetime | None = None
+    latest_fetch_finished_at: datetime | None = None
+    latest_fetch_fetched: int = 0
+    latest_fetch_new: int = 0
+    latest_fetch_duplicates: int = 0
+    latest_fetch_errors: int = 0
+
+
+class NewsDailyStatsItem(BaseModel):
+    stat_date: date
+    published_count: int
+    discovered_count: int
+    fetch_run_count: int
+    fetched_count: int
+    new_count: int
+    duplicate_count: int
+    error_count: int
+
+
+class NewsDailyStatsResponse(BaseModel):
+    date_from: date
+    date_to: date
+    items: list[NewsDailyStatsItem]
 
 
 class SourceOnboardingCandidateView(BaseModel):

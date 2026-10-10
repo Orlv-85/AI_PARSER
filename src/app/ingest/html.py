@@ -152,8 +152,12 @@ def extract_article_text(html_content: str, url: str, strategy: str | None = Non
 def _build_html_article(*, source: SourceConfig, url: str, article_html: str) -> Article | None:
     if source.type != "html" or source.html is None:
         return None
-    title_nodes = lxml_html.fromstring(article_html).cssselect("h1")
-    title = title_nodes[0].text_content().strip() if title_nodes else url
+    tree = lxml_html.fromstring(article_html)
+    for node in tree.cssselect("script, style, template"):
+        node.drop_tree()
+    title_nodes = tree.cssselect("h1")
+    title = " ".join(title_nodes[0].text_content().split()) if title_nodes else url
+    title = title or url
     content = extract_article_text(
         html_content=article_html,
         url=url,

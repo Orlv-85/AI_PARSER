@@ -26,11 +26,15 @@ run options:
   --task TEXT                 Current scoped task/slice description
   --allow TEXT                Allowed file scope description for prompts
   --approved                  Explicit Gate A confirmation (required)
+  --max-iterations N          Auto-retry loop count on FAIL (default: 3)
+  --stream                    Stream nested agent logs in this terminal
   --sandbox MODE              Sandbox for nested codex (default: workspace-write)
   --retries N                 Retries for wrapper (default: 3)
   --backoff CSV               Backoff list for wrapper (default: 5,10,20)
   --coverage-cmd CMD          Optional coverage command for wrapper gate
   --coverage-fail-under N     Optional coverage threshold
+  --final-gate                Run final repo-wide gate:
+                              make lint PYTHON=./venv1/bin/python && ./venv1/bin/pytest
 
 Examples:
   ./scripts/feature_delivery_flow.sh bootstrap
@@ -40,6 +44,8 @@ Examples:
     --task "Implement endpoint validation errors" \
     --allow "src/app/web,tests/unit" \
     --approved \
+    --stream \
+    --final-gate \
     --coverage-cmd "./venv1/bin/pytest --cov=src/app/web --cov-report=term-missing" \
     --coverage-fail-under 100
 USAGE
@@ -117,13 +123,45 @@ run_bootstrap() {
   if [[ ${#rest_args[@]} -gt 0 ]]; then
     forward=("${rest_args[@]}")
   fi
+  local output_raw
   local output
 
   if [[ ${#forward[@]} -gt 0 ]]; then
-    output="$(cd "$repo" && "$start_script" -C "$repo" --json "${forward[@]}")"
+    output_raw="$(cd "$repo" && "$start_script" -C "$repo" --json "${forward[@]}")"
   else
-    output="$(cd "$repo" && "$start_script" -C "$repo" --json)"
+    output_raw="$(cd "$repo" && "$start_script" -C "$repo" --json)"
   fi
+
+  output="$(python3 -c '
+import json,sys
+raw=sys.argv[1]
+required={"status","branch","spec_file","plan_file","tasks_file","execution_packet"}
+def ok(p):
+    return isinstance(p,dict) and required <= set(p.keys())
+try:
+    p=json.loads(raw)
+    if ok(p):
+        print(json.dumps(p)); raise SystemExit(0)
+except Exception:
+    pass
+s=raw.find("{"); e=raw.rfind("}")
+if s!=-1 and e!=-1 and e>s:
+    try:
+        p=json.loads(raw[s:e+1])
+        if ok(p):
+            print(json.dumps(p)); raise SystemExit(0)
+    except Exception:
+        pass
+for line in reversed([ln.strip() for ln in raw.splitlines() if ln.strip()]):
+    if line.startswith("{") and line.endswith("}"):
+        try:
+            p=json.loads(line)
+            if ok(p):
+                print(json.dumps(p)); raise SystemExit(0)
+        except Exception:
+            pass
+raise SystemExit("Failed to parse bootstrap JSON output")
+' "$output_raw")"
 
   local branch
   local spec_file
@@ -185,9 +223,12 @@ run_execute() {
   local task=""
   local allow_scope=""
   local approved=0
+  local max_iterations="3"
   local sandbox="workspace-write"
   local retries="3"
   local backoff="5,10,20"
+  local stream=0
+  local final_gate=0
   local coverage_cmd=""
   local coverage_fail_under=""
 
@@ -207,6 +248,15 @@ run_execute() {
         ;;
       --approved)
         approved=1
+        ;;
+      --max-iterations)
+        i=$((i + 1)); max_iterations="${args[$i]:-}"
+        ;;
+      --stream)
+        stream=1
+        ;;
+      --final-gate)
+        final_gate=1
         ;;
       --sandbox)
         i=$((i + 1)); sandbox="${args[$i]:-}"
@@ -233,6 +283,10 @@ run_execute() {
 
   if [[ "$approved" -ne 1 ]]; then
     echo "Error: explicit --approved is required (Gate A)." >&2
+    exit 1
+  fi
+  if ! [[ "$max_iterations" =~ ^[0-9]+$ ]] || [[ "$max_iterations" -lt 1 ]]; then
+    echo "Error: --max-iterations must be an integer >= 1." >&2
     exit 1
   fi
   if [[ -z "$feature_dir" || -z "$task" || -z "$allow_scope" ]]; then
@@ -265,7 +319,20 @@ run_execute() {
   local generator_prompt_file="$flow_dir/prompts/generator.txt"
   local reviewer_prompt_file="$flow_dir/prompts/reviewer.txt"
 
-  cat > "$tester_prompt_file" <<EOF_TESTER
+  local iteration=1
+  local completed=0
+  local last_failure_reason=""
+  local final_iteration=0
+
+  while [[ "$iteration" -le "$max_iterations" ]]; do
+    echo "[loop] iteration ${iteration}/${max_iterations}"
+
+    local retry_context=""
+    if [[ -n "$last_failure_reason" ]]; then
+      retry_context="Previous iteration failed: $last_failure_reason"
+    fi
+
+    cat > "$tester_prompt_file" <<EOF_TESTER
 You are the Tester agent in a spec-first flow.
 
 Read:
@@ -276,6 +343,8 @@ Read:
 
 Task slice:
 - $task
+- Iteration: $iteration/$max_iterations
+${retry_context:+- Retry context: $retry_context}
 
 Scope restrictions:
 - Edit tests only.
@@ -284,9 +353,19 @@ Scope restrictions:
 Deliverable:
 - Write strict JSON handoff to tmp/tester_out.json using schema_version=1.0 and role=tester.
 - Include failing_reasons and coverage object keys: command, percent, target_percent, uncovered_lines.
+- status MUST be exactly one of: PASS, FAIL, NEEDS_WORK.
+- Use EXACT keys only (no extras, no omissions):
+  schema_version, role, status, summary, changed_files, checks, artifacts, next_action, failing_reasons, coverage
+- Minimal valid skeleton:
+  {
+    "schema_version":"1.0","role":"tester","status":"NEEDS_WORK",
+    "summary":"...","changed_files":[],"checks":[],"artifacts":["tmp/tester_out.json"],
+    "next_action":"...","failing_reasons":[],
+    "coverage":{"command":"...","percent":0,"target_percent":100,"uncovered_lines":[]}
+  }
 EOF_TESTER
 
-  cat > "$generator_prompt_file" <<EOF_GENERATOR
+    cat > "$generator_prompt_file" <<EOF_GENERATOR
 You are the Generator agent in a spec-first flow.
 
 Read:
@@ -298,6 +377,8 @@ Read:
 
 Task slice:
 - $task
+- Iteration: $iteration/$max_iterations
+${retry_context:+- Retry context: $retry_context}
 
 Scope restrictions:
 - Edit only implementation files in scope: $allow_scope
@@ -309,9 +390,12 @@ Validation before completion:
 Deliverable:
 - Write strict JSON handoff to tmp/generator_out.json using schema_version=1.0 and role=generator.
 - Include implementation_notes and coverage object keys: command, percent, target_percent, uncovered_lines.
+- status MUST be exactly one of: PASS, FAIL, NEEDS_WORK.
+- Use EXACT keys only:
+  schema_version, role, status, summary, changed_files, checks, artifacts, next_action, implementation_notes, coverage
 EOF_GENERATOR
 
-  cat > "$reviewer_prompt_file" <<EOF_REVIEWER
+    cat > "$reviewer_prompt_file" <<EOF_REVIEWER
 You are the Reviewer agent in a spec-first flow.
 
 Read:
@@ -324,6 +408,8 @@ Read:
 
 Review target:
 - $task
+- Iteration: $iteration/$max_iterations
+${retry_context:+- Retry context: $retry_context}
 
 Scope:
 - Verify only requested slice and allowed scope: $allow_scope
@@ -332,40 +418,163 @@ Deliverables:
 - Write strict JSON handoff to tmp/reviewer_out.json using schema_version=1.0 and role=reviewer.
 - verdict must be PASS or FAIL, include concise reason and requirement checks.
 - Write tmp/agent_audit.txt line1=PASS|FAIL, line2=one short reason.
+- status MUST be exactly one of: PASS, FAIL, NEEDS_WORK.
+- Use EXACT keys only:
+  schema_version, role, status, summary, changed_files, checks, artifacts, next_action, verdict, reason, requirements
 EOF_REVIEWER
 
-  local tester_prompt generator_prompt reviewer_prompt
-  tester_prompt="$(cat "$tester_prompt_file")"
-  generator_prompt="$(cat "$generator_prompt_file")"
-  reviewer_prompt="$(cat "$reviewer_prompt_file")"
+    local tester_prompt generator_prompt reviewer_prompt
+    tester_prompt="$(cat "$tester_prompt_file")"
+    generator_prompt="$(cat "$generator_prompt_file")"
+    reviewer_prompt="$(cat "$reviewer_prompt_file")"
 
-  local run_cmd=(
-    "$multiagent_script"
-    -C "$repo"
-    -t "$tester_prompt"
-    -g "$generator_prompt"
-    -r "$reviewer_prompt"
-    --sandbox "$sandbox"
-    --retries "$retries"
-    --backoff "$backoff"
-    --tag "featureflow"
-  )
+    local run_cmd=(
+      "$multiagent_script"
+      -C "$repo"
+      -t "$tester_prompt"
+      -g "$generator_prompt"
+      -r "$reviewer_prompt"
+      --sandbox "$sandbox"
+      --retries "$retries"
+      --backoff "$backoff"
+      --tag "featureflow"
+    )
+    if [[ "$stream" -eq 1 ]]; then
+      run_cmd+=(--stream-logs)
+    fi
 
-  if [[ -n "$coverage_cmd" ]]; then
-    run_cmd+=(--coverage-cmd "$coverage_cmd")
+    if [[ -n "$coverage_cmd" ]]; then
+      run_cmd+=(--coverage-cmd "$coverage_cmd")
+    fi
+    if [[ -n "$coverage_fail_under" ]]; then
+      run_cmd+=(--coverage-fail-under "$coverage_fail_under")
+    fi
+
+    set +e
+    "${run_cmd[@]}"
+    local run_rc=$?
+    set -e
+
+    local audit_status="FAIL"
+    if [[ -f "$repo/tmp/agent_audit.txt" ]]; then
+      audit_status="$(head -n 1 "$repo/tmp/agent_audit.txt" | tr -d '\r' | tr '[:lower:]' '[:upper:]')"
+    fi
+    if [[ "$audit_status" != "PASS" ]]; then
+      audit_status="FAIL"
+    fi
+
+    local reviewer_reason=""
+    if [[ -f "$repo/tmp/reviewer_out.json" ]]; then
+      reviewer_reason="$(python3 - "$repo/tmp/reviewer_out.json" <<'PY'
+import json
+import pathlib
+import sys
+path = pathlib.Path(sys.argv[1])
+try:
+    data = json.loads(path.read_text(encoding="utf-8"))
+except Exception:
+    print("")
+    raise SystemExit(0)
+print(str(data.get("reason", "")).strip())
+PY
+)"
+    fi
+
+    local gate_rc=0
+    if [[ "$final_gate" -eq 1 && "$run_rc" -eq 0 && "$audit_status" == "PASS" ]]; then
+      local lint_log="$flow_dir/final_gate_lint_iter${iteration}.log"
+      local pytest_log="$flow_dir/final_gate_pytest_iter${iteration}.log"
+
+      echo "[final-gate] running lint..."
+      if [[ "$stream" -eq 1 ]]; then
+        set +e
+        (cd "$repo" && make lint PYTHON=./venv1/bin/python) 2>&1 | tee "$lint_log"
+        local lint_rc=${PIPESTATUS[0]}
+        set -e
+        if [[ "$lint_rc" -ne 0 ]]; then
+          echo "[final-gate] FAILED: make lint (see $lint_log)" >&2
+          gate_rc=1
+        fi
+      else
+        if ! (cd "$repo" && make lint PYTHON=./venv1/bin/python) >"$lint_log" 2>&1; then
+          echo "[final-gate] FAILED: make lint (see $lint_log)" >&2
+          gate_rc=1
+        fi
+      fi
+
+      if [[ "$gate_rc" -eq 0 ]]; then
+        echo "[final-gate] running full pytest..."
+        if [[ "$stream" -eq 1 ]]; then
+          set +e
+          (cd "$repo" && ./venv1/bin/pytest) 2>&1 | tee "$pytest_log"
+          local pytest_rc=${PIPESTATUS[0]}
+          set -e
+          if [[ "$pytest_rc" -ne 0 ]]; then
+            echo "[final-gate] FAILED: pytest (see $pytest_log)" >&2
+            gate_rc=1
+          fi
+        else
+          if ! (cd "$repo" && ./venv1/bin/pytest) >"$pytest_log" 2>&1; then
+            echo "[final-gate] FAILED: pytest (see $pytest_log)" >&2
+            gate_rc=1
+          fi
+        fi
+      fi
+
+      if [[ "$gate_rc" -eq 0 ]]; then
+        echo "[final-gate] PASS"
+      fi
+    fi
+
+    local loop_ok=0
+    if [[ "$run_rc" -eq 0 && "$audit_status" == "PASS" && "$gate_rc" -eq 0 ]]; then
+      loop_ok=1
+    fi
+
+    if [[ "$loop_ok" -eq 1 ]]; then
+      completed=1
+      final_iteration="$iteration"
+      break
+    fi
+
+    last_failure_reason="run_rc=$run_rc audit=$audit_status gate=$gate_rc"
+    if [[ -n "$reviewer_reason" ]]; then
+      last_failure_reason="$last_failure_reason reviewer=${reviewer_reason}"
+    fi
+
+    if [[ "$iteration" -lt "$max_iterations" ]]; then
+      echo "[loop] iteration ${iteration} failed: $last_failure_reason"
+      echo "[loop] retrying with updated context..."
+    fi
+
+    iteration=$((iteration + 1))
+  done
+
+  if [[ "$completed" -ne 1 ]]; then
+    echo "run: failed after ${max_iterations} iterations" >&2
+    if [[ -n "$last_failure_reason" ]]; then
+      echo "reason: $last_failure_reason" >&2
+    fi
+    return 1
   fi
-  if [[ -n "$coverage_fail_under" ]]; then
-    run_cmd+=(--coverage-fail-under "$coverage_fail_under")
-  fi
-
-  "${run_cmd[@]}"
 
   local meta_file="$flow_dir/run_meta.json"
-  python3 - "$meta_file" "$feature_dir" "$task" "$allow_scope" "$sandbox" "$retries" "$backoff" <<'PY'
+  python3 - "$meta_file" "$feature_dir" "$task" "$allow_scope" "$sandbox" "$retries" "$backoff" "$final_gate" "$max_iterations" "$final_iteration" <<'PY'
 import json
 import sys
 
-meta_path, feature_dir, task, allow_scope, sandbox, retries, backoff = sys.argv[1:]
+(
+    meta_path,
+    feature_dir,
+    task,
+    allow_scope,
+    sandbox,
+    retries,
+    backoff,
+    final_gate,
+    max_iterations,
+    final_iteration,
+) = sys.argv[1:]
 payload = {
     "status": "ok",
     "feature_dir": feature_dir,
@@ -374,6 +583,9 @@ payload = {
     "sandbox": sandbox,
     "retries": int(retries),
     "backoff": backoff,
+    "final_gate": bool(int(final_gate)),
+    "max_iterations": int(max_iterations),
+    "completed_iteration": int(final_iteration),
 }
 with open(meta_path, "w", encoding="utf-8") as fh:
     json.dump(payload, fh, indent=2)
@@ -388,6 +600,7 @@ PY
     echo "feature_dir: $feature_dir"
     echo "task: $task"
     echo "flow_run_dir: $flow_dir"
+    echo "iterations: $final_iteration/$max_iterations"
     echo "next: run final independent checks (pytest/make lint/git diff)"
   fi
 }

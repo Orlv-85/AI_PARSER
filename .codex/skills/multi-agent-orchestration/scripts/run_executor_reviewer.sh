@@ -26,6 +26,7 @@ Options:
   --generator-handoff P Expected generator handoff file (default: tmp/generator_out.json)
   --reviewer-handoff P  Expected reviewer handoff file (default: tmp/reviewer_out.json)
   --runs-dir P          Relative runs directory (default: tmp/runs)
+  --stream-logs         Stream nested codex output to stdout while saving logs
   --coverage-cmd CMD    Coverage command executed after generator step
   --coverage-fail-under N  Minimum coverage percent required (0..100)
   --coverage-log P      Coverage log path relative to repo (default: tmp/coverage_gate.log)
@@ -50,6 +51,7 @@ coverage_cmd=""
 coverage_fail_under=""
 coverage_log_rel="tmp/coverage_gate.log"
 json_validate=1
+stream_logs=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -104,6 +106,10 @@ while [[ $# -gt 0 ]]; do
     --runs-dir)
       runs_dir_rel="${2:-}"
       shift 2
+      ;;
+    --stream-logs)
+      stream_logs=1
+      shift
       ;;
     --coverage-cmd)
       coverage_cmd="${2:-}"
@@ -278,10 +284,23 @@ if data["schema_version"] != "1.0":
     print("schema_error:schema_version must be 1.0", file=sys.stderr)
     sys.exit(1)
 
+status = str(data["status"]).strip().upper()
 allowed_status = {"PASS", "FAIL", "NEEDS_WORK"}
-if data["status"] not in allowed_status:
-    print("schema_error:status must be PASS|FAIL|NEEDS_WORK", file=sys.stderr)
-    sys.exit(1)
+status_aliases = {
+    "OK": "PASS",
+    "DONE": "PASS",
+    "COMPLETED": "PASS",
+    "SUCCESS": "PASS",
+    "BLOCKED": "NEEDS_WORK",
+}
+status = status_aliases.get(status, status)
+if status not in allowed_status:
+    print(
+        f"schema_warn:unknown status '{data['status']}', normalized to NEEDS_WORK",
+        file=sys.stderr,
+    )
+    status = "NEEDS_WORK"
+data["status"] = status
 
 if role in {"tester", "generator"}:
     cov = data["coverage"]
@@ -301,9 +320,16 @@ if role in {"tester", "generator"}:
             sys.exit(1)
 
 if role == "reviewer":
-    if data["verdict"] not in {"PASS", "FAIL"}:
+    verdict = str(data["verdict"]).strip().upper()
+    verdict_aliases = {"OK": "PASS", "SUCCESS": "PASS", "BLOCKER": "FAIL", "BLOCKED": "FAIL"}
+    verdict = verdict_aliases.get(verdict, verdict)
+    if verdict not in {"PASS", "FAIL"}:
         print("schema_error:reviewer.verdict must be PASS|FAIL", file=sys.stderr)
         sys.exit(1)
+    data["verdict"] = verdict
+
+# Persist normalized fields so downstream steps see canonical values.
+path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 print("ok")
 PY
@@ -398,9 +424,16 @@ run_agent() {
   while [[ "$attempt" -le "$retries" ]]; do
     echo "[${role}] attempt ${attempt}/${retries}"
     set +e
-    /bin/zsh -f -lc "codex exec -C '$repo' --sandbox '$sandbox' --output-last-message '$message_rel' \"\$(cat '$prompt_abs')\"" \
-      >"$log_abs" 2>&1
-    local rc=$?
+    local rc=0
+    if [[ "$stream_logs" -eq 1 ]]; then
+      /bin/zsh -f -lc "codex exec -C '$repo' --sandbox '$sandbox' --output-last-message '$message_rel' \"\$(cat '$prompt_abs')\"" \
+        2>&1 | tee "$log_abs"
+      rc=${PIPESTATUS[0]}
+    else
+      /bin/zsh -f -lc "codex exec -C '$repo' --sandbox '$sandbox' --output-last-message '$message_rel' \"\$(cat '$prompt_abs')\"" \
+        >"$log_abs" 2>&1
+      rc=$?
+    fi
     set -e
 
     cp "$log_abs" "$run_log_abs"

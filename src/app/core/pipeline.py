@@ -1,6 +1,6 @@
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from logging import Logger
 from threading import BoundedSemaphore
 from typing import Any, cast
@@ -18,7 +18,7 @@ from app.ingest.html import (
 )
 from app.ingest.rss import fetch_rss, fetch_rss_with_metadata
 from app.storage import SessionLocal, create_all
-from app.storage.repos import ArticleRepo, SourceRepo
+from app.storage.repos import ArticleRepo, SourceRepo, WeeklyAnalyticsRepo
 
 _DEFAULT_FETCH_RSS_WITH_METADATA = fetch_rss_with_metadata
 _DEFAULT_FETCH_HTML = fetch_html
@@ -447,6 +447,45 @@ def _upsert_article_rows(
             duplicate_count += 1
     return new_count, duplicate_count
 
+
+def _weekly_report_date_to_publish(today: date) -> date | None:
+    if today.weekday() != 0:
+        return None
+    return today - timedelta(days=1)
+
+
+def _publish_weekly_analytics_if_due(
+    *,
+    session: object,
+    logger: Logger,
+    run_id: str,
+) -> None:
+    report_date = _weekly_report_date_to_publish(datetime.now(UTC).date())
+    if report_date is None:
+        return
+
+    try:
+        WeeklyAnalyticsRepo(cast(Any, session)).save_weekly_report(report_date=report_date)
+    except Exception as exc:  # pragma: no cover - defensive logging path
+        logger.error(
+            "weekly_analytics_publish_failed",
+            {
+                "run_id": run_id,
+                "report_date": report_date.isoformat(),
+                "error_type": type(exc).__name__,
+                "error_message": str(exc),
+            },
+        )
+        return
+
+    logger.info(
+        "weekly_analytics_published",
+        {
+            "run_id": run_id,
+            "report_date": report_date.isoformat(),
+        },
+    )
+
 # pylint: disable=too-many-branches,too-many-statements
 def _process_html_links_two_stage(
     *,
@@ -688,6 +727,58 @@ def _process_fetched_source_items(
     return new_count, duplicate_count, skipped_known_items, early_stop_hit
 
 
+def _process_source_result(
+    *,
+    fetch_result: object,
+    config: SourceConfig,
+    db_source_id: int,
+    source_repo: SourceRepo,
+    article_repo: ArticleRepo,
+    settings: Settings,
+    metrics: SourceMetrics,
+) -> None:
+    if config.type in {"rss", "html"}:
+        _persist_fetch_state_if_present(
+            source_repo=source_repo,
+            db_source_id=db_source_id,
+            result=fetch_result,
+        )
+        if bool(getattr(fetch_result, "not_modified", False)):
+            metrics.not_modified = True
+            return
+
+    if config.type == "html" and isinstance(fetch_result, HtmlLinkFetchResult):
+        (
+            metrics.fetched_items,
+            metrics.new_items,
+            metrics.duplicate_items,
+            metrics.skipped_known_items,
+            metrics.early_stop_hit,
+        ) = _process_html_links_two_stage(
+            links=fetch_result.links,
+            config=config,
+            db_source_id=db_source_id,
+            article_repo=article_repo,
+            settings=settings,
+        )
+        return
+
+    items = _fetch_result_items(fetch_result)
+    metrics.fetched_items = len(items)
+    (
+        metrics.new_items,
+        metrics.duplicate_items,
+        metrics.skipped_known_items,
+        metrics.early_stop_hit,
+    ) = _process_fetched_source_items(
+        items=items,
+        config=config,
+        db_source_id=db_source_id,
+        article_repo=article_repo,
+        settings=settings,
+    )
+
+
 # pylint: disable=too-many-statements
 def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
     configs = load_sources(settings.sources_path)
@@ -774,81 +865,45 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                 continue
 
             source_metrics = SourceMetrics(source_id=config.id, source_type=config.type)
-            if config.type in {"rss", "html"}:
-                _persist_fetch_state_if_present(
-                    source_repo=source_repo,
-                    db_source_id=db_source_id,
-                    result=fetch_result,
-                )
-                if bool(getattr(fetch_result, "not_modified", False)):
-                    source_metrics.not_modified = True
-                    optimization_not_modified_sources += 1
-                    _log_source_metrics(
-                        logger=logger,
-                        run_id=run_id,
+            try:
+                # Keep articles and cache validators atomic so failed sources can be retried.
+                with session.begin_nested():
+                    _process_source_result(
+                        fetch_result=fetch_result,
+                        config=config,
+                        db_source_id=db_source_id,
+                        source_repo=source_repo,
+                        article_repo=article_repo,
+                        settings=settings,
                         metrics=source_metrics,
-                        enabled=bool(getattr(settings, "fetch_emit_source_metrics", True)),
                     )
-                    continue
-
-            if config.type == "html" and isinstance(fetch_result, HtmlLinkFetchResult):
-                (
-                    source_fetched,
-                    source_new,
-                    source_duplicates,
-                    source_skipped_known,
-                    source_early_stop,
-                ) = _process_html_links_two_stage(
-                    links=fetch_result.links,
-                    config=config,
-                    db_source_id=db_source_id,
-                    article_repo=article_repo,
-                    settings=settings,
+            except Exception as exc:
+                source_metrics.new_items = 0
+                source_metrics.duplicate_items = 0
+                source_metrics.skipped_known_items = 0
+                source_metrics.early_stop_hit = False
+                source_metrics.not_modified = False
+                source_metrics.errors = 1
+                error_count += 1
+                logger.error(
+                    "source_persist_failed",
+                    {
+                        "run_id": run_id,
+                        "source_id": config.id,
+                        "stage": "persist",
+                        "url": str(config.url),
+                        "error_type": type(exc).__name__,
+                        "error_message": str(exc),
+                    },
                 )
-                fetched_count += source_fetched
-                source_metrics.fetched_items = source_fetched
-                new_count += source_new
-                duplicate_count += source_duplicates
-                source_metrics.new_items = source_new
-                source_metrics.duplicate_items = source_duplicates
-                source_metrics.skipped_known_items = source_skipped_known
-                source_metrics.early_stop_hit = source_early_stop
-                if source_early_stop:
-                    optimization_early_stop_hits += 1
-                optimization_skipped_known_html_links += source_skipped_known
-                _log_source_metrics(
-                    logger=logger,
-                    run_id=run_id,
-                    metrics=source_metrics,
-                    enabled=bool(getattr(settings, "fetch_emit_source_metrics", True)),
-                )
-                continue
 
-            items = _fetch_result_items(fetch_result)
-            fetched_count += len(items)
-            source_metrics.fetched_items = len(items)
-            (
-                source_new,
-                source_duplicates,
-                source_skipped_known,
-                source_early_stop,
-            ) = _process_fetched_source_items(
-                items=items,
-                config=config,
-                db_source_id=db_source_id,
-                article_repo=article_repo,
-                settings=settings,
-            )
-            new_count += source_new
-            duplicate_count += source_duplicates
-            source_metrics.new_items = source_new
-            source_metrics.duplicate_items = source_duplicates
-            source_metrics.skipped_known_items = source_skipped_known
-            source_metrics.early_stop_hit = source_early_stop
-            if source_early_stop:
-                optimization_early_stop_hits += 1
+            fetched_count += source_metrics.fetched_items
+            new_count += source_metrics.new_items
+            duplicate_count += source_metrics.duplicate_items
+            optimization_not_modified_sources += int(source_metrics.not_modified)
+            optimization_early_stop_hits += int(source_metrics.early_stop_hit)
             if config.type == "html":
-                optimization_skipped_known_html_links += source_skipped_known
+                optimization_skipped_known_html_links += source_metrics.skipped_known_items
             _log_source_metrics(
                 logger=logger,
                 run_id=run_id,
@@ -856,6 +911,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                 enabled=bool(getattr(settings, "fetch_emit_source_metrics", True)),
             )
 
+        _publish_weekly_analytics_if_due(session=session, logger=logger, run_id=run_id)
         session.commit()
 
     logger.info(

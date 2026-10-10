@@ -24,6 +24,17 @@ pip install -e ".[dev]"
 docker build -f build/Dockerfile -t ai-news-collector:latest .
 ```
 
+To mirror the release workflow with a reusable dependency base:
+
+```bash
+DEP_HASH="$(./scripts/docker_dependency_fingerprint.sh)"
+docker build -f build/Dockerfile --target runtime-base -t "ai-news-runtime-base:${DEP_HASH}" .
+docker build \
+  -f build/Dockerfile.runtime \
+  --build-arg "RUNTIME_BASE_IMAGE=ai-news-runtime-base:${DEP_HASH}" \
+  -t ai-news-collector:latest .
+```
+
 ### Run container
 
 ```bash
@@ -67,6 +78,7 @@ Repository Variables:
 - `AINEWS_MCP_AUTH_ENABLED` (optional, default `false`)
 
 Repository Secrets:
+- `DS_API_KEY` (DeepSeek key, required for digest generation)
 - `SERVER_PASSWORD`
 - `AINEWS_AUTH_PASSWORD_HASH`
 - `AINEWS_AUTH_SECRET`
@@ -84,6 +96,33 @@ cp deploy/.env.prod.example .env
 
 Edit `.env` and set strong `POSTGRES_PASSWORD`.
 Set `CADDY_SITE_ADDRESS` to your public domain/host (for example `5kzt.l.time4vps.cloud`).
+
+### Daily digest generation (DeepSeek)
+
+Set `DS_API_KEY` in the server's `.env` or in the job environment. Do not commit
+the key. The scheduled daily job calls DeepSeek directly; Google accounts and
+Antigravity Manager are not required. The key is passed only in the HTTP
+Authorization header, not in CLI arguments.
+
+- Model: `AINEWS_DIGEST_MODEL` (default `deepseek-flash`).
+- Run/rebuild a date: `./scripts/run_daily_digest_job.sh 2026-10-03`.
+- Manual CLI: `python3 scripts/pocketpaw_digest_bridge.py publish-deepseek-digest
+  --base-url http://APP_IP:8010 --report-date 2026-10-03` (export `DS_API_KEY` first).
+- The generator requests `/api/news/links?date=...&include_content=true` to get
+  stored summary/content. Without this opt-in, the link-feed API is unchanged.
+- All AI summaries must cover the original URLs exactly. Invalid/incomplete
+  responses are retried once and are not published.
+- If DeepSeek fails, `AINEWS_DIGEST_ALLOW_FALLBACK=1` uses cleaned source excerpts
+  and logs that these are not AI summaries. Set it to `0` to fail the job instead.
+  Missing article text is reported explicitly; facts are not inferred from a title.
+- Antigravity is disabled by default on deploy. Its account data is retained in
+  `data/antigravity`; an explicitly enabled legacy integration can still use the
+  old `publish-antigravity-digest` command.
+
+The tag deploy copies `DS_API_KEY` from GitHub Actions repository secrets into
+the private server-side `.env`. A missing secret fails validation before any
+server changes. Set the repository variable `AINEWS_DIGEST_MODEL` to override
+the model. Manual server jobs can still use an exported key or the server `.env`.
 
 Server prerequisites (once):
 - Docker Engine + Docker Compose v2 installed and working for deploy user
@@ -103,8 +142,9 @@ What this does:
 - starts/updates PostgreSQL container
 - runs `alembic upgrade head`
 - starts/updates app container + Caddy reverse proxy (HTTPS)
-  - rebuilds image only when build inputs changed (`build/Dockerfile`, `Dockerfile`, `requirements*.txt`, `pyproject.toml`, `poetry.lock`)
-  - otherwise runs `docker compose up -d app caddy` without rebuild
+  - tagged release builds use a reusable `runtime-base-<hash>` dependency image
+  - dependency base hash is computed from `build/Dockerfile`, `build/Dockerfile.runtime`, `build/requirements*.txt`, and `pyproject.toml`
+  - if that base image already exists in GHCR, CI builds only the thin app/code image
 - runs retention cleanup (`ai-news prune --older-than-days 100` by default)
 - verifies app health
 

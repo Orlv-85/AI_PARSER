@@ -559,3 +559,6 @@ class _TestSession:
 
     def commit(self) -> None:
         pass
+
+    def begin_nested(self):
+        return self

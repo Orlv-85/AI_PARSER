@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import UTC, date, datetime
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -22,6 +22,74 @@ def _digest_models():
         models_sql.NewsDigestGroup,
         models_sql.NewsDigestItem,
     )
+
+
+def _seed_weekly_analytics_articles(session) -> None:  # type: ignore[no-untyped-def]
+    source = models_sql.Source(
+        source_key="weekly-source",
+        name="Weekly Source",
+        type="rss",
+        url="https://example.com/feed",
+    )
+    session.add(source)
+    session.flush()
+    session.add_all(
+        [
+            models_sql.Article(
+                source_id=source.id,
+                title="Coding Agents Expand",
+                summary="The topic showed up last week at a lower intensity.",
+                content=None,
+                url="https://example.com/coding-agents-prior",
+                url_canonical="https://example.com/coding-agents-prior",
+                url_canonical_hash="coding-agents-prior",
+                published_at=datetime(2026, 2, 25, 9, 0, tzinfo=UTC),
+                ai_relevance_score=0.7,
+                freshness_score=0.5,
+                rank_score=0.35,
+            ),
+            models_sql.Article(
+                source_id=source.id,
+                title="Standalone Vector DBs Cool Off",
+                summary="This topic mattered last week but does not recur this week.",
+                content=None,
+                url="https://example.com/vector-dbs-prior",
+                url_canonical="https://example.com/vector-dbs-prior",
+                url_canonical_hash="vector-dbs-prior",
+                published_at=datetime(2026, 2, 27, 13, 0, tzinfo=UTC),
+                ai_relevance_score=0.82,
+                freshness_score=0.6,
+                rank_score=0.88,
+            ),
+            models_sql.Article(
+                source_id=source.id,
+                title="Coding Agents Expand",
+                summary="The same topic accelerated this week and should be trending up.",
+                content=None,
+                url="https://example.com/coding-agents-recent",
+                url_canonical="https://example.com/coding-agents-recent",
+                url_canonical_hash="coding-agents-recent",
+                published_at=datetime(2026, 3, 5, 11, 0, tzinfo=UTC),
+                ai_relevance_score=0.92,
+                freshness_score=0.8,
+                rank_score=0.97,
+            ),
+            models_sql.Article(
+                source_id=source.id,
+                title="AI Browser Launches",
+                summary="This topic is net new in the selected seven-day report window.",
+                content=None,
+                url="https://example.com/ai-browser-recent",
+                url_canonical="https://example.com/ai-browser-recent",
+                url_canonical_hash="ai-browser-recent",
+                published_at=datetime(2026, 3, 6, 10, 30, tzinfo=UTC),
+                ai_relevance_score=0.9,
+                freshness_score=0.82,
+                rank_score=0.91,
+            ),
+        ]
+    )
+    session.commit()
 
 
 def test_save_digest_creates_report_with_groups_and_items() -> None:
@@ -246,3 +314,150 @@ def test_save_digest_preserves_existing_report_when_replacement_fails() -> None:
     assert fetched is not None
     assert [group.title for group in fetched.groups] == ["Stable Digest"]
     assert [item.title for item in fetched.groups[0].items] == ["Keep Me"]
+
+
+def test_weekly_report_builds_local_summary_for_selected_seven_day_window() -> None:
+    session = _session()
+    _seed_weekly_analytics_articles(session)
+    target_date = date(2026, 3, 7)
+
+    report = repos.WeeklyAnalyticsRepo(session).get_weekly_report(report_date=target_date)
+
+    assert report.report_date == target_date
+    assert report.date_from == date(2026, 3, 1)
+    assert report.date_to == target_date
+    assert report.summary.startswith("Weekly summary for 2026-03-01 to 2026-03-07:")
+    assert [item.title for item in report.new] == ["AI Browser Launches"]
+    assert [item.title for item in report.trending_up] == ["Coding Agents Expand"]
+    assert [item.title for item in report.trending_down] == ["Standalone Vector DBs Cool Off"]
+
+
+def test_weekly_report_matches_topic_when_titles_vary_between_weeks() -> None:
+    session = _session()
+    source = models_sql.Source(
+        source_key="weekly-variant-source",
+        name="Weekly Variant Source",
+        type="rss",
+        url="https://example.com/weekly-variant",
+    )
+    session.add(source)
+    session.flush()
+    session.add_all(
+        [
+            models_sql.Article(
+                source_id=source.id,
+                title="Adaptive Inference in NVIDIA TensorRT for RTX optimization",
+                summary="Prior week wording of the same topic.",
+                content=None,
+                url="https://example.com/prior-topic",
+                url_canonical="https://example.com/prior-topic",
+                url_canonical_hash="prior-topic",
+                published_at=datetime(2026, 2, 28, 10, 0, tzinfo=UTC),
+                ai_relevance_score=0.6,
+                freshness_score=0.4,
+                rank_score=0.31,
+            ),
+            models_sql.Article(
+                source_id=source.id,
+                title="NVIDIA TensorRT automatically optimizes inference for RTX",
+                summary="Recent week variant with stronger momentum.",
+                content=None,
+                url="https://example.com/recent-topic",
+                url_canonical="https://example.com/recent-topic",
+                url_canonical_hash="recent-topic",
+                published_at=datetime(2026, 3, 7, 11, 0, tzinfo=UTC),
+                ai_relevance_score=0.92,
+                freshness_score=0.9,
+                rank_score=0.95,
+            ),
+        ]
+    )
+    session.commit()
+
+    report = repos.WeeklyAnalyticsRepo(session).get_weekly_report(report_date=date(2026, 3, 8))
+
+    assert not report.new
+    assert [item.title for item in report.trending_up] == [
+        "NVIDIA TensorRT automatically optimizes inference for RTX"
+    ]
+
+
+def test_get_weekly_report_returns_saved_published_report_for_matching_week() -> None:
+    engine = create_engine("sqlite:///:memory:", future=True)
+    models_sql.Base.metadata.create_all(engine)
+    session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    target_date = date(2026, 3, 8)
+
+    with session_local() as write_session:
+        _seed_weekly_analytics_articles(write_session)
+        repos.WeeklyAnalyticsRepo(write_session).save_weekly_report(
+            report_date=target_date,
+            date_from=date(2026, 3, 2),
+            date_to=target_date,
+            summary="Published weekly management snapshot for the completed Monday-Sunday week.",
+            new=[
+                {
+                    "title": "AI Browser Launches",
+                    "summary": "Saved weekly section items should be served from storage.",
+                    "url": "https://example.com/ai-browser-recent",
+                }
+            ],
+            trending_up=[
+                {
+                    "title": "Coding Agents Expand",
+                    "summary": "Published reports should preserve the reviewed trend narrative.",
+                    "url": "https://example.com/coding-agents-recent",
+                }
+            ],
+            trending_down=[
+                {
+                    "title": "Standalone Vector DBs Cool Off",
+                    "summary": "Published reports should keep the stored comparison section.",
+                    "url": "https://example.com/vector-dbs-prior",
+                }
+            ],
+        )
+        write_session.commit()
+
+    with session_local() as read_session:
+        report = repos.WeeklyAnalyticsRepo(read_session).get_weekly_report(report_date=target_date)
+
+    assert report.report_date == target_date
+    assert report.date_from == date(2026, 3, 2)
+    assert report.date_to == target_date
+    assert report.summary == (
+        "Published weekly management snapshot for the completed Monday-Sunday week."
+    )
+    assert [item.title for item in report.new] == ["AI Browser Launches"]
+    assert [item.title for item in report.trending_up] == ["Coding Agents Expand"]
+    assert [item.title for item in report.trending_down] == ["Standalone Vector DBs Cool Off"]
+
+
+def test_save_weekly_report_truncates_oversized_titles_for_storage_limits() -> None:
+    engine = create_engine("sqlite:///:memory:", future=True)
+    models_sql.Base.metadata.create_all(engine)
+    session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    target_date = date(2026, 3, 8)
+    long_title = "A" * 700
+
+    with session_local() as session:
+        repo = repos.WeeklyAnalyticsRepo(session)
+        report = repo.save_weekly_report(
+            report_date=target_date,
+            date_from=date(2026, 3, 2),
+            date_to=target_date,
+            summary="Stored report with oversized source title.",
+            new=[
+                {
+                    "title": long_title,
+                    "summary": "Long title should be truncated before persistence.",
+                    "url": "https://example.com/very-long-title",
+                }
+            ],
+            trending_up=[],
+            trending_down=[],
+        )
+        session.commit()
+
+    assert len(report.new) == 1
+    assert len(report.new[0].title) == 512

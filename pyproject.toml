@@ -48,7 +48,14 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-"app.web" = ["digest.html", "index.html", "login.html"]
+"app.web" = [
+  "digest.html",
+  "index.html",
+  "login.html",
+  "news_stats.html",
+  "weekly_analytics.html",
+  "weekly_analytics_reports.html",
+]
 
 [tool.ruff]
 target-version = "py314"

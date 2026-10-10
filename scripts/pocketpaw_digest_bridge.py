@@ -6,8 +6,10 @@ import json
 import os
 import re
 import sys
+from datetime import UTC, date, datetime, timedelta
+from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.error import HTTPError, URLError
 from urllib.parse import unquote, urlencode, urlparse
 from urllib.request import Request, urlopen
@@ -108,6 +110,9 @@ _CATEGORY_RULES = (
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _ROOT_DIR = _SCRIPT_DIR.parent
 _DEFAULT_PROMPT_PATH = _ROOT_DIR / "automation" / "pocketpaw" / "antigravity_digest_prompt.txt"
+_DEFAULT_DEEPSEEK_PROMPT_PATH = (
+    _ROOT_DIR / "automation" / "pocketpaw" / "deepseek_digest_prompt.txt"
+)
 _UPPERCASE_TITLE_TOKENS = {
     "ai",
     "api",
@@ -135,6 +140,47 @@ _TITLE_BRAND_REPLACEMENTS = (
     (r"\bCode Whisperer\b", "CodeWhisperer"),
     (r"\bLlama Index\b", "LlamaIndex"),
 )
+_TOPIC_STOPWORDS = frozenset(
+    {
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "by",
+        "for",
+        "from",
+        "how",
+        "in",
+        "into",
+        "is",
+        "new",
+        "of",
+        "on",
+        "or",
+        "that",
+        "the",
+        "this",
+        "to",
+        "what",
+        "week",
+        "weeks",
+        "with",
+        "story",
+        "stories",
+        "recent",
+        "prior",
+        "trending",
+        "trend",
+        "latest",
+        "up",
+        "down",
+    }
+)
+_TOPIC_TOKEN_MAX = 6
+_TOPIC_MATCH_MIN_OVERLAP = 0.5
+_TOPIC_MATCH_MIN_COMMON_TOKENS = 2
 
 
 def read_json_response(
@@ -142,6 +188,7 @@ def read_json_response(
     *,
     body: bytes | None = None,
     headers: dict[str, str] | None = None,
+    timeout: float = 30,
 ) -> Any:
     request = Request(url=url, data=body)
     for key, value in (headers or {}).items():
@@ -150,7 +197,7 @@ def read_json_response(
         request.add_header("Content-Type", "application/json")
         request.method = "POST"
     try:
-        with urlopen(request, timeout=30) as response:
+        with urlopen(request, timeout=timeout) as response:
             return json.load(response)
     except TimeoutError as exc:
         raise RuntimeError(f"Network timeout for {url}") from exc
@@ -205,7 +252,9 @@ def _normalize_display_title(*, raw_title: str, url: str) -> str:
 
 def _is_generic_digest_summary(summary: str) -> bool:
     normalized = summary.strip().lower()
-    return normalized.startswith("source:") and "included in the daily digest" in normalized
+    return (
+        normalized.startswith("source:") and "included in the daily digest" in normalized
+    ) or normalized.startswith("article text is unavailable")
 
 
 def _is_weak_display_title(title: str) -> bool:
@@ -286,9 +335,7 @@ def _truncate_title(title: str) -> str:
     if len(normalized) <= _MAX_TITLE_LENGTH:
         return normalized
     fragments = [
-        fragment.strip(" .")
-        for fragment in normalized.split(". ")
-        if fragment.strip(" .")
+        fragment.strip(" .") for fragment in normalized.split(". ") if fragment.strip(" .")
     ]
     for fragment_count in (2, 1):
         if len(fragments) >= fragment_count:
@@ -449,7 +496,7 @@ def _write_json(path: Path, payload: object) -> None:
 
 
 def _fetch_feed_items(*, base_url: str, report_date: str, limit: int) -> list[dict[str, Any]]:
-    query = urlencode({"date": report_date, "limit": limit})
+    query = urlencode({"date": report_date, "limit": limit, "include_content": "true"})
     items = read_json_response(f"{base_url.rstrip('/')}/api/news/links?{query}")
     if not isinstance(items, list):
         raise RuntimeError("news links API did not return a list")
@@ -458,6 +505,44 @@ def _fetch_feed_items(*, base_url: str, report_date: str, limit: int) -> list[di
     if not all(isinstance(item, dict) for item in items):
         raise RuntimeError("news links API returned an invalid article entry")
     return items
+
+
+def _fetch_news_links_range(
+    *,
+    base_url: str,
+    date_from: str,
+    date_to: str,
+    limit: int,
+) -> list[dict[str, Any]]:
+    start = date.fromisoformat(date_from)
+    end = date.fromisoformat(date_to)
+    if start > end:
+        raise ValueError("date_from must be <= date_to")
+
+    rows: list[dict[str, Any]] = []
+    current = start
+    while current <= end:
+        offset = 0
+        while True:
+            query = urlencode(
+                {
+                    "date": current.isoformat(),
+                    "limit": limit,
+                    "offset": offset,
+                    "include_content": "true",
+                }
+            )
+            daily_rows = read_json_response(f"{base_url.rstrip('/')}/api/news/links?{query}")
+            if not isinstance(daily_rows, list):
+                raise RuntimeError("news links API did not return a list")
+            if not all(isinstance(row, dict) for row in daily_rows):
+                raise RuntimeError("news links API returned an invalid article entry")
+            rows.extend(daily_rows)
+            if len(daily_rows) < limit:
+                break
+            offset += limit
+        current += timedelta(days=1)
+    return rows
 
 
 def fetch_bundle(
@@ -499,10 +584,68 @@ def publish_digest(*, base_url: str, report_date: str, input_path: Path) -> dict
     return response
 
 
+class _ArticleTextParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.hidden_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in {"script", "style", "template"}:
+            self.hidden_depth += 1
+        elif not self.hidden_depth and tag in {"p", "br", "div", "li", "h1", "h2"}:
+            self.parts.append(" ")
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if not self.hidden_depth:
+            self.parts.append(" ")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in {"script", "style", "template"} and self.hidden_depth:
+            self.hidden_depth -= 1
+        elif not self.hidden_depth:
+            self.parts.append(" ")
+
+    def handle_data(self, data: str) -> None:
+        if not self.hidden_depth:
+            self.parts.append(data)
+
+
+def _article_text(value: object) -> str:
+    parser = _ArticleTextParser()
+    parser.feed(str(value or ""))
+    text = " ".join("".join(parser.parts).split())
+    text = re.sub(r"\s*The post .+? appeared first on .*$", "", text, flags=re.I)
+    return text.strip()
+
+
+def _source_excerpt(row: dict[str, Any], *, limit: int = _MAX_SUMMARY_LENGTH) -> str:
+    for key in ("summary", "content"):
+        text = _article_text(row.get(key))
+        if not text or text.lower() == "no summary available." or _is_generic_digest_summary(text):
+            continue
+        if len(text) <= limit:
+            return text
+        sentences = re.split(r"(?<=[.!?])\s+", text)
+        excerpt = ""
+        for sentence in sentences[:2]:
+            candidate = (excerpt + " " + sentence).strip()
+            if len(candidate) > limit:
+                break
+            excerpt = candidate
+        if excerpt:
+            return excerpt
+        return text[: limit - 3].rsplit(" ", 1)[0].rstrip(".,;:") + "..."
+    return ""
+
+
 def _default_feed_summary(*, row: dict[str, Any], report_date: str) -> str:
-    source_name = str(row.get("source_name") or "unknown source").strip() or "unknown source"
-    published_at = str(row.get("published_at") or report_date).strip() or report_date
-    return f"Source: {source_name}. Published at {published_at}. Included in the daily digest."
+    del report_date
+    excerpt = _source_excerpt(row)
+    if excerpt:
+        return excerpt
+    source_name = str(row.get("source_name") or "the source").strip() or "the source"
+    return f"Article text is unavailable; read the original report from {source_name}."
 
 
 def _normalize_feed_rows(items: object) -> tuple[list[dict[str, Any]], list[str]]:
@@ -539,9 +682,7 @@ def categorize_digest_item(*, row: dict[str, Any], summary: str = "") -> str:
             summary,
         )
     ).lower()
-    has_rag_negative = any(
-        _has_keyword(haystack, keyword) for keyword in _RAG_NEGATIVE_KEYWORDS
-    )
+    has_rag_negative = any(_has_keyword(haystack, keyword) for keyword in _RAG_NEGATIVE_KEYWORDS)
     if (
         any(_has_keyword(haystack, keyword) for keyword in _RAG_STRONG_KEYWORDS)
         and not has_rag_negative
@@ -690,8 +831,7 @@ def chunk_feed_items(
     if chunk_size < 1:
         raise ValueError("chunk_size must be >= 1")
     return [
-        feed_items[start : start + chunk_size]
-        for start in range(0, len(feed_items), chunk_size)
+        feed_items[start : start + chunk_size] for start in range(0, len(feed_items), chunk_size)
     ]
 
 
@@ -944,11 +1084,141 @@ def build_feed_digest_payload(*, items: object, report_date: str) -> dict[str, A
     return build_categorized_digest_payload(items=items, report_date=report_date)
 
 
-def publish_feed_digest(*, base_url: str, report_date: str, limit: int) -> dict[str, Any]:
-    query = urlencode({"date": report_date, "limit": limit})
-    items = read_json_response(f"{base_url.rstrip('/')}/api/news/links?{query}")
-    payload = build_feed_digest_payload(items=items, report_date=report_date)
+def run_deepseek_chunk(
+    *,
+    api_key: str,
+    model: str,
+    prompt: str,
+    report_date: str,
+    articles: list[dict[str, Any]],
+) -> dict[str, str]:
+    expected_urls = sorted(str(row["url"]) for row in articles)
+    source_rows = [
+        {
+            "url": row["url"],
+            "title": row["title"],
+            "summary": _article_text(row.get("summary"))[:2000],
+            "content": _article_text(row.get("content"))[:6000],
+        }
+        for row in articles
+    ]
+    model = model.strip().strip('"').strip("'")
+    for attempt in range(2):
+        payload = {
+            "model": model,
+            "thinking": {"type": "disabled"},
+            "response_format": {"type": "json_object"},
+            "max_tokens": 4000,
+            "temperature": 0.2,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": prompt + (_ANTIGRAVITY_RETRY_SUFFIX if attempt else ""),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "report_date": report_date,
+                            "articles": source_rows,
+                        },
+                        ensure_ascii=False,
+                    ),
+                },
+            ],
+        }
+        try:
+            response = read_json_response(
+                "https://api.deepseek.com/chat/completions",
+                body=json.dumps(payload).encode("utf-8"),
+                headers={"Authorization": f"Bearer {api_key}"},
+                timeout=90,
+            )
+        except RuntimeError as exc:
+            detail = str(exc).replace(api_key, "[redacted]")
+            if attempt == 0 and _is_transient_request_error(exc):
+                continue
+            raise RuntimeError(f"DeepSeek request failed: {detail}") from None
+        try:
+            choice = response["choices"][0]
+            if choice.get("finish_reason") != "stop":
+                raise ValueError("incomplete response")
+            generated = json.loads(choice["message"]["content"])
+            summaries = normalize_summary_batch(generated, report_date=report_date)
+            returned_urls = sorted(str(item["url"]) for item in generated["items"])
+            if returned_urls != expected_urls or sorted(summaries) != expected_urls:
+                raise ValueError("incomplete URL coverage")
+            if any(
+                len(str(item["summary"])) > _MAX_SUMMARY_LENGTH
+                or "included in the daily digest" in str(item["summary"]).lower()
+                for item in generated["items"]
+            ):
+                raise ValueError("invalid summary")
+            return summaries
+        except (KeyError, IndexError, TypeError, ValueError):
+            continue
+    raise RuntimeError("DeepSeek returned invalid summaries after retry; digest was not published")
 
+
+def publish_deepseek_digest(
+    *,
+    base_url: str,
+    report_date: str,
+    limit: int,
+    api_key: str,
+    model: str,
+    prompt_path: Path,
+    chunk_size: int = _DEFAULT_ANTIGRAVITY_CHUNK_SIZE,
+) -> dict[str, Any]:
+    if not api_key.strip():
+        raise RuntimeError("DS_API_KEY is required")
+    items = _fetch_feed_items(base_url=base_url, report_date=report_date, limit=limit)
+    normalized_rows, _ = _normalize_feed_rows(items)
+    prompt = prompt_path.read_text(encoding="utf-8").strip()
+    summaries: dict[str, str] = {}
+    chunks = chunk_feed_items(normalized_rows, chunk_size=chunk_size)
+    for chunk in chunks:
+        summaries.update(
+            run_deepseek_chunk(
+                api_key=api_key,
+                model=model,
+                prompt=prompt,
+                report_date=report_date,
+                articles=chunk,
+            )
+        )
+    payload = build_categorized_digest_payload(
+        items=normalized_rows,
+        report_date=report_date,
+        summaries_by_url=summaries,
+    )
+    result = _publish_verified_digest(
+        base_url=base_url,
+        report_date=report_date,
+        items=normalized_rows,
+        payload=payload,
+    )
+    return {**result, "mode": "deepseek", "model": model, "chunk_count": len(chunks)}
+
+
+def publish_feed_digest(*, base_url: str, report_date: str, limit: int) -> dict[str, Any]:
+    items = _fetch_feed_items(base_url=base_url, report_date=report_date, limit=limit)
+    payload = build_feed_digest_payload(items=items, report_date=report_date)
+    return _publish_verified_digest(
+        base_url=base_url,
+        report_date=report_date,
+        items=items,
+        payload=payload,
+    )
+
+
+def _publish_verified_digest(
+    *,
+    base_url: str,
+    report_date: str,
+    items: list[dict[str, Any]],
+    payload: dict[str, Any],
+) -> dict[str, Any]:
     response = read_json_response(
         f"{base_url.rstrip('/')}/api/news/digests",
         body=json.dumps(payload).encode("utf-8"),
@@ -982,6 +1252,336 @@ def publish_feed_digest(*, base_url: str, report_date: str, limit: int) -> dict[
         "fetched_count": len(expected_urls),
         "saved_count": len(actual_urls),
         "group_count": len(saved_groups),
+    }
+
+
+def _parse_iso_dt(value: str) -> datetime:
+    normalized = value.strip()
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    parsed = datetime.fromisoformat(normalized)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _weekly_item_fallback_summary(*, row: dict[str, Any]) -> str:
+    source_name = str(row.get("source_name") or "unknown source").strip() or "unknown source"
+    published_raw = str(row.get("published_at") or "").strip()
+    published_on = ""
+    if published_raw:
+        try:
+            published_on = _parse_iso_dt(published_raw).date().isoformat()
+        except ValueError:
+            published_on = published_raw
+    if published_on:
+        return f"Reported by {source_name} on {published_on}."
+    return f"Reported by {source_name}."
+
+
+def _weekly_item_summary(*, row: dict[str, Any]) -> str:
+    return _source_excerpt(row) or _weekly_item_fallback_summary(row=row)
+
+
+def _normalize_topic_token(token: str) -> str:
+    normalized = token.lower().strip()
+    if len(normalized) <= 2:
+        return normalized
+    for suffix in ("ing", "ed", "es", "s"):
+        if normalized.endswith(suffix) and len(normalized) > len(suffix) + 2:
+            normalized = normalized[: -len(suffix)]
+            break
+    return normalized
+
+
+def _topic_tokens_from_title(title: str) -> list[str]:
+    words = re.findall(r"[a-z0-9]+", title.lower())
+    tokens: list[str] = []
+    seen: set[str] = set()
+    for raw in words:
+        token = _normalize_topic_token(raw)
+        if (
+            not token
+            or token in _TOPIC_STOPWORDS
+            or (len(token) <= 2 and not token.isdigit())
+            or token in seen
+        ):
+            continue
+        seen.add(token)
+        tokens.append(token)
+        if len(tokens) >= _TOPIC_TOKEN_MAX:
+            break
+    if tokens:
+        return tokens
+    fallback = " ".join(words).strip() or title.lower().strip()
+    return [fallback]
+
+
+def _topic_overlap_score(left_tokens: set[str], right_tokens: set[str]) -> tuple[int, float]:
+    if not left_tokens or not right_tokens:
+        return (0, 0.0)
+    common_count = len(left_tokens & right_tokens)
+    smaller_len = float(min(len(left_tokens), len(right_tokens)))
+    return (common_count, common_count / smaller_len)
+
+
+def _find_best_topic_match(
+    *,
+    recent_tokens: set[str],
+    prior_topics: dict[str, dict[str, Any]],
+    excluded_keys: set[str],
+) -> str | None:
+    best_key: str | None = None
+    best_common = 0
+    best_ratio = 0.0
+    for prior_key, prior_topic in prior_topics.items():
+        if prior_key in excluded_keys:
+            continue
+        common_count, overlap_ratio = _topic_overlap_score(
+            recent_tokens,
+            set(cast(list[str], prior_topic["tokens"])),
+        )
+        if (
+            common_count < _TOPIC_MATCH_MIN_COMMON_TOKENS
+            or overlap_ratio < _TOPIC_MATCH_MIN_OVERLAP
+        ):
+            continue
+        if (common_count, overlap_ratio) > (best_common, best_ratio):
+            best_key = prior_key
+            best_common = common_count
+            best_ratio = overlap_ratio
+    return best_key
+
+
+def _weekly_best_by_title(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    counts: dict[str, int] = {}
+    for row in rows:
+        title = str(row.get("title", "")).strip()
+        url = str(row.get("url", "")).strip()
+        if not title or not _is_http_url(url):
+            continue
+        topic_tokens = set(_topic_tokens_from_title(title))
+        topic_key = " ".join(sorted(topic_tokens))
+        counts[topic_key] = counts.get(topic_key, 0) + 1
+        try:
+            published_at = _parse_iso_dt(str(row.get("published_at", "")))
+        except ValueError:
+            continue
+        try:
+            raw_rank_score = float(row.get("rank_score", 0.0))
+        except (TypeError, ValueError):
+            raw_rank_score = 0.0
+        has_explicit_rank = raw_rank_score > 0.0
+        rank_score = raw_rank_score if has_explicit_rank else float(counts[topic_key])
+        normalized = {
+            "title": title,
+            "summary": _weekly_item_summary(row=row),
+            "url": url,
+            "published_at": published_at,
+            "rank_score": rank_score,
+            "has_explicit_rank": has_explicit_rank,
+            "tokens": list(topic_tokens),
+        }
+        current = grouped.get(topic_key)
+        if current is None or (rank_score, published_at) > (
+            float(current["rank_score"]),
+            current["published_at"],
+        ):
+            grouped[topic_key] = normalized
+        else:
+            if not bool(current.get("has_explicit_rank", False)):
+                current["rank_score"] = max(
+                    float(current["rank_score"]),
+                    float(counts[topic_key]),
+                )
+
+    for topic_key, item in grouped.items():
+        if not bool(item.get("has_explicit_rank", False)):
+            item["rank_score"] = max(
+                float(item["rank_score"]),
+                float(counts.get(topic_key, 1)),
+            )
+    return grouped
+
+
+def _weekly_to_items(
+    rows: list[dict[str, Any]],
+    *,
+    sort_key: str,
+    limit: int = 10,
+) -> list[dict[str, str]]:
+    if sort_key == "published_at":
+        ordered = sorted(rows, key=lambda row: row["published_at"], reverse=True)
+    else:
+        ordered = sorted(
+            rows,
+            key=lambda row: (float(row["rank_score"]), row["published_at"]),
+            reverse=True,
+        )
+    return [
+        {
+            "title": str(row["title"]),
+            "summary": str(row["summary"]),
+            "url": str(row["url"]),
+        }
+        for row in ordered[:limit]
+    ]
+
+
+def _weekly_build_summary(
+    *,
+    date_from: date,
+    date_to: date,
+    recent_rows: list[dict[str, Any]],
+    prior_rows: list[dict[str, Any]],
+    new_rows: list[dict[str, Any]],
+    trending_up_rows: list[dict[str, Any]],
+    trending_down_rows: list[dict[str, Any]],
+) -> str:
+    recent_count = len(recent_rows)
+    prior_count = len(prior_rows)
+    if recent_count == 0:
+        return f"No AI news signals between {date_from.isoformat()} and {date_to.isoformat()}."
+    delta = recent_count - prior_count
+    if delta > 0:
+        trend = "Momentum increased versus the previous week."
+    elif delta < 0:
+        trend = "Momentum cooled versus the previous week."
+    else:
+        trend = "Momentum held steady versus the previous week."
+    change = f"+{delta}" if delta > 0 else str(delta)
+    top_titles = [str(row["title"]) for row in recent_rows[:2]]
+    top_focus = ", ".join(top_titles) if top_titles else "no dominant topic"
+    return (
+        f"Weekly summary for {date_from.isoformat()} to {date_to.isoformat()}: "
+        f"{recent_count} notable AI stories ({change} vs previous week). {trend} "
+        f"Signals: {len(new_rows)} new, {len(trending_up_rows)} trending up, "
+        f"{len(trending_down_rows)} trending down. Top focus: {top_focus}."
+    )
+
+
+def build_feed_weekly_payload(
+    *,
+    recent_items: list[dict[str, Any]],
+    prior_items: list[dict[str, Any]],
+    report_date: str,
+) -> dict[str, Any]:
+    report_date_obj = date.fromisoformat(report_date)
+    date_from = report_date_obj - timedelta(days=6)
+    date_to = report_date_obj
+    prior_date_to = date_from - timedelta(days=1)
+    prior_date_from = prior_date_to - timedelta(days=6)
+
+    recent_by_title = _weekly_best_by_title(recent_items)
+    prior_by_title = _weekly_best_by_title(prior_items)
+
+    new_rows: list[dict[str, Any]] = []
+    trending_up_rows: list[dict[str, Any]] = []
+    matched_prior_keys: set[str] = set()
+    for _, recent_row in recent_by_title.items():
+        prior_key = _find_best_topic_match(
+            recent_tokens=set(cast(list[str], recent_row["tokens"])),
+            prior_topics=prior_by_title,
+            excluded_keys=matched_prior_keys,
+        )
+        if prior_key is None:
+            new_rows.append(recent_row)
+            continue
+        matched_prior_keys.add(prior_key)
+        if float(recent_row["rank_score"]) > float(prior_by_title[prior_key]["rank_score"]):
+            trending_up_rows.append(recent_row)
+
+    trending_down_rows: list[dict[str, Any]] = []
+    for prior_key, prior_row in prior_by_title.items():
+        if prior_key not in matched_prior_keys:
+            trending_down_rows.append(prior_row)
+
+    summary = _weekly_build_summary(
+        date_from=date_from,
+        date_to=date_to,
+        recent_rows=list(recent_by_title.values()),
+        prior_rows=list(prior_by_title.values()),
+        new_rows=new_rows,
+        trending_up_rows=trending_up_rows,
+        trending_down_rows=trending_down_rows,
+    )
+
+    return {
+        "report_date": report_date,
+        "date_from": date_from.isoformat(),
+        "date_to": date_to.isoformat(),
+        "summary": summary,
+        "new": _weekly_to_items(new_rows, sort_key="published_at"),
+        "trending_up": _weekly_to_items(trending_up_rows, sort_key="rank_score"),
+        "trending_down": _weekly_to_items(trending_down_rows, sort_key="rank_score"),
+        "window": {
+            "recent_date_from": date_from.isoformat(),
+            "recent_date_to": date_to.isoformat(),
+            "prior_date_from": prior_date_from.isoformat(),
+            "prior_date_to": prior_date_to.isoformat(),
+        },
+    }
+
+
+def publish_feed_weekly(
+    *,
+    base_url: str,
+    report_date: str,
+    limit: int,
+) -> dict[str, Any]:
+    report_date_obj = date.fromisoformat(report_date)
+    date_from = report_date_obj - timedelta(days=6)
+    prior_date_to = date_from - timedelta(days=1)
+    prior_date_from = prior_date_to - timedelta(days=6)
+
+    recent_items = _fetch_news_links_range(
+        base_url=base_url,
+        date_from=date_from.isoformat(),
+        date_to=report_date,
+        limit=limit,
+    )
+    prior_items = _fetch_news_links_range(
+        base_url=base_url,
+        date_from=prior_date_from.isoformat(),
+        date_to=prior_date_to.isoformat(),
+        limit=limit,
+    )
+    payload = build_feed_weekly_payload(
+        recent_items=recent_items,
+        prior_items=prior_items,
+        report_date=report_date,
+    )
+    window = payload.pop("window", {})
+
+    response = read_json_response(
+        f"{base_url.rstrip('/')}/api/news/weekly-analytics",
+        body=json.dumps(payload).encode("utf-8"),
+    )
+    if not isinstance(response, dict):
+        raise RuntimeError("publish weekly response was not a JSON object")
+
+    saved = read_json_response(
+        f"{base_url.rstrip('/')}/api/news/weekly-analytics?date={report_date}"
+    )
+    if not isinstance(saved, dict):
+        raise RuntimeError("saved weekly response was not a JSON object")
+
+    return {
+        "report_date": report_date,
+        "recent_fetched_count": len(recent_items),
+        "prior_fetched_count": len(prior_items),
+        "saved_new_count": len(saved.get("new", [])) if isinstance(saved.get("new"), list) else 0,
+        "saved_trending_up_count": (
+            len(saved.get("trending_up", [])) if isinstance(saved.get("trending_up"), list) else 0
+        ),
+        "saved_trending_down_count": (
+            len(saved.get("trending_down", []))
+            if isinstance(saved.get("trending_down"), list)
+            else 0
+        ),
+        "window": window,
+        "mode": "feed_weekly",
     }
 
 
@@ -1022,6 +1622,31 @@ def _build_parser() -> argparse.ArgumentParser:
     publish_feed_parser.add_argument("--base-url", required=True)
     publish_feed_parser.add_argument("--report-date", required=True)
     publish_feed_parser.add_argument("--limit", type=int, default=200)
+
+    deepseek_parser = subparsers.add_parser(
+        "publish-deepseek-digest",
+        help="Summarize article text via DeepSeek and publish the digest",
+    )
+    deepseek_parser.add_argument("--base-url", required=True)
+    deepseek_parser.add_argument("--report-date", required=True)
+    deepseek_parser.add_argument("--limit", type=int, default=200)
+    deepseek_parser.add_argument(
+        "--model",
+        default=os.environ.get("AINEWS_DIGEST_MODEL", "deepseek-flash"),
+    )
+    deepseek_parser.add_argument("--chunk-size", type=int, default=12)
+    deepseek_parser.add_argument("--prompt", default=str(_DEFAULT_DEEPSEEK_PROMPT_PATH))
+
+    publish_feed_weekly_parser = subparsers.add_parser(
+        "publish-feed-weekly",
+        help=(
+            "Build weekly analytics from news export ranges, publish to weekly endpoint, "
+            "and verify saved payload"
+        ),
+    )
+    publish_feed_weekly_parser.add_argument("--base-url", required=True)
+    publish_feed_weekly_parser.add_argument("--report-date", required=True)
+    publish_feed_weekly_parser.add_argument("--limit", type=int, default=200)
 
     publish_ai_parser = subparsers.add_parser(
         "publish-antigravity-digest",
@@ -1084,6 +1709,26 @@ def main() -> int:
             return 0
         if args.command == "publish-feed-digest":
             response = publish_feed_digest(
+                base_url=args.base_url,
+                report_date=args.report_date,
+                limit=args.limit,
+            )
+            sys.stdout.write(json.dumps(response, ensure_ascii=False, indent=2) + "\n")
+            return 0
+        if args.command == "publish-deepseek-digest":
+            response = publish_deepseek_digest(
+                base_url=args.base_url,
+                report_date=args.report_date,
+                limit=args.limit,
+                api_key=os.environ.get("DS_API_KEY", "").strip().strip('"').strip("'"),
+                model=args.model,
+                prompt_path=Path(args.prompt),
+                chunk_size=args.chunk_size,
+            )
+            sys.stdout.write(json.dumps(response, ensure_ascii=False, indent=2) + "\n")
+            return 0
+        if args.command == "publish-feed-weekly":
+            response = publish_feed_weekly(
                 base_url=args.base_url,
                 report_date=args.report_date,
                 limit=args.limit,
