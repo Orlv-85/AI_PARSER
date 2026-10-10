@@ -529,7 +529,14 @@ ai-news prune --older-than-days 100 --dry-run
 
 ## Weekly attention analytics v2
 
-V2 is disabled by default (`AINEWS_WEEKLY_V2_ENABLED=false`). Its arithmetic measures
+Production Compose and both deploy workflows enable v2 by default
+(`AINEWS_WEEKLY_V2_ENABLED=true`). Deploy workflows replace the previous server value
+and pass the flag to the app container, including web, ingestion and weekly commands.
+Set the GitHub repository variable `AINEWS_WEEKLY_V2_ENABLED=false` to disable v2 on
+subsequent deploys; direct Compose deployments can override it in `.env`. Local
+application settings still default to false. Enabling the flag preserves the Monday
+worker schedule and does not launch a backfill. Runtime quality gates still suppress
+confirmed labels when comparable coverage or classification is insufficient. Its arithmetic measures
 publisher-balanced news attention, using complete observations rather than ranking.
 The API keeps its existing fields and adds metrics, evidence, quality reasons and
 immutable snapshot revisions. Manual/external reports remain `legacy`; a legacy POST
@@ -608,7 +615,8 @@ Separate tuning and evaluation weeks; freeze revised thresholds under a new
 methodology version. Require the release criteria in
 [trend-spec.md](specs/010-weekly-ai-analytics-for-management-dashboard/trend-spec.md).
 If historical coverage is unavailable, collect two completed weeks for Up/Down and
-35 observed days for New, then complete the replay and semantic review before rollout.
+35 observed days for New. Complete the replay and semantic review to assess trend
+quality; enabling the runtime flag does not certify historical coverage or precision.
 
 Explicit backfill creates new revisions; original legacy reports remain stored.
 A failed or insufficient regeneration keeps the last ready revision. Rollback sets
