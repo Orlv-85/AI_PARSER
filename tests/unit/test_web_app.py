@@ -662,11 +662,11 @@ def test_public_root_hides_admin_controls_while_admin_route_shows_them(
     assert public_page.status_code == 200
     assert "Yesterday&#39;s Digest" in public_page.text or "Yesterday's Digest" in public_page.text
     assert "Update Sources" not in public_page.text
-    assert "Import Source Candidates" not in public_page.text
+    assert "Add news sources" not in public_page.text
 
     assert admin_page.status_code == 200
     assert "Update Sources" in admin_page.text
-    assert "Import Source Candidates" in admin_page.text
+    assert "Add news sources" in admin_page.text
 
 
 def test_public_and_admin_pages_expose_distinct_shell_markers(monkeypatch, tmp_path) -> None:

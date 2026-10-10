@@ -1,3 +1,5 @@
+# pylint: disable=too-many-lines
+import json
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -95,6 +97,9 @@ class ValidationResult:
 
 
 def extract_candidate_urls(raw_text: str) -> list[str]:
+    records = _json_source_records(raw_text)
+    if records is not None:
+        return [str(record["url"]) for record in records]
     matches: list[tuple[int, str]] = []
     consumed_ranges: list[tuple[int, int]] = []
 
@@ -110,6 +115,39 @@ def extract_candidate_urls(raw_text: str) -> list[str]:
 
     matches.sort(key=lambda item: item[0])
     return [url for _, url in matches]
+
+
+def _json_source_records(raw_text: str) -> list[dict[str, str]] | None:
+    text = raw_text.strip()
+    if text.startswith("```json") and text.endswith("```"):
+        text = text[7:-3].strip()
+    if not text.startswith(("{", "[")):
+        return None
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        if text.startswith("[") and not re.match(r'\[\s*[\{"\]]', text):
+            return None
+        raise ValueError("Invalid JSON: upload an array or an object with a sources array") from exc
+    records = payload.get("sources") if isinstance(payload, dict) else payload
+    if not isinstance(records, list):
+        raise ValueError("JSON must contain a sources array")
+    if len(records) > 200 or len(text.encode("utf-8")) > 1_000_000:
+        raise ValueError("Source JSON is limited to 200 records and 1 MB")
+    result: list[dict[str, str]] = []
+    for record in records:
+        if isinstance(record, str):
+            record = {"url": record}
+        if not isinstance(record, dict) or not isinstance(record.get("url"), str):
+            raise ValueError("Each source record needs a string url")
+        if len(record["url"]) > 2048:
+            raise ValueError("Source URLs must be at most 2048 characters")
+        result.append({
+            key: str(record[key])[:limit]
+            for key, limit in (("url", 2048), ("name", 128), ("description", 500), ("type", 16))
+            if key in record and isinstance(record[key], str)
+        })
+    return result
 
 
 def normalize_candidate_url(raw_url: str) -> str:
@@ -144,12 +182,13 @@ def normalize_candidate_url(raw_url: str) -> str:
 
 
 def parse_source_candidates(raw_text: str) -> tuple[list[NormalizedSourceCandidate], int, int]:
+    records = _json_source_records(raw_text)
     extracted_urls = extract_candidate_urls(raw_text)
     normalized_candidates: list[NormalizedSourceCandidate] = []
     seen_urls: set[str] = set()
     rejected_count = 0
 
-    for raw_url in extracted_urls:
+    for index, raw_url in enumerate(extracted_urls):
         try:
             normalized_url = normalize_candidate_url(raw_url)
         except ValueError:
@@ -161,11 +200,17 @@ def parse_source_candidates(raw_text: str) -> tuple[list[NormalizedSourceCandida
             continue
 
         seen_urls.add(normalized_url)
+        record = records[index] if records is not None else None
+        declared_type = record.get("type", "").lower() if record else ""
+        candidate_type = "rss" if declared_type == "atom" else declared_type
         normalized_candidates.append(
             NormalizedSourceCandidate(
-                raw_input=raw_url,
+                raw_input=json.dumps(record, ensure_ascii=True) if record else raw_url,
                 normalized_url=normalized_url,
-                candidate_type=_infer_candidate_type(normalized_url),
+                candidate_type=(
+                    candidate_type if candidate_type in {"rss", "html"}
+                    else _infer_candidate_type(normalized_url)
+                ),
             )
         )
 
@@ -678,9 +723,20 @@ def _edit_candidate(
         normalized_updates["candidate_type"] = _infer_candidate_type(
             normalized_updates["normalized_url"]
         )
+    changed = any(
+        field_name in normalized_updates
+        and getattr(candidate, field_name, None) != normalized_updates[field_name]
+        for field_name in ("raw_input", "normalized_url", "candidate_type")
+    )
     for field_name in ("raw_input", "normalized_url", "candidate_type"):
         if field_name in normalized_updates:
             setattr(candidate, field_name, normalized_updates[field_name])
+    if changed:
+        candidate.validation_status = "pending"
+        candidate.validation_details = None
+        candidate.validation_error = None
+        candidate.validation_detected_type = None
+        candidate.validated_at = None
     if review_note is not None:
         candidate.review_note = review_note
 

@@ -66,6 +66,7 @@ from app.web.models import (
 )
 from app.web.service import SourceOnboardingService, UpdateRunService
 from app.web.settings_store import UpdateSettingsStore
+from app.web.source_intake import SourceIntakeService
 
 _TEMPLATE = Path(__file__).with_name("index.html")
 _DIGEST_TEMPLATE = Path(__file__).with_name("digest.html")
@@ -361,6 +362,7 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
         autocommit=False,
         future=True,
     )
+    source_intake: SourceIntakeService = SourceIntakeService(onboarding_session_local, settings)
     auth_enabled = settings.is_auth_enabled
     signer = (
         SessionSigner(
@@ -970,6 +972,8 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
                 accepted_count = result.accepted_count
                 rejected_count = result.rejected_count
                 candidate_ids = [candidate.id for candidate in result.candidates]
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         except SQLAlchemyError as exc:
             raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
 
@@ -983,6 +987,40 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
                 "candidate_ids": candidate_ids,
             },
         )
+
+    @api.get("/api/source-onboarding/latest")
+    def latest_source_batch() -> dict[str, Any]:
+        try:
+            Base.metadata.create_all(bind=onboarding_engine)
+            return {"batch_id": source_intake.latest_batch(), "job": source_intake.status()}
+        except SQLAlchemyError as exc:
+            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+
+    @api.get("/api/source-onboarding/check-status")
+    def source_check_status() -> dict[str, Any]:
+        return dict(source_intake.status())
+
+    @api.post("/api/source-onboarding/batches/{batch_id}/check", status_code=202)
+    def check_source_batch(batch_id: int = FastAPIPath(..., ge=1)) -> dict[str, Any]:
+        try:
+            Base.metadata.create_all(bind=onboarding_engine)
+            return dict(source_intake.start(batch_id))
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except SQLAlchemyError as exc:
+            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+
+    @api.post("/api/source-onboarding/batches/{batch_id}/approve-ready")
+    def approve_ready_sources(batch_id: int = FastAPIPath(..., ge=1)) -> dict[str, Any]:
+        try:
+            Base.metadata.create_all(bind=onboarding_engine)
+            approved = source_intake.approve_ready(batch_id)
+            return {"batch_id": batch_id, "approved_count": len(approved),
+                    "candidate_ids": approved}
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except SQLAlchemyError as exc:
+            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
 
     @api.post("/api/source-onboarding/validate")
     async def validate_source_onboarding_batch(request: Request) -> JSONResponse:

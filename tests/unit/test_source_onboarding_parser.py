@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from app.core.source_onboarding import (
@@ -66,3 +68,39 @@ def test_parse_source_candidates_rejects_invalid_and_duplicate_urls() -> None:
     assert parsed_count == 3
     assert rejected_count == 2
     assert [candidate.normalized_url for candidate in candidates] == ["https://example.com/feed.xml"]
+
+
+def test_json_intake_imports_only_source_urls_and_preserves_declared_type() -> None:
+    report = {"sources": [{"name": "AI Publisher", "type": "rss",
+                           "url": "https://example.com/stream",
+                           "website_url": "https://example.com/blog",
+                           "verification": {"evidence_url": "https://example.com/story"}}],
+              "replacement_suggestions": [{"url": "https://other.example.com/feed"}],
+              "unverified": [{"url": "https://unknown.example.com/feed"}]}
+    text = json.dumps(report)
+    assert extract_candidate_urls(text) == ["https://example.com/stream"]
+    candidates, parsed, rejected = parse_source_candidates(text)
+    assert (parsed, rejected) == (1, 0)
+    assert candidates[0].candidate_type == "rss"
+    assert json.loads(candidates[0].raw_input)["name"] == "AI Publisher"
+    assert "evidence_url" not in candidates[0].raw_input
+
+
+def test_json_arrays_and_fences_are_supported() -> None:
+    candidates, parsed, rejected = parse_source_candidates(
+        '```json\n[{"url":"https://example.com/atom","type":"atom"},'
+        '"https://other.example.com/blog"]\n```'
+    )
+    assert (parsed, rejected) == (2, 0)
+    assert candidates[0].candidate_type == "rss"
+
+
+@pytest.mark.parametrize("text", [
+    '{"sources":', '{"url":"https://example.com"}', '{"sources":{}}',
+    '{"sources":[{"name":"No URL"}]}', '[42]',
+    json.dumps(["https://example.com"] * 201),
+    json.dumps({"sources": [], "notes": "x" * 1_000_000}),
+])
+def test_malformed_or_oversized_json_does_not_fall_back_to_url_scraping(text) -> None:
+    with pytest.raises(ValueError):
+        parse_source_candidates(text)

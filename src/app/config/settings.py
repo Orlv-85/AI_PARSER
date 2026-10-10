@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     jev_category_min_confidence: float = Field(
         default=0.7, ge=0, le=1, allow_inf_nan=False,
     )
+    ds_api_key: SecretStr | None = Field(
+        default=None, validation_alias=AliasChoices("DS_API_KEY", "AINEWS_DS_API_KEY"),
+    )
+    source_review_deepseek_model: str = "deepseek-flash"
     respect_robots_txt: bool = True
     auth_enabled: bool = False
     auth_username: str | None = None

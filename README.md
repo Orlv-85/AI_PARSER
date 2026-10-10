@@ -337,6 +337,37 @@ Source schema:
 
 ## CLI Usage
 
+### Upload and review sources in the web UI
+
+Open `/admin` and choose **Onboarding**. Upload a JSON file, or paste JSON and
+click **Import & check**. The app opens the latest batch automatically and checks
+new candidates in the background. **Check this batch** can also review an older
+batch. **Connect recommended** enables technically validated, recommended draft
+sources; uncertain sources remain available for individual review. Use
+**Update > Run update** afterward to collect news.
+
+Supported JSON shapes are `{"sources": [{"name": "AI Blog", "type": "rss",
+"url": "https://example.com/feed.xml"}]}` and a top-level array of source objects
+or URL strings. Only source `url` fields are imported: evidence links,
+`website_url`, replacements and unverified recommendations are ignored. Plain
+URLs/Markdown remain supported. Limits: 200 JSON records and a 1 MB file.
+
+Verification reads only the feed/list page (at most 1 MB, 10-second network
+timeout, bounded redirects), never the article archive. Jev receives at most
+five publication samples in a 6,000-character brief. Confident decisions use
+Jev alone; uncertain cases receive a DeepSeek second opinion using the same
+brief, with thinking disabled and a 400-token output limit. A batch makes at
+most 50 DeepSeek requests. Missing keys, provider failures or insufficient
+evidence leave manual review; a provider failure stops further calls to that
+provider in the batch. Successful model reviews are reused for unchanged
+evidence for seven days. Overlapping source families always require review.
+
+This workflow uses existing `JEV_API_KEY` / `AINEWS_JEV_ENABLED` settings and
+`DS_API_KEY`. The second-opinion model is configured by
+`AINEWS_SOURCE_REVIEW_DEEPSEEK_MODEL` (default `deepseek-flash`). Keys stay on the
+server. Completed candidate results persist across restarts; interrupted pending
+work can be restarted with **Check this batch**.
+
 ### Show configured sources
 
 ```bash
