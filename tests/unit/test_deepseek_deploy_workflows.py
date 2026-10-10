@@ -7,6 +7,32 @@ import pytest
 import yaml
 
 
+@pytest.mark.parametrize(
+    "workflow",
+    [
+        "tests.yml",
+        "deploy-release.yml",
+        "deploy-by-tag.yml",
+        "db-maintenance.yml",
+    ],
+)
+def test_workflows_pin_runner_and_use_node24_checkout(workflow) -> None:
+    config = yaml.safe_load(Path(".github/workflows", workflow).read_text(encoding="utf-8"))
+    for job in config["jobs"].values():
+        assert job["runs-on"] == "ubuntu-24.04"
+        for step in job.get("steps", []):
+            action = step.get("uses", "")
+            if action.startswith("actions/checkout@"):
+                assert action == "actions/checkout@v5"
+            for name, version in {
+                "docker/setup-buildx-action": "v4",
+                "docker/login-action": "v4",
+                "docker/build-push-action": "v7",
+            }.items():
+                if action.startswith(name + "@"):
+                    assert action == name + "@" + version
+
+
 @pytest.mark.parametrize("workflow", ["deploy-release.yml", "deploy-by-tag.yml"])
 def test_deploy_transports_deepseek_secret_privately(workflow, tmp_path) -> None:
     config = yaml.safe_load(Path(".github/workflows", workflow).read_text(encoding="utf-8"))

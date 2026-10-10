@@ -30,6 +30,7 @@ COPY pyproject.toml README.md alembic.ini Makefile ./
 COPY src ./src
 COPY sources.yaml ./sources.yaml
 COPY scripts ./scripts
+COPY automation ./automation
 COPY run_web.sh ./run_web.sh
 
 RUN pip install --no-deps .
@@ -54,6 +55,8 @@ COPY pyproject.toml README.md alembic.ini Makefile ./
 COPY src ./src
 COPY sources.yaml ./sources.yaml
 COPY scripts ./scripts
+COPY automation ./automation
+COPY .github/workflows ./.github/workflows
 COPY run_web.sh ./run_web.sh
 COPY tests ./tests
 
