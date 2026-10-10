@@ -1,5 +1,8 @@
 # Production legacy cleanup, 2026-10-11
 
+Code: [implementation commit c787ce0](https://github.com/Orlv-85/AI_PARSER/commit/c787ce0f7ae9dbf0836899fa1b99db2eefc2e005).
+Review: [PR #15](https://github.com/Orlv-85/AI_PARSER/pull/15).
+
 The authorized one-time JEV cleanup completed successfully. Production articles
 decreased from **8,549 to 7,430**. Exactly **1,119** frozen confirmed IDs were
 deleted: 1,030 non-AI and 89 non-editorial. No changed or already-absent rows were
