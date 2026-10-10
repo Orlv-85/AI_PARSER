@@ -49,6 +49,20 @@ class Settings(BaseSettings):
         default=None, validation_alias=AliasChoices("DS_API_KEY", "AINEWS_DS_API_KEY"),
     )
     source_review_deepseek_model: str = "deepseek-flash"
+    weekly_v2_enabled: bool = False
+    weekly_jev_model: str = "jev-1.13.0"
+    weekly_deepseek_model: str = "deepseek-flash"
+    weekly_prompt_version: str = "weekly-1"
+    weekly_provider_concurrency: int = Field(default=4, ge=1, le=4)
+    weekly_deepseek_timeout_seconds: float = Field(default=60, gt=0, le=60)
+    weekly_jev_decision_budget: int = Field(default=1000, ge=0, le=1000)
+    weekly_ambiguity_budget: int = Field(default=100, ge=0, le=100)
+    weekly_narrative_budget: int = Field(default=16, ge=0, le=16)
+    weekly_wall_seconds: int = Field(default=900, ge=1, le=900)
+    weekly_input_token_cap: int = Field(default=16000, ge=100, le=16000)
+    weekly_output_token_cap: int = Field(default=1200, ge=100, le=4000)
+    weekly_input_safety_cap: int = Field(default=100000, ge=1)
+    weekly_publisher_overrides: dict[str, str] = Field(default_factory=dict)
     respect_robots_txt: bool = True
     auth_enabled: bool = False
     auth_username: str | None = None

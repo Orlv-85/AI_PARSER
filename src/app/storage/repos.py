@@ -3,6 +3,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlsplit
@@ -12,8 +13,10 @@ from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session, selectinload
 
+from app.config.settings import get_settings
 from app.config.sources import SourceConfig
 from app.core.categories import CATEGORY_ORDER
+from app.core.weekly_analytics import SECTION_STATES, empty_section
 from app.storage.models_sql import (
     Article,
     ArticleAlias,
@@ -26,7 +29,10 @@ from app.storage.models_sql import (
     SourceImportBatch,
     WeeklyAnalyticsStoredItem,
     WeeklyAnalyticsStoredReport,
+    WeeklyPublication,
+    WeeklySnapshot,
 )
+from app.storage.weekly import WeeklyStore
 
 if TYPE_CHECKING:
     from app.core.source_onboarding import CandidateOverlapGroup
@@ -40,10 +46,11 @@ class WeeklyAnalyticsItem:
     title: str
     summary: str
     url: str
+    details: dict[str, Any] = dataclass_field(default_factory=dict)
 
 
 @dataclass(slots=True)
-class WeeklyAnalyticsReport:
+class WeeklyAnalyticsReport:  # pylint: disable=too-many-instance-attributes
     report_date: date
     date_from: date
     date_to: date
@@ -51,6 +58,7 @@ class WeeklyAnalyticsReport:
     new: list[WeeklyAnalyticsItem]
     trending_up: list[WeeklyAnalyticsItem]
     trending_down: list[WeeklyAnalyticsItem]
+    metadata: dict[str, Any] = dataclass_field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -814,6 +822,20 @@ class WeeklyAnalyticsRepo:
         self.session = session
 
     def get_weekly_report(self, *, report_date: date) -> WeeklyAnalyticsReport:
+        if get_settings().weekly_v2_enabled:
+            payload = WeeklyStore(self.session).published(report_date)
+            if payload is not None:
+                return self._hydrate_v2(payload)
+            stored_report = self._get_stored_report(report_date=report_date)
+            if stored_report is not None:
+                return self._hydrate_stored_report(stored_report)
+            return WeeklyAnalyticsReport(
+                report_date, report_date - timedelta(days=6), report_date,
+                "Weekly attention analytics are awaiting a verified snapshot.", [], [], [],
+                metadata={"status": "insufficient_data", "quality": {"reason": "coverage_unknown"},
+                          "section_status": {s: empty_section(s, "coverage_unknown")
+                                             for s in SECTION_STATES}},
+            )
         stored_report = self._get_stored_report(report_date=report_date)
         if stored_report is not None:
             return self._hydrate_stored_report(stored_report)
@@ -827,6 +849,11 @@ class WeeklyAnalyticsRepo:
             .limit(1)
         )
         value = self.session.execute(stmt).scalar_one_or_none()
+        if get_settings().weekly_v2_enabled:
+            latest = self.session.scalar(select(func.max(WeeklyPublication.report_date)).where(
+                WeeklyPublication.snapshot_id.is_not(None)))
+            if latest is not None:
+                value = max(value, latest) if value else latest
         if value is None or isinstance(value, date):
             return value
         raise TypeError(f"Expected date or None for report_date, got {type(value)!r}")
@@ -838,7 +865,7 @@ class WeeklyAnalyticsRepo:
             .limit(limit)
         )
         rows = self.session.execute(stmt).scalars().all()
-        return [
+        entries = [
             WeeklyAnalyticsReportIndexEntry(
                 report_date=row.report_date,
                 date_from=row.date_from,
@@ -848,6 +875,18 @@ class WeeklyAnalyticsRepo:
             )
             for row in rows
         ]
+        if get_settings().weekly_v2_enabled:
+            snapshots = self.session.scalars(select(WeeklySnapshot).join(
+                WeeklyPublication, WeeklyPublication.snapshot_id == WeeklySnapshot.id,
+            ).order_by(WeeklySnapshot.report_date.desc()).limit(limit)).all()
+            by_date = {entry.report_date: entry for entry in entries}
+            for snapshot in snapshots:
+                payload = json.loads(snapshot.payload)
+                by_date[snapshot.report_date] = WeeklyAnalyticsReportIndexEntry(
+                    snapshot.report_date, date.fromisoformat(payload["date_from"]),
+                    snapshot.report_date, payload["summary"], snapshot.generated_at)
+            entries = sorted(by_date.values(), key=lambda entry: entry.report_date, reverse=True)
+        return entries[:limit]
 
     def save_weekly_report(
         self,
@@ -879,6 +918,11 @@ class WeeklyAnalyticsRepo:
         )
 
         with self.session.begin_nested():
+            store = WeeklyStore(self.session)
+            store.lock_date(report_date)
+            if store.published(report_date) is not None:
+                raise ValueError(
+                    "A verified weekly revision cannot be overwritten by a legacy report")
             existing = self._get_stored_report(report_date=report.report_date)
             if existing is not None:
                 self.session.delete(existing)
@@ -909,6 +953,27 @@ class WeeklyAnalyticsRepo:
             self.session.flush()
 
         return report
+
+    @staticmethod
+    def _hydrate_v2(payload: dict) -> WeeklyAnalyticsReport:
+        def items(section: str) -> list[WeeklyAnalyticsItem]:
+            return [WeeklyAnalyticsItem(
+                title=row["title"], summary=row["summary"], url=row["url"],
+                details={k: v for k, v in row.items() if k not in {"title", "summary", "url"}},
+            ) for row in payload[section][:5]]
+
+        return WeeklyAnalyticsReport(
+            report_date=date.fromisoformat(payload["report_date"]),
+            date_from=date.fromisoformat(payload["date_from"]),
+            date_to=date.fromisoformat(payload["date_to"]), summary=payload["summary"],
+            new=items("new"), trending_up=items("trending_up"),
+            trending_down=items("trending_down"),
+            metadata={k: v for k, v in payload.items() if k not in {
+                "report_date", "date_from", "date_to", "summary", "new", "trending_up",
+                "trending_down", "assignments", "included_observation_ids", "input_fingerprint",
+                "topic_registry", "event_ambiguities", "excluded_observations",
+            }},
+        )
 
     def _generate_report(self, *, report_date: date) -> WeeklyAnalyticsReport:
         date_to = report_date

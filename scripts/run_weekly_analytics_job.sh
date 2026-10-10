@@ -8,6 +8,16 @@ APP_CONTAINER="${AINEWS_APP_CONTAINER:-ai-news-app}"
 APP_PORT="${AINEWS_DIGEST_APP_PORT:-8010}"
 WEEKLY_LIMIT="${AINEWS_WEEKLY_LIMIT:-200}"
 
+# Read the effective setting inside the application, including its .env file.
+# Cadence and the legacy fallback stay unchanged until operators enable v2.
+if [ "$(docker exec "$APP_CONTAINER" python -c \
+  'from app.config.settings import get_settings; print(int(get_settings().weekly_v2_enabled))')" = "1" ]; then
+  if [ "$#" -ge 1 ]; then
+    exec docker exec "$APP_CONTAINER" ai-news weekly-analytics --report-date "$1" --limit "$WEEKLY_LIMIT"
+  fi
+  exec docker exec "$APP_CONTAINER" ai-news weekly-analytics --limit "$WEEKLY_LIMIT"
+fi
+
 if [ -n "${AINEWS_DIGEST_APP_BASE_URL:-}" ]; then
   APP_BASE_URL="$AINEWS_DIGEST_APP_BASE_URL"
 else

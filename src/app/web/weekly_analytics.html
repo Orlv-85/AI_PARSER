@@ -163,7 +163,20 @@
       <section class="panel">
         <h2>Summary</h2>
         <p id="weekly-summary" class="muted">Loading weekly analytics...</p>
+        <p id="weekly-quality" class="muted"></p>
+        <details id="methodology">
+          <summary>How attention is measured</summary>
+          <p>Coverage share is equally weighted by publisher group across comparable healthy
+          sources. Counts represent distinct events, with one observation per event, publisher
+          and week. Up and Down require a material change in share and multiple events.
+          New means first observed after 28 days of verified history in this corpus.
+          These are news attention signals; they do not measure market adoption or sentiment.</p>
+        </details>
       </section>
+      <details class="panel">
+        <summary>Stable topics and unconfirmed signals</summary>
+        <ul id="weekly-other" class="item-list"></ul>
+      </details>
 
       <section class="panel">
         <h2>Freshness</h2>
@@ -214,17 +227,50 @@
           .replaceAll("'", "&#39;");
       }
 
-      function renderList(node, items) {
+      function safeUrl(url) {
+        return /^https?:\/\//i.test(String(url)) ? escapeHtml(url) : "";
+      }
+
+      function topicMetrics(item) {
+        if (item.share_current == null) return "";
+        const growth = item.growth_pct == null ? "" : ` / ${Number(item.growth_pct).toFixed(1)}%`;
+        return `<p class="muted">Publisher-balanced share:
+          ${(100 * Number(item.share_previous)).toFixed(1)}% → ${(100 * Number(item.share_current)).toFixed(1)}%
+          (${Number(item.delta_pp).toFixed(2)} pp${growth})<br>
+          Distinct events: ${Number(item.event_count_previous)} → ${Number(item.event_count_current)}<br>
+          Publisher groups: ${Number(item.publisher_count_previous)} → ${Number(item.publisher_count_current)}</p>`;
+      }
+
+      function topicEvidence(item) {
+        if (!item.evidence?.length) return "";
+        return `<details><summary>Sources (${item.evidence.length})</summary><ul>` + item.evidence
+          .filter((row) => safeUrl(row.url))
+          .map((row) => `<li><a href="${safeUrl(row.url)}" target="_blank" rel="noreferrer">${escapeHtml(row.title)}</a>
+            <p>${escapeHtml(row.publisher)} · ${escapeHtml(row.published_at)} · ${escapeHtml(row.window)}</p>
+            <p>${escapeHtml(row.excerpt)}</p></li>`).join("") + "</ul></details>";
+      }
+
+      function emptyMessage(payload, section) {
+        const defaults = {new: "No confirmed new topics in the observed 28-day history.",
+          trending_up: "No topics met the growth threshold this week.",
+          trending_down: "No topics met the decline threshold this week."};
+        return payload.section_status?.[section]?.message || defaults[section];
+      }
+
+      function renderList(node, items, message) {
         if (!items.length) {
-          node.innerHTML = '<li class="empty">No items for this section yet.</li>';
+          node.innerHTML = `<li class="empty">${escapeHtml(message)}</li>`;
           return;
         }
         node.innerHTML = items
           .map(
             (item) => `
               <li>
-                <a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>
+                ${safeUrl(item.url) ? `<a href="${safeUrl(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>` : escapeHtml(item.title)}
+                ${item.state ? `<p>${escapeHtml(item.state)}${item.reason ? " · " + escapeHtml(item.reason) : ""}</p>` : ""}
+                ${topicMetrics(item)}
                 <p class="muted">${escapeHtml(item.summary)}</p>
+                ${topicEvidence(item)}
               </li>
             `,
           )
@@ -243,9 +289,19 @@
         const payload = await response.json();
         window.history.replaceState({}, "", "?date=" + encodeURIComponent(selectedDate));
         summaryNode.textContent = payload.summary;
-        renderList(newNode, payload.new);
-        renderList(trendingUpNode, payload.trending_up);
-        renderList(trendingDownNode, payload.trending_down);
+        document.getElementById("weekly-quality").textContent = payload.status === "legacy"
+          ? "Legacy report: historical headline-based methodology; unverified attention signals."
+          : `Status: ${payload.status}. Compared ${payload.date_from}–${payload.date_to} with the preceding seven days.
+             Cohort: ${payload.quality?.cohort_size || 0} publisher groups.
+             Data quality: ${payload.quality?.reason || "comparable coverage"}.
+             Classification: ${(100 * Number(payload.quality?.weeks?.[0]?.assignment_rate || 0)).toFixed(1)}% current,
+             ${(100 * Number(payload.quality?.weeks?.[1]?.assignment_rate || 0)).toFixed(1)}% previous.
+             Generated: ${payload.generated_at || "awaiting snapshot"}.
+             Cutoff: ${payload.data_cutoff || "unknown"}. Revision: ${payload.revision || "—"}.`;
+        renderList(newNode, payload.new, emptyMessage(payload, "new"));
+        renderList(trendingUpNode, payload.trending_up, emptyMessage(payload, "trending_up"));
+        renderList(trendingDownNode, payload.trending_down, emptyMessage(payload, "trending_down"));
+        renderList(document.getElementById("weekly-other"), payload.other_signals || [], "No other signals.");
       }
 
       async function loadFreshness(selectedDate) {

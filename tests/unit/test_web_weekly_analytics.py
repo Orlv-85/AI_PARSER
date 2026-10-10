@@ -257,6 +257,7 @@ def test_weekly_ai_analytics_api_returns_report_sections_for_last_7_days(
         "date_from": "2026-03-01",
         "date_to": "2026-03-07",
         "summary": "Leaders should watch infrastructure efficiency and coding agents.",
+        "status": "legacy",
         "new": [
             {
                 "title": "AI Browser Launches",
@@ -606,6 +607,7 @@ def test_weekly_ai_analytics_api_defaults_to_previous_utc_day(
         "date_from": "2026-03-01",
         "date_to": "2026-03-07",
         "summary": "Weekly analytics synthesized the last seven days of AI news.",
+        "status": "legacy",
         "new": [],
         "trending_up": [],
         "trending_down": [],
@@ -672,6 +674,7 @@ def test_weekly_ai_analytics_api_defaults_to_latest_published_report_date(
         "date_from": "2026-03-02",
         "date_to": "2026-03-08",
         "summary": "Saved Monday-published weekly report.",
+        "status": "legacy",
         "new": [],
         "trending_up": [],
         "trending_down": [],

@@ -300,9 +300,9 @@
           .join("");
       }
 
-      function renderWeeklyPreviewList(node, items) {
+      function renderWeeklyPreviewList(node, items, message) {
         if (!items.length) {
-          node.innerHTML = '<li class="preview-empty">No items yet.</li>';
+          node.innerHTML = `<li class="preview-empty">${escapeHtml(message)}</li>`;
           return;
         }
 
@@ -310,7 +310,8 @@
           .map(
             (item) => `
               <li>
-                <a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>
+                <a href="${/^https?:\/\//i.test(item.url) ? escapeHtml(item.url) : ""}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>
+                ${item.delta_pp == null ? "" : `<p>Share: ${(100 * Number(item.share_previous)).toFixed(1)}% → ${(100 * Number(item.share_current)).toFixed(1)}% (${Number(item.delta_pp).toFixed(2)} pp)</p>`}
                 <p>${escapeHtml(truncateText(item.summary, 360))}</p>
               </li>
             `,
@@ -342,9 +343,12 @@
 
         const payload = await response.json();
         weeklySummary.textContent = payload.summary;
-        renderWeeklyPreviewList(weeklyNew, payload.new);
-        renderWeeklyPreviewList(weeklyTrendingUp, payload.trending_up);
-        renderWeeklyPreviewList(weeklyTrendingDown, payload.trending_down);
+        renderWeeklyPreviewList(weeklyNew, payload.new, payload.section_status?.new?.message
+          || "No confirmed new topics in the observed 28-day history.");
+        renderWeeklyPreviewList(weeklyTrendingUp, payload.trending_up, payload.section_status?.trending_up?.message
+          || "No topics met the growth threshold this week.");
+        renderWeeklyPreviewList(weeklyTrendingDown, payload.trending_down, payload.section_status?.trending_down?.message
+          || "No topics met the decline threshold this week.");
       }
 
       async function loadDailyLinks(selectedDate) {

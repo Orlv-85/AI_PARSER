@@ -1315,6 +1315,21 @@ def publish_feed_weekly(
     report_date: str,
     limit: int,
 ) -> dict[str, Any]:
+    if os.getenv("AINEWS_WEEKLY_V2_ENABLED", "").lower() in {"1", "true", "yes"}:
+        # The v2 adapter uses complete DB observations, never the ranked HTTP feed.
+        from app.config.settings import get_settings
+        from app.core.weekly_worker import drain
+        from app.storage import SessionLocal, create_all
+        from app.storage.weekly import WeeklyStore
+
+        create_all()
+        settings = get_settings()
+        with SessionLocal() as session:
+            store = WeeklyStore(session)
+            job_id = store.enqueue(date.fromisoformat(report_date), settings)
+            session.commit()
+            results = drain(store, settings)
+        return {"mode": "attention-v2", "job_id": job_id, "results": results}
     report_date_obj = date.fromisoformat(report_date)
     date_from = report_date_obj - timedelta(days=6)
     prior_date_to = date_from - timedelta(days=1)

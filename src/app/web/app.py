@@ -59,6 +59,7 @@ from app.web.models import (
     UpdateStatus,
     WebUpdateSettings,
     WeeklyAnalyticsFreshnessResponse,
+    WeeklyAnalyticsItemPayload,
     WeeklyAnalyticsPayload,
     WeeklyAnalyticsReportListItem,
     WeeklyAnalyticsReportListResponse,
@@ -227,8 +228,8 @@ def _build_weekly_analytics_response(
             trending_down=[],
         )
 
-    def _serialize_items(items: list[WeeklyAnalyticsItem]) -> list[NewsDigestItemPayload]:
-        payload: list[NewsDigestItemPayload] = []
+    def _serialize_items(items: list[WeeklyAnalyticsItem]) -> list[WeeklyAnalyticsItemPayload]:
+        payload: list[WeeklyAnalyticsItemPayload] = []
         for item in items:
             if not item.url.startswith(("http://", "https://")):
                 continue
@@ -237,10 +238,11 @@ def _build_weekly_analytics_response(
             if not title or not summary:
                 continue
             payload.append(
-                NewsDigestItemPayload(
+                WeeklyAnalyticsItemPayload(
                     title=title,
                     summary=summary,
                     url=item.url,
+                    **getattr(item, "details", {}),
                 )
             )
         return payload
@@ -253,6 +255,7 @@ def _build_weekly_analytics_response(
         new=_serialize_items(weekly_report.new),
         trending_up=_serialize_items(weekly_report.trending_up),
         trending_down=_serialize_items(weekly_report.trending_down),
+        **{"status": "legacy", **getattr(weekly_report, "metadata", {})},
     )
 
 
@@ -780,7 +783,8 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
             raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
         return response
 
-    @api.get("/api/news/weekly-analytics", response_model=WeeklyAnalyticsResponse)
+    @api.get("/api/news/weekly-analytics", response_model=WeeklyAnalyticsResponse,
+             response_model_exclude_unset=True)
     def get_weekly_ai_analytics(
         *,
         target_date: date | None = _OPTIONAL_WEEKLY_ANALYTICS_DATE_QUERY,
@@ -804,7 +808,8 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
             weekly_report=weekly_report,
         )
 
-    @api.post("/api/news/weekly-analytics", response_model=WeeklyAnalyticsResponse)
+    @api.post("/api/news/weekly-analytics", response_model=WeeklyAnalyticsResponse,
+              response_model_exclude_unset=True)
     def save_weekly_ai_analytics(payload: WeeklyAnalyticsPayload) -> WeeklyAnalyticsResponse:
         try:
             create_all()
@@ -842,6 +847,8 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
                 )
                 session.commit()
                 stored = repo.get_weekly_report(report_date=payload.report_date)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         except SQLAlchemyError as exc:
             raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
 

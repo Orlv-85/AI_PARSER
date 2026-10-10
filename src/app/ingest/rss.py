@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from threading import Semaphore
 from time import struct_time
+from typing import Literal
 
 import feedparser
 import httpx
@@ -23,6 +24,7 @@ class RssFetchResult:
     status_code: int
     etag: str | None
     last_modified: str | None
+    coverage_complete: bool = True
 
 
 class RssItemList(list[Article]):
@@ -32,6 +34,7 @@ class RssItemList(list[Article]):
     status_code: int
     etag: str | None
     last_modified: str | None
+    coverage_complete: bool = True
 
 
 def _with_rss_metadata(items: list[Article], result: RssFetchResult) -> list[Article]:
@@ -40,6 +43,7 @@ def _with_rss_metadata(items: list[Article], result: RssFetchResult) -> list[Art
     wrapped.status_code = result.status_code
     wrapped.etag = result.etag
     wrapped.last_modified = result.last_modified
+    wrapped.coverage_complete = getattr(result, "coverage_complete", True)
     return wrapped
 
 
@@ -51,17 +55,24 @@ def _to_datetime(value: struct_time | None) -> datetime | None:
 
 def parse_rss(source_key: str, content: bytes) -> list[Article]:
     parsed = feedparser.parse(content)
-    items: list[Article] = []
+    items = RssItemList()
+    items.coverage_complete = bool(getattr(parsed, "version", None)) and not getattr(
+        parsed, "bozo", False)
 
     for entry in parsed.entries:
         link = getattr(entry, "link", None)
         title = getattr(entry, "title", None)
         if not link or not title:
+            items.coverage_complete = False
             continue
 
         published = _to_datetime(getattr(entry, "published_parsed", None))
+        date_kind: Literal["published", "updated", "unknown"] = (
+            "published" if published is not None else "unknown")
         if published is None:
             published = _to_datetime(getattr(entry, "updated_parsed", None))
+            if published is not None:
+                date_kind = "updated"
 
         items.append(
             Article(
@@ -71,6 +82,7 @@ def parse_rss(source_key: str, content: bytes) -> list[Article]:
                 published_at=published,
                 summary=getattr(entry, "summary", None),
                 content=None,
+                publication_date_kind=date_kind,
             )
         )
 
@@ -129,6 +141,7 @@ def fetch_rss_with_metadata(
                 status_code=200,
                 etag=None,
                 last_modified=None,
+                coverage_complete=getattr(items, "coverage_complete", False),
             )
     else:
         headers: dict[str, str] = {}
@@ -163,6 +176,7 @@ def fetch_rss_with_metadata(
         status_code=status_code,
         etag=headers.get("ETag"),
         last_modified=headers.get("Last-Modified"),
+        coverage_complete=getattr(items, "coverage_complete", False),
     )
 
 # pylint: disable=too-many-positional-arguments

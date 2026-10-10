@@ -101,14 +101,60 @@ class NewsDigestResponse(BaseModel):
     groups: list[NewsDigestGroupPayload]
 
 
+class WeeklyEvidence(BaseModel):
+    id: str
+    article_id: int | None = None
+    event_id: str
+    title: str
+    url: HttpUrl
+    publisher: str
+    published_at: datetime
+    window: Literal["current", "previous"]
+    excerpt: str
+
+
+class WeeklyAnalyticsItemPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    title: str = Field(min_length=1, max_length=255)
+    summary: str = Field(min_length=1, max_length=2000)
+    url: HttpUrl | Literal[""] = ""
+    topic_id: str | None = None
+    state: Literal[
+        "new", "up", "down", "stable", "resurfacing", "insufficient_evidence"
+    ] | None = None
+    reason: str | None = None
+    event_count_current: int | None = None
+    event_count_previous: int | None = None
+    publisher_count_current: int | None = None
+    publisher_count_previous: int | None = None
+    share_current: float | None = None
+    share_previous: float | None = None
+    delta_pp: float | None = None
+    growth_pct: float | None = None
+    first_observed_at: datetime | None = None
+    evidence: list[WeeklyEvidence] = Field(default_factory=list)
+    claims: list[dict] = Field(default_factory=list)
+
+
 class WeeklyAnalyticsResponse(BaseModel):
     report_date: date
     date_from: date
     date_to: date
     summary: str
-    new: list[NewsDigestItemPayload]
-    trending_up: list[NewsDigestItemPayload]
-    trending_down: list[NewsDigestItemPayload]
+    new: list[WeeklyAnalyticsItemPayload]
+    trending_up: list[WeeklyAnalyticsItemPayload]
+    trending_down: list[WeeklyAnalyticsItemPayload]
+    methodology_version: str | None = None
+    taxonomy_version: str | None = None
+    snapshot_id: str | None = None
+    revision: int | None = None
+    generated_at: datetime | None = None
+    data_cutoff: datetime | None = None
+    status: Literal["ready", "provisional", "insufficient_data", "legacy"] = "legacy"
+    narrative_mode: Literal["deepseek", "template", "mixed"] = "template"
+    quality: dict = Field(default_factory=dict)
+    section_status: dict = Field(default_factory=dict)
+    other_signals: list[WeeklyAnalyticsItemPayload] = Field(default_factory=list)
 
 
 class WeeklyAnalyticsPayload(BaseModel):
