@@ -31,7 +31,7 @@ fi
 DEEPSEEK_MODEL="${DEEPSEEK_MODEL:-deepseek-flash}"
 export DS_API_KEY
 
-if python3 "$ROOT_DIR/scripts/pocketpaw_digest_bridge.py" \
+if python3 "$ROOT_DIR/scripts/digest_generator.py" \
   publish-deepseek-digest \
   --base-url "$APP_BASE_URL" \
   --report-date "$REPORT_DATE" \
@@ -44,7 +44,7 @@ if [ "$ALLOW_FALLBACK" != "1" ]; then
 fi
 
 echo "DeepSeek unavailable; using source text excerpts (not AI summaries)" >&2
-exec python3 "$ROOT_DIR/scripts/pocketpaw_digest_bridge.py" \
+exec python3 "$ROOT_DIR/scripts/digest_generator.py" \
   publish-feed-digest \
   --base-url "$APP_BASE_URL" \
   --report-date "$REPORT_DATE" \

@@ -100,13 +100,13 @@ Set `CADDY_SITE_ADDRESS` to your public domain/host (for example `5kzt.l.time4vp
 ### Daily digest generation (DeepSeek)
 
 Set `DS_API_KEY` in the server's `.env` or in the job environment. Do not commit
-the key. The scheduled daily job calls DeepSeek directly; Google accounts and
-Antigravity Manager are not required. The key is passed only in the HTTP
-Authorization header, not in CLI arguments.
+the key. The scheduled daily job calls DeepSeek directly from Python, without
+an external agent runner. The key is passed only in the HTTP Authorization
+header, not in CLI arguments.
 
 - Model: `AINEWS_DIGEST_MODEL` (default `deepseek-flash`).
 - Run/rebuild a date: `./scripts/run_daily_digest_job.sh 2026-10-03`.
-- Manual CLI: `python3 scripts/pocketpaw_digest_bridge.py publish-deepseek-digest
+- Manual CLI: `python3 scripts/digest_generator.py publish-deepseek-digest
   --base-url http://APP_IP:8010 --report-date 2026-10-03` (export `DS_API_KEY` first).
 - The generator requests `/api/news/links?date=...&include_content=true` to get
   stored summary/content. Without this opt-in, the link-feed API is unchanged.
@@ -115,9 +115,9 @@ Authorization header, not in CLI arguments.
 - If DeepSeek fails, `AINEWS_DIGEST_ALLOW_FALLBACK=1` uses cleaned source excerpts
   and logs that these are not AI summaries. Set it to `0` to fail the job instead.
   Missing article text is reported explicitly; facts are not inferred from a title.
-- Antigravity is disabled by default on deploy. Its account data is retained in
-  `data/antigravity`; an explicitly enabled legacy integration can still use the
-  old `publish-antigravity-digest` command.
+- The deploy retires the old proxy container without deleting its account data.
+  Retired local tooling is moved to `backups/retired-ai-tools.*`, not reinstalled.
+  The old proxy-provider CLI and external-agent job template are removed.
 
 The tag deploy copies `DS_API_KEY` from GitHub Actions repository secrets into
 the private server-side `.env`. A missing secret fails validation before any

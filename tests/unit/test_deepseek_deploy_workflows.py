@@ -43,6 +43,9 @@ def test_deploy_transports_deepseek_secret_privately(workflow, tmp_path) -> None
     assert "secrets.DS_API_KEY" not in validate["run"]
     payload = next(step for step in steps if step["name"] == "Prepare runtime env payload")
     assert payload["env"]["DS_API_KEY"] == "${{ secrets.DS_API_KEY }}"
+    assert not any(
+        key.startswith(("ANTIGRAVITY_", "POCKETPAW_", "ANTHROPIC_")) for key in payload["env"]
+    )
     env_path = tmp_path / "runtime.env"
     run = payload["run"].replace("/tmp/ai_news_auth.env", str(env_path))
     environment = {
@@ -63,3 +66,5 @@ def test_deploy_transports_deepseek_secret_privately(workflow, tmp_path) -> None
     deploy = next(step for step in steps if "retry sshpass" in step.get("run", ""))
     assert "|DS_API_KEY|AINEWS_DIGEST_MODEL)=" in deploy["run"]
     assert "chmod 600 .env.next" in deploy["run"]
+    assert "POCKETPAW_ENABLED=" not in deploy["run"]
+    assert "POCKETPAW_VERSION=" not in deploy["run"]

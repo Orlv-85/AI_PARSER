@@ -57,6 +57,7 @@ COPY sources.yaml ./sources.yaml
 COPY scripts ./scripts
 COPY automation ./automation
 COPY .github/workflows ./.github/workflows
+COPY docker-compose.prod.yml ./docker-compose.prod.yml
 COPY run_web.sh ./run_web.sh
 COPY tests ./tests
 

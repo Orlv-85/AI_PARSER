@@ -33,7 +33,7 @@ PY
 )"
 fi
 
-exec python3 "$ROOT_DIR/scripts/pocketpaw_digest_bridge.py" \
+exec python3 "$ROOT_DIR/scripts/digest_generator.py" \
   publish-feed-weekly \
   --base-url "$APP_BASE_URL" \
   --report-date "$REPORT_DATE" \
