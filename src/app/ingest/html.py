@@ -12,6 +12,7 @@ from readability import Document
 from app.config.sources import SourceConfig
 from app.core.models import Article
 from app.ingest.fetcher import Fetcher
+from app.ingest.page_filter import html_exclusion_reason, log_exclusion, url_exclusion_reason
 
 try:
     _selectolax_parser = import_module("selectolax.parser")
@@ -81,7 +82,14 @@ def _extract_links_with_lxml(
             href = node.attrib.get("href")
             if not href:
                 continue
+            if any(parent.tag in {"nav", "footer"} or parent.get("role") == "navigation"
+                   for parent in node.iterancestors()):
+                continue
             absolute = urljoin(base_url, href).strip()
+            reason = url_exclusion_reason(absolute)
+            if reason:
+                log_exclusion(absolute, reason)
+                continue
             if absolute in seen:
                 continue
             seen.add(absolute)
@@ -115,7 +123,20 @@ def _extract_links_with_selectolax(
             href = node.attributes.get("href")
             if not href:
                 continue
+            parent = getattr(node, "parent", None)
+            navigation = False
+            while parent is not None:
+                if parent.tag in {"nav", "footer"} or parent.attributes.get("role") == "navigation":
+                    navigation = True
+                    break
+                parent = parent.parent
+            if navigation:
+                continue
             absolute = urljoin(base_url, href).strip()
+            reason = url_exclusion_reason(absolute)
+            if reason:
+                log_exclusion(absolute, reason)
+                continue
             if absolute in seen:
                 continue
             seen.add(absolute)
@@ -169,6 +190,10 @@ def publication_date_evidence(article_html: str) -> datetime | None:
 def _build_html_article(*, source: SourceConfig, url: str, article_html: str) -> Article | None:
     if source.type != "html" or source.html is None:
         return None
+    reason = html_exclusion_reason(url, article_html)
+    if reason:
+        log_exclusion(url, reason)
+        return None
     tree = lxml_html.fromstring(article_html)
     for node in tree.cssselect("script, style, template"):
         node.drop_tree()
@@ -188,6 +213,7 @@ def _build_html_article(*, source: SourceConfig, url: str, article_html: str) ->
         summary=None,
         content=content,
         publication_evidence_at=publication_date_evidence(article_html),
+        page_eligibility_checked=True,
     )
 
 
@@ -283,6 +309,10 @@ def fetch_html_article(
     fetcher: Fetcher | None = None,
 ) -> Article | None:
     if source.type != "html" or source.html is None:
+        return None
+    reason = url_exclusion_reason(url)
+    if reason:
+        log_exclusion(url, reason)
         return None
 
     if fetcher is not None:

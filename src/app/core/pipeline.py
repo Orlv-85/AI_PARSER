@@ -20,6 +20,12 @@ from app.ingest.html import (
     fetch_html_links,
     fetch_html_links_with_metadata,
 )
+from app.ingest.page_filter import (
+    MANAGED_LINK_SELECTORS,
+    log_exclusion,
+    text_exclusion_reason,
+    url_exclusion_reason,
+)
 from app.ingest.rss import fetch_rss, fetch_rss_with_metadata
 from app.storage import SessionLocal, create_all
 from app.storage.repos import ArticleRepo, SourceRepo, WeeklyAnalyticsRepo
@@ -124,7 +130,8 @@ def _managed_source_to_config(source: object) -> SourceConfig:
         "source_weight": float(source_model.source_weight),
     }
     if source_type == "html":
-        payload["html"] = {}
+        selector = MANAGED_LINK_SELECTORS.get(str(source_model.url).rstrip("/"))
+        payload["html"] = {"link_selector": selector} if selector else {}
     return SourceConfig.model_validate(payload)
 
 
@@ -524,6 +531,7 @@ def _process_html_links_two_stage(
     existing_canonical_hashes_fn = (
         existing_canonical_hashes if callable(existing_canonical_hashes) else None
     )
+    links = [link for link in links if url_exclusion_reason(str(link)) is None]
     capped_links = links
     if isinstance(html_max_links_per_source, int) and html_max_links_per_source >= 0:
         capped_links = links[:html_max_links_per_source]
@@ -582,6 +590,10 @@ def _process_html_links_two_stage(
             if item is None:
                 if quality_flags is not None:
                     quality_flags.append("parser_failure")
+                continue
+            reason = _item_exclusion_reason(item)
+            if reason:
+                log_exclusion(str(item.url), reason)
                 continue
             fetched_articles += 1
             _record_weekly_observation(article_repo, db_source_id, item)
@@ -668,6 +680,15 @@ def _record_weekly_observation(article_repo: ArticleRepo, source_id: int, item: 
         record_observation(session, source_id, item)
 
 
+def _item_exclusion_reason(item: Any) -> str | None:
+    if getattr(item, "page_eligibility_checked", False):
+        reason = url_exclusion_reason(str(item.url))
+    else:
+        reason = text_exclusion_reason(
+            str(item.url), item.title, item.content or item.summary or "")
+    return cast(str | None, reason)
+
+
 def _process_fetched_source_items(
     *,
     items: list,
@@ -694,6 +715,14 @@ def _process_fetched_source_items(
         and exists_by_canonical_hash_fn is not None
     )
     queued_rows_by_hash: dict[str, dict[str, object]] = {}
+    accepted_items = []
+    for item in items:
+        reason = _item_exclusion_reason(item)
+        if reason:
+            log_exclusion(str(item.url), reason)
+        else:
+            accepted_items.append(item)
+    items = accepted_items
 
     # The RSS feed has already been parsed in full. Preserve observations even
     # when legacy ingestion later stops at a streak of known URLs.
