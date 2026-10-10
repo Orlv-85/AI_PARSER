@@ -284,6 +284,11 @@ fetch cycle; the next cycle tries again. Connections and repeated-text results
 are reused within each cycle. Only bounded title/summary/content text is sent.
 The key is masked in settings and is never included in fallback logs.
 
+Production Compose passes the Jev key and settings from the server's private
+`.env` into the app container. Set `JEV_API_KEY` and `AINEWS_JEV_ENABLED=true`
+on the server and recreate the app container to enable classification for future
+RSS/HTML ingestion. Tag deployments preserve these server-side settings.
+
 Stored categories and confidence are included in `/api/news`, the digest link
 feed and exports when available. The news page supports filtering by category
 and `sort=category` (existing category order, then rank and freshness).
