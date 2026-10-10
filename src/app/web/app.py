@@ -14,6 +14,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
+from starlette.concurrency import run_in_threadpool
 
 from app.config.settings import get_settings
 from app.core.categories import CATEGORY_CRITERIA
@@ -996,36 +997,39 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
         if batch_id is None and not candidate_ids:
             raise HTTPException(status_code=422, detail="batch_id or candidate_ids is required")
 
-        try:
-            Base.metadata.create_all(bind=onboarding_engine)
-            with onboarding_session_local() as session:
-                results = run_source_validation_batch(
-                    session=session,
-                    batch_id=batch_id,
-                    candidate_ids=candidate_ids,
-                )
-                session.commit()
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+        def _validate_batch() -> JSONResponse:
+            try:
+                Base.metadata.create_all(bind=onboarding_engine)
+                with onboarding_session_local() as session:
+                    results = run_source_validation_batch(
+                        session=session,
+                        batch_id=batch_id,
+                        candidate_ids=candidate_ids,
+                    )
+                    session.commit()
+            except SQLAlchemyError as exc:
+                raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
 
-        return JSONResponse(
-            status_code=200,
-            content={
-                "validated_count": len(results),
-                "results": [
-                    {
-                        "candidate_id": result.candidate_id,
-                        "status": result.status,
-                        "detected_type": result.detected_type,
-                        "validation_error": result.validation_error,
-                        "entry_count": result.entry_count,
-                        "link_count": result.link_count,
-                        "sample_links": result.sample_links,
-                    }
-                    for result in results
-                ],
-            },
-        )
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "validated_count": len(results),
+                    "results": [
+                        {
+                            "candidate_id": result.candidate_id,
+                            "status": result.status,
+                            "detected_type": result.detected_type,
+                            "validation_error": result.validation_error,
+                            "entry_count": result.entry_count,
+                            "link_count": result.link_count,
+                            "sample_links": result.sample_links,
+                        }
+                        for result in results
+                    ],
+                },
+            )
+
+        return await run_in_threadpool(_validate_batch)
 
     @api.get("/api/source-onboarding/overlaps")
     def get_source_onboarding_overlaps(
