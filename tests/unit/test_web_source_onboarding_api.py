@@ -1,4 +1,6 @@
+from concurrent.futures import ThreadPoolExecutor
 from importlib import import_module
+from threading import Event
 from typing import Any, cast
 
 from fastapi.testclient import TestClient
@@ -451,6 +453,35 @@ def test_source_onboarding_validate_route_accepts_candidate_ids_only(
             }
         ],
     }
+
+
+def test_source_onboarding_validation_keeps_health_endpoint_responsive(
+    monkeypatch, tmp_path
+) -> None:
+    client = _build_client(monkeypatch, tmp_path)
+    web_app_module = import_module("app.web.app")
+    validation_started = Event()
+    release_validation = Event()
+
+    def _blocking_validation(**_kwargs):
+        validation_started.set()
+        assert release_validation.wait(timeout=10)
+        return []
+
+    monkeypatch.setattr(web_app_module, "run_source_validation_batch", _blocking_validation)
+
+    with client, ThreadPoolExecutor(max_workers=2) as executor:
+        validation = executor.submit(
+            client.post, "/api/source-onboarding/validate", json={"batch_id": 1}
+        )
+        try:
+            assert validation_started.wait(timeout=5)
+            health = executor.submit(client.get, "/health")
+            assert health.result(timeout=2).status_code == 200
+            assert not validation.done()
+        finally:
+            release_validation.set()
+        assert validation.result(timeout=5).json() == {"validated_count": 0, "results": []}
 
 
 def test_source_onboarding_validate_route_returns_503_when_storage_is_unavailable(
