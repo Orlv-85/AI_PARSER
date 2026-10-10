@@ -6,7 +6,10 @@ ROOT_DIR="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
 cd "$ROOT_DIR"
 
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
-RETENTION_DAYS="${RETENTION_DAYS:-100}"
+if [ -z "${RETENTION_DAYS:-}" ] && [ -f .env ]; then
+  RETENTION_DAYS="$(sed -nE "s/^[[:space:]]*(export[[:space:]]+)?RETENTION_DAYS[[:space:]]*=[[:space:]]*['\"]?([0-9]+)['\"]?([[:space:]]*#.*)?[[:space:]]*$/\\2/p" .env | tail -n 1)"
+fi
+RETENTION_DAYS="${RETENTION_DAYS:-800}"
 DEPLOY_TAG="${1:-}"
 LAST_DEPLOY_FILE="${LAST_DEPLOY_FILE:-.last_deploy_commit}"
 LAST_DEPLOY_IMAGE_FILE="${LAST_DEPLOY_IMAGE_FILE:-.last_deploy_image}"

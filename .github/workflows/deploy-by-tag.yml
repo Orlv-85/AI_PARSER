@@ -52,6 +52,7 @@ jobs:
           AINEWS_JEV_ENABLED: "true"
           AINEWS_SEMANTIC_ADMISSION_ENABLED: "true"
           AINEWS_WEEKLY_V2_ENABLED: "false"
+          RETENTION_DAYS: ${{ vars.RETENTION_DAYS || '800' }}
           AINEWS_AUTH_PASSWORD_HASH: ${{ secrets.AINEWS_AUTH_PASSWORD_HASH }}
           AINEWS_AUTH_SECRET: ${{ secrets.AINEWS_AUTH_SECRET }}
           AINEWS_AUTH_USERNAME: ${{ vars.AINEWS_AUTH_USERNAME || 'operator' }}
@@ -72,6 +73,7 @@ jobs:
             printf 'AINEWS_JEV_ENABLED=%s\n' "${AINEWS_JEV_ENABLED}"
             printf 'AINEWS_SEMANTIC_ADMISSION_ENABLED=%s\n' "${AINEWS_SEMANTIC_ADMISSION_ENABLED}"
             printf 'AINEWS_WEEKLY_V2_ENABLED=%s\n' "${AINEWS_WEEKLY_V2_ENABLED}"
+            printf 'RETENTION_DAYS=%s\n' "${RETENTION_DAYS}"
             printf 'AINEWS_AUTH_ENABLED=%s\n' "${AINEWS_AUTH_ENABLED}"
             printf 'AINEWS_AUTH_USERNAME=%s\n' "${AINEWS_AUTH_USERNAME}"
             printf 'AINEWS_AUTH_PASSWORD_HASH=%s\n' "${AINEWS_AUTH_PASSWORD_HASH_ESCAPED}"
@@ -94,6 +96,7 @@ jobs:
           DEPLOY_USER: ${{ vars.DEPLOY_USER }}
           DEPLOY_APP_DIR: ${{ vars.DEPLOY_APP_DIR || '/opt/ai-news' }}
           DEPLOY_TAG: ${{ github.event.inputs.deploy_tag }}
+          RETENTION_DAYS: ${{ vars.RETENTION_DAYS || '800' }}
           SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
         run: |
           SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=3"
@@ -116,4 +119,4 @@ jobs:
           }
           retry sshpass -p "${SERVER_PASSWORD}" scp ${SSH_OPTS} /tmp/ai_news_auth.env "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/ai_news_auth.env"
           retry sshpass -p "${SERVER_PASSWORD}" scp ${SSH_OPTS} /tmp/ai_news_ghcr.token "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/ai_news_ghcr.token"
-          retry sshpass -p "${SERVER_PASSWORD}" ssh ${SSH_OPTS} "${DEPLOY_USER}@${DEPLOY_HOST}" "cd '${DEPLOY_APP_DIR}' && git fetch --force origin '+refs/tags/*:refs/tags/*' && git rev-parse --verify --quiet 'refs/tags/${DEPLOY_TAG}' >/dev/null || { echo 'Tag not found: ${DEPLOY_TAG}' >&2; exit 1; } && touch .env && grep -vE '^(AINEWS_AUTH_ENABLED|AINEWS_AUTH_USERNAME|AINEWS_AUTH_PASSWORD_HASH|AINEWS_AUTH_SECRET|AINEWS_AUTH_SESSION_TTL_SECONDS|AINEWS_AUTH_COOKIE_SECURE|AINEWS_MCP_AUTH_ENABLED|AINEWS_MCP_AUTH_TOKEN|ANTIGRAVITY_[A-Z_]+|POCKETPAW_[A-Z_]+|ANTHROPIC_API_KEY|AINEWS_JEV_ENABLED|AINEWS_SEMANTIC_ADMISSION_ENABLED|AINEWS_WEEKLY_V2_ENABLED|DS_API_KEY|AINEWS_DIGEST_MODEL)=' .env > .env.next || true && cat /tmp/ai_news_auth.env >> .env.next && chmod 600 .env.next && mv .env.next .env && cat /tmp/ai_news_ghcr.token | docker login ghcr.io -u 'orlv-85' --password-stdin && git checkout --force '${DEPLOY_TAG}' && AINEWS_WEEKLY_CRON_ENABLED=0 APP_IMAGE='ghcr.io/orlv-85/ai-parser:${DEPLOY_TAG}' ./scripts/deploy_prod.sh '${DEPLOY_TAG}' && rm -f /tmp/ai_news_auth.env /tmp/ai_news_ghcr.token"
+          retry sshpass -p "${SERVER_PASSWORD}" ssh ${SSH_OPTS} "${DEPLOY_USER}@${DEPLOY_HOST}" "cd '${DEPLOY_APP_DIR}' && git fetch --force origin '+refs/tags/*:refs/tags/*' && git rev-parse --verify --quiet 'refs/tags/${DEPLOY_TAG}' >/dev/null || { echo 'Tag not found: ${DEPLOY_TAG}' >&2; exit 1; } && touch .env && grep -vE '^(AINEWS_AUTH_ENABLED|AINEWS_AUTH_USERNAME|AINEWS_AUTH_PASSWORD_HASH|AINEWS_AUTH_SECRET|AINEWS_AUTH_SESSION_TTL_SECONDS|AINEWS_AUTH_COOKIE_SECURE|AINEWS_MCP_AUTH_ENABLED|AINEWS_MCP_AUTH_TOKEN|ANTIGRAVITY_[A-Z_]+|POCKETPAW_[A-Z_]+|ANTHROPIC_API_KEY|AINEWS_JEV_ENABLED|AINEWS_SEMANTIC_ADMISSION_ENABLED|AINEWS_WEEKLY_V2_ENABLED|DS_API_KEY|AINEWS_DIGEST_MODEL|RETENTION_DAYS)=' .env > .env.next || true && cat /tmp/ai_news_auth.env >> .env.next && chmod 600 .env.next && mv .env.next .env && cat /tmp/ai_news_ghcr.token | docker login ghcr.io -u 'orlv-85' --password-stdin && git checkout --force '${DEPLOY_TAG}' && RETENTION_DAYS='${RETENTION_DAYS}' AINEWS_WEEKLY_CRON_ENABLED=0 APP_IMAGE='ghcr.io/orlv-85/ai-parser:${DEPLOY_TAG}' ./scripts/deploy_prod.sh '${DEPLOY_TAG}' && rm -f /tmp/ai_news_auth.env /tmp/ai_news_ghcr.token"

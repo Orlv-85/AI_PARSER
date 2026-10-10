@@ -155,7 +155,7 @@ def search(
 
 @app.command()
 def prune(
-    older_than_days: int = typer.Option(100, "--older-than-days", min=1),
+    older_than_days: int = typer.Option(800, "--older-than-days", min=1),
     dry_run: bool = typer.Option(
         False,
         "--dry-run",

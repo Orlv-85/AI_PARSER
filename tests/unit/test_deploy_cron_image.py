@@ -87,6 +87,7 @@ def test_deploy_updates_cron_to_use_the_deployed_image(tmp_path, legacy_containe
         assert last_call.startswith(image + "|")
         assert last_call.endswith("app ai-news fetch --once")
         calls = (tmp_path / "docker.log").read_text(encoding="utf-8")
+        assert "app ai-news prune --older-than-days 800" in calls
         assert calls.count("|stop ai-news-antigravity\n") == int(legacy_container_present)
         assert calls.count("|rm ai-news-antigravity\n") == int(legacy_container_present)
         assert "--volumes" not in calls
