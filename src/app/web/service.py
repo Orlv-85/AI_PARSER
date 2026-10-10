@@ -13,6 +13,8 @@ from app.config.settings import get_settings
 from app.core.pipeline import run_fetch_cycle
 from app.core.source_onboarding import review_source_candidate
 from app.observability import setup_json_logging
+from app.storage import SessionLocal
+from app.storage.admission import PAUSED_MESSAGE, read_collection_status
 from app.storage.repos import SourceCandidateRepo, SourceImportBatchRepo, SourceRepo
 from app.web.models import (
     SourceOnboardingApproveResponse,
@@ -73,6 +75,9 @@ def _run_offloaded_fetch_cycle(
             "errors": summary.errors,
             "error_message": None,
         }
+        if bool(getattr(summary, "screening_paused", 0)):
+            result_payload["screening_paused"] = 1
+            result_payload["screening_message"] = PAUSED_MESSAGE
     except Exception as exc:  # pragma: no cover - exercised via service polling
         result_payload = {
             "status": "failed",
@@ -112,7 +117,17 @@ class UpdateRunService:
     def current_status(self) -> UpdateStatus:
         with self._lock:
             self._harvest_process_result_locked()
+            self._apply_screening_status_locked()
             return self._status.model_copy(deep=True)
+
+    def _apply_screening_status_locked(self) -> None:
+        try:
+            with SessionLocal() as session:
+                paused, message = read_collection_status(session)
+        except Exception:
+            return
+        self._status.screening_paused = paused
+        self._status.screening_message = message
 
     def start(self, runtime_settings: WebUpdateSettings) -> UpdateStatus | None:
         with self._lock:
@@ -140,6 +155,7 @@ class UpdateRunService:
                 errors=0,
                 error_message=None,
             )
+            self._apply_screening_status_locked()
             self._logger.info(
                 "update_run_started",
                 {"run_id": run_id, "source_id": None, "trigger": "web"},
@@ -195,6 +211,7 @@ class UpdateRunService:
 
         try:
             summary = run_fetch_cycle(settings=merged_settings, logger=self._logger)
+            screening_paused = bool(getattr(summary, "screening_paused", 0))
             with self._lock:
                 self._status = UpdateStatus(
                     run_id=run_id,
@@ -207,7 +224,10 @@ class UpdateRunService:
                     duplicates=summary.duplicates,
                     errors=summary.errors,
                     error_message=None,
+                    screening_paused=screening_paused,
+                    screening_message=PAUSED_MESSAGE if screening_paused else None,
                 )
+                self._apply_screening_status_locked()
             self._logger.info(
                 "update_run_finished",
                 {
@@ -235,6 +255,7 @@ class UpdateRunService:
                     errors=1,
                     error_message=str(exc),
                 )
+                self._apply_screening_status_locked()
             self._logger.error(
                 "update_run_failed",
                 {
@@ -301,6 +322,17 @@ class UpdateRunService:
         new_items = _coerce_int(result_payload.get("new", 0), default=0)
         duplicates = _coerce_int(result_payload.get("duplicates", 0), default=0)
         errors = _coerce_int(result_payload.get("errors", 1), default=1)
+        screening_message: str | None = None
+        if "screening_paused" in result_payload:
+            screening_paused = bool(_coerce_int(result_payload.get("screening_paused", 0), 0))
+            raw_screening_message = result_payload.get("screening_message")
+            if raw_screening_message is not None:
+                screening_message = str(raw_screening_message)
+            elif screening_paused:
+                screening_message = PAUSED_MESSAGE
+        else:
+            screening_paused = self._status.screening_paused
+            screening_message = self._status.screening_message
         error_message = result_payload.get("error_message")
         if error_message is not None:
             error_message = str(error_message)
@@ -316,6 +348,8 @@ class UpdateRunService:
             duplicates=duplicates,
             errors=errors,
             error_message=error_message,
+            screening_paused=screening_paused,
+            screening_message=screening_message,
         )
 
         log_payload = {

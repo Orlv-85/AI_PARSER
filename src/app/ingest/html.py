@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from importlib import import_module
@@ -187,12 +188,17 @@ def publication_date_evidence(article_html: str) -> datetime | None:
     return None
 
 
-def _build_html_article(*, source: SourceConfig, url: str, article_html: str) -> Article | None:
+def _build_html_article(
+    *, source: SourceConfig, url: str, article_html: str,
+    on_exclusion: Callable[[str], None] | None = None,
+) -> Article | None:
     if source.type != "html" or source.html is None:
         return None
     reason = html_exclusion_reason(url, article_html)
     if reason:
         log_exclusion(url, reason)
+        if on_exclusion is not None:
+            on_exclusion(reason)
         return None
     tree = lxml_html.fromstring(article_html)
     for node in tree.cssselect("script, style, template"):
@@ -307,12 +313,15 @@ def fetch_html_article(
     url: str,
     timeout_seconds: float = 15.0,
     fetcher: Fetcher | None = None,
+    on_exclusion: Callable[[str], None] | None = None,
 ) -> Article | None:
     if source.type != "html" or source.html is None:
         return None
     reason = url_exclusion_reason(url)
     if reason:
         log_exclusion(url, reason)
+        if on_exclusion is not None:
+            on_exclusion(reason)
         return None
 
     if fetcher is not None:
@@ -322,7 +331,9 @@ def fetch_html_article(
             response = client.get(url)
             response.raise_for_status()
             article_html = response.text
-    return _build_html_article(source=source, url=url, article_html=article_html)
+    return _build_html_article(
+        source=source, url=url, article_html=article_html, on_exclusion=on_exclusion,
+    )
 
 
 def fetch_html(

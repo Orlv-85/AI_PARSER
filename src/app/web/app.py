@@ -24,6 +24,7 @@ from app.core.source_onboarding import (
     run_source_validation_batch,
 )
 from app.storage import SessionLocal, create_all
+from app.storage.admission import read_collection_status
 from app.storage.models_sql import Article, Base, FetchRun, NewsDigestReport
 from app.storage.repos import (
     ArticleRepo,
@@ -39,6 +40,7 @@ from app.web.auth import SessionSigner, verify_password
 from app.web.models import (
     DigestLinkFeedItem,
     NewsArticleDetail,
+    NewsCollectionStatusResponse,
     NewsDailyStatsItem,
     NewsDailyStatsResponse,
     NewsDigestGroupPayload,
@@ -391,6 +393,7 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
             "/api/news/stats/daily",
             "/api/news/weekly-analytics",
             "/api/news/weekly-analytics/reports",
+            "/api/news/collection-status",
         }
         is_unprotected = (
             path
@@ -486,6 +489,16 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
     @api.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @api.get("/api/news/collection-status", response_model=NewsCollectionStatusResponse)
+    def get_collection_status_api() -> NewsCollectionStatusResponse:
+        try:
+            create_all()
+            with SessionLocal() as session:
+                paused, message = read_collection_status(session)
+        except SQLAlchemyError as exc:
+            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+        return NewsCollectionStatusResponse(paused=paused, message=message)
 
     @api.post("/api/auth/login")
     async def login(request: Request) -> JSONResponse:

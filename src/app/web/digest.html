@@ -198,6 +198,7 @@
         <p class="lede" style="margin-bottom: 8px; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent);">
           Public Briefing
         </p>
+        <div id="collection-paused-notice" class="hidden" style="margin: 12px 0; padding: 12px 14px; border: 1px solid #f0c36d; border-radius: 12px; background: #fff8e5; color: #7a4b00;"></div>
         <h1 id="digest-hero-title">__HERO_TITLE__</h1>
         <p class="lede">The latest published AI news briefing, defaulting to yesterday in UTC. Pick another date to browse earlier digests.</p>
         <label for="digest-date">Digest Date</label>
@@ -331,6 +332,24 @@
             : "Digest for " + selectedDate;
       }
 
+      async function loadCollectionStatus() {
+        try {
+          const response = await fetch("/api/news/collection-status");
+          if (!response.ok) return;
+          const payload = await response.json();
+          const notice = document.getElementById("collection-paused-notice");
+          if (payload.paused && payload.message) {
+            notice.textContent = payload.message;
+            notice.classList.remove("hidden");
+          } else {
+            notice.textContent = "";
+            notice.classList.add("hidden");
+          }
+        } catch (_error) {
+          return;
+        }
+      }
+
       async function loadWeeklyPreview(selectedDate) {
         const response = await fetch("/api/news/weekly-analytics?date=" + encodeURIComponent(selectedDate));
         if (!response.ok) {
@@ -392,6 +411,8 @@
         window.history.replaceState({}, "", initialDigestUrl);
       }
       updateHeroTitle(dateInput.value);
+      void loadCollectionStatus();
+      setInterval(loadCollectionStatus, 15000);
       void loadWeeklyPreview(dateInput.value);
       if (!emptyState.classList.contains("hidden")) {
         void loadDailyLinks(dateInput.value);

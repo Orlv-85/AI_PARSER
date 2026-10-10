@@ -1,8 +1,10 @@
 # pylint: disable=too-many-lines
+import json
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from logging import Logger
+from math import isfinite
 from threading import BoundedSemaphore
 from typing import Any, cast
 
@@ -10,8 +12,16 @@ from sqlalchemy.orm import Session
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig, load_sources
+from app.core.admission import (
+    admission_cache_key,
+    bounded_evidence,
+    decision_from_assessment,
+    evidence_hash,
+)
 from app.core.canonicalize import canonical_url_hash, canonicalize_url
-from app.core.jev import JevRelevanceScorer, jev_relevance_scorer
+from app.core.categories import CATEGORY_CRITERIA
+from app.core.jev import JevAssessment, JevRelevanceScorer, jev_relevance_scorer
+from app.core.models import Article as CoreArticle
 from app.core.scoring import ai_relevance_score, freshness_score, rank_score
 from app.ingest.fetcher import Fetcher
 from app.ingest.html import (
@@ -28,6 +38,15 @@ from app.ingest.page_filter import (
 )
 from app.ingest.rss import fetch_rss, fetch_rss_with_metadata
 from app.storage import SessionLocal, create_all
+from app.storage.admission import (
+    clear_collection_paused,
+    get_cached_decision,
+    list_pending,
+    record_decision,
+    set_collection_paused,
+    settle_pending,
+    upsert_pending,
+)
 from app.storage.repos import ArticleRepo, SourceRepo, WeeklyAnalyticsRepo
 from app.storage.weekly import WeeklyStore, record_attempt, record_observation, register_source
 
@@ -48,6 +67,10 @@ class FetchSummary:  # pylint: disable=too-many-instance-attributes
     not_modified_sources: int = 0
     skipped_known_html_links: int = 0
     early_stop_hits: int = 0
+    semantic_rejected: int = 0
+    semantic_unresolved: int = 0
+    semantic_cache_hits: int = 0
+    screening_paused: int = 0
 
 
 @dataclass(frozen=True)
@@ -71,6 +94,377 @@ class SourceMetrics:  # pylint: disable=too-many-instance-attributes
     early_stop_hit: bool = False
     not_modified: bool = False
     coverage_complete: bool = True
+    acquisition_stopped: bool = False
+    semantic_rejected: int = 0
+    semantic_unresolved: int = 0
+    semantic_cache_hits: int = 0
+    screening_paused: bool = False
+    replay_items: int = 0
+
+
+@dataclass
+class AdmissionState:
+    enabled: bool = False
+    paused: bool = False
+    fresh_success: bool = False
+    cache_hits: int = 0
+    rejected: int = 0
+    unresolved: int = 0
+    observed: int = 0
+
+
+def _candidate_payload(
+    item: object, config: SourceConfig, canonical_url: str | None = None,
+) -> dict[str, object]:
+    published = getattr(item, "published_at", None)
+    evidence_at = getattr(item, "publication_evidence_at", None)
+    return {
+        "kind": "article",
+        "title": getattr(item, "title", None),
+        "url": str(getattr(item, "url", "")),
+        "canonical_url": canonical_url or getattr(item, "ingestion_canonical_url", None),
+        "summary": getattr(item, "summary", None),
+        "content": getattr(item, "content", None),
+        "published_at": published.isoformat() if published else None,
+        "publication_evidence_at": evidence_at.isoformat() if evidence_at else None,
+        "publication_date_kind": getattr(item, "publication_date_kind", "published"),
+        "page_eligibility_checked": bool(getattr(item, "page_eligibility_checked", False)),
+        "source_key": config.id,
+    }
+
+
+def _parse_dt(value: object) -> datetime | None:
+    if isinstance(value, str) and value:
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _article_from_candidate(candidate: dict[str, object], source_key: str) -> CoreArticle:
+    kind = str(candidate.get("publication_date_kind") or "published")
+    if kind not in {"published", "updated", "unknown"}:
+        kind = "published"
+    return CoreArticle(
+        source_key=source_key,
+        title=str(candidate.get("title") or ""),
+        url=str(candidate.get("url") or ""),
+        published_at=_parse_dt(candidate.get("published_at")),
+        summary=candidate.get("summary") if isinstance(candidate.get("summary"), str) else None,
+        content=candidate.get("content") if isinstance(candidate.get("content"), str) else None,
+        publication_evidence_at=_parse_dt(candidate.get("publication_evidence_at")),
+        publication_date_kind=cast(Any, kind),
+        page_eligibility_checked=bool(candidate.get("page_eligibility_checked", False)),
+        ingestion_canonical_url=(
+            candidate.get("canonical_url")
+            if isinstance(candidate.get("canonical_url"), str) else None
+        ),
+    )
+
+
+def _assessment_payload(assessment: JevAssessment) -> dict[str, object]:
+    return {
+        "relevance_score": assessment.relevance_score,
+        "category": assessment.category,
+        "category_confidence": assessment.category_confidence,
+        "admission_choice": assessment.admission_choice,
+        "admission_confidence": assessment.admission_confidence,
+    }
+
+
+def _jev_state(item: object) -> str:
+    return (
+        f"Title: {str(getattr(item, 'title', '') or '')[:1024]}\n"
+        f"Summary: {str(getattr(item, 'summary', '') or '')[:4000]}\n"
+        f"Content: {str(getattr(item, 'content', '') or '')[:16000]}"
+    )
+
+
+def _build_article_row(
+    *, item: object, config: SourceConfig, db_source_id: int, canonical: str,
+    canonical_hash: str, assessment: JevAssessment | None, admission_enabled: bool,
+) -> dict[str, object] | None:
+    if admission_enabled:
+        if assessment is None:
+            return None
+        relevance = assessment.relevance_score
+    else:
+        relevance = (
+            assessment.relevance_score if assessment is not None else ai_relevance_score(item)
+        )
+    freshness = freshness_score(getattr(item, "published_at", None))
+    rank = rank_score(
+        relevance=relevance,
+        freshness=freshness,
+        source_weight=config.source_weight,
+    )
+    row: dict[str, object] = {
+        "source_id": db_source_id,
+        "title": getattr(item, "title", None),
+        "url": str(getattr(item, "url", "")),
+        "url_canonical": canonical,
+        "url_canonical_hash": canonical_hash,
+        "published_at": getattr(item, "published_at", None) or datetime.now(UTC),
+        "summary": getattr(item, "summary", None),
+        "content": getattr(item, "content", None),
+        "ai_relevance_score": relevance,
+        "freshness_score": freshness,
+        "rank_score": rank,
+    }
+    if assessment is not None and assessment.category is not None:
+        row["category"] = assessment.category
+        row["category_confidence"] = assessment.category_confidence
+    return row
+
+
+# pylint: disable=too-many-return-statements,too-many-branches,too-many-statements
+def _screen_candidate(
+    *, item: object, config: SourceConfig, db_source_id: int, article_repo: ArticleRepo,
+    settings: Settings, relevance_scorer: JevRelevanceScorer | None,
+    admission_state: AdmissionState | None, canonical_hash: str, logger: Logger | None = None,
+    canonical_url: str | None = None,
+) -> tuple[str, JevAssessment | None]:
+    if admission_state is None or not admission_state.enabled:
+        assessment = relevance_scorer.classify(item) if relevance_scorer is not None else None
+        return ("accept", assessment)
+    admission_state.observed += 1
+    evidence = bounded_evidence(item)
+    ev_hash = evidence_hash(evidence)
+    key = admission_cache_key(
+        url_canonical_hash=canonical_hash,
+        evidence_hash=ev_hash,
+        model=settings.jev_model,
+        policy_version=settings.semantic_admission_policy_version,
+        prompt_version=settings.semantic_admission_prompt_version,
+    )
+    cached = get_cached_decision(article_repo.session, key)
+    if cached is not None and cached.provider_status == "ok" and cached.decision is not None:
+        if cached.decision == "accept":
+            assessment = _assessment_from_cached(cached)
+            if assessment is not None:
+                admission_state.cache_hits += 1
+                if logger:
+                    logger.info("semantic_cache_hit", {"decision": "accept"})
+                return ("accept", assessment)
+            if logger:
+                logger.error("semantic_cache_corrupt", {"decision": "accept"})
+        else:
+            admission_state.cache_hits += 1
+            if cached.decision == "reject":
+                admission_state.rejected += 1
+            else:
+                admission_state.unresolved += 1
+            if logger:
+                logger.info("semantic_cache_hit", {"decision": cached.decision})
+            return (cached.decision, None)
+    upsert_pending(
+        article_repo.session,
+        key=key,
+        url_canonical_hash=canonical_hash,
+        source_id=db_source_id,
+        payload=_candidate_payload(item, config, canonical_url),
+        evidence_hash=ev_hash,
+        policy_version=settings.semantic_admission_policy_version,
+        model=settings.jev_model,
+        force_pending=cached is not None and cached.decision == "accept",
+    )
+    if relevance_scorer is None:
+        admission_state.paused = True
+        if logger:
+            logger.error("semantic_paused", {"reason": "provider_missing"})
+        return ("paused", None)
+    state = _jev_state(item)
+    was_cached = state in relevance_scorer.cache
+    assessment = relevance_scorer.classify(item)
+    if assessment is None:
+        admission_state.paused = True
+        if logger:
+            logger.error("semantic_paused", {"reason": "provider_failed"})
+        return ("paused", None)
+    decision = decision_from_assessment(assessment)
+    if decision is None:
+        admission_state.paused = True
+        if logger:
+            logger.error("semantic_paused", {"reason": "invalid_assessment"})
+        return ("paused", None)
+    if not was_cached:
+        admission_state.fresh_success = True
+    record_decision(
+        article_repo.session,
+        key=key,
+        decision=decision.status,
+        reason=decision.reason,
+        provider_status="ok",
+        payload=_assessment_payload(assessment),
+    )
+    if decision.accepted:
+        return ("accept", assessment)
+    if decision.status == "reject":
+        admission_state.rejected += 1
+    else:
+        admission_state.unresolved += 1
+    if logger:
+        logger.info("semantic_decision", {"decision": decision.status, "reason": decision.reason})
+    return (decision.status, None)
+
+
+def _html_placeholder_key(settings: Settings, canonical_hash: str) -> str:
+    return cast(str, admission_cache_key(
+        url_canonical_hash=canonical_hash,
+        evidence_hash="",
+        model=settings.jev_model,
+        policy_version=settings.semantic_admission_policy_version,
+        prompt_version=settings.semantic_admission_prompt_version,
+    ))
+
+
+def _settle_placeholders(
+    session: Session, *, current_key: str, old_key: str | None = None,
+) -> None:
+    settle_pending(session, key=current_key)
+    if old_key and old_key != current_key:
+        settle_pending(session, key=old_key)
+
+
+def _clear_source_validators(source_repo: SourceRepo, db_source_id: int) -> None:
+    _source_repo_update_fetch_state(
+        source_repo,
+        source_id=db_source_id,
+        etag=None,
+        last_modified=None,
+        last_status_code=None,
+        last_checked_at=datetime.now(UTC),
+    )
+
+
+def _admission_snapshot(state: AdmissionState) -> tuple[int, int, int, int, bool]:
+    return (
+        state.cache_hits,
+        state.rejected,
+        state.unresolved,
+        state.observed,
+        state.fresh_success,
+    )
+
+
+def _restore_admission(
+    state: AdmissionState, snapshot: tuple[int, int, int, int, bool],
+) -> None:
+    state.cache_hits = snapshot[0]
+    state.rejected = snapshot[1]
+    state.unresolved = snapshot[2]
+    state.observed = snapshot[3]
+    state.fresh_success = snapshot[4]
+
+
+def _replay_pending_for_source(  # pylint: disable=too-many-branches
+    *, session: Session, config: SourceConfig, db_source_id: int,
+    article_repo: ArticleRepo, settings: Settings,
+    relevance_scorer: JevRelevanceScorer | None, admission_state: AdmissionState,
+    metrics: SourceMetrics,
+) -> int:
+    pending = list_pending(session, source_id=db_source_id, limit=50)
+    bodies: list[tuple[Any, CoreArticle]] = []
+    links: list[Any] = []
+    for entry in pending:
+        payload = json.loads(entry.payload)
+        candidate = payload.get("candidate")
+        if not isinstance(candidate, dict):
+            raise ValueError("Invalid stored admission candidate")
+        if candidate.get("kind") == "html_link":
+            links.append(entry)
+        elif candidate.get("kind") == "article":
+            bodies.append((entry, _article_from_candidate(candidate, config.id)))
+        else:
+            raise ValueError("Invalid stored admission candidate kind")
+
+    if bodies:
+        items = [item for _, item in bodies]
+        new, duplicates, skipped, _ = _process_fetched_source_items(
+            items=items, config=config, db_source_id=db_source_id,
+            article_repo=article_repo, settings=settings,
+            relevance_scorer=relevance_scorer, admission_state=admission_state,
+        )
+        metrics.fetched_items += len(items)
+        metrics.new_items += new
+        metrics.duplicate_items += duplicates
+        metrics.skipped_known_items += skipped
+        for entry, item in bodies:
+            current_key = admission_cache_key(
+                url_canonical_hash=entry.url_canonical_hash,
+                evidence_hash=evidence_hash(bounded_evidence(item)),
+                model=settings.jev_model,
+                policy_version=settings.semantic_admission_policy_version,
+                prompt_version=settings.semantic_admission_prompt_version,
+            )
+            current = get_cached_decision(session, current_key)
+            if _item_exclusion_reason(item) or article_repo.exists_by_canonical_hash(
+                entry.url_canonical_hash
+            ):
+                if entry.provider_status == "pending":
+                    settle_pending(session, key=entry.key)
+            elif current is not None and current_key != entry.key:
+                settle_pending(session, key=entry.key)
+
+    replayed = len(bodies)
+    if links and not admission_state.paused:
+        urls = [str(json.loads(entry.payload)["candidate"]["url"]) for entry in links]
+        fetched, new, duplicates, skipped, _ = _process_html_links_two_stage(
+            links=urls, config=config, db_source_id=db_source_id,
+            article_repo=article_repo, settings=settings,
+            relevance_scorer=relevance_scorer, admission_state=admission_state,
+        )
+        replayed += len(links)
+        metrics.fetched_items += fetched
+        metrics.new_items += new
+        metrics.duplicate_items += duplicates
+        metrics.skipped_known_items += skipped
+        metrics.acquisition_stopped = admission_state.paused
+        for entry in links:
+            current_key = _html_placeholder_key(settings, entry.url_canonical_hash)
+            current = get_cached_decision(session, current_key)
+            if current_key != entry.key and current is not None:
+                settle_pending(session, key=entry.key)
+    return replayed
+
+
+def _valid_cached_probability(value: object) -> bool:
+    return (
+        not isinstance(value, bool) and isinstance(value, (int, float))
+        and isfinite(value) and 0.0 <= value <= 1.0
+    )
+
+
+def _assessment_from_cached(cached: object) -> JevAssessment | None:
+    try:
+        payload = json.loads(getattr(cached, "payload", "") or "{}")
+        assessment = payload.get("assessment") if isinstance(payload, dict) else None
+        if not isinstance(assessment, dict):
+            return None
+        score = assessment.get("relevance_score")
+        if isinstance(score, bool) or not isinstance(score, (int, float)):
+            return None
+        value = float(score)
+        if not isfinite(value) or not 0.0 <= value <= 1.0:
+            return None
+        if assessment.get("admission_choice") != "accepted_ai_editorial":
+            return None
+        admission_confidence = assessment.get("admission_confidence")
+        if admission_confidence is not None and not _valid_cached_probability(admission_confidence):
+            return None
+        category = assessment.get("category")
+        confidence = assessment.get("category_confidence")
+        if (
+            not isinstance(category, str) or category not in CATEGORY_CRITERIA
+            or not _valid_cached_probability(confidence)
+        ):
+            category, confidence = None, None
+        return JevAssessment(
+            value, category, confidence, "accepted_ai_editorial", admission_confidence,
+        )
+    except (TypeError, ValueError):
+        return None
 
 
 def _coerce_html_link_fetch_result(result: object) -> HtmlLinkFetchResult:
@@ -113,6 +507,11 @@ def _log_source_metrics(
             "early_stop_hit": metrics.early_stop_hit,
             "not_modified": metrics.not_modified,
             "errors": metrics.errors,
+            "replay_items": metrics.replay_items,
+            "semantic_rejected": metrics.semantic_rejected,
+            "semantic_unresolved": metrics.semantic_unresolved,
+            "semantic_cache_hits": metrics.semantic_cache_hits,
+            "screening_paused": metrics.screening_paused,
         },
     )
 
@@ -513,6 +912,9 @@ def _process_html_links_two_stage(
     settings: Settings,
     relevance_scorer: JevRelevanceScorer | None = None,
     quality_flags: list[str] | None = None,
+    admission_state: AdmissionState | None = None,
+    placeholder_key: str | None = None,
+    placeholder_hash: str | None = None,
 ) -> tuple[int, int, int, int, bool]:
     new_count = 0
     duplicate_count = 0
@@ -523,6 +925,7 @@ def _process_html_links_two_stage(
     html_known_streak_stop = int(getattr(settings, "html_known_streak_stop", 0) or 0)
     html_max_links_per_source = getattr(settings, "html_max_links_per_source", None)
     batch_mode = bool(getattr(settings, "article_batch_upsert_enabled", False))
+    admission_enabled = admission_state is not None and admission_state.enabled
     exists_by_canonical_hash = getattr(article_repo, "exists_by_canonical_hash", None)
     exists_by_canonical_hash_fn = (
         exists_by_canonical_hash if callable(exists_by_canonical_hash) else None
@@ -538,11 +941,7 @@ def _process_html_links_two_stage(
         if len(capped_links) < len(links) and quality_flags is not None:
             quality_flags.append("truncated")
     canonical_by_link: list[tuple[str, str, str]] = [
-        (
-            str(link),
-            canonicalize_url(str(link)),
-            canonical_url_hash(str(link)),
-        )
+        (str(link), canonicalize_url(str(link)), canonical_url_hash(str(link)))
         for link in capped_links
     ]
     known_hashes: set[str] = set()
@@ -559,8 +958,31 @@ def _process_html_links_two_stage(
         ),
     )
 
+    if admission_enabled:
+        for link, _canonical, canonical_hash in canonical_by_link:
+            is_known = False
+            if existing_canonical_hashes_fn is not None:
+                is_known = canonical_hash in known_hashes
+            elif exists_by_canonical_hash_fn is not None:
+                is_known = exists_by_canonical_hash_fn(canonical_hash)
+            ph_key = _html_placeholder_key(settings, canonical_hash)
+            if is_known:
+                settle_pending(article_repo.session, key=ph_key)
+                continue
+            upsert_pending(
+                article_repo.session,
+                key=ph_key,
+                url_canonical_hash=canonical_hash,
+                source_id=db_source_id,
+                payload={"kind": "html_link", "url": link},
+                evidence_hash="",
+                policy_version=settings.semantic_admission_policy_version,
+                model=settings.jev_model,
+            )
+
     try:
         for link, canonical, canonical_hash in canonical_by_link:
+            ph_key = _html_placeholder_key(settings, canonical_hash) if admission_enabled else ""
             is_known = False
             if existing_canonical_hashes_fn is not None:
                 is_known = canonical_hash in known_hashes
@@ -569,6 +991,12 @@ def _process_html_links_two_stage(
             if is_known:
                 duplicate_count += 1
                 skipped_known_items += 1
+                if admission_enabled:
+                    _settle_placeholders(
+                        article_repo.session,
+                        current_key=ph_key,
+                        old_key=placeholder_key if placeholder_hash == canonical_hash else None,
+                    )
                 html_known_streak += 1
                 if 0 < html_known_streak_stop <= html_known_streak:
                     early_stop_hit = True
@@ -576,24 +1004,41 @@ def _process_html_links_two_stage(
                 continue
 
             html_known_streak = 0
+            exclusions: list[str] = []
+            fetch_options: dict[str, Any] = {}
+            if admission_enabled:
+                fetch_options["on_exclusion"] = exclusions.append
             try:
                 item = fetch_html_article(
                     source=config,
                     url=str(link),
                     timeout_seconds=settings.request_timeout_seconds,
                     fetcher=fetcher,
+                    **fetch_options,
                 )
             except Exception:
                 if quality_flags is not None:
                     quality_flags.append("article_failure")
                 continue
             if item is None:
+                if exclusions:
+                    _settle_placeholders(
+                        article_repo.session, current_key=ph_key,
+                        old_key=placeholder_key if placeholder_hash == canonical_hash else None,
+                    )
+                    continue
                 if quality_flags is not None:
                     quality_flags.append("parser_failure")
                 continue
             reason = _item_exclusion_reason(item)
             if reason:
                 log_exclusion(str(item.url), reason)
+                if admission_enabled:
+                    _settle_placeholders(
+                        article_repo.session,
+                        current_key=ph_key,
+                        old_key=placeholder_key if placeholder_hash == canonical_hash else None,
+                    )
                 continue
             fetched_articles += 1
             _record_weekly_observation(article_repo, db_source_id, item)
@@ -601,32 +1046,53 @@ def _process_html_links_two_stage(
                     and quality_flags is not None):
                 quality_flags.append("unknown_publication_date")
 
-            assessment = relevance_scorer.classify(item) if relevance_scorer is not None else None
-            relevance = assessment.relevance_score if assessment is not None else None
-            if relevance is None:
-                relevance = ai_relevance_score(item)
-            freshness = freshness_score(item.published_at)
-            rank = rank_score(
-                relevance=relevance,
-                freshness=freshness,
-                source_weight=config.source_weight,
+            assessment = None
+            if admission_enabled:
+                action, assessment = _screen_candidate(
+                    item=item,
+                    config=config,
+                    db_source_id=db_source_id,
+                    article_repo=article_repo,
+                    settings=settings,
+                    relevance_scorer=relevance_scorer,
+                    admission_state=admission_state,
+                    canonical_hash=canonical_hash,
+                    canonical_url=canonical,
+                )
+                if action == "paused":
+                    _settle_placeholders(
+                        article_repo.session, current_key=ph_key,
+                        old_key=placeholder_key if placeholder_hash == canonical_hash else None,
+                    )
+                    break
+                if action != "accept":
+                    _settle_placeholders(
+                        article_repo.session,
+                        current_key=ph_key,
+                        old_key=placeholder_key if placeholder_hash == canonical_hash else None,
+                    )
+                    continue
+                _settle_placeholders(
+                    article_repo.session,
+                    current_key=ph_key,
+                    old_key=placeholder_key if placeholder_hash == canonical_hash else None,
+                )
+            else:
+                assessment = (
+                    relevance_scorer.classify(item) if relevance_scorer is not None else None
+                )
+
+            row = _build_article_row(
+                item=item,
+                config=config,
+                db_source_id=db_source_id,
+                canonical=canonical,
+                canonical_hash=canonical_hash,
+                assessment=assessment,
+                admission_enabled=admission_enabled,
             )
-            row: dict[str, object] = {
-                "source_id": db_source_id,
-                "title": item.title,
-                "url": str(item.url),
-                "url_canonical": canonical,
-                "url_canonical_hash": canonical_hash,
-                "published_at": item.published_at or datetime.now(UTC),
-                "summary": item.summary,
-                "content": item.content,
-                "ai_relevance_score": relevance,
-                "freshness_score": freshness,
-                "rank_score": rank,
-            }
-            if assessment is not None and assessment.category is not None:
-                row["category"] = assessment.category
-                row["category_confidence"] = assessment.category_confidence
+            if row is None:
+                continue
             if batch_mode:
                 queued_rows.append(row)
             else:
@@ -697,6 +1163,7 @@ def _process_fetched_source_items(
     article_repo: ArticleRepo,
     settings: Settings,
     relevance_scorer: JevRelevanceScorer | None = None,
+    admission_state: AdmissionState | None = None,
 ) -> tuple[int, int, int, bool]:
     new_count = 0
     duplicate_count = 0
@@ -705,14 +1172,17 @@ def _process_fetched_source_items(
     rss_known_streak = 0
     rss_known_streak_stop = int(getattr(settings, "rss_known_streak_stop", 0) or 0)
     batch_mode = bool(getattr(settings, "article_batch_upsert_enabled", False))
+    admission_enabled = admission_state is not None and admission_state.enabled
     exists_by_canonical_hash = getattr(article_repo, "exists_by_canonical_hash", None)
     exists_by_canonical_hash_fn = (
         exists_by_canonical_hash if callable(exists_by_canonical_hash) else None
     )
     use_rss_early_stop = (
-        config.type == "rss"
-        and rss_known_streak_stop > 0
+        config.type == "rss" and rss_known_streak_stop > 0
         and exists_by_canonical_hash_fn is not None
+    )
+    use_known_skip = exists_by_canonical_hash_fn is not None and (
+        admission_enabled or use_rss_early_stop
     )
     queued_rows_by_hash: dict[str, dict[str, object]] = {}
     accepted_items = []
@@ -724,56 +1194,86 @@ def _process_fetched_source_items(
             accepted_items.append(item)
     items = accepted_items
 
-    # The RSS feed has already been parsed in full. Preserve observations even
-    # when legacy ingestion later stops at a streak of known URLs.
     for item in items:
         _record_weekly_observation(article_repo, db_source_id, item)
 
+    if admission_enabled:
+        for item in items:
+            identity_url = getattr(item, "ingestion_canonical_url", None) or str(item.url)
+            canonical_hash = canonical_url_hash(identity_url)
+            if use_known_skip and exists_by_canonical_hash_fn is not None:
+                if exists_by_canonical_hash_fn(canonical_hash):
+                    continue
+            evidence = bounded_evidence(item)
+            ev_hash = evidence_hash(evidence)
+            key = admission_cache_key(
+                url_canonical_hash=canonical_hash,
+                evidence_hash=ev_hash,
+                model=settings.jev_model,
+                policy_version=settings.semantic_admission_policy_version,
+                prompt_version=settings.semantic_admission_prompt_version,
+            )
+            upsert_pending(
+                article_repo.session,
+                key=key,
+                url_canonical_hash=canonical_hash,
+                source_id=db_source_id,
+                payload=_candidate_payload(item, config),
+                evidence_hash=ev_hash,
+                policy_version=settings.semantic_admission_policy_version,
+                model=settings.jev_model,
+            )
+
     for item in items:
-        canonical = canonicalize_url(str(item.url))
-        canonical_hash = canonical_url_hash(str(item.url))
-        if (
-            use_rss_early_stop
-            and exists_by_canonical_hash_fn is not None
-            and exists_by_canonical_hash_fn(canonical_hash)
-        ):
+        identity_url = getattr(item, "ingestion_canonical_url", None) or str(item.url)
+        canonical = canonicalize_url(identity_url)
+        canonical_hash = canonical_url_hash(identity_url)
+        is_known = False
+        if use_known_skip and exists_by_canonical_hash_fn is not None:
+            is_known = exists_by_canonical_hash_fn(canonical_hash)
+        if is_known:
             duplicate_count += 1
             skipped_known_items += 1
-            rss_known_streak += 1
-            if rss_known_streak >= rss_known_streak_stop:
-                early_stop_hit = True
-                break
+            if use_rss_early_stop:
+                rss_known_streak += 1
+                if rss_known_streak >= rss_known_streak_stop:
+                    early_stop_hit = True
+                    break
             continue
-
         if use_rss_early_stop:
             rss_known_streak = 0
 
-        assessment = relevance_scorer.classify(item) if relevance_scorer is not None else None
-        relevance = assessment.relevance_score if assessment is not None else None
-        if relevance is None:
-            relevance = ai_relevance_score(item)
-        freshness = freshness_score(item.published_at)
-        rank = rank_score(
-            relevance=relevance,
-            freshness=freshness,
-            source_weight=config.source_weight,
+        assessment = None
+        if admission_enabled:
+            action, assessment = _screen_candidate(
+                item=item,
+                config=config,
+                db_source_id=db_source_id,
+                article_repo=article_repo,
+                settings=settings,
+                relevance_scorer=relevance_scorer,
+                admission_state=admission_state,
+                canonical_hash=canonical_hash,
+                canonical_url=canonical,
+            )
+            if action == "paused":
+                break
+            if action != "accept":
+                continue
+        else:
+            assessment = relevance_scorer.classify(item) if relevance_scorer is not None else None
+
+        row = _build_article_row(
+            item=item,
+            config=config,
+            db_source_id=db_source_id,
+            canonical=canonical,
+            canonical_hash=canonical_hash,
+            assessment=assessment,
+            admission_enabled=admission_enabled,
         )
-        row: dict[str, object] = {
-            "source_id": db_source_id,
-            "title": item.title,
-            "url": str(item.url),
-            "url_canonical": canonical,
-            "url_canonical_hash": canonical_hash,
-            "published_at": item.published_at or datetime.now(UTC),
-            "summary": item.summary,
-            "content": item.content,
-            "ai_relevance_score": relevance,
-            "freshness_score": freshness,
-            "rank_score": rank,
-        }
-        if assessment is not None and assessment.category is not None:
-            row["category"] = assessment.category
-            row["category_confidence"] = assessment.category_confidence
+        if row is None:
+            continue
         if batch_mode:
             existing_row = queued_rows_by_hash.get(canonical_hash)
             if existing_row is not None:
@@ -815,6 +1315,7 @@ def _process_source_result(
     settings: Settings,
     metrics: SourceMetrics,
     relevance_scorer: JevRelevanceScorer | None = None,
+    admission_state: AdmissionState | None = None,
 ) -> None:
     metrics.coverage_complete = bool(getattr(fetch_result, "coverage_complete", True))
     if config.type in {"rss", "html"}:
@@ -843,7 +1344,9 @@ def _process_source_result(
             settings=settings,
             relevance_scorer=relevance_scorer,
             quality_flags=quality_flags,
+            admission_state=admission_state,
         )
+        metrics.acquisition_stopped = bool(admission_state and admission_state.paused)
         metrics.coverage_complete = metrics.coverage_complete and not quality_flags
         return
 
@@ -864,6 +1367,7 @@ def _process_source_result(
         article_repo=article_repo,
         settings=settings,
         relevance_scorer=relevance_scorer,
+        admission_state=admission_state,
     )
 
 
@@ -886,6 +1390,9 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
         and settings.rss_full_text_concurrency_limit > 0
         else None
     )
+    admission_state = AdmissionState(
+        enabled=bool(getattr(settings, "semantic_admission_enabled", False))
+    )
     with SessionLocal() as session, jev_relevance_scorer(settings, logger) as relevance_scorer:
         source_repo = SourceRepo(session)
         article_repo = ArticleRepo(session)
@@ -905,13 +1412,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                 source_id=db_source.id,
             )
             enabled_sources.append(
-                (
-                    idx,
-                    config,
-                    db_source.id,
-                    fetch_state,
-                    bool(supports_fetch_state),
-                )
+                (idx, config, db_source.id, fetch_state, bool(supports_fetch_state))
             )
 
         list_enabled_sources = getattr(source_repo, "list_enabled_sources", None)
@@ -929,55 +1430,140 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                     source_id=source_id,
                 )
                 enabled_sources.append(
-                    (
-                        next_index,
-                        config,
-                        source_id,
-                        fetch_state,
-                        bool(supports_fetch_state),
-                    )
+                    (next_index, config, source_id, fetch_state, bool(supports_fetch_state))
                 )
                 next_index += 1
 
         if isinstance(session, Session):
             for _, config, source_id, _, _ in enabled_sources:
                 weekly_versions[source_id] = register_source(
-                    session, source_id, config, settings, datetime.now(UTC))
+                    session, source_id, config, settings, datetime.now(UTC)
+                )
 
-        fetched_by_index, fetch_errors = _collect_fetched_items(
-            enabled_sources=enabled_sources,
-            settings=settings,
-            logger=logger,
-            run_id=run_id,
-            full_text_semaphore=full_text_semaphore,
-        )
-        error_count += fetch_errors
+        if admission_state.enabled and relevance_scorer is None:
+            set_collection_paused(session)
+            session.commit()
+            logger.error(
+                "screening_unavailable",
+                {"run_id": run_id, "reason": "provider_missing_or_disabled"},
+            )
+            return FetchSummary(
+                run_id=run_id,
+                source_count=len(enabled_sources),
+                fetched=0,
+                new=0,
+                duplicates=0,
+                errors=0,
+                screening_paused=1,
+            )
 
-        for idx, config, db_source_id, _fetch_state, _enable_rss_fetch_state in enabled_sources:
-            fetch_result = fetched_by_index.get(idx)
-            if fetch_result is None:
-                if isinstance(session, Session):
-                    record_attempt(session, run_id=run_id, source_id=db_source_id,
-                                   version_id=weekly_versions[db_source_id],
-                                   interval=config.fetch_interval_minutes, outcome="fetch_failure",
-                                   complete=True, now=datetime.now(UTC))
-                continue
+        fetched_by_index: dict[int, object] = {}
+        if not admission_state.enabled:
+            fetched_by_index, fetch_errors = _collect_fetched_items(
+                enabled_sources=enabled_sources,
+                settings=settings,
+                logger=logger,
+                run_id=run_id,
+                full_text_semaphore=full_text_semaphore,
+            )
+            error_count += fetch_errors
 
+        run_semantic_rejected = 0
+        run_semantic_unresolved = 0
+        run_semantic_cache_hits = 0
+        for idx, config, db_source_id, fetch_state, enable_fetch_state in enabled_sources:
+            if admission_state.paused:
+                break
             source_metrics = SourceMetrics(source_id=config.id, source_type=config.type)
+            snapshot = _admission_snapshot(admission_state)
+            fetch_result: object | None = None
+            fetch_failed = False
             try:
-                # Keep articles and cache validators atomic so failed sources can be retried.
-                with session.begin_nested():
-                    _process_source_result(
-                        fetch_result=fetch_result,
-                        config=config,
-                        db_source_id=db_source_id,
-                        source_repo=source_repo,
-                        article_repo=article_repo,
-                        settings=settings,
-                        metrics=source_metrics,
-                        relevance_scorer=relevance_scorer,
-                    )
+                if admission_state.enabled:
+                    with session.begin_nested():
+                        replay_count = _replay_pending_for_source(
+                            session=session,
+                            config=config,
+                            db_source_id=db_source_id,
+                            article_repo=article_repo,
+                            settings=settings,
+                            relevance_scorer=relevance_scorer,
+                            admission_state=admission_state,
+                            metrics=source_metrics,
+                        )
+                        source_metrics.replay_items += replay_count
+                        if not admission_state.paused:
+                            one_source = [
+                                (idx, config, db_source_id, fetch_state, enable_fetch_state)
+                            ]
+                            fetched, errors = _collect_fetched_items(
+                                enabled_sources=one_source,
+                                settings=settings,
+                                logger=logger,
+                                run_id=run_id,
+                                full_text_semaphore=full_text_semaphore,
+                            )
+                            error_count += errors
+                            fetch_result = fetched.get(idx)
+                            fetch_failed = fetch_result is None
+                            if fetch_result is not None:
+                                fresh_metrics = SourceMetrics(
+                                    source_id=config.id, source_type=config.type,
+                                )
+                                _process_source_result(
+                                    fetch_result=fetch_result,
+                                    config=config,
+                                    db_source_id=db_source_id,
+                                    source_repo=source_repo,
+                                    article_repo=article_repo,
+                                    settings=settings,
+                                    metrics=fresh_metrics,
+                                    relevance_scorer=relevance_scorer,
+                                    admission_state=admission_state,
+                                )
+                                source_metrics.fetched_items += fresh_metrics.fetched_items
+                                source_metrics.new_items += fresh_metrics.new_items
+                                source_metrics.duplicate_items += fresh_metrics.duplicate_items
+                                source_metrics.skipped_known_items += (
+                                    fresh_metrics.skipped_known_items
+                                )
+                                source_metrics.early_stop_hit = fresh_metrics.early_stop_hit
+                                source_metrics.not_modified = fresh_metrics.not_modified
+                                source_metrics.acquisition_stopped = (
+                                    source_metrics.acquisition_stopped
+                                    or fresh_metrics.acquisition_stopped
+                                )
+                                source_metrics.coverage_complete = (
+                                    source_metrics.coverage_complete
+                                    and fresh_metrics.coverage_complete
+                                )
+                        if admission_state.paused:
+                            _clear_source_validators(source_repo, db_source_id)
+                else:
+                    fetch_result = fetched_by_index.get(idx)
+                    if fetch_result is None:
+                        if isinstance(session, Session):
+                            record_attempt(
+                                session, run_id=run_id, source_id=db_source_id,
+                                version_id=weekly_versions[db_source_id],
+                                interval=config.fetch_interval_minutes,
+                                outcome="fetch_failure", complete=True, now=datetime.now(UTC),
+                            )
+                        continue
+                    with session.begin_nested():
+                        _process_source_result(
+                            fetch_result=fetch_result,
+                            config=config,
+                            db_source_id=db_source_id,
+                            source_repo=source_repo,
+                            article_repo=article_repo,
+                            settings=settings,
+                            metrics=source_metrics,
+                            relevance_scorer=relevance_scorer,
+                            admission_state=admission_state,
+                        )
             except Exception as exc:
+                _restore_admission(admission_state, snapshot)
                 source_metrics.new_items = 0
                 source_metrics.duplicate_items = 0
                 source_metrics.skipped_known_items = 0
@@ -998,18 +1584,44 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                     },
                 )
 
+            if admission_state.paused:
+                set_collection_paused(session)
+            source_metrics.semantic_rejected = admission_state.rejected - snapshot[1]
+            source_metrics.semantic_unresolved = admission_state.unresolved - snapshot[2]
+            source_metrics.semantic_cache_hits = admission_state.cache_hits - snapshot[0]
+            source_metrics.screening_paused = admission_state.paused
+            run_semantic_rejected += source_metrics.semantic_rejected
+            run_semantic_unresolved += source_metrics.semantic_unresolved
+            run_semantic_cache_hits += source_metrics.semantic_cache_hits
             fetched_count += source_metrics.fetched_items
             if isinstance(session, Session):
-                outcome = ("persist_failure" if source_metrics.errors else (
-                    "parser_failure" if not source_metrics.coverage_complete else (
-                    "not_modified" if source_metrics.not_modified else (
-                        "success" if source_metrics.fetched_items else "empty"))))
-                record_attempt(session, run_id=run_id, source_id=db_source_id,
-                               version_id=weekly_versions[db_source_id],
-                               interval=config.fetch_interval_minutes, outcome=outcome,
-                               complete=(source_metrics.coverage_complete and not (
-                                   config.type == "html" and source_metrics.early_stop_hit)),
-                               now=datetime.now(UTC))
+                outcome = (
+                    "fetch_failure" if fetch_failed else "persist_failure"
+                    if source_metrics.errors
+                    else (
+                        "parser_failure"
+                        if not source_metrics.coverage_complete
+                        else (
+                            "not_modified"
+                            if source_metrics.not_modified
+                            else ("success" if source_metrics.fetched_items else "empty")
+                        )
+                    )
+                )
+                record_attempt(
+                    session,
+                    run_id=run_id,
+                    source_id=db_source_id,
+                    version_id=weekly_versions[db_source_id],
+                    interval=config.fetch_interval_minutes,
+                    outcome=outcome,
+                    complete=(
+                        source_metrics.coverage_complete
+                        and not source_metrics.acquisition_stopped
+                        and not (config.type == "html" and source_metrics.early_stop_hit)
+                    ),
+                    now=datetime.now(UTC),
+                )
             new_count += source_metrics.new_items
             duplicate_count += source_metrics.duplicate_items
             optimization_not_modified_sources += int(source_metrics.not_modified)
@@ -1022,9 +1634,14 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                 metrics=source_metrics,
                 enabled=bool(getattr(settings, "fetch_emit_source_metrics", True)),
             )
+            if admission_state.paused:
+                break
 
-        _publish_weekly_analytics_if_due(session=session, logger=logger, run_id=run_id,
-                                       settings=settings)
+        if not admission_state.paused and admission_state.fresh_success:
+            clear_collection_paused(session)
+        _publish_weekly_analytics_if_due(
+            session=session, logger=logger, run_id=run_id, settings=settings
+        )
         session.commit()
 
     logger.info(
@@ -1050,4 +1667,8 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
         not_modified_sources=optimization_not_modified_sources,
         skipped_known_html_links=optimization_skipped_known_html_links,
         early_stop_hits=optimization_early_stop_hits,
+        semantic_rejected=run_semantic_rejected,
+        semantic_unresolved=run_semantic_unresolved,
+        semantic_cache_hits=run_semantic_cache_hits,
+        screening_paused=int(admission_state.paused),
     )
