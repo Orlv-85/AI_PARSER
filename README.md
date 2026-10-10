@@ -304,12 +304,12 @@ title/summary/content text is sent. The key is masked in settings and is never
 included in fallback logs.
 
 Production Compose passes the Jev key and settings from the server's private
-`.env` into the app container. Set `JEV_API_KEY` and `AINEWS_JEV_ENABLED=true`
-on the server and recreate the app container to enable classification for future
-RSS/HTML ingestion. Tag deployments preserve these server-side settings.
-To enable article admission as well, set `AINEWS_SEMANTIC_ADMISSION_ENABLED=true`
-in that server `.env` after applying the migration, then recreate the app
-container. Compose defaults this flag to `false`. It also forwards
+`.env` into the app container. Configure `JEV_API_KEY` privately on the server.
+Both deploy workflows enforce `AINEWS_JEV_ENABLED=true` and
+`AINEWS_SEMANTIC_ADMISSION_ENABLED=true`; production Compose defaults both to true.
+Missing keys or screening outages pause collection without keyword admission.
+The deployment applies migrations before starting the app. Local application
+settings still default to disabled. Compose also forwards
 `AINEWS_SEMANTIC_ADMISSION_POLICY_VERSION` and
 `AINEWS_SEMANTIC_ADMISSION_PROMPT_VERSION`; their defaults match `Settings`.
 Change the relevant version when changing admission policy or prompt.
@@ -554,13 +554,13 @@ ai-news prune --older-than-days 100 --dry-run
 
 ## Weekly attention analytics v2
 
-Production Compose and both deploy workflows enable v2 by default
-(`AINEWS_WEEKLY_V2_ENABLED=true`). Deploy workflows replace the previous server value
-and pass the flag to the app container, including web, ingestion and weekly commands.
-Set the GitHub repository variable `AINEWS_WEEKLY_V2_ENABLED=false` to disable v2 on
-subsequent deploys; direct Compose deployments can override it in `.env`. Local
-application settings still default to false. Enabling the flag preserves the Monday
-worker schedule and does not launch a backfill. Runtime quality gates still suppress
+Both deploy workflows enforce `AINEWS_WEEKLY_V2_ENABLED=false`, and production
+Compose defaults it to false. Deployments remove the managed weekly cron with
+`AINEWS_WEEKLY_CRON_ENABLED=0`; the deploy script also defaults it to zero.
+Repository variables cannot silently re-enable weekly during these deployments.
+Local application settings still default to false. Any future reactivation must
+explicitly change both the runtime flag and scheduling policy. It does not launch
+a backfill. Runtime quality gates still suppress
 confirmed labels when comparable coverage or classification is insufficient. Its arithmetic measures
 publisher-balanced news attention, using complete observations rather than ranking.
 The API keeps its existing fields and adds metrics, evidence, quality reasons and

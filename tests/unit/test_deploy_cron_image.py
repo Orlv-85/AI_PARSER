@@ -32,7 +32,11 @@ def test_deploy_updates_cron_to_use_the_deployed_image(tmp_path, legacy_containe
     binaries = tmp_path / "bin"
     binaries.mkdir()
     cron_store = tmp_path / "crontab"
-    cron_store.write_text("0 0 * * * echo keep-existing-job\n", encoding="utf-8")
+    cron_store.write_text(
+        "0 0 * * * echo keep-existing-job\n"
+        "# BEGIN AI_NEWS_WEEKLY_ANALYTICS\n"
+        "15 2 * * 1 /old/scripts/run_weekly_analytics_job.sh\n"
+        "# END AI_NEWS_WEEKLY_ANALYTICS\n", encoding="utf-8")
     commands = {
         "git": '#!/bin/sh\nif [ "$1" = rev-parse ]; then echo test-commit; fi\n',
         "docker": (
@@ -74,6 +78,8 @@ def test_deploy_updates_cron_to_use_the_deployed_image(tmp_path, legacy_containe
         cron = cron_store.read_text(encoding="utf-8")
         assert cron.count("# BEGIN AI_NEWS_AUTO_UPDATE") == 1
         assert "echo keep-existing-job" in cron
+        assert "run_weekly_analytics_job.sh" not in cron
+        assert "# BEGIN AI_NEWS_WEEKLY_ANALYTICS" not in cron
         fetch_line = next(line for line in cron.splitlines() if "ai-news fetch --once" in line)
         command = fetch_line.split(" ", 5)[5]
         subprocess.run(["sh", "-c", command], env={**env, "APP_IMAGE": "stale:latest"}, check=True)
