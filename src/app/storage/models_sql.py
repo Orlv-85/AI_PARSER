@@ -136,6 +136,8 @@ class Article(Base):
     ai_relevance_score: Mapped[float] = mapped_column(Float, default=0.0)
     freshness_score: Mapped[float] = mapped_column(Float, default=0.0)
     rank_score: Mapped[float] = mapped_column(Float, default=0.0, index=True)
+    category: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    category_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     source: Mapped[Source | None] = relationship(back_populates="articles")
     aliases: Mapped[list[ArticleAlias]] = relationship(back_populates="article")

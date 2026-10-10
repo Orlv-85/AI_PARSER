@@ -8,6 +8,7 @@ from typing import Any, cast
 from app.config.settings import Settings
 from app.config.sources import SourceConfig, load_sources
 from app.core.canonicalize import canonical_url_hash, canonicalize_url
+from app.core.jev import JevRelevanceScorer, jev_relevance_scorer
 from app.core.scoring import ai_relevance_score, freshness_score, rank_score
 from app.ingest.fetcher import Fetcher
 from app.ingest.html import (
@@ -494,6 +495,7 @@ def _process_html_links_two_stage(
     db_source_id: int,
     article_repo: ArticleRepo,
     settings: Settings,
+    relevance_scorer: JevRelevanceScorer | None = None,
 ) -> tuple[int, int, int, int, bool]:
     new_count = 0
     duplicate_count = 0
@@ -567,7 +569,10 @@ def _process_html_links_two_stage(
                 continue
             fetched_articles += 1
 
-            relevance = ai_relevance_score(item)
+            assessment = relevance_scorer.classify(item) if relevance_scorer is not None else None
+            relevance = assessment.relevance_score if assessment is not None else None
+            if relevance is None:
+                relevance = ai_relevance_score(item)
             freshness = freshness_score(item.published_at)
             rank = rank_score(
                 relevance=relevance,
@@ -587,6 +592,9 @@ def _process_html_links_two_stage(
                 "freshness_score": freshness,
                 "rank_score": rank,
             }
+            if assessment is not None and assessment.category is not None:
+                row["category"] = assessment.category
+                row["category_confidence"] = assessment.category_confidence
             if batch_mode:
                 queued_rows.append(row)
             else:
@@ -641,6 +649,7 @@ def _process_fetched_source_items(
     db_source_id: int,
     article_repo: ArticleRepo,
     settings: Settings,
+    relevance_scorer: JevRelevanceScorer | None = None,
 ) -> tuple[int, int, int, bool]:
     new_count = 0
     duplicate_count = 0
@@ -679,7 +688,10 @@ def _process_fetched_source_items(
         if use_rss_early_stop:
             rss_known_streak = 0
 
-        relevance = ai_relevance_score(item)
+        assessment = relevance_scorer.classify(item) if relevance_scorer is not None else None
+        relevance = assessment.relevance_score if assessment is not None else None
+        if relevance is None:
+            relevance = ai_relevance_score(item)
         freshness = freshness_score(item.published_at)
         rank = rank_score(
             relevance=relevance,
@@ -699,12 +711,18 @@ def _process_fetched_source_items(
             "freshness_score": freshness,
             "rank_score": rank,
         }
+        if assessment is not None and assessment.category is not None:
+            row["category"] = assessment.category
+            row["category_confidence"] = assessment.category_confidence
         if batch_mode:
             existing_row = queued_rows_by_hash.get(canonical_hash)
             if existing_row is not None:
                 existing_row["ai_relevance_score"] = row["ai_relevance_score"]
                 existing_row["freshness_score"] = row["freshness_score"]
                 existing_row["rank_score"] = row["rank_score"]
+                if row.get("category") is not None:
+                    existing_row["category"] = row["category"]
+                    existing_row["category_confidence"] = row["category_confidence"]
                 duplicate_count += 1
                 continue
             queued_rows_by_hash[canonical_hash] = row
@@ -736,6 +754,7 @@ def _process_source_result(
     article_repo: ArticleRepo,
     settings: Settings,
     metrics: SourceMetrics,
+    relevance_scorer: JevRelevanceScorer | None = None,
 ) -> None:
     if config.type in {"rss", "html"}:
         _persist_fetch_state_if_present(
@@ -760,6 +779,7 @@ def _process_source_result(
             db_source_id=db_source_id,
             article_repo=article_repo,
             settings=settings,
+            relevance_scorer=relevance_scorer,
         )
         return
 
@@ -776,6 +796,7 @@ def _process_source_result(
         db_source_id=db_source_id,
         article_repo=article_repo,
         settings=settings,
+        relevance_scorer=relevance_scorer,
     )
 
 
@@ -798,7 +819,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
         and settings.rss_full_text_concurrency_limit > 0
         else None
     )
-    with SessionLocal() as session:
+    with SessionLocal() as session, jev_relevance_scorer(settings, logger) as relevance_scorer:
         source_repo = SourceRepo(session)
         article_repo = ArticleRepo(session)
         enabled_sources: list[
@@ -876,6 +897,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                         article_repo=article_repo,
                         settings=settings,
                         metrics=source_metrics,
+                        relevance_scorer=relevance_scorer,
                     )
             except Exception as exc:
                 source_metrics.new_items = 0

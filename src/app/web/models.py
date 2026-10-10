@@ -40,6 +40,8 @@ class NewsItem(BaseModel):
     source_id: int | None = None
     source_key: str | None = None
     source_name: str | None = None
+    category: str | None = None
+    category_confidence: float | None = None
 
 
 class NewsArticleDetail(BaseModel):
@@ -67,6 +69,9 @@ class DigestLinkFeedItem(BaseModel):
     source_name: str | None = None
     summary: str | None = None
     content: str | None = None
+    category: str | None = None
+    category_confidence: float | None = None
+    rank_score: float | None = None
 
 
 class NewsDigestItemPayload(BaseModel):

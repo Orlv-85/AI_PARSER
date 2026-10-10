@@ -4,7 +4,7 @@ import re
 from datetime import UTC, date, datetime, time, timedelta
 from html import escape, unescape
 from pathlib import Path
-from typing import SupportsIndex, SupportsInt, cast
+from typing import Any, SupportsIndex, SupportsInt, cast
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi import Path as FastAPIPath
@@ -16,6 +16,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import get_settings
+from app.core.categories import CATEGORY_CRITERIA
 from app.core.source_onboarding import (
     import_source_candidates,
     review_candidate_overlaps,
@@ -83,6 +84,16 @@ _OPTIONAL_WEEKLY_ANALYTICS_DATE_QUERY = Query(default=None, alias="date")
 
 def _render_index() -> str:
     return _TEMPLATE.read_text(encoding="utf-8")
+
+
+def _article_category_metadata(article: object) -> dict[str, Any]:
+    category = getattr(article, "category", None)
+    if not isinstance(category, str) or category not in CATEGORY_CRITERIA:
+        return {}
+    return {
+        "category": category,
+        "category_confidence": getattr(article, "category_confidence", None),
+    }
 
 
 def _render_digest(*, report_date: date, digest: NewsDigestReport | None) -> str:
@@ -528,7 +539,9 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
     def get_update_status() -> UpdateStatus:
         return update_service.current_status()
 
-    @api.get("/api/news", response_model=list[NewsItem])
+    @api.get(
+        "/api/news", response_model=list[NewsItem], response_model_exclude_unset=True,
+    )
     def list_news(
         *,
         hours: int = Query(24, ge=1, le=720),
@@ -536,7 +549,8 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
         min_ai_relevance: float = Query(0.2, ge=0.0, le=1.0),
         query: str | None = None,
         days: int = Query(7, ge=1, le=365),
-        sort: str = Query("rank", pattern="^(rank|published)$"),
+        sort: str = Query("rank", pattern="^(rank|published|category)$"),
+        category: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
     ) -> list[NewsItem]:
@@ -557,6 +571,8 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
                 if has_date_range:
                     list_kwargs["date_from"] = date_from
                     list_kwargs["date_to"] = date_to
+                if category is not None:
+                    list_kwargs["category"] = category
                 rows = repo.list_for_view(**list_kwargs)
         except SQLAlchemyError as exc:
             raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
@@ -570,6 +586,7 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
                 source_id=article.source_id,
                 source_key=source_key,
                 source_name=source_name,
+                **_article_category_metadata(article),
             )
             for article, source_key, source_name in rows
         ]
@@ -582,7 +599,8 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
         min_ai_relevance: float = Query(0.2, ge=0.0, le=1.0),
         query: str | None = None,
         days: int = Query(7, ge=1, le=365),
-        sort: str = Query("rank", pattern="^(rank|published)$"),
+        sort: str = Query("rank", pattern="^(rank|published|category)$"),
+        category: str | None = None,
         include_content: bool = False,
         date_from: date | None = None,
         date_to: date | None = None,
@@ -605,6 +623,8 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
                 if has_date_range:
                     list_kwargs["date_from"] = date_from
                     list_kwargs["date_to"] = date_to
+                if category is not None:
+                    list_kwargs["category"] = category
                 rows = repo.list_for_view(**list_kwargs)
         except SQLAlchemyError as exc:
             raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
@@ -625,6 +645,7 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
                 item["summary"] = article.summary
                 item["content"] = article.content
                 item["url"] = article.url
+            item.update(_article_category_metadata(article))
             payload.append(item)
 
         filename = datetime.now(UTC).strftime("news-export-%Y%m%dT%H%M%SZ.json")
@@ -674,6 +695,12 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
                 source_id=article.source_id,
                 source_key=source_key,
                 source_name=source_name,
+                **_article_category_metadata(article),
+                **(
+                    {"rank_score": article.rank_score}
+                    if include_content and hasattr(article, "rank_score")
+                    else {}
+                ),
                 **(
                     {
                         "summary": article.summary,

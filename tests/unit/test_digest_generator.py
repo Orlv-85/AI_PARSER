@@ -17,6 +17,27 @@ def _load_bridge_module():
     return module
 
 
+def test_digest_uses_stored_category_and_ranks_inside_each_group() -> None:
+    from app.core.categories import CATEGORY_ORDER  # pylint: disable=import-outside-toplevel
+
+    bridge = _load_bridge_module()
+    assert bridge._CATEGORY_ORDER == CATEGORY_ORDER  # pylint: disable=protected-access
+    items = [
+        {"title": "Agent SDK release", "url": "https://example.com/low",
+         "category": "AI Coding", "category_confidence": 0.95, "rank_score": 0.3},
+        {"title": "Agent SDK release", "url": "https://example.com/high",
+         "category": "AI Coding", "category_confidence": 0.99, "rank_score": 0.9},
+        {"title": "Prompt injection defense", "url": "https://example.com/security",
+         "category": "Invented", "rank_score": 0.8},
+    ]
+    payload = bridge.build_categorized_digest_payload(items=items, report_date="2026-10-10")
+    assert [group["title"] for group in payload["groups"]] == ["AI Coding", "Security"]
+    assert [item["url"] for item in payload["groups"][0]["items"]] == [
+        "https://example.com/high", "https://example.com/low",
+    ]
+    assert payload["groups"][1]["items"][0]["url"] == "https://example.com/security"
+
+
 def test_normalize_digest_keeps_valid_groups_and_items() -> None:
     bridge = _load_bridge_module()
 

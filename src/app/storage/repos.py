@@ -7,12 +7,13 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlsplit
 
-from sqlalchemy import Select, delete, desc, func, select
+from sqlalchemy import Select, case, delete, desc, func, select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session, selectinload
 
 from app.config.sources import SourceConfig
+from app.core.categories import CATEGORY_ORDER
 from app.storage.models_sql import (
     Article,
     ArticleAlias,
@@ -347,9 +348,14 @@ class ArticleRepo:
                 existing_row["ai_relevance_score"] = row["ai_relevance_score"]
                 existing_row["freshness_score"] = row["freshness_score"]
                 existing_row["rank_score"] = row["rank_score"]
+                if row.get("category") is not None:
+                    existing_row["category"] = row["category"]
+                    existing_row["category_confidence"] = row.get("category_confidence")
                 continue
             normalized_by_hash[canonical_hash] = dict(row)
             normalized_by_hash[canonical_hash]["title"] = str(row["title"])[:self._TITLE_MAX_LEN]
+            normalized_by_hash[canonical_hash].setdefault("category", None)
+            normalized_by_hash[canonical_hash].setdefault("category_confidence", None)
 
         normalized_rows = list(normalized_by_hash.values())
         canonical_hashes = list(normalized_by_hash)
@@ -371,6 +377,11 @@ class ArticleRepo:
                     "ai_relevance_score": excluded.ai_relevance_score,
                     "freshness_score": excluded.freshness_score,
                     "rank_score": excluded.rank_score,
+                    "category": func.coalesce(excluded.category, Article.category),
+                    "category_confidence": case(
+                        (excluded.category.is_not(None), excluded.category_confidence),
+                        else_=Article.category_confidence,
+                    ),
                 },
             )
             self.session.execute(stmt)
@@ -402,6 +413,8 @@ class ArticleRepo:
         ai_relevance_score: float = 0.0,
         freshness_score: float = 0.0,
         rank_score: float = 0.0,
+        category: str | None = None,
+        category_confidence: float | None = None,
     ) -> tuple[Article, bool]:
         existing_stmt: Select[tuple[Article]] = select(Article).where(
             Article.url_canonical_hash == url_canonical_hash
@@ -411,6 +424,9 @@ class ArticleRepo:
             existing.ai_relevance_score = ai_relevance_score
             existing.freshness_score = freshness_score
             existing.rank_score = rank_score
+            if category is not None:
+                existing.category = category
+                existing.category_confidence = category_confidence
             return existing, False
 
         article = Article(
@@ -426,6 +442,8 @@ class ArticleRepo:
             ai_relevance_score=ai_relevance_score,
             freshness_score=freshness_score,
             rank_score=rank_score,
+            category=category,
+            category_confidence=category_confidence,
         )
         self.session.add(article)
         self.session.flush()
@@ -497,7 +515,7 @@ class ArticleRepo:
         )
         return list(self.session.scalars(stmt).all())
 
-    def list_for_view(
+    def list_for_view(  # pylint: disable=too-many-branches
         self,
         *,
         hours: int | None,
@@ -510,6 +528,7 @@ class ArticleRepo:
         date_from: date | None = None,
         date_to: date | None = None,
         include_content: bool = False,
+        category: str | None = None,
     ) -> list[tuple[Article, str | None, str | None]]:
         del include_content
         base_stmt = (
@@ -518,6 +537,8 @@ class ArticleRepo:
             .where(Article.ai_relevance_score >= min_ai_relevance)
         )
         has_date_range = date_from is not None or date_to is not None
+        if category is not None:
+            base_stmt = base_stmt.where(Article.category == category)
         if has_date_range:
             if date_from is not None:
                 start_at = datetime.combine(date_from, time.min, tzinfo=UTC)
@@ -560,6 +581,15 @@ class ArticleRepo:
                     Article.rank_score.desc(),
                     Article.published_at.desc(),
                 )
+        if sort == "category":
+            base_stmt = base_stmt.order_by(None).order_by(
+                case(
+                    {name: index for index, name in enumerate(CATEGORY_ORDER)},
+                    value=Article.category, else_=len(CATEGORY_ORDER),
+                ),
+                Article.rank_score.desc(),
+                Article.published_at.desc(),
+            )
         base_stmt = base_stmt.limit(limit).offset(offset)
         return [
             (row[0], row[1], row[2])

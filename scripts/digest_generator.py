@@ -8,6 +8,7 @@ import re
 import sys
 from datetime import UTC, date, datetime, timedelta
 from html.parser import HTMLParser
+from math import isfinite
 from pathlib import Path
 from typing import Any, cast
 from urllib.error import HTTPError, URLError
@@ -716,6 +717,9 @@ def _normalize_feed_rows(items: object) -> tuple[list[dict[str, Any]], list[str]
 
 
 def categorize_digest_item(*, row: dict[str, Any], summary: str = "") -> str:
+    stored_category = row.get("category")
+    if isinstance(stored_category, str) and stored_category in _CATEGORY_ORDER:
+        return stored_category
     content = " ".join((str(row.get("title", "")), summary)).lower()
     haystack = " ".join(
         (
@@ -765,6 +769,12 @@ def build_categorized_digest_payload(
 
     grouped_items: dict[str, list[dict[str, str]]] = {category: [] for category in _CATEGORY_ORDER}
     row_by_url = {str(row["url"]): row for row in normalized_rows}
+
+    def rank_for_url(url: str) -> float:
+        value = row_by_url[url].get("rank_score")
+        return float(value) if isinstance(value, (int, float)) and isfinite(value) else 0.0
+
+    ordered_urls.sort(key=rank_for_url, reverse=True)
 
     for url in ordered_urls:
         row = row_by_url[url]
