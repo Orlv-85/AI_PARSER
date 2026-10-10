@@ -13,6 +13,12 @@ import httpx
 from app.core.models import Article
 from app.ingest.fetcher import Fetcher
 from app.ingest.html import extract_article_text
+from app.ingest.page_filter import (
+    NonNewsPageError,
+    html_exclusion_reason,
+    log_exclusion,
+    text_exclusion_reason,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -65,6 +71,10 @@ def parse_rss(source_key: str, content: bytes) -> list[Article]:
         if not link or not title:
             items.coverage_complete = False
             continue
+        reason = text_exclusion_reason(str(link), str(title), str(getattr(entry, "summary", "")))
+        if reason:
+            log_exclusion(str(link), reason)
+            continue
 
         published = _to_datetime(getattr(entry, "published_parsed", None))
         date_kind: Literal["published", "updated", "unknown"] = (
@@ -110,6 +120,10 @@ def _extract_linked_article_text(
             response = client.get(link)
             response.raise_for_status()
             html_content = response.text
+    reason = html_exclusion_reason(link, html_content)
+    if reason:
+        log_exclusion(link, reason)
+        raise NonNewsPageError(reason)
     extracted = extract_article_text(html_content=html_content, url=link, strategy="trafilatura")
     return _normalize_plain_text(extracted)
 
@@ -214,6 +228,9 @@ def fetch_rss(
                 timeout_seconds=timeout_seconds,
                 fetcher=fetcher,
             )
+        except NonNewsPageError:
+            items.remove(item)
+            continue
         except Exception as exc:
             _LOGGER.warning(
                 "event=rss.full_text_extract outcome=failed source_key=%s url=%s error=%s",
@@ -227,4 +244,5 @@ def fetch_rss(
                 full_text_semaphore.release()
         if text:
             item.content = text
+        item.page_eligibility_checked = True
     return _with_rss_metadata(items, result)

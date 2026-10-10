@@ -73,7 +73,7 @@ def test_html_title_excludes_embedded_styles_scripts_and_templates(monkeypatch) 
     monkeypatch.setattr("app.ingest.html.extract_article_text", lambda **_kwargs: "content")
     article = _build_html_article(
         source=_html_source(),
-        url="https://keploy.io/",
+        url="https://keploy.io/blog/ai-code-testing",
         article_html=(
             "<h1><style>" + ".khl-ai{color:red}" * 100 + "</style>"
             "AI writes code <script>alert('bad')</script>"
