@@ -18,7 +18,7 @@ sources:
   - id: deepmind_blog
     name: Google DeepMind Blog
     type: rss
-    url: https://deepmind.com/blog/feed/basic
+    url: https://deepmind.google/blog/rss.xml
     fetch_interval_minutes: 60
     source_weight: 1.3
 
@@ -37,9 +37,9 @@ sources:
     source_weight: 1.1
 
   - id: microsoft_ai_blog
-    name: Microsoft AI Blog
+    name: Microsoft Cloud AI Blog
     type: rss
-    url: https://blogs.microsoft.com/ai/feed/
+    url: https://www.microsoft.com/en-us/microsoft-cloud/blog/feed/
     fetch_interval_minutes: 120
     source_weight: 1.2
 
@@ -274,10 +274,13 @@ sources:
 
   - id: rainbird
     name: Rainbird AI Blog
-    type: rss
-    url: http://rainbird.ai/blog/feed
+    type: html
+    url: https://rainbird.ai/resources
     fetch_interval_minutes: 720
     source_weight: 0.6
+    html:
+      link_selector: .rb-reveal a[href^="/"]:has(h3)
+      extraction_strategy: readability
 
   - id: brighterion
     name: Brighterion Blog (FICO fallback)
@@ -342,13 +345,13 @@ sources:
     source_weight: 0.5
 
   - id: linguamatics
-    name: IQVIA Newsroom (Linguamatics)
+    name: Linguamatics Blog
     type: html
-    url: https://www.iqvia.com/newsroom
+    url: https://www.linguamatics.com/blog
     fetch_interval_minutes: 720
     source_weight: 0.5
     html:
-      link_selector: a[href^="/newsroom/"]
+      link_selector: .resource-featured a[href^="/blog/"], .resource-teaser a[href^="/blog/"]
       extraction_strategy: readability
 
   - id: nactem
@@ -468,11 +471,11 @@ sources:
   - id: vellum_blog
     name: Vellum AI Blog
     type: html
-    url: https://www.vellum.ai/blog
+    url: https://website.vellum.ai/blog/category/all
     fetch_interval_minutes: 120
     source_weight: 1.0
     html:
-      link_selector: a[href^="/blog/"]:not([href="/blog"])
+      link_selector: article a[href^="/blog/"]:not([href^="/blog/category/"])
       extraction_strategy: readability
 
   - id: dify_blog
@@ -482,7 +485,7 @@ sources:
     fetch_interval_minutes: 120
     source_weight: 1.0
     html:
-      link_selector: a[href^="./blog/"]:not([href="./blog"])
+      link_selector: a[href^="/blog/"]:not([href^="/blog/category/"])
       extraction_strategy: readability
 
   - id: crewai_releases
@@ -594,17 +597,17 @@ sources:
     fetch_interval_minutes: 180
     source_weight: 0.8
     html:
-      link_selector: a[href^="/blog/"]:not([href="/blog"]):not([href="/blog/"])
+      link_selector: a[href^="./blog/"]
       extraction_strategy: readability
 
   - id: e2b_blog
     name: E2B Blog
     type: html
-    url: https://e2b.dev/blog
+    url: https://e2b.dev/resources
     fetch_interval_minutes: 120
     source_weight: 1.0
     html:
-      link_selector: a[href^="/blog/"]:not([href^="/blog/category/"])
+      link_selector: a[href^="/resources/"]:has(h2)
       extraction_strategy: readability
 
   - id: cognition_blog
@@ -663,13 +666,10 @@ sources:
 
   - id: promptengineering_blog
     name: Prompt Engineering Institute
-    type: html
-    url: https://promptengineering.org/
+    type: rss
+    url: https://promptengineering.org/rss/
     fetch_interval_minutes: 360
     source_weight: 0.6
-    html:
-      link_selector: article h2 a[href^="https://promptengineering.org/"], article h3 a[href^="https://promptengineering.org/"]
-      extraction_strategy: readability
 
   - id: langsmith_changelog
     name: LangSmith Changelog
@@ -836,13 +836,13 @@ sources:
       extraction_strategy: readability
 
   - id: outerbounds_blog
-    name: Outerbounds Blog
+    name: Outerbounds / Anaconda Blog
     type: html
-    url: https://outerbounds.com/blog
+    url: https://www.anaconda.com/blog
     fetch_interval_minutes: 180
     source_weight: 0.8
     html:
-      link_selector: a[href^="/blog/"]:not([href="/blog"]):not([href="/blog/"])
+      link_selector: h2 a[href^="https://www.anaconda.com/blog/"], h3 a[href^="https://www.anaconda.com/blog/"]
       extraction_strategy: readability
 
   - id: predibase_blog
