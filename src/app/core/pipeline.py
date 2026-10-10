@@ -1,9 +1,12 @@
+# pylint: disable=too-many-lines
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from logging import Logger
 from threading import BoundedSemaphore
 from typing import Any, cast
+
+from sqlalchemy.orm import Session
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig, load_sources
@@ -20,6 +23,7 @@ from app.ingest.html import (
 from app.ingest.rss import fetch_rss, fetch_rss_with_metadata
 from app.storage import SessionLocal, create_all
 from app.storage.repos import ArticleRepo, SourceRepo, WeeklyAnalyticsRepo
+from app.storage.weekly import WeeklyStore, record_attempt, record_observation, register_source
 
 _DEFAULT_FETCH_RSS_WITH_METADATA = fetch_rss_with_metadata
 _DEFAULT_FETCH_HTML = fetch_html
@@ -60,6 +64,7 @@ class SourceMetrics:  # pylint: disable=too-many-instance-attributes
     skipped_known_items: int = 0
     early_stop_hit: bool = False
     not_modified: bool = False
+    coverage_complete: bool = True
 
 
 def _coerce_html_link_fetch_result(result: object) -> HtmlLinkFetchResult:
@@ -460,13 +465,17 @@ def _publish_weekly_analytics_if_due(
     session: object,
     logger: Logger,
     run_id: str,
+    settings: Settings | None = None,
 ) -> None:
     report_date = _weekly_report_date_to_publish(datetime.now(UTC).date())
     if report_date is None:
         return
 
     try:
-        WeeklyAnalyticsRepo(cast(Any, session)).save_weekly_report(report_date=report_date)
+        if settings is not None and settings.weekly_v2_enabled:
+            WeeklyStore(cast(Any, session)).enqueue(report_date, settings)
+        else:
+            WeeklyAnalyticsRepo(cast(Any, session)).save_weekly_report(report_date=report_date)
     except Exception as exc:  # pragma: no cover - defensive logging path
         logger.error(
             "weekly_analytics_publish_failed",
@@ -496,6 +505,7 @@ def _process_html_links_two_stage(
     article_repo: ArticleRepo,
     settings: Settings,
     relevance_scorer: JevRelevanceScorer | None = None,
+    quality_flags: list[str] | None = None,
 ) -> tuple[int, int, int, int, bool]:
     new_count = 0
     duplicate_count = 0
@@ -517,6 +527,8 @@ def _process_html_links_two_stage(
     capped_links = links
     if isinstance(html_max_links_per_source, int) and html_max_links_per_source >= 0:
         capped_links = links[:html_max_links_per_source]
+        if len(capped_links) < len(links) and quality_flags is not None:
+            quality_flags.append("truncated")
     canonical_by_link: list[tuple[str, str, str]] = [
         (
             str(link),
@@ -564,10 +576,18 @@ def _process_html_links_two_stage(
                     fetcher=fetcher,
                 )
             except Exception:
+                if quality_flags is not None:
+                    quality_flags.append("article_failure")
                 continue
             if item is None:
+                if quality_flags is not None:
+                    quality_flags.append("parser_failure")
                 continue
             fetched_articles += 1
+            _record_weekly_observation(article_repo, db_source_id, item)
+            if (item.published_at is None and item.publication_evidence_at is None
+                    and quality_flags is not None):
+                quality_flags.append("unknown_publication_date")
 
             assessment = relevance_scorer.classify(item) if relevance_scorer is not None else None
             relevance = assessment.relevance_score if assessment is not None else None
@@ -642,6 +662,12 @@ def _persist_fetch_state_if_present(
     )
 
 
+def _record_weekly_observation(article_repo: ArticleRepo, source_id: int, item: Any) -> None:
+    session = getattr(article_repo, "session", None)
+    if isinstance(session, Session):
+        record_observation(session, source_id, item)
+
+
 def _process_fetched_source_items(
     *,
     items: list,
@@ -668,6 +694,11 @@ def _process_fetched_source_items(
         and exists_by_canonical_hash_fn is not None
     )
     queued_rows_by_hash: dict[str, dict[str, object]] = {}
+
+    # The RSS feed has already been parsed in full. Preserve observations even
+    # when legacy ingestion later stops at a streak of known URLs.
+    for item in items:
+        _record_weekly_observation(article_repo, db_source_id, item)
 
     for item in items:
         canonical = canonicalize_url(str(item.url))
@@ -756,6 +787,7 @@ def _process_source_result(
     metrics: SourceMetrics,
     relevance_scorer: JevRelevanceScorer | None = None,
 ) -> None:
+    metrics.coverage_complete = bool(getattr(fetch_result, "coverage_complete", True))
     if config.type in {"rss", "html"}:
         _persist_fetch_state_if_present(
             source_repo=source_repo,
@@ -767,6 +799,7 @@ def _process_source_result(
             return
 
     if config.type == "html" and isinstance(fetch_result, HtmlLinkFetchResult):
+        quality_flags: list[str] = []
         (
             metrics.fetched_items,
             metrics.new_items,
@@ -780,10 +813,15 @@ def _process_source_result(
             article_repo=article_repo,
             settings=settings,
             relevance_scorer=relevance_scorer,
+            quality_flags=quality_flags,
         )
+        metrics.coverage_complete = metrics.coverage_complete and not quality_flags
         return
 
     items = _fetch_result_items(fetch_result)
+    if any(item.published_at is None or getattr(item, "publication_date_kind", "published")
+           != "published" for item in items):
+        metrics.coverage_complete = False
     metrics.fetched_items = len(items)
     (
         metrics.new_items,
@@ -826,6 +864,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
             tuple[int, SourceConfig, int, dict[str, object | None] | None, bool]
         ] = []
         configured_source_keys: set[str] = set()
+        weekly_versions: dict[int, str] = {}
 
         for idx, config in enumerate(configs):
             configured_source_keys.add(config.id)
@@ -871,6 +910,11 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                 )
                 next_index += 1
 
+        if isinstance(session, Session):
+            for _, config, source_id, _, _ in enabled_sources:
+                weekly_versions[source_id] = register_source(
+                    session, source_id, config, settings, datetime.now(UTC))
+
         fetched_by_index, fetch_errors = _collect_fetched_items(
             enabled_sources=enabled_sources,
             settings=settings,
@@ -883,6 +927,11 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
         for idx, config, db_source_id, _fetch_state, _enable_rss_fetch_state in enabled_sources:
             fetch_result = fetched_by_index.get(idx)
             if fetch_result is None:
+                if isinstance(session, Session):
+                    record_attempt(session, run_id=run_id, source_id=db_source_id,
+                                   version_id=weekly_versions[db_source_id],
+                                   interval=config.fetch_interval_minutes, outcome="fetch_failure",
+                                   complete=True, now=datetime.now(UTC))
                 continue
 
             source_metrics = SourceMetrics(source_id=config.id, source_type=config.type)
@@ -906,6 +955,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                 source_metrics.early_stop_hit = False
                 source_metrics.not_modified = False
                 source_metrics.errors = 1
+                source_metrics.coverage_complete = False
                 error_count += 1
                 logger.error(
                     "source_persist_failed",
@@ -920,6 +970,17 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                 )
 
             fetched_count += source_metrics.fetched_items
+            if isinstance(session, Session):
+                outcome = ("persist_failure" if source_metrics.errors else (
+                    "parser_failure" if not source_metrics.coverage_complete else (
+                    "not_modified" if source_metrics.not_modified else (
+                        "success" if source_metrics.fetched_items else "empty"))))
+                record_attempt(session, run_id=run_id, source_id=db_source_id,
+                               version_id=weekly_versions[db_source_id],
+                               interval=config.fetch_interval_minutes, outcome=outcome,
+                               complete=(source_metrics.coverage_complete and not (
+                                   config.type == "html" and source_metrics.early_stop_hit)),
+                               now=datetime.now(UTC))
             new_count += source_metrics.new_items
             duplicate_count += source_metrics.duplicate_items
             optimization_not_modified_sources += int(source_metrics.not_modified)
@@ -933,7 +994,8 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                 enabled=bool(getattr(settings, "fetch_emit_source_metrics", True)),
             )
 
-        _publish_weekly_analytics_if_due(session=session, logger=logger, run_id=run_id)
+        _publish_weekly_analytics_if_due(session=session, logger=logger, run_id=run_id,
+                                       settings=settings)
         session.commit()
 
     logger.info(

@@ -1,3 +1,7 @@
+import json
+from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
+
 import typer
 import uvicorn
 
@@ -5,12 +9,17 @@ from app.config.settings import get_settings
 from app.config.sources import load_sources
 from app.core.pipeline import run_fetch_cycle
 from app.core.source_onboarding import import_source_candidates, run_source_validation_batch
+from app.core.weekly_audit import audit
+from app.core.weekly_worker import drain
 from app.mcp.server import run_mcp_server
 from app.observability import setup_json_logging
 from app.storage import SessionLocal, create_all
 from app.storage.repos import ArticleRepo, SourceCandidateRepo, SourceImportBatchRepo
+from app.storage.weekly import WeeklyStore
 
 app = typer.Typer(help="AI News Collector CLI")
+_WEEKLY_DATE_OPTION = typer.Option(None, "--report-date")
+_WEEKLY_AUDIT_OUTPUT_OPTION = typer.Option(..., "--output")
 _VALIDATE_BATCH_ID_OPTION = typer.Option(None, "--batch-id", min=1)
 _VALIDATE_CANDIDATE_ID_OPTION = typer.Option([], "--candidate-id", min=1)
 
@@ -18,6 +27,55 @@ _VALIDATE_CANDIDATE_ID_OPTION = typer.Option([], "--candidate-id", min=1)
 @app.callback()
 def main() -> None:
     """CLI entrypoint."""
+
+
+@app.command("weekly-analytics")
+def weekly_analytics(
+    report_date: str | None = _WEEKLY_DATE_OPTION,
+    limit: int = typer.Option(200, "--limit", min=1, help="Compatibility evidence/page-size hint."),
+    max_jobs: int = typer.Option(1, "--max-jobs", min=1, max=20),
+    enqueue_only: bool = typer.Option(False, "--enqueue-only"),
+    drain_only: bool = typer.Option(False, "--drain-only"),
+) -> None:
+    """Freeze complete inputs and drain leased v2 jobs without changing legacy history."""
+    del limit
+    settings = get_settings()
+    if not settings.weekly_v2_enabled:
+        raise typer.BadParameter("Enable AINEWS_WEEKLY_V2_ENABLED for the v2 worker")
+    today = datetime.now(UTC).date()
+    try:
+        target = date.fromisoformat(report_date) if report_date else (
+            today - timedelta(days=(today.weekday() - 6) % 7))
+    except ValueError as exc:
+        raise typer.BadParameter("report-date must be YYYY-MM-DD") from exc
+    if enqueue_only and drain_only:
+        raise typer.BadParameter("Choose either enqueue-only or drain-only")
+    setup_json_logging()
+    create_all()
+    with SessionLocal() as session:
+        store = WeeklyStore(session)
+        job_id = None if drain_only else store.enqueue(target, settings)
+        session.commit()
+        results = [] if enqueue_only else drain(store, settings, max_jobs=max_jobs)
+    typer.echo(json.dumps({"job_id": job_id, "results": results}))
+
+
+@app.command("weekly-analytics-audit")
+def weekly_analytics_audit(
+    report_date: str = typer.Option(..., "--report-date"),
+    output: Path = _WEEKLY_AUDIT_OUTPUT_OPTION,
+    weeks: int = typer.Option(8, "--weeks", min=1, max=52),
+) -> None:
+    """Export stored comparisons and review samples without calling providers."""
+    try:
+        target = date.fromisoformat(report_date)
+    except ValueError as exc:
+        raise typer.BadParameter("report-date must be YYYY-MM-DD") from exc
+    create_all()
+    with SessionLocal() as session:
+        artifact = audit(WeeklyStore(session), target, weeks)
+    output.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
+    typer.echo(f"Weekly replay/review artifact written to {output}")
 
 
 @app.command()

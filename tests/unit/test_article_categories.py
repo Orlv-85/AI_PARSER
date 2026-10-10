@@ -145,7 +145,7 @@ def test_category_migration_preserves_existing_rows_and_downgrades(tmp_path, mon
             "VALUES ('Existing AI news', 'https://example.com/old', 'https://example.com/old', "
             "'old-hash', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0.5, 0.5, 0.5)"
         ))
-    command.upgrade(config, "head")
+    command.upgrade(config, "c9e71b82a640")
     with engine.connect() as connection:
         assert connection.execute(text(
             "SELECT title, category, category_confidence FROM articles"
