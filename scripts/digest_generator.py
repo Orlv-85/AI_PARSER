@@ -72,24 +72,71 @@ _RAG_NEGATIVE_KEYWORDS = (
     "testing",
     "regression",
 )
+_QA_GENERIC_KEYWORDS = (
+    "benchmark",
+    "benchmarking",
+    "quality",
+    "test",
+    "tests",
+    "tested",
+    "testing",
+    "verification",
+    "trace",
+    "traces",
+    "tracing",
+    "monitor",
+    "monitoring",
+)
+_QA_CONTEXT_KEYWORDS = (
+    "software",
+    "code",
+    "coding",
+    "sdk",
+    "api",
+    "apis",
+    "llm",
+    "llms",
+    "model",
+    "models",
+    "agent",
+    "agents",
+    "rag",
+    "retrieval",
+    "pipeline",
+    "ci",
+)
 _CATEGORY_RULES = (
-    ("Security", ("security", "attack", "prompt injection", "vulnerability", "secure", "sast")),
+    (
+        "Security",
+        (
+            "security",
+            "attack",
+            "prompt injection",
+            "vulnerability",
+            "secure",
+            "sast",
+            "synthid",
+            "synth id",
+            "content provenance",
+        ),
+    ),
     (
         "QA & Observability",
         (
-            "benchmark",
             "eval",
+            "evals",
             "evaluation",
             "observability",
-            "trace",
-            "monitor",
             "hallucination",
             "qa",
-            "quality",
-            "test",
-            "testing",
+            "quality assurance",
+            "unit test",
+            "unit tests",
+            "integration test",
+            "integration tests",
+            "test automation",
             "regression",
-            "verification",
+            *_QA_GENERIC_KEYWORDS,
         ),
     ),
     (
@@ -669,6 +716,7 @@ def _normalize_feed_rows(items: object) -> tuple[list[dict[str, Any]], list[str]
 
 
 def categorize_digest_item(*, row: dict[str, Any], summary: str = "") -> str:
+    content = " ".join((str(row.get("title", "")), summary)).lower()
     haystack = " ".join(
         (
             str(row.get("title", "")),
@@ -693,7 +741,15 @@ def categorize_digest_item(*, row: dict[str, Any], summary: str = "") -> str:
     ):
         return "RAG & Data Systems"
     for category, keywords in _CATEGORY_RULES:
-        if any(_has_keyword(haystack, keyword) for keyword in keywords):
+        category_text = haystack
+        if category == "QA & Observability":
+            # Source names and URL paths are not evidence of an article's QA topic.
+            category_text = content
+            if not any(_has_keyword(content, keyword) for keyword in _QA_CONTEXT_KEYWORDS):
+                keywords = tuple(
+                    keyword for keyword in keywords if keyword not in _QA_GENERIC_KEYWORDS
+                )
+        if any(_has_keyword(category_text, keyword) for keyword in keywords):
             return category
     return "Business & Product"
 
