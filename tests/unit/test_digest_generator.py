@@ -9,8 +9,8 @@ import pytest
 
 def _load_bridge_module():
     repo_root = Path(__file__).resolve().parents[2]
-    script_path = repo_root / "scripts" / "pocketpaw_digest_bridge.py"
-    spec = importlib.util.spec_from_file_location("pocketpaw_digest_bridge", script_path)
+    script_path = repo_root / "scripts" / "digest_generator.py"
+    spec = importlib.util.spec_from_file_location("digest_generator", script_path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -23,7 +23,7 @@ def test_normalize_digest_keeps_valid_groups_and_items() -> None:
     payload = {
         "report_date": "2026-03-01",
         "title": "anything",
-        "generated_by": "antigravity",
+        "generated_by": "external-client",
         "groups": [
             {
                 "title": "AI Coding",
@@ -630,120 +630,3 @@ def test_chunk_feed_items_splits_large_batches() -> None:
     assert [len(chunk) for chunk in chunks] == [2, 2, 1]
 
 
-def test_run_antigravity_chunk_retries_after_non_json_response() -> None:
-    bridge = _load_bridge_module()
-    responses = iter(
-        [
-            {"content": [{"type": "text", "text": "not json"}]},
-            {
-                "content": [
-                    {
-                        "type": "text",
-                        "text": (
-                            '{"report_date":"2026-03-01","items":'
-                            '[{"url":"https://example.com/1","summary":"Short summary."}]}'
-                        ),
-                    }
-                ]
-            },
-        ]
-    )
-
-    original = bridge.read_json_response
-    bridge.read_json_response = lambda *args, **kwargs: next(responses)
-    try:
-        normalized = bridge.run_antigravity_chunk(
-            admin_url="http://example.test",
-            api_key="key",
-            model="gemini-3-flash",
-            prompt="Prompt",
-            report_date="2026-03-01",
-            articles=[{"title": "Item", "url": "https://example.com/1"}],
-        )
-    finally:
-        bridge.read_json_response = original
-
-    assert normalized == {"https://example.com/1": "Short summary."}
-
-
-def test_run_antigravity_chunk_retries_after_network_timeout() -> None:
-    bridge = _load_bridge_module()
-    responses = iter(
-        [
-            RuntimeError("Network timeout for http://example.test/v1/messages"),
-            {
-                "content": [
-                    {
-                        "type": "text",
-                        "text": (
-                            '{"report_date":"2026-03-01","items":'
-                            '[{"url":"https://example.com/1","summary":"Short summary."}]}'
-                        ),
-                    }
-                ]
-            },
-        ]
-    )
-
-    def fake_read_json_response(*_args, **_kwargs):
-        response = next(responses)
-        if isinstance(response, Exception):
-            raise response
-        return response
-
-    original = bridge.read_json_response
-    bridge.read_json_response = fake_read_json_response
-    try:
-        normalized = bridge.run_antigravity_chunk(
-            admin_url="http://example.test",
-            api_key="key",
-            model="gemini-3-flash",
-            prompt="Prompt",
-            report_date="2026-03-01",
-            articles=[{"title": "Item", "url": "https://example.com/1"}],
-        )
-    finally:
-        bridge.read_json_response = original
-
-    assert normalized == {"https://example.com/1": "Short summary."}
-
-
-def test_run_antigravity_title_chunk_retries_after_non_json_response() -> None:
-    bridge = _load_bridge_module()
-    responses = iter(
-        [
-            {"content": [{"type": "text", "text": "not json"}]},
-            {
-                "content": [
-                    {
-                        "type": "text",
-                        "text": (
-                            '{"report_date":"2026-03-01","items":'
-                            '[{"url":"https://example.com/1","title":"Better headline"}]}'
-                        ),
-                    }
-                ]
-            },
-        ]
-    )
-
-    original = bridge.read_json_response
-    bridge.read_json_response = lambda *args, **kwargs: next(responses)
-    try:
-        normalized = bridge.run_antigravity_title_chunk(
-            admin_url="http://example.test",
-            api_key="key",
-            model="gemini-3-flash",
-            report_date="2026-03-01",
-            articles=[
-                {
-                    "title": "Weak title",
-                    "url": "https://example.com/1",
-                    "summary": "Technical summary",
-                }
-            ],
-        )
-    finally:
-        bridge.read_json_response = original
-
-    assert normalized == {"https://example.com/1": "Better headline"}

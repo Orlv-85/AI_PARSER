@@ -24,11 +24,6 @@ AINEWS_DIGEST_LOG_PATH="${AINEWS_DIGEST_LOG_PATH:-$ROOT_DIR/logs/daily-digest.lo
 AINEWS_WEEKLY_CRON_ENABLED="${AINEWS_WEEKLY_CRON_ENABLED:-1}"
 AINEWS_WEEKLY_CRON_SCHEDULE="${AINEWS_WEEKLY_CRON_SCHEDULE:-15 2 * * 1}"
 AINEWS_WEEKLY_LOG_PATH="${AINEWS_WEEKLY_LOG_PATH:-$ROOT_DIR/logs/weekly-analytics.log}"
-ANTIGRAVITY_ENABLED="${ANTIGRAVITY_ENABLED:-0}"
-ANTIGRAVITY_PORT="${ANTIGRAVITY_PORT:-8045}"
-POCKETPAW_ENABLED="${POCKETPAW_ENABLED:-1}"
-POCKETPAW_VERSION="${POCKETPAW_VERSION:-0.2.5}"
-POCKETPAW_VENV_PATH="${POCKETPAW_VENV_PATH:-$ROOT_DIR/.tools/pocketpaw-venv}"
 
 if [ -n "$DEPLOY_TAG" ]; then
   echo "Checking out tag: $DEPLOY_TAG"
@@ -47,7 +42,28 @@ export APP_IMAGE
 
 CURRENT_COMMIT="$(git rev-parse --verify HEAD)"
 
-mkdir -p data backups data/antigravity .tools logs
+mkdir -p data backups logs
+
+# Retire the old proxy without deleting its bind-mounted account data.
+if docker container inspect ai-news-antigravity >/dev/null 2>&1; then
+  echo "Removing retired AI proxy container; persisted account data is preserved"
+  docker stop ai-news-antigravity >/dev/null
+  docker rm ai-news-antigravity >/dev/null
+fi
+
+# Keep the retired local tooling recoverable instead of deleting it recursively.
+legacy_backup=""
+for legacy_path in .tools/pocketpaw-venv .tools/pocketpaw .tools/pocketpaw-version; do
+  if [ -e "$legacy_path" ] || [ -L "$legacy_path" ]; then
+    if [ -z "$legacy_backup" ]; then
+      legacy_backup="$(mktemp -d "$ROOT_DIR/backups/retired-ai-tools.XXXXXX")"
+    fi
+    mv "$legacy_path" "$legacy_backup/"
+  fi
+done
+if [ -n "$legacy_backup" ]; then
+  echo "Retired tooling archived at $legacy_backup"
+fi
 
 is_enabled() {
   case "${1:-}" in
@@ -58,57 +74,6 @@ is_enabled() {
       return 1
       ;;
   esac
-}
-
-install_pocketpaw() {
-  if ! is_enabled "$POCKETPAW_ENABLED"; then
-    echo "POCKETPAW_ENABLED=0; skipping PocketPaw installation"
-    return 0
-  fi
-
-  if ! command -v python3 >/dev/null 2>&1; then
-    echo "python3 is required to install PocketPaw" >&2
-    exit 1
-  fi
-
-  if ! python3 -m ensurepip --version >/dev/null 2>&1; then
-    if command -v apt-get >/dev/null 2>&1; then
-      echo "Installing python3-venv system package for PocketPaw"
-      apt-get update >/dev/null
-      apt-get install -y python3-venv >/dev/null
-    else
-      echo "python3 venv support is missing and apt-get is unavailable" >&2
-      exit 1
-    fi
-  fi
-
-  if [ ! -x "$POCKETPAW_VENV_PATH/bin/python" ]; then
-    echo "Creating PocketPaw virtualenv at $POCKETPAW_VENV_PATH"
-    python3 -m venv "$POCKETPAW_VENV_PATH"
-  fi
-
-  if ! "$POCKETPAW_VENV_PATH/bin/python" -m pip --version >/dev/null 2>&1; then
-    echo "Rebuilding PocketPaw virtualenv to restore pip"
-    python3 -m venv --clear "$POCKETPAW_VENV_PATH"
-  fi
-
-  if ! "$POCKETPAW_VENV_PATH/bin/python" -m pip --version >/dev/null 2>&1; then
-    echo "Bootstrapping pip inside PocketPaw virtualenv"
-    "$POCKETPAW_VENV_PATH/bin/python" -m ensurepip --upgrade >/dev/null
-  fi
-
-  echo "Installing PocketPaw ${POCKETPAW_VERSION} into $POCKETPAW_VENV_PATH"
-  "$POCKETPAW_VENV_PATH/bin/python" -m pip install --upgrade pip >/dev/null
-  "$POCKETPAW_VENV_PATH/bin/python" -m pip install --upgrade "pocketpaw==${POCKETPAW_VERSION}" >/dev/null
-
-  if [ ! -x "$POCKETPAW_VENV_PATH/bin/pocketpaw" ]; then
-    echo "PocketPaw installation completed but binary is missing" >&2
-    exit 1
-  fi
-
-  printf '%s\n' "$POCKETPAW_VERSION" > "$ROOT_DIR/.tools/pocketpaw-version"
-  ln -sf "$POCKETPAW_VENV_PATH/bin/pocketpaw" "$ROOT_DIR/.tools/pocketpaw"
-  echo "PocketPaw is installed and available at $ROOT_DIR/.tools/pocketpaw"
 }
 
 install_auto_update_cron() {
@@ -241,16 +206,6 @@ install_weekly_analytics_cron() {
 echo "Starting PostgreSQL..."
 docker compose -f "$COMPOSE_FILE" up -d db
 
-install_pocketpaw
-
-if is_enabled "$ANTIGRAVITY_ENABLED"; then
-  echo "Starting Antigravity Manager..."
-  docker compose -f "$COMPOSE_FILE" up -d antigravity
-else
-  echo "ANTIGRAVITY_ENABLED=0; stopping Antigravity Manager (account data is preserved)"
-  docker compose -f "$COMPOSE_FILE" stop antigravity
-fi
-
 echo "Waiting for PostgreSQL readiness..."
 attempt=0
 until docker compose -f "$COMPOSE_FILE" exec -T db sh -lc 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null 2>&1; do
@@ -263,13 +218,8 @@ until docker compose -f "$COMPOSE_FILE" exec -T db sh -lc 'pg_isready -U "$POSTG
 done
 
 echo "Deploying app image: $APP_IMAGE"
-if is_enabled "$ANTIGRAVITY_ENABLED"; then
-  echo "Pulling app and Antigravity images from registries..."
-  docker compose -f "$COMPOSE_FILE" pull app antigravity
-else
-  echo "Pulling app image from registry..."
-  docker compose -f "$COMPOSE_FILE" pull app
-fi
+echo "Pulling app image from registry..."
+docker compose -f "$COMPOSE_FILE" pull app
 
 echo "Starting app and caddy..."
 docker compose -f "$COMPOSE_FILE" up -d app caddy
@@ -283,11 +233,6 @@ docker compose -f "$COMPOSE_FILE" run --rm app ai-news prune --older-than-days "
 echo "Restarting app..."
 docker compose -f "$COMPOSE_FILE" up -d app caddy
 
-if is_enabled "$ANTIGRAVITY_ENABLED"; then
-  echo "Refreshing Antigravity Manager..."
-  docker compose -f "$COMPOSE_FILE" up -d antigravity
-fi
-
 echo "Checking app health..."
 attempt=0
 until docker exec ai-news-app python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/health', timeout=3)" >/dev/null 2>&1; do
@@ -298,19 +243,6 @@ until docker exec ai-news-app python -c "import urllib.request; urllib.request.u
   fi
   sleep 2
 done
-
-if is_enabled "$ANTIGRAVITY_ENABLED"; then
-  echo "Checking Antigravity Manager HTTP endpoint..."
-  attempt=0
-  until curl -fsS "http://127.0.0.1:${ANTIGRAVITY_PORT}" >/dev/null 2>&1; do
-    attempt=$((attempt + 1))
-    if [ "$attempt" -ge 30 ]; then
-      echo "Antigravity Manager HTTP check failed" >&2
-      exit 1
-    fi
-    sleep 2
-  done
-fi
 
 if [ -n "${CADDY_SITE_ADDRESS:-}" ] && [ "${CADDY_SITE_ADDRESS}" != "localhost" ]; then
   echo "Checking HTTPS endpoint health via Caddy..."

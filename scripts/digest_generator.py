@@ -20,9 +20,8 @@ _MAX_ITEMS_PER_GROUP = 6
 _MAX_SUMMARY_LENGTH = 400
 _MAX_TITLE_LENGTH = 120
 _MAX_HEADLINE_LENGTH = 84
-_DEFAULT_ANTIGRAVITY_CHUNK_SIZE = 12
-_DEFAULT_ANTIGRAVITY_TITLE_CHUNK_SIZE = 8
-_ANTIGRAVITY_RETRY_SUFFIX = (
+_DEFAULT_CHUNK_SIZE = 12
+_SUMMARY_RETRY_SUFFIX = (
     "\n\nYour previous response was invalid.\n"
     "Return valid JSON only.\n"
     "Do not include markdown.\n"
@@ -30,7 +29,6 @@ _ANTIGRAVITY_RETRY_SUFFIX = (
     "Do not include commentary.\n"
     "Do not omit any URL.\n"
 )
-_ANTIGRAVITY_REQUEST_RETRIES = 2
 _CATEGORY_ORDER = (
     "AI Coding",
     "Agent Frameworks",
@@ -109,10 +107,7 @@ _CATEGORY_RULES = (
 )
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _ROOT_DIR = _SCRIPT_DIR.parent
-_DEFAULT_PROMPT_PATH = _ROOT_DIR / "automation" / "pocketpaw" / "antigravity_digest_prompt.txt"
-_DEFAULT_DEEPSEEK_PROMPT_PATH = (
-    _ROOT_DIR / "automation" / "pocketpaw" / "deepseek_digest_prompt.txt"
-)
+_DEFAULT_PROMPT_PATH = _ROOT_DIR / "automation" / "digest_prompt.txt"
 _UPPERCASE_TITLE_TOKENS = {
     "ai",
     "api",
@@ -787,42 +782,6 @@ def repair_digest_coverage(
     )
 
 
-def _extract_message_text(payload: object) -> str:
-    if not isinstance(payload, dict):
-        raise RuntimeError("antigravity response was not a JSON object")
-    content = payload.get("content")
-    if not isinstance(content, list):
-        raise RuntimeError("antigravity response did not include a content array")
-    text_parts: list[str] = []
-    for item in content:
-        if not isinstance(item, dict):
-            continue
-        item_type = str(item.get("type", ""))
-        if item_type in {"text", "output_text"}:
-            text = item.get("text")
-            if isinstance(text, str):
-                text_parts.append(text)
-    if not text_parts:
-        raise RuntimeError("antigravity response did not include text content")
-    return "\n".join(text_parts).strip()
-
-
-def _fetch_antigravity_proxy_api_key(*, admin_url: str, admin_password: str) -> str:
-    config = read_json_response(
-        f"{admin_url.rstrip('/')}/api/config",
-        headers={"Authorization": admin_password},
-    )
-    if not isinstance(config, dict):
-        raise RuntimeError("antigravity config response was not a JSON object")
-    proxy = config.get("proxy")
-    if not isinstance(proxy, dict):
-        raise RuntimeError("antigravity config did not include proxy settings")
-    api_key = proxy.get("api_key")
-    if not isinstance(api_key, str) or not api_key.strip():
-        raise RuntimeError("antigravity proxy api_key is missing")
-    return api_key
-
-
 def chunk_feed_items(
     feed_items: list[dict[str, Any]],
     *,
@@ -838,246 +797,6 @@ def chunk_feed_items(
 def _is_transient_request_error(exc: RuntimeError) -> bool:
     message = str(exc).lower()
     return "network error" in message or "network timeout" in message
-
-
-def run_antigravity_chunk(
-    *,
-    admin_url: str,
-    api_key: str,
-    model: str,
-    prompt: str,
-    report_date: str,
-    articles: list[dict[str, Any]],
-) -> dict[str, str]:
-    base_content = (
-        f"{prompt}\n\n"
-        "You must return only per-article summaries for the provided list.\n"
-        "Do not group the articles.\n"
-        "Do not omit any URL.\n"
-        "Every returned item must include the original URL and a concise technical summary.\n\n"
-        "Input payload:\n"
-        + json.dumps(
-            {"report_date": report_date, "articles": articles},
-            ensure_ascii=False,
-        )
-    )
-
-    errors: list[str] = []
-    for attempt in range(2):
-        content = base_content if attempt == 0 else base_content + _ANTIGRAVITY_RETRY_SUFFIX
-        llm_payload = {
-            "model": model,
-            "max_tokens": 4000,
-            "messages": [{"role": "user", "content": content}],
-        }
-        llm_response: Any | None = None
-        for request_attempt in range(_ANTIGRAVITY_REQUEST_RETRIES):
-            try:
-                llm_response = read_json_response(
-                    f"{admin_url.rstrip('/')}/v1/messages",
-                    body=json.dumps(llm_payload).encode("utf-8"),
-                    headers={
-                        "x-api-key": api_key,
-                        "anthropic-version": "2023-06-01",
-                    },
-                )
-                break
-            except RuntimeError as exc:
-                if not _is_transient_request_error(exc):
-                    raise
-                errors.append(str(exc))
-                if request_attempt + 1 == _ANTIGRAVITY_REQUEST_RETRIES:
-                    llm_response = None
-        if llm_response is None:
-            continue
-        llm_text = _extract_message_text(llm_response)
-        try:
-            generated = json.loads(llm_text)
-        except json.JSONDecodeError:
-            errors.append("non-JSON content")
-            continue
-        try:
-            return normalize_summary_batch(generated, report_date=report_date)
-        except ValueError as exc:
-            errors.append(str(exc))
-            continue
-
-    raise RuntimeError(
-        "antigravity returned invalid content after retry: "
-        + ", ".join(errors or ["unknown error"])
-    )
-
-
-def run_antigravity_title_chunk(
-    *,
-    admin_url: str,
-    api_key: str,
-    model: str,
-    report_date: str,
-    articles: list[dict[str, Any]],
-) -> dict[str, str]:
-    base_content = (
-        "Rewrite weak article titles into short editorial headlines.\n"
-        "Return only JSON.\n"
-        "Use this exact structure:\n"
-        '{"report_date":"YYYY-MM-DD","items":[{"url":"https://...","title":"Short headline"}]}\n'
-        "Rules:\n"
-        "- Include every input URL exactly once.\n"
-        "- Keep each title factual and technical.\n"
-        "- Keep each title concise, ideally under 12 words.\n"
-        "- Do not add markdown or commentary.\n"
-        "- Do not end titles with a period.\n\n"
-        "Input payload:\n"
-        + json.dumps(
-            {"report_date": report_date, "articles": articles},
-            ensure_ascii=False,
-        )
-    )
-
-    errors: list[str] = []
-    for attempt in range(2):
-        content = base_content if attempt == 0 else base_content + _ANTIGRAVITY_RETRY_SUFFIX
-        llm_payload = {
-            "model": model,
-            "max_tokens": 2000,
-            "messages": [{"role": "user", "content": content}],
-        }
-        llm_response: Any | None = None
-        for request_attempt in range(_ANTIGRAVITY_REQUEST_RETRIES):
-            try:
-                llm_response = read_json_response(
-                    f"{admin_url.rstrip('/')}/v1/messages",
-                    body=json.dumps(llm_payload).encode("utf-8"),
-                    headers={
-                        "x-api-key": api_key,
-                        "anthropic-version": "2023-06-01",
-                    },
-                )
-                break
-            except RuntimeError as exc:
-                if not _is_transient_request_error(exc):
-                    raise
-                errors.append(str(exc))
-                if request_attempt + 1 == _ANTIGRAVITY_REQUEST_RETRIES:
-                    llm_response = None
-        if llm_response is None:
-            continue
-        llm_text = _extract_message_text(llm_response)
-        try:
-            generated = json.loads(llm_text)
-        except json.JSONDecodeError:
-            errors.append("non-JSON content")
-            continue
-        try:
-            return normalize_title_batch(generated, report_date=report_date)
-        except ValueError as exc:
-            errors.append(str(exc))
-            continue
-
-    raise RuntimeError(
-        "antigravity returned invalid title content after retry: "
-        + ", ".join(errors or ["unknown error"])
-    )
-
-
-def publish_antigravity_digest(
-    *,
-    base_url: str,
-    report_date: str,
-    limit: int,
-    admin_url: str,
-    admin_password: str,
-    model: str,
-    prompt_path: Path,
-    chunk_size: int = _DEFAULT_ANTIGRAVITY_CHUNK_SIZE,
-) -> dict[str, Any]:
-    feed_items = _fetch_feed_items(base_url=base_url, report_date=report_date, limit=limit)
-    prompt = prompt_path.read_text(encoding="utf-8").strip()
-    api_key = _fetch_antigravity_proxy_api_key(admin_url=admin_url, admin_password=admin_password)
-    summaries_by_url: dict[str, str] = {}
-    for chunk in chunk_feed_items(feed_items, chunk_size=chunk_size):
-        chunk_summaries = run_antigravity_chunk(
-            admin_url=admin_url,
-            api_key=api_key,
-            model=model,
-            prompt=prompt,
-            report_date=report_date,
-            articles=chunk,
-        )
-        summaries_by_url.update(chunk_summaries)
-
-    normalized_rows, _ = _normalize_feed_rows(feed_items)
-    title_rewrite_candidates = [
-        {
-            "url": str(row["url"]),
-            "title": str(row["title"]),
-            "summary": str(summaries_by_url.get(str(row["url"]), "")),
-        }
-        for row in normalized_rows
-        if _should_prefer_summary_title(str(row["title"]))
-        and str(summaries_by_url.get(str(row["url"]), "")).strip()
-    ]
-    rewritten_titles_by_url: dict[str, str] = {}
-    for chunk in chunk_feed_items(
-        title_rewrite_candidates,
-        chunk_size=_DEFAULT_ANTIGRAVITY_TITLE_CHUNK_SIZE,
-    ):
-        try:
-            rewritten_titles_by_url.update(
-                run_antigravity_title_chunk(
-                    admin_url=admin_url,
-                    api_key=api_key,
-                    model=model,
-                    report_date=report_date,
-                    articles=chunk,
-                )
-            )
-        except RuntimeError:
-            continue
-
-    payload = build_categorized_digest_payload(
-        items=feed_items,
-        report_date=report_date,
-        summaries_by_url=summaries_by_url,
-        titles_by_url=rewritten_titles_by_url,
-    )
-    response = read_json_response(
-        f"{base_url.rstrip('/')}/api/news/digests",
-        body=json.dumps(payload).encode("utf-8"),
-    )
-    if not isinstance(response, dict):
-        raise RuntimeError("publish response was not a JSON object")
-
-    saved = read_json_response(f"{base_url.rstrip('/')}/api/news/digests?date={report_date}")
-    if not isinstance(saved, dict):
-        raise RuntimeError("saved digest response was not a JSON object")
-    saved_groups = saved.get("groups")
-    if not isinstance(saved_groups, list):
-        raise RuntimeError("saved digest response did not contain a valid groups array")
-
-    expected_urls = sorted(str(row["url"]) for row in feed_items)
-    actual_urls = sorted(
-        str(item["url"])
-        for group in saved_groups
-        if isinstance(group, dict)
-        for item in group.get("items", [])
-        if isinstance(item, dict) and "url" in item
-    )
-    if expected_urls != actual_urls:
-        raise RuntimeError(
-            "saved digest links do not match fetched links: "
-            f"expected={len(expected_urls)} actual={len(actual_urls)}"
-        )
-
-    return {
-        "report_date": report_date,
-        "fetched_count": len(expected_urls),
-        "saved_count": len(actual_urls),
-        "group_count": len(saved_groups),
-        "model": model,
-        "mode": "antigravity",
-        "chunk_count": len(chunk_feed_items(feed_items, chunk_size=chunk_size)),
-    }
 
 
 def build_feed_digest_payload(*, items: object, report_date: str) -> dict[str, Any]:
@@ -1113,7 +832,7 @@ def run_deepseek_chunk(
             "messages": [
                 {
                     "role": "system",
-                    "content": prompt + (_ANTIGRAVITY_RETRY_SUFFIX if attempt else ""),
+                    "content": prompt + (_SUMMARY_RETRY_SUFFIX if attempt else ""),
                 },
                 {
                     "role": "user",
@@ -1168,7 +887,7 @@ def publish_deepseek_digest(
     api_key: str,
     model: str,
     prompt_path: Path,
-    chunk_size: int = _DEFAULT_ANTIGRAVITY_CHUNK_SIZE,
+    chunk_size: int = _DEFAULT_CHUNK_SIZE,
 ) -> dict[str, Any]:
     if not api_key.strip():
         raise RuntimeError("DS_API_KEY is required")
@@ -1586,7 +1305,7 @@ def publish_feed_weekly(
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="PocketPaw bridge for AI_PARSER daily digests")
+    parser = argparse.ArgumentParser(description="AI_PARSER digest generator")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     fetch_parser = subparsers.add_parser(
@@ -1635,7 +1354,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default=os.environ.get("AINEWS_DIGEST_MODEL", "deepseek-flash"),
     )
     deepseek_parser.add_argument("--chunk-size", type=int, default=12)
-    deepseek_parser.add_argument("--prompt", default=str(_DEFAULT_DEEPSEEK_PROMPT_PATH))
+    deepseek_parser.add_argument("--prompt", default=str(_DEFAULT_PROMPT_PATH))
 
     publish_feed_weekly_parser = subparsers.add_parser(
         "publish-feed-weekly",
@@ -1647,32 +1366,6 @@ def _build_parser() -> argparse.ArgumentParser:
     publish_feed_weekly_parser.add_argument("--base-url", required=True)
     publish_feed_weekly_parser.add_argument("--report-date", required=True)
     publish_feed_weekly_parser.add_argument("--limit", type=int, default=200)
-
-    publish_ai_parser = subparsers.add_parser(
-        "publish-antigravity-digest",
-        help=(
-            "Generate a digest via Antigravity, repair coverage, "
-            "publish it, and verify full link coverage"
-        ),
-    )
-    publish_ai_parser.add_argument("--base-url", required=True)
-    publish_ai_parser.add_argument("--report-date", required=True)
-    publish_ai_parser.add_argument("--limit", type=int, default=200)
-    publish_ai_parser.add_argument("--antigravity-url", required=True)
-    publish_ai_parser.add_argument(
-        "--antigravity-admin-password",
-        default=os.environ.get("ANTIGRAVITY_ADMIN_PASSWORD", ""),
-    )
-    publish_ai_parser.add_argument(
-        "--antigravity-model",
-        default=os.environ.get("ANTIGRAVITY_MODEL", "gemini-3-flash"),
-    )
-    publish_ai_parser.add_argument(
-        "--antigravity-chunk-size",
-        type=int,
-        default=int(os.environ.get("ANTIGRAVITY_CHUNK_SIZE", _DEFAULT_ANTIGRAVITY_CHUNK_SIZE)),
-    )
-    publish_ai_parser.add_argument("--prompt", default=str(_DEFAULT_PROMPT_PATH))
 
     return parser
 
@@ -1732,21 +1425,6 @@ def main() -> int:
                 base_url=args.base_url,
                 report_date=args.report_date,
                 limit=args.limit,
-            )
-            sys.stdout.write(json.dumps(response, ensure_ascii=False, indent=2) + "\n")
-            return 0
-        if args.command == "publish-antigravity-digest":
-            if not args.antigravity_admin_password:
-                raise RuntimeError("antigravity admin password is required")
-            response = publish_antigravity_digest(
-                base_url=args.base_url,
-                report_date=args.report_date,
-                limit=args.limit,
-                admin_url=args.antigravity_url,
-                admin_password=args.antigravity_admin_password,
-                model=args.antigravity_model,
-                prompt_path=Path(args.prompt),
-                chunk_size=args.antigravity_chunk_size,
             )
             sys.stdout.write(json.dumps(response, ensure_ascii=False, indent=2) + "\n")
             return 0

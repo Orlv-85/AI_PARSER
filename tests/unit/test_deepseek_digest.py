@@ -6,10 +6,11 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import yaml
 
 
 def _load_bridge_module():
-    script = Path(__file__).resolve().parents[2] / "scripts" / "pocketpaw_digest_bridge.py"
+    script = Path(__file__).resolve().parents[2] / "scripts" / "digest_generator.py"
     spec = importlib.util.spec_from_file_location("deepseek_digest_bridge", script)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -17,9 +18,58 @@ def _load_bridge_module():
     return module
 
 
-def test_bridge_supports_server_host_python() -> None:
-    source = Path("scripts/pocketpaw_digest_bridge.py").read_text(encoding="utf-8")
+def test_generator_supports_server_host_python() -> None:
+    source = Path("scripts/digest_generator.py").read_text(encoding="utf-8")
     ast.parse(source, feature_version=(3, 10))
+
+
+def test_generator_exposes_only_current_provider_and_prompt() -> None:
+    generator = _load_bridge_module()
+    parser = generator.__dict__["_build_parser"]()
+    assert "publish-antigravity-digest" not in parser.format_help()
+    args = parser.parse_args(
+        [
+            "publish-deepseek-digest",
+            "--base-url",
+            "http://example.test",
+            "--report-date",
+            "2026-10-03",
+        ]
+    )
+    assert Path(args.prompt).is_file()
+    assert Path(args.prompt).name == "digest_prompt.txt"
+
+
+def test_compose_contains_only_application_services() -> None:
+    config = yaml.safe_load(Path("docker-compose.prod.yml").read_text(encoding="utf-8"))
+    assert set(config["services"]) == {"app", "db", "caddy"}
+
+
+def test_deepseek_retries_network_timeout(monkeypatch) -> None:
+    generator = _load_bridge_module()
+    items = [{"url": "https://example.com/story", "summary": "A concrete finding."}]
+    responses = iter(
+        [
+            RuntimeError("Network timeout for https://api.deepseek.com/chat/completions"),
+            _completion(items),
+        ]
+    )
+
+    def read(*_args, **_kwargs):
+        response = next(responses)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    monkeypatch.setattr(generator, "read_json_response", read)
+    result = generator.run_deepseek_chunk(
+        api_key="test-only-key",
+        model="deepseek-flash",
+        prompt="Return JSON.",
+        report_date="2026-10-03",
+        articles=[{"url": items[0]["url"], "title": "Finding"}],
+    )
+    assert result == {items[0]["url"]: items[0]["summary"]}
 
 
 @pytest.mark.parametrize("field", ["summary", "content"])
@@ -148,7 +198,7 @@ def test_deepseek_rejects_bad_response_without_publishing(monkeypatch, bad_items
             limit=200,
             api_key="test-only-key",
             model="deepseek-flash",
-            prompt_path=Path("automation/pocketpaw/deepseek_digest_prompt.txt"),
+            prompt_path=Path("automation/digest_prompt.txt"),
         )
     assert len(calls) == 3
     assert not any("/api/news/digests" in url for url in calls)
@@ -205,7 +255,7 @@ def test_deepseek_publishes_all_chunks_and_verifies_saved_digest(monkeypatch) ->
         api_key="test-only-key",
         model="deepseek-flash",
         chunk_size=1,
-        prompt_path=Path("automation/pocketpaw/deepseek_digest_prompt.txt"),
+        prompt_path=Path("automation/digest_prompt.txt"),
     )
     assert result["mode"] == "deepseek"
     assert result["chunk_count"] == 2
