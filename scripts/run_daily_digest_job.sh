@@ -7,8 +7,7 @@ ROOT_DIR="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
 APP_CONTAINER="${AINEWS_APP_CONTAINER:-ai-news-app}"
 APP_PORT="${AINEWS_DIGEST_APP_PORT:-8010}"
 DIGEST_LIMIT="${AINEWS_DIGEST_LIMIT:-200}"
-ANTIGRAVITY_PORT="${ANTIGRAVITY_PORT:-8045}"
-ANTIGRAVITY_MODEL="${AINEWS_DIGEST_MODEL:-gemini-3-flash}"
+DEEPSEEK_MODEL="${AINEWS_DIGEST_MODEL:-}"
 ALLOW_FALLBACK="${AINEWS_DIGEST_ALLOW_FALLBACK:-1}"
 REPORT_DATE="${1:-$(date -u -d 'yesterday' +%F)}"
 
@@ -23,24 +22,28 @@ else
   APP_BASE_URL="http://${APP_IP}:${APP_PORT}"
 fi
 
-ANTIGRAVITY_ADMIN_PASSWORD="$(sed -n 's/^ANTIGRAVITY_WEB_PASSWORD=//p' "$ROOT_DIR/.env" | tail -n 1)"
+if [ -z "${DS_API_KEY:-}" ] && [ -f "$ROOT_DIR/.env" ]; then
+  DS_API_KEY="$(sed -n 's/^DS_API_KEY=//p' "$ROOT_DIR/.env" | tail -n 1)"
+fi
+if [ -z "$DEEPSEEK_MODEL" ] && [ -f "$ROOT_DIR/.env" ]; then
+  DEEPSEEK_MODEL="$(sed -n 's/^AINEWS_DIGEST_MODEL=//p' "$ROOT_DIR/.env" | tail -n 1)"
+fi
+DEEPSEEK_MODEL="${DEEPSEEK_MODEL:-deepseek-flash}"
+export DS_API_KEY
 
-if [ -n "$ANTIGRAVITY_ADMIN_PASSWORD" ]; then
-  if python3 "$ROOT_DIR/scripts/pocketpaw_digest_bridge.py" \
-    publish-antigravity-digest \
-    --base-url "$APP_BASE_URL" \
-    --report-date "$REPORT_DATE" \
-    --limit "$DIGEST_LIMIT" \
-    --antigravity-url "http://127.0.0.1:${ANTIGRAVITY_PORT}" \
-    --antigravity-admin-password "$ANTIGRAVITY_ADMIN_PASSWORD" \
-    --antigravity-model "$ANTIGRAVITY_MODEL"; then
-    exit 0
-  fi
-  if [ "$ALLOW_FALLBACK" != "1" ]; then
-    exit 1
-  fi
+if python3 "$ROOT_DIR/scripts/pocketpaw_digest_bridge.py" \
+  publish-deepseek-digest \
+  --base-url "$APP_BASE_URL" \
+  --report-date "$REPORT_DATE" \
+  --limit "$DIGEST_LIMIT" \
+  --model "$DEEPSEEK_MODEL"; then
+  exit 0
+fi
+if [ "$ALLOW_FALLBACK" != "1" ]; then
+  exit 1
 fi
 
+echo "DeepSeek unavailable; using source text excerpts (not AI summaries)" >&2
 exec python3 "$ROOT_DIR/scripts/pocketpaw_digest_bridge.py" \
   publish-feed-digest \
   --base-url "$APP_BASE_URL" \

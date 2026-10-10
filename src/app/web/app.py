@@ -633,13 +633,18 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
-    @api.get("/api/news/links", response_model=list[DigestLinkFeedItem])
+    @api.get(
+        "/api/news/links",
+        response_model=list[DigestLinkFeedItem],
+        response_model_exclude_unset=True,
+    )
     def list_news_links(
         *,
         target_date: date = _NEWS_LINKS_DATE_QUERY,
         limit: int = Query(30, ge=1, le=200),
         offset: int = Query(0, ge=0),
         min_ai_relevance: float = Query(0.2, ge=0.0, le=1.0),
+        include_content: bool = False,
     ) -> list[DigestLinkFeedItem]:
         try:
             create_all()
@@ -669,6 +674,14 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
                 source_id=article.source_id,
                 source_key=source_key,
                 source_name=source_name,
+                **(
+                    {
+                        "summary": article.summary,
+                        "content": article.content[:12000] if article.content else None,
+                    }
+                    if include_content
+                    else {}
+                ),
             )
             for article, source_key, source_name in rows
         ]

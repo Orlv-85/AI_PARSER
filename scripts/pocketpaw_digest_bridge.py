@@ -7,6 +7,7 @@ import os
 import re
 import sys
 from datetime import UTC, date, datetime, timedelta
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, cast
 from urllib.error import HTTPError, URLError
@@ -109,6 +110,9 @@ _CATEGORY_RULES = (
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _ROOT_DIR = _SCRIPT_DIR.parent
 _DEFAULT_PROMPT_PATH = _ROOT_DIR / "automation" / "pocketpaw" / "antigravity_digest_prompt.txt"
+_DEFAULT_DEEPSEEK_PROMPT_PATH = (
+    _ROOT_DIR / "automation" / "pocketpaw" / "deepseek_digest_prompt.txt"
+)
 _UPPERCASE_TITLE_TOKENS = {
     "ai",
     "api",
@@ -184,6 +188,7 @@ def read_json_response(
     *,
     body: bytes | None = None,
     headers: dict[str, str] | None = None,
+    timeout: float = 30,
 ) -> Any:
     request = Request(url=url, data=body)
     for key, value in (headers or {}).items():
@@ -192,7 +197,7 @@ def read_json_response(
         request.add_header("Content-Type", "application/json")
         request.method = "POST"
     try:
-        with urlopen(request, timeout=30) as response:
+        with urlopen(request, timeout=timeout) as response:
             return json.load(response)
     except TimeoutError as exc:
         raise RuntimeError(f"Network timeout for {url}") from exc
@@ -247,7 +252,9 @@ def _normalize_display_title(*, raw_title: str, url: str) -> str:
 
 def _is_generic_digest_summary(summary: str) -> bool:
     normalized = summary.strip().lower()
-    return normalized.startswith("source:") and "included in the daily digest" in normalized
+    return (
+        normalized.startswith("source:") and "included in the daily digest" in normalized
+    ) or normalized.startswith("article text is unavailable")
 
 
 def _is_weak_display_title(title: str) -> bool:
@@ -328,9 +335,7 @@ def _truncate_title(title: str) -> str:
     if len(normalized) <= _MAX_TITLE_LENGTH:
         return normalized
     fragments = [
-        fragment.strip(" .")
-        for fragment in normalized.split(". ")
-        if fragment.strip(" .")
+        fragment.strip(" .") for fragment in normalized.split(". ") if fragment.strip(" .")
     ]
     for fragment_count in (2, 1):
         if len(fragments) >= fragment_count:
@@ -491,7 +496,7 @@ def _write_json(path: Path, payload: object) -> None:
 
 
 def _fetch_feed_items(*, base_url: str, report_date: str, limit: int) -> list[dict[str, Any]]:
-    query = urlencode({"date": report_date, "limit": limit})
+    query = urlencode({"date": report_date, "limit": limit, "include_content": "true"})
     items = read_json_response(f"{base_url.rstrip('/')}/api/news/links?{query}")
     if not isinstance(items, list):
         raise RuntimeError("news links API did not return a list")
@@ -520,7 +525,12 @@ def _fetch_news_links_range(
         offset = 0
         while True:
             query = urlencode(
-                {"date": current.isoformat(), "limit": limit, "offset": offset}
+                {
+                    "date": current.isoformat(),
+                    "limit": limit,
+                    "offset": offset,
+                    "include_content": "true",
+                }
             )
             daily_rows = read_json_response(f"{base_url.rstrip('/')}/api/news/links?{query}")
             if not isinstance(daily_rows, list):
@@ -574,10 +584,68 @@ def publish_digest(*, base_url: str, report_date: str, input_path: Path) -> dict
     return response
 
 
+class _ArticleTextParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.hidden_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in {"script", "style", "template"}:
+            self.hidden_depth += 1
+        elif not self.hidden_depth and tag in {"p", "br", "div", "li", "h1", "h2"}:
+            self.parts.append(" ")
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if not self.hidden_depth:
+            self.parts.append(" ")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in {"script", "style", "template"} and self.hidden_depth:
+            self.hidden_depth -= 1
+        elif not self.hidden_depth:
+            self.parts.append(" ")
+
+    def handle_data(self, data: str) -> None:
+        if not self.hidden_depth:
+            self.parts.append(data)
+
+
+def _article_text(value: object) -> str:
+    parser = _ArticleTextParser()
+    parser.feed(str(value or ""))
+    text = " ".join("".join(parser.parts).split())
+    text = re.sub(r"\s*The post .+? appeared first on .*$", "", text, flags=re.I)
+    return text.strip()
+
+
+def _source_excerpt(row: dict[str, Any], *, limit: int = _MAX_SUMMARY_LENGTH) -> str:
+    for key in ("summary", "content"):
+        text = _article_text(row.get(key))
+        if not text or text.lower() == "no summary available." or _is_generic_digest_summary(text):
+            continue
+        if len(text) <= limit:
+            return text
+        sentences = re.split(r"(?<=[.!?])\s+", text)
+        excerpt = ""
+        for sentence in sentences[:2]:
+            candidate = (excerpt + " " + sentence).strip()
+            if len(candidate) > limit:
+                break
+            excerpt = candidate
+        if excerpt:
+            return excerpt
+        return text[: limit - 3].rsplit(" ", 1)[0].rstrip(".,;:") + "..."
+    return ""
+
+
 def _default_feed_summary(*, row: dict[str, Any], report_date: str) -> str:
-    source_name = str(row.get("source_name") or "unknown source").strip() or "unknown source"
-    published_at = str(row.get("published_at") or report_date).strip() or report_date
-    return f"Source: {source_name}. Published at {published_at}. Included in the daily digest."
+    del report_date
+    excerpt = _source_excerpt(row)
+    if excerpt:
+        return excerpt
+    source_name = str(row.get("source_name") or "the source").strip() or "the source"
+    return f"Article text is unavailable; read the original report from {source_name}."
 
 
 def _normalize_feed_rows(items: object) -> tuple[list[dict[str, Any]], list[str]]:
@@ -614,9 +682,7 @@ def categorize_digest_item(*, row: dict[str, Any], summary: str = "") -> str:
             summary,
         )
     ).lower()
-    has_rag_negative = any(
-        _has_keyword(haystack, keyword) for keyword in _RAG_NEGATIVE_KEYWORDS
-    )
+    has_rag_negative = any(_has_keyword(haystack, keyword) for keyword in _RAG_NEGATIVE_KEYWORDS)
     if (
         any(_has_keyword(haystack, keyword) for keyword in _RAG_STRONG_KEYWORDS)
         and not has_rag_negative
@@ -765,8 +831,7 @@ def chunk_feed_items(
     if chunk_size < 1:
         raise ValueError("chunk_size must be >= 1")
     return [
-        feed_items[start : start + chunk_size]
-        for start in range(0, len(feed_items), chunk_size)
+        feed_items[start : start + chunk_size] for start in range(0, len(feed_items), chunk_size)
     ]
 
 
@@ -1019,11 +1084,141 @@ def build_feed_digest_payload(*, items: object, report_date: str) -> dict[str, A
     return build_categorized_digest_payload(items=items, report_date=report_date)
 
 
-def publish_feed_digest(*, base_url: str, report_date: str, limit: int) -> dict[str, Any]:
-    query = urlencode({"date": report_date, "limit": limit})
-    items = read_json_response(f"{base_url.rstrip('/')}/api/news/links?{query}")
-    payload = build_feed_digest_payload(items=items, report_date=report_date)
+def run_deepseek_chunk(
+    *,
+    api_key: str,
+    model: str,
+    prompt: str,
+    report_date: str,
+    articles: list[dict[str, Any]],
+) -> dict[str, str]:
+    expected_urls = sorted(str(row["url"]) for row in articles)
+    source_rows = [
+        {
+            "url": row["url"],
+            "title": row["title"],
+            "summary": _article_text(row.get("summary"))[:2000],
+            "content": _article_text(row.get("content"))[:6000],
+        }
+        for row in articles
+    ]
+    model = model.strip().strip('"').strip("'")
+    for attempt in range(2):
+        payload = {
+            "model": model,
+            "thinking": {"type": "disabled"},
+            "response_format": {"type": "json_object"},
+            "max_tokens": 4000,
+            "temperature": 0.2,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": prompt + (_ANTIGRAVITY_RETRY_SUFFIX if attempt else ""),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "report_date": report_date,
+                            "articles": source_rows,
+                        },
+                        ensure_ascii=False,
+                    ),
+                },
+            ],
+        }
+        try:
+            response = read_json_response(
+                "https://api.deepseek.com/chat/completions",
+                body=json.dumps(payload).encode("utf-8"),
+                headers={"Authorization": f"Bearer {api_key}"},
+                timeout=90,
+            )
+        except RuntimeError as exc:
+            detail = str(exc).replace(api_key, "[redacted]")
+            if attempt == 0 and _is_transient_request_error(exc):
+                continue
+            raise RuntimeError(f"DeepSeek request failed: {detail}") from None
+        try:
+            choice = response["choices"][0]
+            if choice.get("finish_reason") != "stop":
+                raise ValueError("incomplete response")
+            generated = json.loads(choice["message"]["content"])
+            summaries = normalize_summary_batch(generated, report_date=report_date)
+            returned_urls = sorted(str(item["url"]) for item in generated["items"])
+            if returned_urls != expected_urls or sorted(summaries) != expected_urls:
+                raise ValueError("incomplete URL coverage")
+            if any(
+                len(str(item["summary"])) > _MAX_SUMMARY_LENGTH
+                or "included in the daily digest" in str(item["summary"]).lower()
+                for item in generated["items"]
+            ):
+                raise ValueError("invalid summary")
+            return summaries
+        except (KeyError, IndexError, TypeError, ValueError):
+            continue
+    raise RuntimeError("DeepSeek returned invalid summaries after retry; digest was not published")
 
+
+def publish_deepseek_digest(
+    *,
+    base_url: str,
+    report_date: str,
+    limit: int,
+    api_key: str,
+    model: str,
+    prompt_path: Path,
+    chunk_size: int = _DEFAULT_ANTIGRAVITY_CHUNK_SIZE,
+) -> dict[str, Any]:
+    if not api_key.strip():
+        raise RuntimeError("DS_API_KEY is required")
+    items = _fetch_feed_items(base_url=base_url, report_date=report_date, limit=limit)
+    normalized_rows, _ = _normalize_feed_rows(items)
+    prompt = prompt_path.read_text(encoding="utf-8").strip()
+    summaries: dict[str, str] = {}
+    chunks = chunk_feed_items(normalized_rows, chunk_size=chunk_size)
+    for chunk in chunks:
+        summaries.update(
+            run_deepseek_chunk(
+                api_key=api_key,
+                model=model,
+                prompt=prompt,
+                report_date=report_date,
+                articles=chunk,
+            )
+        )
+    payload = build_categorized_digest_payload(
+        items=normalized_rows,
+        report_date=report_date,
+        summaries_by_url=summaries,
+    )
+    result = _publish_verified_digest(
+        base_url=base_url,
+        report_date=report_date,
+        items=normalized_rows,
+        payload=payload,
+    )
+    return {**result, "mode": "deepseek", "model": model, "chunk_count": len(chunks)}
+
+
+def publish_feed_digest(*, base_url: str, report_date: str, limit: int) -> dict[str, Any]:
+    items = _fetch_feed_items(base_url=base_url, report_date=report_date, limit=limit)
+    payload = build_feed_digest_payload(items=items, report_date=report_date)
+    return _publish_verified_digest(
+        base_url=base_url,
+        report_date=report_date,
+        items=items,
+        payload=payload,
+    )
+
+
+def _publish_verified_digest(
+    *,
+    base_url: str,
+    report_date: str,
+    items: list[dict[str, Any]],
+    payload: dict[str, Any],
+) -> dict[str, Any]:
     response = read_json_response(
         f"{base_url.rstrip('/')}/api/news/digests",
         body=json.dumps(payload).encode("utf-8"),
@@ -1085,11 +1280,7 @@ def _weekly_item_fallback_summary(*, row: dict[str, Any]) -> str:
 
 
 def _weekly_item_summary(*, row: dict[str, Any]) -> str:
-    for key in ("summary", "content"):
-        candidate = str(row.get(key) or "").strip()
-        if candidate and candidate.lower() != "no summary available.":
-            return candidate
-    return _weekly_item_fallback_summary(row=row)
+    return _source_excerpt(row) or _weekly_item_fallback_summary(row=row)
 
 
 def _normalize_topic_token(token: str) -> str:
@@ -1432,6 +1623,20 @@ def _build_parser() -> argparse.ArgumentParser:
     publish_feed_parser.add_argument("--report-date", required=True)
     publish_feed_parser.add_argument("--limit", type=int, default=200)
 
+    deepseek_parser = subparsers.add_parser(
+        "publish-deepseek-digest",
+        help="Summarize article text via DeepSeek and publish the digest",
+    )
+    deepseek_parser.add_argument("--base-url", required=True)
+    deepseek_parser.add_argument("--report-date", required=True)
+    deepseek_parser.add_argument("--limit", type=int, default=200)
+    deepseek_parser.add_argument(
+        "--model",
+        default=os.environ.get("AINEWS_DIGEST_MODEL", "deepseek-flash"),
+    )
+    deepseek_parser.add_argument("--chunk-size", type=int, default=12)
+    deepseek_parser.add_argument("--prompt", default=str(_DEFAULT_DEEPSEEK_PROMPT_PATH))
+
     publish_feed_weekly_parser = subparsers.add_parser(
         "publish-feed-weekly",
         help=(
@@ -1507,6 +1712,18 @@ def main() -> int:
                 base_url=args.base_url,
                 report_date=args.report_date,
                 limit=args.limit,
+            )
+            sys.stdout.write(json.dumps(response, ensure_ascii=False, indent=2) + "\n")
+            return 0
+        if args.command == "publish-deepseek-digest":
+            response = publish_deepseek_digest(
+                base_url=args.base_url,
+                report_date=args.report_date,
+                limit=args.limit,
+                api_key=os.environ.get("DS_API_KEY", "").strip().strip('"').strip("'"),
+                model=args.model,
+                prompt_path=Path(args.prompt),
+                chunk_size=args.chunk_size,
             )
             sys.stdout.write(json.dumps(response, ensure_ascii=False, indent=2) + "\n")
             return 0

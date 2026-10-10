@@ -24,7 +24,7 @@ AINEWS_DIGEST_LOG_PATH="${AINEWS_DIGEST_LOG_PATH:-$ROOT_DIR/logs/daily-digest.lo
 AINEWS_WEEKLY_CRON_ENABLED="${AINEWS_WEEKLY_CRON_ENABLED:-1}"
 AINEWS_WEEKLY_CRON_SCHEDULE="${AINEWS_WEEKLY_CRON_SCHEDULE:-15 2 * * 1}"
 AINEWS_WEEKLY_LOG_PATH="${AINEWS_WEEKLY_LOG_PATH:-$ROOT_DIR/logs/weekly-analytics.log}"
-ANTIGRAVITY_ENABLED="${ANTIGRAVITY_ENABLED:-1}"
+ANTIGRAVITY_ENABLED="${ANTIGRAVITY_ENABLED:-0}"
 ANTIGRAVITY_PORT="${ANTIGRAVITY_PORT:-8045}"
 POCKETPAW_ENABLED="${POCKETPAW_ENABLED:-1}"
 POCKETPAW_VERSION="${POCKETPAW_VERSION:-0.2.5}"
@@ -247,7 +247,8 @@ if is_enabled "$ANTIGRAVITY_ENABLED"; then
   echo "Starting Antigravity Manager..."
   docker compose -f "$COMPOSE_FILE" up -d antigravity
 else
-  echo "ANTIGRAVITY_ENABLED=0; skipping Antigravity Manager startup"
+  echo "ANTIGRAVITY_ENABLED=0; stopping Antigravity Manager (account data is preserved)"
+  docker compose -f "$COMPOSE_FILE" stop antigravity
 fi
 
 echo "Waiting for PostgreSQL readiness..."
@@ -289,7 +290,7 @@ fi
 
 echo "Checking app health..."
 attempt=0
-until docker compose -f "$COMPOSE_FILE" exec -T app python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/health', timeout=3)" >/dev/null 2>&1; do
+until docker exec ai-news-app python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/health', timeout=3)" >/dev/null 2>&1; do
   attempt=$((attempt + 1))
   if [ "$attempt" -ge 30 ]; then
     echo "App healthcheck failed" >&2

@@ -39,8 +39,11 @@ def test_deploy_updates_cron_to_use_the_deployed_image(tmp_path) -> None:
     for tag in ("v0.1.62", "v0.1.63"):
         image = f"ghcr.io/orlv-85/ai-parser:{tag}"
         result = subprocess.run(
-            ["sh", str(script), tag], env={**env, "APP_IMAGE": image},
-            capture_output=True, text=True, check=False,
+            ["sh", str(script), tag],
+            env={**env, "APP_IMAGE": image},
+            capture_output=True,
+            text=True,
+            check=False,
         )
         assert result.returncode == 0, result.stdout + result.stderr
         cron = cron_store.read_text(encoding="utf-8")
@@ -52,3 +55,7 @@ def test_deploy_updates_cron_to_use_the_deployed_image(tmp_path) -> None:
         last_call = (tmp_path / "docker.log").read_text(encoding="utf-8").splitlines()[-1]
         assert last_call.startswith(image + "|")
         assert last_call.endswith("app ai-news fetch --once")
+        calls = (tmp_path / "docker.log").read_text(encoding="utf-8")
+        assert "stop antigravity" in calls
+        assert "exec ai-news-app python" in calls
+        assert "exec -T app python" not in calls

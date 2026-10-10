@@ -170,7 +170,9 @@ def test_build_feed_digest_payload_includes_every_link_once() -> None:
     assert payload["report_date"] == "2026-03-01"
     assert urls == ["https://example.com/1", "https://example.com/2"]
     assert categories == ["Business & Product"]
-    assert payload["groups"][0]["items"][0]["summary"].startswith("Source: Tech Source.")
+    assert payload["groups"][0]["items"][0]["summary"] == (
+        "Article text is unavailable; read the original report from Tech Source."
+    )
 
 
 def test_build_feed_digest_payload_rejects_invalid_feed_row() -> None:
@@ -520,8 +522,8 @@ def test_fetch_news_links_range_paginates_daily_results() -> None:
 
     assert len(rows) == 1
     assert captured_queries == [
-        {"date": "2026-03-08", "limit": "1", "offset": "0"},
-        {"date": "2026-03-08", "limit": "1", "offset": "1"},
+        {"date": "2026-03-08", "limit": "1", "offset": "0", "include_content": "true"},
+        {"date": "2026-03-08", "limit": "1", "offset": "1", "include_content": "true"},
     ]
 
 

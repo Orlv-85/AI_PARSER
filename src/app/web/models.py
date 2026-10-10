@@ -65,6 +65,8 @@ class DigestLinkFeedItem(BaseModel):
     source_id: int | None = None
     source_key: str | None = None
     source_name: str | None = None
+    summary: str | None = None
+    content: str | None = None
 
 
 class NewsDigestItemPayload(BaseModel):

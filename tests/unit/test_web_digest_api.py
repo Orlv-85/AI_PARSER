@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from importlib import import_module
 from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
@@ -12,8 +13,9 @@ from app.storage.models_sql import Article, Base, FetchRun, Source
 from app.web.app import create_app
 
 
+@pytest.mark.parametrize("include_content", [False, True])
 def test_news_links_filters_to_requested_date_and_returns_article_metadata(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, include_content
 ) -> None:
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()
@@ -43,6 +45,8 @@ def test_news_links_filters_to_requested_date_and_returns_article_metadata(
                 url="https://example.com/source-article",
                 url_canonical="https://example.com/source-article",
                 source_id=9,
+                summary="Article summary",
+                content="x" * 13000,
             )
             return [(article, "feed-key", "Feed Source")]
 
@@ -53,7 +57,8 @@ def test_news_links_filters_to_requested_date_and_returns_article_metadata(
 
     client = TestClient(create_app())
 
-    response = client.get("/api/news/links?date=2026-03-01&limit=25&min_ai_relevance=0.4")
+    query = "/api/news/links?date=2026-03-01&limit=25&min_ai_relevance=0.4"
+    response = client.get(query + ("&include_content=true" if include_content else ""))
 
     assert response.status_code == 200
     assert captured == {
@@ -77,6 +82,7 @@ def test_news_links_filters_to_requested_date_and_returns_article_metadata(
             "source_id": 9,
             "source_key": "feed-key",
             "source_name": "Feed Source",
+            **({"summary": "Article summary", "content": "x" * 12000} if include_content else {}),
         }
     ]
 
@@ -300,9 +306,7 @@ def test_news_stats_page_renders_public_shell(monkeypatch, tmp_path) -> None:
     assert "/api/news/stats/daily?" in response.text
 
 
-def test_news_digests_rejects_blank_group_titles_and_item_summaries(
-    monkeypatch, tmp_path
-) -> None:
+def test_news_digests_rejects_blank_group_titles_and_item_summaries(monkeypatch, tmp_path) -> None:
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()
 
