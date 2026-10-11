@@ -65,6 +65,14 @@ Tests include >200 daily articles, ordinary admission journal reuse, preserved
 historical reports, provider outage, truncation, unsupported summaries, explicit
 evidence holds, repeat publication with no paid requests, and UTC timer units.
 
+The first PR CI run passed assertions and lint but failed the 90% coverage gate:
+its PostgreSQL tests were skipped and coverage rounded to 89%. Both branch and
+release workflows now provision an isolated PostgreSQL 18 service and pass its
+test-only connection to the Docker test container; the threshold remains 90%.
+A Docker image built from the committed files, excluding unrelated untracked
+user files, passed **838 tests, zero skipped**, and the coverage gate at **91%**.
+The local worktree's 842 count also includes four unrelated untracked tests.
+
 Production publication and release receipt will be appended after deployment
 and API/page verification. A manual dated run is not evidence that the next
 regular scheduled timer has fired.
