@@ -384,6 +384,8 @@ class ArticleRepo:
             normalized_by_hash[canonical_hash]["title"] = str(row["title"])[:self._TITLE_MAX_LEN]
             normalized_by_hash[canonical_hash].setdefault("category", None)
             normalized_by_hash[canonical_hash].setdefault("category_confidence", None)
+            normalized_by_hash[canonical_hash].setdefault("material_type", None)
+            normalized_by_hash[canonical_hash].setdefault("enrichment_provenance", None)
 
         normalized_rows = list(normalized_by_hash.values())
         canonical_hashes = list(normalized_by_hash)

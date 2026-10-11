@@ -1,0 +1,200 @@
+"""Daily publication coverage, grounding, cache reuse and failure isolation."""
+import json
+from datetime import UTC, date, datetime
+from types import SimpleNamespace
+
+import httpx
+import pytest
+from pydantic import SecretStr
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+
+from app.config.sources import SourceConfig
+from app.core import daily_enrichment as daily
+from app.core.daily_rubric import QUESTIONS
+from app.core.jev import JevRelevanceScorer
+from app.core.models import Article as CoreArticle
+from app.core.pipeline import _build_article_row
+from app.storage.legacy_cleanup import encoded, fingerprint
+from app.storage.models_sql import Article, Base
+from app.storage.reenrich_pilot_journal import PilotJournal
+from app.storage.repos import NewsDigestRepo
+
+TARGET = date(2026, 10, 10)
+SOURCE = "The company says its AI system handles document extraction for hospitals. " * 8
+SUMMARY = "The company says its AI system handles document extraction for hospitals."
+
+
+@pytest.fixture(name="session")
+def daily_session(tmp_path):
+    engine = create_engine("sqlite:///" + str(tmp_path / "daily.sqlite3"))
+    Base.metadata.create_all(engine)
+    with Session(engine) as value:
+        yield value
+    engine.dispose()
+
+
+def article(session, index=1, *, proof=False):
+    row = Article(title="AI document extraction", url=f"https://example.org/{index}",
+                  url_canonical=f"https://example.org/{index}",
+                  url_canonical_hash=f"{index:064x}", content=SOURCE,
+                  published_at=datetime(2026, 10, 10, 12, tzinfo=UTC),
+                  publication_status="confirmed", ai_relevance_score=0.9,
+                  freshness_score=0.5, rank_score=0.7)
+    if proof:
+        row.summary = SUMMARY
+        row.category = "AI Applications"
+        row.enrichment_provenance = encoded({"rubric": daily.RUBRIC_VERSION,
+            "source_content_hash": fingerprint(SOURCE),
+            "summary": {"generated_summary": SUMMARY, "support": [
+                {"sentence": SUMMARY, "quote": SUMMARY}]}, "summary_review": {"supported": True}})
+    session.add(row)
+    session.commit()
+    return row
+
+
+def settings():
+    return SimpleNamespace(semantic_admission_enabled=True, jev_api_key=SecretStr("test-key"),
+                           ds_api_key=SecretStr("test-key"))
+
+
+async def no_download(*_args):
+    pass
+
+
+def mock_client(monkeypatch, handler):
+    real_client = httpx.Client
+    monkeypatch.setattr(daily, "acquire", no_download)
+    monkeypatch.setattr(daily.httpx, "Client", lambda **_kwargs:
+                        real_client(transport=httpx.MockTransport(handler)))
+
+
+def provider_response(request, *, truncate=False, supported=True):
+    body = json.loads(request.content)
+    if "questions" in body:
+        assert body["questions"] == QUESTIONS
+        assert "Summary:" not in body["state"]
+        return httpx.Response(200, json={"model": "jev-1.13.0", "usage": {"input_tokens": 500},
+            "answers": {"ai_relevant": {"noul": 0.99},
+                "admission": {"choice": "accepted_ai_editorial", "confidence": 0.99},
+                "category": {"choice": "AI Applications", "confidence": 0.99},
+                "comparison": {"choice": "NotComparison", "confidence": 0.99}}})
+    is_review = "entailment" in body["messages"][0]["content"]
+    value = {"supported": supported, "english": True} if is_review else {
+        "facts": [{"sentence": SUMMARY, "quote": SUMMARY}], "compared_products": []}
+    return httpx.Response(200, json={"model": "deepseek-flash",
+        "usage": {"prompt_tokens": 500, "completion_tokens": 90},
+        "choices": [{"finish_reason": "length" if truncate else "stop",
+                     "message": {"content": json.dumps(value)}}]})
+
+
+def test_complete_day_more_than_200_and_preserves_history(session, tmp_path, monkeypatch):
+    for index in range(205):
+        article(session, index, proof=True)
+    repo = NewsDigestRepo(session)
+    repo.save_digest(report_date=date(2026, 10, 9), groups=[
+        {"title": "Frozen", "items": [
+            {"title": "old", "url": "https://old.org", "summary": "Old"}]}])
+    session.commit()
+    mock_client(monkeypatch, lambda _r: pytest.fail("Paid request for cached data"))
+    result = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    assert result["scope_count"] == result["published_count"] == 205
+    assert result["usage"]["total_committed_usd"] == 0
+    assert repo.get_digest(report_date=date(2026, 10, 9)).groups[0].title == "Frozen"
+
+
+def test_new_summary_review_then_resume_without_provider_calls(session, tmp_path, monkeypatch):
+    row = article(session)
+    calls = []
+
+    def respond(request):
+        calls.append(request)
+        return provider_response(request)
+
+    mock_client(monkeypatch, respond)
+    first = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    assert first["state"] == "published" and first["counts"] == {"enriched": 1}
+    assert len(calls) == 3
+    assert daily.reusable(row)
+    second = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    assert len(calls) == 3
+    assert second["counts"] == {"reused": 1}
+    assert (tmp_path / "cache" / TARGET.isoformat()).joinpath(
+        second["backup_path"].split("/")[-1]).exists()
+
+
+@pytest.mark.parametrize("failure", ["outage", "truncated", "unsupported"])
+def test_failure_retains_good_digest_and_records_reason(session, tmp_path, monkeypatch, failure):
+    article(session)
+    repo = NewsDigestRepo(session)
+    repo.save_digest(report_date=TARGET, groups=[{"title": "Good", "items": [
+        {"title": "Good", "summary": "Previously checked", "url": "https://good.org"}]}])
+    session.commit()
+
+    def respond(request):
+        if failure == "outage":
+            raise httpx.ConnectError("test-key", request=request)
+        return provider_response(request, truncate=failure == "truncated",
+                                 supported=failure != "unsupported")
+
+    mock_client(monkeypatch, respond)
+    result = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    assert result["state"] == "failed_preserved_previous"
+    assert "reason" in result and "test-key" not in json.dumps(result)
+    assert repo.get_digest(report_date=TARGET).groups[0].title == "Good"
+
+
+def test_insufficient_evidence_is_explicit_and_never_an_excerpt(session, tmp_path, monkeypatch):
+    article(session, proof=True)
+    row = article(session, 2)
+    row.content = "Tiny text"
+    session.commit()
+    mock_client(monkeypatch, lambda _r: pytest.fail("Insufficient input went to a provider"))
+    result = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    assert result["scope_count"] == 2 and result["published_count"] == 1
+    assert result["state"] == "published_with_holds"
+    assert result["held"] == [{"article_id": row.id,
+                                "reason": "insufficient_source_or_date_evidence"}]
+
+
+def test_changed_source_invalidates_cached_summary(session):
+    row = article(session, proof=True)
+    assert daily.reusable(row)
+    row.content += "New material"
+    assert not daily.reusable(row)
+
+
+def test_ordinary_ingestion_uses_rubric_journal_and_reusable_admission(tmp_path, session):
+    from logging import getLogger  # pylint: disable=import-outside-toplevel
+
+    calls = []
+
+    def respond(request):
+        calls.append(request)
+        return provider_response(request)
+
+    item = CoreArticle(source_key="test", title="AI document extraction",
+                       url="https://example.org/1", content=SOURCE)
+    journal = PilotJournal(tmp_path / "admission.sqlite3", {"version": "test"}, daily.CAPS)
+    with httpx.Client(transport=httpx.MockTransport(respond),
+                      headers={"Authorization": "Bearer test-key"}) as client:
+        scorer = JevRelevanceScorer(client, "jev-1.13.0", getLogger(__name__),
+            semantic_admission_enabled=True, daily_enrichment_enabled=True,
+            payment_journal=journal)
+        assessment = scorer.classify(item)
+        assert assessment.category == "AI Applications"
+        second = JevRelevanceScorer(client, "jev-1.13.0", getLogger(__name__),
+            semantic_admission_enabled=True, daily_enrichment_enabled=True,
+            payment_journal=journal)
+        assert second.classify(item) == assessment
+    assert len(calls) == 1
+    assert journal.report()["providers"]["jev"]["calls"] == 1
+    journal.close()
+    config = SourceConfig(id="test", name="Test", type="rss", url="https://example.org/feed")
+    values = _build_article_row(item=item, config=config, db_source_id=1,
+        canonical=item.url, canonical_hash="hash", assessment=assessment, admission_enabled=True)
+    row = article(session)
+    row.enrichment_provenance = values["enrichment_provenance"]
+    data = daily.admission_from_proof(row, {"title": item.title, "content": SOURCE})
+    assert data["answers"]["admission"]["choice"] == "accepted_ai_editorial"
+    assert data["answers"]["comparison"]["choice"] == "NotComparison"

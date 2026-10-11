@@ -64,6 +64,7 @@ def test_deploy_updates_cron_to_use_the_deployed_image(tmp_path, legacy_containe
         "TEST_LEGACY_STATE": str(legacy_state),
         "CADDY_SITE_ADDRESS": "localhost",
         "AUTO_UPDATE_LOG_PATH": str(tmp_path / "update.log"),
+        "AINEWS_DAILY_SCHEDULER": "cron",
     }
     for tag in ("v0.1.62", "v0.1.63"):
         image = f"ghcr.io/orlv-85/ai-parser:{tag}"

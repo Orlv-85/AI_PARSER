@@ -3,6 +3,7 @@ import json
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
+from hashlib import sha256
 from logging import Logger
 from math import isfinite
 from threading import BoundedSemaphore
@@ -19,7 +20,8 @@ from app.core.admission import (
     evidence_hash,
 )
 from app.core.canonicalize import canonical_url_hash, canonicalize_url
-from app.core.categories import CATEGORY_CRITERIA
+from app.core.categories import READABLE_CATEGORIES
+from app.core.daily_rubric import RUBRIC_VERSION
 from app.core.jev import JevAssessment, JevRelevanceScorer, jev_relevance_scorer
 from app.core.models import Article as CoreArticle
 from app.core.scoring import ai_relevance_score, freshness_score, rank_score
@@ -176,6 +178,8 @@ def _assessment_payload(assessment: JevAssessment) -> dict[str, object]:
         "category_confidence": assessment.category_confidence,
         "admission_choice": assessment.admission_choice,
         "admission_confidence": assessment.admission_confidence,
+        "comparison_choice": assessment.comparison_choice,
+        "comparison_confidence": assessment.comparison_confidence,
     }
 
 
@@ -239,6 +243,17 @@ def _build_article_row(
     if assessment is not None and assessment.category is not None:
         row["category"] = assessment.category
         row["category_confidence"] = assessment.category_confidence
+    if assessment is not None and assessment.comparison_choice == "Comparison":
+        if (assessment.comparison_confidence or 0) >= 0.7:
+            row["material_type"] = "Comparison"
+    if assessment is not None and assessment.comparison_choice is not None:
+        state = (f"Title: {str(row['title'])[:1024]}\n"
+                 f"Content: {str(row['content'] or '')[:16000]}")
+        source_hash = sha256(json.dumps(state, ensure_ascii=True).encode()).hexdigest()
+        row["enrichment_provenance"] = json.dumps({
+            "rubric": RUBRIC_VERSION, "admission_source_hash": source_hash,
+            "admission_assessment": _assessment_payload(assessment),
+        })
     return row
 
 
@@ -480,12 +495,13 @@ def _assessment_from_cached(cached: object) -> JevAssessment | None:
         category = assessment.get("category")
         confidence = assessment.get("category_confidence")
         if (
-            not isinstance(category, str) or category not in CATEGORY_CRITERIA
+            not isinstance(category, str) or category not in READABLE_CATEGORIES
             or not _valid_cached_probability(confidence)
         ):
             category, confidence = None, None
         return JevAssessment(
             value, category, confidence, "accepted_ai_editorial", admission_confidence,
+            assessment.get("comparison_choice"), assessment.get("comparison_confidence"),
         )
     except (TypeError, ValueError):
         return None

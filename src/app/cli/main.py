@@ -7,6 +7,7 @@ import uvicorn
 
 from app.config.settings import get_settings
 from app.config.sources import load_sources
+from app.core.daily_enrichment import publish_day
 from app.core.pipeline import run_fetch_cycle
 from app.core.source_onboarding import import_source_candidates, run_source_validation_batch
 from app.core.weekly_audit import audit
@@ -87,6 +88,27 @@ def sources() -> None:
         typer.echo(
             f"{source.id}\t{source.type}\t{status}\t{source.url}"
         )
+
+
+@app.command("daily-publish")
+def daily_publish(
+    report_date: str | None = _WEEKLY_DATE_OPTION,
+    cache_dir: str = typer.Option("data/daily-enrichment", "--cache-dir"),
+) -> None:
+    """Enrich the complete previous UTC day and atomically publish grounded summaries."""
+    try:
+        target = date.fromisoformat(report_date) if report_date else (
+            datetime.now(UTC).date() - timedelta(days=1))
+    except ValueError as exc:
+        raise typer.BadParameter("report-date must be YYYY-MM-DD") from exc
+    if target >= datetime.now(UTC).date():
+        raise typer.BadParameter("Only completed UTC days can be published")
+    create_all()
+    with SessionLocal() as session:
+        result = publish_day(session, get_settings(), target, Path(cache_dir))
+    typer.echo(json.dumps(result))
+    if result["state"] == "failed_preserved_previous":
+        raise typer.Exit(1)
 
 
 @app.command()

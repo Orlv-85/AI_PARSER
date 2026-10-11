@@ -21,6 +21,13 @@ AUTO_UPDATE_LOG_PATH="${AUTO_UPDATE_LOG_PATH:-/var/log/ai-news-auto-update.log}"
 AUTO_UPDATE_CONCURRENCY_LIMIT="${AUTO_UPDATE_CONCURRENCY_LIMIT:-10}"
 AUTO_UPDATE_FULLTEXT_CONCURRENCY_LIMIT="${AUTO_UPDATE_FULLTEXT_CONCURRENCY_LIMIT:-4}"
 AUTO_UPDATE_RSS_EXTRACT_FULL_TEXT="${AUTO_UPDATE_RSS_EXTRACT_FULL_TEXT:-0}"
+AINEWS_DAILY_SCHEDULER="${AINEWS_DAILY_SCHEDULER:-systemd}"
+FETCH_TIMER_ENABLED="$AUTO_UPDATE_ENABLED"
+DIGEST_TIMER_ENABLED="${AINEWS_DIGEST_CRON_ENABLED:-1}"
+if [ "$AINEWS_DAILY_SCHEDULER" = systemd ]; then
+  AUTO_UPDATE_ENABLED=0
+  AINEWS_DIGEST_CRON_ENABLED=0
+fi
 AINEWS_DIGEST_CRON_ENABLED="${AINEWS_DIGEST_CRON_ENABLED:-1}"
 AINEWS_DIGEST_CRON_SCHEDULE="${AINEWS_DIGEST_CRON_SCHEDULE:-0 2 * * *}"
 AINEWS_DIGEST_LOG_PATH="${AINEWS_DIGEST_LOG_PATH:-$ROOT_DIR/logs/daily-digest.log}"
@@ -260,9 +267,19 @@ if [ -n "${CADDY_SITE_ADDRESS:-}" ] && [ "${CADDY_SITE_ADDRESS}" != "localhost" 
   done
 fi
 
+printf '%s\n' "$APP_IMAGE" > "$LAST_DEPLOY_IMAGE_FILE"
 install_auto_update_cron
 install_daily_digest_cron
 install_weekly_analytics_cron
+if [ "$AINEWS_DAILY_SCHEDULER" = systemd ]; then
+  sh "$ROOT_DIR/scripts/install_daily_timers.sh"
+  if ! is_enabled "$FETCH_TIMER_ENABLED"; then
+    systemctl disable --now ai-news-daily-fetch.timer
+  fi
+  if ! is_enabled "$DIGEST_TIMER_ENABLED"; then
+    systemctl disable --now ai-news-daily-digest.timer
+  fi
+fi
 
 printf '%s\n' "$CURRENT_COMMIT" > "$LAST_DEPLOY_FILE"
 printf '%s\n' "$APP_IMAGE" > "$LAST_DEPLOY_IMAGE_FILE"

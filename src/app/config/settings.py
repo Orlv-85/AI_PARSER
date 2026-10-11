@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     semantic_admission_enabled: bool = False
     semantic_admission_policy_version: str = "semantic-admission-2026-10-10"
     semantic_admission_prompt_version: str = "semantic-admission-prompt-1"
+    daily_enrichment_enabled: bool = False
     ds_api_key: SecretStr | None = Field(
         default=None, validation_alias=AliasChoices("DS_API_KEY", "AINEWS_DS_API_KEY"),
     )

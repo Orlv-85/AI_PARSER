@@ -1,13 +1,17 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from importlib import import_module
 from logging import Logger
 from math import isfinite
+from pathlib import Path
 
 import httpx
 
 from app.config.settings import Settings
 from app.core.categories import CATEGORY_CRITERIA
+from app.core.daily_rubric import QUESTIONS
 from app.core.models import Article
 
 
@@ -18,6 +22,8 @@ class JevAssessment:
     category_confidence: float | None = None
     admission_choice: str | None = None
     admission_confidence: float | None = None
+    comparison_choice: str | None = None
+    comparison_confidence: float | None = None
 
 
 def _probability(value: object) -> float:
@@ -31,11 +37,13 @@ def _probability(value: object) -> float:
     return float(value)
 
 
-class JevRelevanceScorer:
+class JevRelevanceScorer:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self, client: httpx.Client, model: str, logger: Logger,
         category_min_confidence: float = 0.7,
         semantic_admission_enabled: bool = False,
+        *, daily_enrichment_enabled: bool = False,
+        payment_journal=None,
     ) -> None:
         self.client = client
         self.model = model
@@ -44,6 +52,8 @@ class JevRelevanceScorer:
         self.cache: dict[str, JevAssessment] = {}
         self.category_min_confidence = category_min_confidence
         self.semantic_admission_enabled = semantic_admission_enabled
+        self.daily_enrichment_enabled = daily_enrichment_enabled
+        self.payment_journal = payment_journal
 
     def score(self, article: Article) -> float | None:
         assessment = self.classify(article)
@@ -51,6 +61,8 @@ class JevRelevanceScorer:
 
     def questions(self) -> dict:
         """Expose the ordinary rubric for criteria-aware offline pilot requests."""
+        if self.daily_enrichment_enabled and self.semantic_admission_enabled:
+            return dict(QUESTIONS)
         questions = {
             "ai_relevant": {
                 "type": "noul",
@@ -106,22 +118,27 @@ class JevRelevanceScorer:
             f"Summary: {(article.summary or '')[:4000]}\n"
             f"Content: {(article.content or '')[:16000]}"
         )
+        if self.daily_enrichment_enabled:
+            state = f"Title: {article.title[:1024]}\nContent: {(article.content or '')[:16000]}"
         if self.failed:
             return None
         if state in self.cache:
             return self.cache[state]
         try:
-            response = self.client.post(
-                "https://api.typesafe.ai/v1/systemone",
-                json={"model": self.model, "state": state, "questions": self.questions()},
-            )
-            response.raise_for_status()
-            answers = response.json()["answers"]
+            body = {"model": self.model, "state": state, "questions": self.questions()}
+            if self.payment_journal is not None:
+                secret = self.client.headers["Authorization"].removeprefix("Bearer ")
+                data = self.payment_journal.call("jev", body, self.client, secret)
+            else:
+                response = self.client.post("https://api.typesafe.ai/v1/systemone", json=body)
+                response.raise_for_status()
+                data = response.json()
+            answers = data["answers"]
             value = _probability(answers["ai_relevant"]["noul"])
             admission_choice, admission_confidence = (None, None)
             if self.semantic_admission_enabled:
                 admission_choice, admission_confidence = self._admission(answers)
-        except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+        except (httpx.HTTPError, ValueError, KeyError, TypeError, RuntimeError) as exc:
             # Stop calling a failed provider for the remainder of this fetch cycle.
             self.failed = True
             fields: dict[str, object] = {"error_type": type(exc).__name__}
@@ -133,8 +150,18 @@ class JevRelevanceScorer:
             self.logger.error(event, fields)
             return None
         category, confidence = self._category(answers)
+        comparison, comparison_confidence = None, None
+        if self.daily_enrichment_enabled:
+            answer = answers.get("comparison", {})
+            if answer.get("choice") in {"Comparison", "NotComparison", "Unknown"}:
+                try:
+                    comparison_confidence = _probability(answer.get("confidence"))
+                    comparison = answer["choice"]
+                except ValueError:
+                    pass
         assessment = JevAssessment(
             value, category, confidence, admission_choice, admission_confidence,
+            comparison, comparison_confidence,
         )
         self.cache[state] = assessment
         return assessment
@@ -144,7 +171,8 @@ class JevRelevanceScorer:
             answer = answers["category"]
             choice = answer["choice"]
             confidence = _probability(answer["confidence"])
-            if not isinstance(choice, str) or choice not in {*CATEGORY_CRITERIA, "Other"}:
+            criteria = self.questions()["category"]["criteria"]
+            if not isinstance(choice, str) or choice not in criteria:
                 raise ValueError("Invalid Jev category")
         except (KeyError, TypeError, ValueError) as exc:
             # A bad category must not discard a valid relevance score.
@@ -189,7 +217,22 @@ def jev_relevance_scorer(
         timeout=settings.jev_timeout_seconds,
         headers={"Authorization": "Bearer " + api_key.get_secret_value().strip()},
     ) as client:
-        yield JevRelevanceScorer(
-            client, settings.jev_model, logger, settings.jev_category_min_confidence,
-            bool(getattr(settings, "semantic_admission_enabled", False)),
-        )
+        daily = bool(getattr(settings, "daily_enrichment_enabled", False))
+        journal = None
+        if daily:
+            # Initialize the shared pilot journal only after provider modules are loaded.
+            journal_class = import_module("app.storage.reenrich_pilot_journal").PilotJournal
+            root = Path("data/daily-admission") / datetime.now(UTC).date().isoformat()
+            root.mkdir(parents=True, exist_ok=True, mode=0o700)
+            journal = journal_class(root / "journal.sqlite3", {"version": "daily-admission-1"},
+                                   {"total": "2", "jev": "1", "deepseek": "1"})
+        try:
+            yield JevRelevanceScorer(
+                client, settings.jev_model, logger, settings.jev_category_min_confidence,
+                bool(getattr(settings, "semantic_admission_enabled", False)),
+                daily_enrichment_enabled=daily, payment_journal=journal,
+            )
+        finally:
+            if journal is not None:
+                logger.info("daily_admission_usage", journal.report())
+                journal.close()

@@ -104,17 +104,29 @@ the key. The scheduled daily job calls DeepSeek directly from Python, without
 an external agent runner. The key is passed only in the HTTP Authorization
 header, not in CLI arguments.
 
-- Model: `AINEWS_DIGEST_MODEL` (default `deepseek-flash`).
+- Daily providers: the validated ten-topic JEV rubric and `deepseek-flash`.
 - Run/rebuild a date: `./scripts/run_daily_digest_job.sh 2026-10-03`.
-- Manual CLI: `python3 scripts/digest_generator.py publish-deepseek-digest
-  --base-url http://APP_IP:8010 --report-date 2026-10-03` (export `DS_API_KEY` first).
-- The generator requests `/api/news/links?date=...&include_content=true` to get
-  stored summary/content. Without this opt-in, the link-feed API is unchanged.
-- All AI summaries must cover the original URLs exactly. Invalid/incomplete
-  responses are retried once and are not published.
-- If DeepSeek fails, `AINEWS_DIGEST_ALLOW_FALLBACK=1` uses cleaned source excerpts
-  and logs that these are not AI summaries. Set it to `0` to fail the job instead.
-  Missing article text is reported explicitly; facts are not inferred from a title.
+- The scheduled wrapper uses the released image from `.last_deploy_image` and
+  runs `ai-news daily-publish` inside compose. The worker selects the complete
+  stored UTC day, including more than 200 records, and uses a persistent private
+  source cache and provider journal under `data/daily-enrichment/`.
+- Summaries require complete JSON, exact supporting quotes, English semantic
+  support review, at most 80 words and 400 characters. The worker permits one
+  narrow repair, preserves usage/cost, and reuses validated summaries on resume.
+- `AINEWS_DIGEST_ALLOW_FALLBACK` no longer enables excerpts in the scheduled path.
+  Provider failure preserves the previous digest. Insufficient source/date or
+  classification evidence is excluded with an explicit hold in the private
+  daily report; `published_with_holds` is not full enrichment coverage.
+- Daily safety caps are $1 JEV and $4 DeepSeek per report date; ordinary ingestion
+  separately journals bounded JEV admission calls under `data/daily-admission/`.
+- Deployment installs systemd timers at **01:00 UTC fetch** and **02:00 UTC
+  publication**. Each publication processes the previous completed UTC date.
+  Both jobs share the collector lock; publication waits for an active fetch.
+  UTC calendar timers handle host DST without changing the server timezone.
+  Installation removes the old managed daily cron blocks. Weekly stays off.
+  Timers do not catch up on installation (`Persistent=false`); use the dated
+  wrapper for an explicit resume. Logs are `logs/daily-fetch.log` and
+  `logs/daily-digest.log`; inspect `systemctl list-timers 'ai-news-daily-*'`.
 - The deploy retires the old proxy container without deleting its account data.
   Retired local tooling is moved to `backups/retired-ai-tools.*`, not reinstalled.
   The old proxy-provider CLI and external-agent job template are removed.
