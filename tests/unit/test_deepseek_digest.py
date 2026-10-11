@@ -306,7 +306,7 @@ def test_missing_key_fails_before_fetch_or_publish(monkeypatch) -> None:
 
 @pytest.mark.parametrize("fallback", ["0", "1"])
 @pytest.mark.parametrize("provider_exit", [0, 1])
-def test_daily_job_uses_env_key_without_antigravity_or_secret_arguments(
+def test_daily_job_uses_release_image_and_never_falls_back(
     tmp_path,
     fallback,
     provider_exit,
@@ -318,13 +318,17 @@ def test_daily_job_uses_env_key_without_antigravity_or_secret_arguments(
         Path("scripts/run_daily_digest_job.sh").read_text(encoding="utf-8"), encoding="utf-8"
     )
     (tmp_path / ".env").write_text('DS_API_KEY="test-only-key"\n', encoding="utf-8")
-    binary = tmp_path / "python3"
+    (tmp_path / ".last_deploy_image").write_text("release:tested\n", encoding="utf-8")
+    binary = tmp_path / "docker"
     binary.write_text(
-        '#!/bin/sh\nprintf "%s|key=%s\\n" "$*" "$DS_API_KEY" >> "$TEST_LOG"\n'
-        f'case "$*" in *publish-deepseek-digest*) exit {provider_exit};; esac\n',
+        '#!/bin/sh\nprintf "%s|image=%s\\n" "$*" "$APP_IMAGE" >> "$TEST_LOG"\n'
+        f'exit {provider_exit}\n',
         encoding="utf-8",
     )
     binary.chmod(0o755)
+    lock = tmp_path / "flock"
+    lock.write_text('#!/bin/sh\nshift 3\nexec "$@"\n', encoding="utf-8")
+    lock.chmod(0o755)
     env = {
         **os.environ,
         "PATH": f"{tmp_path}:/usr/bin:/bin",
@@ -337,11 +341,10 @@ def test_daily_job_uses_env_key_without_antigravity_or_secret_arguments(
         ["sh", str(script), "2026-10-03"], env=env, capture_output=True, text=True, check=False
     )
     calls = (tmp_path / "calls").read_text(encoding="utf-8").splitlines()
-    assert "publish-deepseek-digest" in calls[0]
-    assert "--model deepseek-flash" in calls[0]
+    assert "ai-news daily-publish --report-date 2026-10-03" in calls[0]
+    assert calls[0].endswith("image=release:tested")
     assert "test-only-key" not in calls[0].split("|", 1)[0]
     assert "antigravity" not in " ".join(calls)
-    expected_exit = 0 if provider_exit == 0 or fallback == "1" else 1
-    assert result.returncode == expected_exit
-    assert len(calls) == (2 if provider_exit == 1 and fallback == "1" else 1)
+    assert result.returncode == provider_exit
+    assert len(calls) == 1
     assert "test-only-key" not in result.stdout + result.stderr

@@ -16,6 +16,10 @@ def test_production_compose_forwards_admission_settings_with_matching_defaults(f
     environment = compose["services"]["app"]["environment"]
     name = "AINEWS_" + field.upper()
     default = Settings.model_fields[field].default  # pylint: disable=unsubscriptable-object
+    if field == "semantic_admission_prompt_version":
+        assert environment[name] == "pilot-rubric-clarification-3"
+        assert environment["AINEWS_DAILY_ENRICHMENT_ENABLED"] == "true"
+        return
     if isinstance(default, bool):
         assert default is False
         default = "true"

@@ -34,6 +34,8 @@ def test_weekly_migrations_and_leased_snapshot_roundtrip_postgres() -> None:
                     "8b3a2d4e9f10_add_weekly_analytics_report_tables",
                     "c9e71b82a640_add_article_categories",
                     "e12a640c9b32_add_weekly_attention_snapshots",
+                    "f31a640c9b33_add_semantic_admission",
+                    "a42b750d0c44_add_article_evidence",
                 ):
                     importlib.import_module(f"app.storage.migrations.versions.{revision}").upgrade()
             connection.commit()
