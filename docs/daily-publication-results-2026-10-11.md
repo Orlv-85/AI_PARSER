@@ -101,6 +101,85 @@ Daily source cache, responses/payment journal and resumable receipts are under
 `/opt/ai-news/data/daily-enrichment/`; SSH/operation receipts are private under
 the backup directory and local ignored `tmp/`.
 
-The final publication receipt will be appended after the follow-up release and
-API/page verification. A manual dated run is not evidence that the next regular
-scheduled timer has fired.
+## Final installed result
+
+Follow-up [PR #18](https://github.com/Orlv-85/AI_PARSER/pull/18), implementation
+commit `df2d23a1195c6513853bb59cc2857559b2cccf5e`, was merged as
+`502d7d5d9f1da2ac2e585895def49c9beaa97510`. Regular
+[release v0.1.82](https://github.com/Orlv-85/AI_PARSER/releases/tag/v0.1.82)
+passed lint, PostgreSQL-backed tests, image build and production deploy in
+[run 38165618483](https://github.com/Orlv-85/AI_PARSER/actions/runs/38165618483).
+The installed image is `ghcr.io/orlv-85/ai-parser:v0.1.82`, image ID
+`sha256:493d14fd2d96f4eff4578adea3b66852f1ecb8cb545d6aac62a8987c9bd20505`.
+Migration remains `a42b750d0c44`. The re-enrichment code is preserved in the
+regular registry release, rather than depending on the former local image.
+
+The dated resume completed at **2026-10-11 18:57:17 UTC** and published
+[October 10](https://5kzt.l.time4vps.cloud/?date=2026-10-10) as
+`published_with_holds`: every one of the **50 stored-day articles** was accounted
+for, **7 grounded English summaries** were published and **43 articles held**.
+This is complete scope enumeration, **not complete enrichment coverage**.
+The resume reused one already supported summary and enriched six more records;
+all earlier compatible paid responses were reused through the same journal.
+
+| Published group | Items |
+| --- | ---: |
+| Models & Research | 1 |
+| QA & Observability | 1 |
+| Security & Safety | 3 |
+| Business & Industry | 2 |
+
+| Hold reason | Articles |
+| --- | ---: |
+| Insufficient source or date evidence | 36 |
+| Unsupported summary after bounded repair/review | 2 |
+| Topic or comparison type unresolved | 3 |
+| Admission unresolved | 2 |
+
+Among the 36 source/date holds, 30 retain legacy-unverified publication evidence
+and six have confirmed dates but insufficient usable text. Source extraction was
+unresolved for 30 and lacked a saved evidence page for six. Signals include five
+paywalls, seven short/empty extractions and 22 unverified article identities;
+signals overlap. Source publication evidence was unknown in 25, confirmed in
+five and absent in six. These cases were not forced into the digest or deleted.
+
+Cumulative daily paid work, including the initial failed run and recovery probe:
+**14 JEV calls**, 45,951 input tokens, **$0.001938**; **23 DeepSeek calls**,
+16,825 input / 2,449 output tokens, **$0.007997**. Total **$0.009935**, priced at
+the recorded conservative peak rates, not an invoice. All **37 calls have known
+usage and retained responses**, with no failed/inflight or unknown-usage calls.
+
+The public HTTPS API returned HTTP 200 with the requested report date, four
+groups and seven items. Internal API items exactly matched article rows with
+grounded/reviewed proof. Chrome displayed the selected 2026-10-10 date, all four
+groups and their English summaries; visual layout was checked. The 4,925 other
+historical digest items retained the exact pre-run hash. Auth and mandatory
+admission are enabled; weekly v2 and its cron remain off. Retention is 800 days,
+size thresholds are 5/4 GiB. No repeat mass cleanup was run.
+
+Effective systemd units were read back on the server: fetch uses
+`OnCalendar=*-*-* 01:00:00 UTC`, publication uses
+`OnCalendar=*-*-* 02:00:00 UTC`; both execute the released wrappers through
+`/bin/sh`, select `.last_deploy_image` and share the collector lock.
+The old managed daily/weekly cron commands are absent. Europe/Vilnius is unchanged.
+At the 2026-10-11 18:58:47 UTC verification, both timers were enabled and their
+`LAST` fields were empty. The first regular runs are **October 12 at 01:00 UTC
+fetch and 02:00 UTC publication**, serving **October 11 UTC**. The manual October
+10 resume is not presented as evidence that those scheduled executions occurred.
+
+Final implementation checks: full lint passed; the full local worktree suite
+with isolated SQLite/PostgreSQL passed **846 tests**, zero skipped, coverage
+**91.18%**. A clean Docker context excluding the four unrelated untracked user
+tests passed **842 tests**, zero skipped, coverage **91%**; branch and release CI
+were green at the unchanged 90% threshold.
+
+Private final report: `/opt/ai-news/data/daily-enrichment/2026-10-10/report.json`.
+Journal: the adjacent `journal.sqlite3`; shared extraction cache:
+`/opt/ai-news/data/daily-enrichment/source-cache/`. The failed first-run report was
+preserved as `backups/daily-publication-20261011/report-before-schema-recovery.json`.
+Final API/proof/timer/image/maintenance verification is in that private backup
+directory's `verification.json`; local copies and diagnostics remain ignored
+under `tmp/daily-publication*`. The first target digest did not exist, so no
+previous target report needed replacement; future replacement creates a private
+`digest-before-*.json` backup before the atomic save. Source holds remain available
+for explicit review and safe resume.
