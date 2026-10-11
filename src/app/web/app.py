@@ -1,4 +1,5 @@
 # pylint: disable=too-many-lines
+import json
 import logging
 import re
 from datetime import UTC, date, datetime, time, timedelta
@@ -17,7 +18,7 @@ from sqlalchemy.orm import sessionmaker
 from starlette.concurrency import run_in_threadpool
 
 from app.config.settings import get_settings
-from app.core.categories import CATEGORY_CRITERIA
+from app.core.categories import READABLE_CATEGORIES
 from app.core.source_onboarding import (
     import_source_candidates,
     review_candidate_overlaps,
@@ -93,12 +94,28 @@ def _render_index() -> str:
 
 def _article_category_metadata(article: object) -> dict[str, Any]:
     category = getattr(article, "category", None)
-    if not isinstance(category, str) or category not in CATEGORY_CRITERIA:
-        return {}
-    return {
-        "category": category,
-        "category_confidence": getattr(article, "category_confidence", None),
-    }
+    result: dict[str, Any] = {}
+    if isinstance(category, str) and category in READABLE_CATEGORIES:
+        result.update(category=category,
+                      category_confidence=getattr(article, "category_confidence", None))
+    for name in ("publication_status", "publication_precision", "publication_day",
+                 "modified_at", "material_type"):
+        value = getattr(article, name, None)
+        if value is not None:
+            result[name] = value
+    try:
+        products = getattr(article, "compared_products", None)
+        if products is not None:
+            result["compared_products"] = json.loads(products)
+        raw_dates = getattr(article, "date_provenance", None)
+        if raw_dates is not None:
+            dates = json.loads(raw_dates)
+            literal = (dates.get("published", {}).get("selected") or {}).get("literal")
+            if literal is not None:
+                result["publication_literal"] = literal
+    except (TypeError, ValueError, AttributeError):
+        pass
+    return result
 
 
 def _render_digest(*, report_date: date, digest: NewsDigestReport | None) -> str:
@@ -967,6 +984,7 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
             source_id=article.source_id,
             source_key=source_key,
             source_name=source_name,
+            **_article_category_metadata(article),
         )
 
     @api.post("/api/source-onboarding/import")

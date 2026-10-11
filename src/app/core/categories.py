@@ -29,3 +29,11 @@ CATEGORY_CRITERIA = {
     ),
 }
 CATEGORY_ORDER = tuple(CATEGORY_CRITERIA)
+
+# Legacy rubric remains pinned; new saved topics are separately readable/filterable.
+REENRICH_TOPIC_ORDER = (
+    "Models & Research", "AI Coding", "Agent Frameworks", "RAG & Data Systems",
+    "QA & Observability", "Security & Safety", "Infrastructure", "AI Applications",
+    "Business & Industry", "Policy & Regulation",
+)
+READABLE_CATEGORIES = frozenset(CATEGORY_ORDER) | frozenset(REENRICH_TOPIC_ORDER)

@@ -212,7 +212,7 @@ class MCPNewsService:
             {
                 "article_id": article.id,
                 "title": article.title,
-                "published_at": article.published_at.isoformat(),
+                "published_at": article.published_at.isoformat() if article.published_at else None,
                 "rank_score": article.rank_score,
                 "url_canonical": article.url_canonical,
                 "source_id": article.source_id,
@@ -263,7 +263,7 @@ class MCPNewsService:
                 "title": article.title,
                 "summary": article.summary,
                 "content": article.content,
-                "published_at": article.published_at.isoformat(),
+                "published_at": article.published_at.isoformat() if article.published_at else None,
                 "rank_score": article.rank_score,
                 "url": article.url,
                 "url_canonical": article.url_canonical,

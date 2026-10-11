@@ -174,7 +174,19 @@ class Article(Base):
     url: Mapped[str] = mapped_column(String(2048))
     url_canonical: Mapped[str] = mapped_column(String(2048))
     url_canonical_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    modified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    publication_day: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    publication_status: Mapped[str] = mapped_column(
+        String(32), default="legacy_unverified", server_default="legacy_unverified"
+    )
+    publication_precision: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    date_provenance: Mapped[str | None] = mapped_column(Text, nullable=True)
+    enrichment_provenance: Mapped[str | None] = mapped_column(Text, nullable=True)
+    material_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    compared_products: Mapped[str | None] = mapped_column(Text, nullable=True)
     discovered_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )

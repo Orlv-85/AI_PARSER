@@ -57,7 +57,7 @@ def test_to_datetime_none_and_struct_time() -> None:
     assert dt.year == 2026
 
 
-def test_parse_rss_skips_invalid_and_uses_updated_parsed(monkeypatch) -> None:
+def test_parse_rss_skips_invalid_and_separates_updated_parsed(monkeypatch) -> None:
     class _Entry:
         def __init__(self, link=None, title=None, updated_parsed=None):
             self.link = link
@@ -82,7 +82,9 @@ def test_parse_rss_skips_invalid_and_uses_updated_parsed(monkeypatch) -> None:
 
     assert len(items) == 2
     assert items[0].title == "One"
-    assert items[1].published_at is not None
+    assert items[1].published_at is None
+    assert items[1].publication_date_kind == "unknown"
+    assert items[1].modified_at is not None
 
 
 def test_fetch_rss_uses_fetcher_and_httpx_branches(monkeypatch) -> None:

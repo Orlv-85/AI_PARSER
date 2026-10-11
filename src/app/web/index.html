@@ -310,6 +310,7 @@
                 <label for="category">Category</label>
                 <select id="category">
                   <option value="">All categories</option>
+                  <option>Models &amp; Research</option>
                   <option>AI Coding</option>
                   <option>Agent Frameworks</option>
                   <option>RAG &amp; Data Systems</option>
@@ -317,6 +318,10 @@
                   <option>QA &amp; Observability</option>
                   <option>Infrastructure</option>
                   <option>Business &amp; Product</option>
+                  <option>Security &amp; Safety</option>
+                  <option>AI Applications</option>
+                  <option>Business &amp; Industry</option>
+                  <option>Policy &amp; Regulation</option>
                 </select>
               </div>
             </div>
@@ -719,7 +724,8 @@
             const sourceLabel = item.source_name || item.source_key || (item.source_id !== null ? `#${item.source_id}` : "n/a");
 
             const publishedCell = document.createElement("td");
-            publishedCell.textContent = item.published_at;
+            publishedCell.textContent = item.published_at || item.publication_day ||
+              item.publication_literal || "Unknown";
             row.appendChild(publishedCell);
 
             const rankCell = document.createElement("td");
@@ -731,7 +737,8 @@
             row.appendChild(sourceCell);
 
             const categoryCell = document.createElement("td");
-            categoryCell.textContent = item.category || "Uncategorized";
+            categoryCell.textContent = (item.category || "Uncategorized") +
+              (item.material_type ? " / " + item.material_type : "");
             row.appendChild(categoryCell);
 
             const titleCell = document.createElement("td");

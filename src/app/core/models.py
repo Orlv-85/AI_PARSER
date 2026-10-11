@@ -13,6 +13,8 @@ class Article(BaseModel):
     content: str | None = None
     publication_evidence_at: datetime | None = None
     publication_date_kind: Literal["published", "updated", "unknown"] = "published"
+    modified_at: datetime | None = None
+    date_evidence: dict | None = None
     page_eligibility_checked: bool = Field(default=False, exclude=True)
     ingestion_canonical_url: str | None = Field(default=None, exclude=True)
 

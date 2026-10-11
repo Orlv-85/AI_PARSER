@@ -12,6 +12,7 @@ from readability import Document
 
 from app.config.sources import SourceConfig
 from app.core.models import Article
+from app.ingest.date_evidence import extract_date_evidence
 from app.ingest.fetcher import Fetcher
 from app.ingest.page_filter import html_exclusion_reason, log_exclusion, url_exclusion_reason
 
@@ -211,6 +212,11 @@ def _build_html_article(
         url=url,
         strategy=source.html.extraction_strategy,
     )
+    dates = extract_date_evidence(article_html, url)
+    selected = dates["published"]["selected"]
+    publication = (datetime.fromisoformat(selected["utc"])
+                   if selected is not None and selected["utc"] else None)
+    modified = dates["modified"]["selected"]
     return Article(
         source_key=source.id,
         title=title,
@@ -218,7 +224,10 @@ def _build_html_article(
         published_at=None,
         summary=None,
         content=content,
-        publication_evidence_at=publication_date_evidence(article_html),
+        publication_evidence_at=publication,
+        modified_at=(datetime.fromisoformat(modified["utc"])
+                     if modified is not None and modified["utc"] else None),
+        date_evidence=dates,
         page_eligibility_checked=True,
     )
 

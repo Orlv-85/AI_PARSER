@@ -59,6 +59,11 @@ def _to_datetime(value: struct_time | None) -> datetime | None:
     return datetime.fromtimestamp(calendar.timegm(value), tz=UTC)
 
 
+def _feed_value(entry, key):
+    # FeedParserDict aliases updated to published; preserve the original field semantics.
+    return dict.get(entry, key) if isinstance(entry, dict) else getattr(entry, key, None)
+
+
 def parse_rss(source_key: str, content: bytes) -> list[Article]:
     parsed = feedparser.parse(content)
     items = RssItemList()
@@ -76,13 +81,10 @@ def parse_rss(source_key: str, content: bytes) -> list[Article]:
             log_exclusion(str(link), reason)
             continue
 
-        published = _to_datetime(getattr(entry, "published_parsed", None))
+        published = _to_datetime(_feed_value(entry, "published_parsed"))
         date_kind: Literal["published", "updated", "unknown"] = (
             "published" if published is not None else "unknown")
-        if published is None:
-            published = _to_datetime(getattr(entry, "updated_parsed", None))
-            if published is not None:
-                date_kind = "updated"
+        modified = _to_datetime(_feed_value(entry, "updated_parsed"))
 
         items.append(
             Article(
@@ -93,6 +95,11 @@ def parse_rss(source_key: str, content: bytes) -> list[Article]:
                 summary=getattr(entry, "summary", None),
                 content=None,
                 publication_date_kind=date_kind,
+                modified_at=modified,
+                date_evidence={"version": "rss-dates-1",
+                               "published_literal": _feed_value(entry, "published"),
+                               "modified_literal": _feed_value(entry, "updated"),
+                               "precision": "normalized_feed_timestamp" if published else None},
             )
         )
 
