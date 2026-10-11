@@ -198,3 +198,62 @@ def test_ordinary_ingestion_uses_rubric_journal_and_reusable_admission(tmp_path,
     data = daily.admission_from_proof(row, {"title": item.title, "content": SOURCE})
     assert data["answers"]["admission"]["choice"] == "accepted_ai_editorial"
     assert data["answers"]["comparison"]["choice"] == "NotComparison"
+
+
+@pytest.mark.parametrize("schema", ["facts", "string_flags", "list"])
+def test_review_schema_recovery_does_not_regenerate_summary(
+    session, tmp_path, monkeypatch, schema,
+):
+    row = article(session)
+    calls = []
+
+    def respond(request):
+        body = json.loads(request.content)
+        calls.append(body)
+        response = provider_response(request)
+        if "messages" not in body:
+            return response
+        prompt = body["messages"][0]["content"]
+        if "entailment" in prompt and "Schema recovery task" not in prompt:
+            value = {"facts": []} if schema == "facts" else (
+                {"supported": "true", "english": True} if schema == "string_flags" else [])
+            data = response.json()
+            data["choices"][0]["message"]["content"] = json.dumps(value)
+            return httpx.Response(200, json=data)
+        return response
+
+    mock_client(monkeypatch, respond)
+    first = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    assert first["state"] == "published"
+    assert len(calls) == 4
+    summary_calls = [body for body in calls if "messages" in body and
+                     "entailment" not in body["messages"][0]["content"]]
+    assert len(summary_calls) == 1
+    proof = json.loads(row.enrichment_provenance)
+    assert proof["summary_review"]["schema_recovery"] == ["review_schema"]
+    second = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    assert second["state"] == "published" and len(calls) == 4
+
+
+def test_explicit_unsupported_review_holds_one_article_and_reuses_billed_work(
+    session, tmp_path, monkeypatch,
+):
+    article(session, proof=True)
+    held = article(session, 2)
+    calls = []
+
+    def respond(request):
+        calls.append(request)
+        return provider_response(request, supported=False)
+
+    mock_client(monkeypatch, respond)
+    first = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    assert first["state"] == "published_with_holds"
+    assert first["scope_count"] == 2 and first["published_count"] == 1
+    assert first["held"] == [{"article_id": held.id, "reason": "summary_not_supported"}]
+    assert held.enrichment_provenance is None
+    # Identical repaired facts reuse the already billed unsupported review.
+    assert len(calls) == 4
+    second = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    assert second["state"] == "published_with_holds"
+    assert len(calls) == 4
