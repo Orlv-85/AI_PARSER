@@ -73,6 +73,34 @@ A Docker image built from the committed files, excluding unrelated untracked
 user files, passed **838 tests, zero skipped**, and the coverage gate at **91%**.
 The local worktree's 842 count also includes four unrelated untracked tests.
 
-Production publication and release receipt will be appended after deployment
-and API/page verification. A manual dated run is not evidence that the next
-regular scheduled timer has fired.
+PR [#17](https://github.com/Orlv-85/AI_PARSER/pull/17) was merged as
+`f4744abbf1fe0af12aea7d9e5c4774d4e41878ec`; regular release `v0.1.81`
+successfully built and deployed. Production uses
+`ghcr.io/orlv-85/ai-parser:v0.1.81`, preserving migration `a42b750d0c44`.
+
+The first dated October 10 run enumerated 50 articles and stopped safely after
+one successful enrichment and seven evidence/classification holds. A complete
+DeepSeek reviewer response (`finish_reason=stop`) contained `facts` rather than
+the required `supported` and `english` booleans. It did not publish a digest.
+The first run's 4 JEV / 6 DeepSeek calls cost $0.002592 on conservative usage rates.
+
+The bounded follow-up keeps the failed billed response and attempts one distinct
+review-schema recovery, without regenerating its summary. A private recovery
+probe reused the original review and made one new reviewer call; its correct
+boolean verdict was unsupported. Such a definitive semantic refusal is now an
+explicit `summary_not_supported` hold, while provider outages, repeated invalid
+review schemas and malformed/truncated summary generation still preserve the
+previous report. All literal quote, length, English and semantic checks remain.
+Cumulative daily usage after that probe: $0.002750, with no unknown billing.
+
+Private full backup: `/opt/ai-news/backups/daily-publication-20261011/full-before-release.dump`.
+SHA-256: `8efe015e0d60e749f4339045d5d479c72b613141c5e8c7800e281220d740579e`.
+The historical report snapshot contains 4,925 items, with hash
+`d5af571aead64595ae915d560f0462605246ae806039e5509257c34a8c3fe421`.
+Daily source cache, responses/payment journal and resumable receipts are under
+`/opt/ai-news/data/daily-enrichment/`; SSH/operation receipts are private under
+the backup directory and local ignored `tmp/`.
+
+The final publication receipt will be appended after the follow-up release and
+API/page verification. A manual dated run is not evidence that the next regular
+scheduled timer has fired.
