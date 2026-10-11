@@ -651,6 +651,20 @@ A failed or insufficient regeneration keeps the last ready revision. Rollback se
 the v2 flag to false while retaining evidence and snapshots; no destructive migration
 is required. Unverified legacy publication cannot replace a date with a v2 snapshot.
 
+## Article dates and one-time re-enrichment
+
+Publication, modification and discovery are separate. Unknown publication
+timestamps are `null`; known calendar dates remain available without an invented
+time. News APIs also expose publication status/precision and optional material
+type/comparison metadata. Migration `a42b750d0c44` is required for these fields.
+
+See [the implementation and operator guide](docs/article-reenrichment.md) for
+the module map, API changes, private cache, provider journal, apply/restore and
+the limits of daily automation. The ten re-enrichment topics are readable and
+filterable; the ordinary JEV rubric and daily digest process remain separate.
+The completed data operation is recorded in
+[the production report](docs/reenrich-production-results-2026-10-11.md).
+
 ## Development
 
 ```bash

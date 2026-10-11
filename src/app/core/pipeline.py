@@ -118,6 +118,7 @@ def _candidate_payload(
 ) -> dict[str, object]:
     published = getattr(item, "published_at", None)
     evidence_at = getattr(item, "publication_evidence_at", None)
+    modified = getattr(item, "modified_at", None)
     return {
         "kind": "article",
         "title": getattr(item, "title", None),
@@ -128,6 +129,8 @@ def _candidate_payload(
         "published_at": published.isoformat() if published else None,
         "publication_evidence_at": evidence_at.isoformat() if evidence_at else None,
         "publication_date_kind": getattr(item, "publication_date_kind", "published"),
+        "modified_at": modified.isoformat() if modified else None,
+        "date_evidence": getattr(item, "date_evidence", None),
         "page_eligibility_checked": bool(getattr(item, "page_eligibility_checked", False)),
         "source_key": config.id,
     }
@@ -155,6 +158,9 @@ def _article_from_candidate(candidate: dict[str, object], source_key: str) -> Co
         content=candidate.get("content") if isinstance(candidate.get("content"), str) else None,
         publication_evidence_at=_parse_dt(candidate.get("publication_evidence_at")),
         publication_date_kind=cast(Any, kind),
+        modified_at=_parse_dt(candidate.get("modified_at")),
+        date_evidence=candidate.get("date_evidence")
+        if isinstance(candidate.get("date_evidence"), dict) else None,
         page_eligibility_checked=bool(candidate.get("page_eligibility_checked", False)),
         ingestion_canonical_url=(
             candidate.get("canonical_url")
@@ -193,7 +199,16 @@ def _build_article_row(
         relevance = (
             assessment.relevance_score if assessment is not None else ai_relevance_score(item)
         )
-    freshness = freshness_score(getattr(item, "published_at", None))
+    published = getattr(item, "published_at", None)
+    if getattr(item, "publication_date_kind", "published") != "published":
+        published = None
+    published = published or getattr(item, "publication_evidence_at", None)
+    dates = getattr(item, "date_evidence", None) or {}
+    resolution = dates.get("published", {})
+    if resolution.get("status") in {"unknown", "conflict"}:
+        published = None
+    selected_date = resolution.get("selected") or {}
+    freshness = freshness_score(published)
     rank = rank_score(
         relevance=relevance,
         freshness=freshness,
@@ -205,7 +220,16 @@ def _build_article_row(
         "url": str(getattr(item, "url", "")),
         "url_canonical": canonical,
         "url_canonical_hash": canonical_hash,
-        "published_at": getattr(item, "published_at", None) or datetime.now(UTC),
+        "published_at": published,
+        "publication_day": date.fromisoformat(selected_date["value"][:10])
+        if selected_date.get("value") and published is None else None,
+        "modified_at": getattr(item, "modified_at", None),
+        "publication_status": resolution.get("status") or (
+            "confirmed" if published is not None else "unknown"),
+        "publication_precision": selected_date.get("precision") or (
+            dates.get("precision") or "normalized_source_timestamp"
+            if published is not None else None),
+        "date_provenance": json.dumps(getattr(item, "date_evidence", None)),
         "summary": getattr(item, "summary", None),
         "content": getattr(item, "content", None),
         "ai_relevance_score": relevance,

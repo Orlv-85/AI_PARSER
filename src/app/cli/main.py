@@ -136,7 +136,9 @@ def top(
         articles = repo.query_top(hours=hours, limit=limit, min_ai_relevance=min_ai_relevance)
         for article in articles:
             typer.echo(
-                f"{article.rank_score:.3f}\t{article.published_at.isoformat()}\t{article.title}\t{article.url_canonical}"
+                f"{article.rank_score:.3f}\t"
+                f"{article.published_at.isoformat() if article.published_at else 'unknown'}\t"
+                f"{article.title}\t{article.url_canonical}"
             )
 
 
@@ -150,7 +152,8 @@ def search(
         repo = ArticleRepo(session)
         articles = repo.search(query=query, days=days)
         for article in articles:
-            typer.echo(f"{article.published_at.isoformat()}\t{article.title}\t{article.url_canonical}")
+            published = article.published_at.isoformat() if article.published_at else "unknown"
+            typer.echo(f"{published}\t{article.title}\t{article.url_canonical}")
 
 
 @app.command()

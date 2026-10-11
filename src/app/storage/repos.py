@@ -8,7 +8,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlsplit
 
-from sqlalchemy import Select, case, delete, desc, func, select
+from sqlalchemy import Select, case, delete, desc, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session, selectinload
@@ -39,6 +39,16 @@ if TYPE_CHECKING:
 
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _publication_since(moment: datetime):
+    return or_(Article.published_at >= moment,
+               Article.published_at.is_(None) & (Article.publication_day >= moment.date()))
+
+
+def _publication_before(moment: datetime):
+    return or_(Article.published_at < moment,
+               Article.published_at.is_(None) & (Article.publication_day < moment.date()))
 
 
 @dataclass(slots=True)
@@ -425,7 +435,7 @@ class ArticleRepo:
         url: str,
         url_canonical: str,
         url_canonical_hash: str,
-        published_at: datetime,
+        published_at: datetime | None,
         summary: str | None = None,
         content: str | None = None,
         ai_relevance_score: float = 0.0,
@@ -433,6 +443,7 @@ class ArticleRepo:
         rank_score: float = 0.0,
         category: str | None = None,
         category_confidence: float | None = None,
+        **evidence_fields: Any,
     ) -> tuple[Article, bool]:
         existing_stmt: Select[tuple[Article]] = select(Article).where(
             Article.url_canonical_hash == url_canonical_hash
@@ -462,6 +473,7 @@ class ArticleRepo:
             rank_score=rank_score,
             category=category,
             category_confidence=category_confidence,
+            **evidence_fields,
         )
         self.session.add(article)
         self.session.flush()
@@ -510,9 +522,9 @@ class ArticleRepo:
         window_start = datetime.now(UTC) - timedelta(hours=hours)
         stmt: Select[tuple[Article]] = (
             select(Article)
-            .where(Article.published_at >= window_start)
+            .where(_publication_since(window_start))
             .where(Article.ai_relevance_score >= min_ai_relevance)
-            .order_by(Article.rank_score.desc(), Article.published_at.desc())
+            .order_by(Article.rank_score.desc(), Article.published_at.desc().nulls_last())
             .limit(limit)
         )
         return list(self.session.scalars(stmt).all())
@@ -522,13 +534,13 @@ class ArticleRepo:
         ilike = f"%{query}%"
         stmt: Select[tuple[Article]] = (
             select(Article)
-            .where(Article.published_at >= window_start)
+            .where(_publication_since(window_start))
             .where(
                 Article.title.ilike(ilike)
                 | Article.summary.ilike(ilike)
                 | Article.content.ilike(ilike)
             )
-            .order_by(Article.published_at.desc())
+            .order_by(Article.published_at.desc().nulls_last())
             .limit(limit)
         )
         return list(self.session.scalars(stmt).all())
@@ -560,14 +572,14 @@ class ArticleRepo:
         if has_date_range:
             if date_from is not None:
                 start_at = datetime.combine(date_from, time.min, tzinfo=UTC)
-                base_stmt = base_stmt.where(Article.published_at >= start_at)
+                base_stmt = base_stmt.where(_publication_since(start_at))
             if date_to is not None:
                 end_at = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=UTC)
-                base_stmt = base_stmt.where(Article.published_at < end_at)
+                base_stmt = base_stmt.where(_publication_before(end_at))
         if query:
             if not has_date_range:
                 window_start = datetime.now(UTC) - timedelta(days=days)
-                base_stmt = base_stmt.where(Article.published_at >= window_start)
+                base_stmt = base_stmt.where(_publication_since(window_start))
             ilike = f"%{query}%"
             base_stmt = base_stmt.where(
                 Article.title.ilike(ilike)
@@ -576,28 +588,28 @@ class ArticleRepo:
             )
             if sort == "published":
                 base_stmt = base_stmt.order_by(
-                    Article.published_at.desc(),
+                    Article.published_at.desc().nulls_last(),
                     desc(Article.rank_score),
                 )
             else:
                 base_stmt = base_stmt.order_by(
                     Article.rank_score.desc(),
-                    Article.published_at.desc(),
+                    Article.published_at.desc().nulls_last(),
                 )
         else:
             if not has_date_range:
                 effective_hours = 24 if hours is None else hours
                 window_start = datetime.now(UTC) - timedelta(hours=effective_hours)
-                base_stmt = base_stmt.where(Article.published_at >= window_start)
+                base_stmt = base_stmt.where(_publication_since(window_start))
             if sort == "published":
                 base_stmt = base_stmt.order_by(
-                    Article.published_at.desc(),
+                    Article.published_at.desc().nulls_last(),
                     desc(Article.rank_score),
                 )
             else:
                 base_stmt = base_stmt.order_by(
                     Article.rank_score.desc(),
-                    Article.published_at.desc(),
+                    Article.published_at.desc().nulls_last(),
                 )
         if sort == "category":
             base_stmt = base_stmt.order_by(None).order_by(
@@ -606,7 +618,7 @@ class ArticleRepo:
                     value=Article.category, else_=len(CATEGORY_ORDER),
                 ),
                 Article.rank_score.desc(),
-                Article.published_at.desc(),
+                Article.published_at.desc().nulls_last(),
             )
         base_stmt = base_stmt.limit(limit).offset(offset)
         return [
@@ -660,12 +672,12 @@ class ArticleRepo:
 
     def count_older_than(self, *, older_than_days: int) -> int:
         cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
-        stmt = select(Article.id).where(Article.published_at < cutoff)
+        stmt = select(Article.id).where(_publication_before(cutoff))
         return len(self.session.scalars(stmt).all())
 
     def prune_older_than(self, *, older_than_days: int) -> tuple[int, int]:
         cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
-        old_article_ids = select(Article.id).where(Article.published_at < cutoff)
+        old_article_ids = select(Article.id).where(_publication_before(cutoff))
 
         deleted_aliases_stmt = select(ArticleAlias.id).where(
             ArticleAlias.article_id.in_(old_article_ids)
@@ -674,7 +686,7 @@ class ArticleRepo:
         deleted_articles = self.count_older_than(older_than_days=older_than_days)
 
         self.session.execute(delete(ArticleAlias).where(ArticleAlias.article_id.in_(old_article_ids)))
-        self.session.execute(delete(Article).where(Article.published_at < cutoff))
+        self.session.execute(delete(Article).where(_publication_before(cutoff)))
         return deleted_articles, deleted_aliases
 
     def daily_stats(self, *, date_from: date, date_to: date) -> list[ArticleDailyStats]:
@@ -686,6 +698,15 @@ class ArticleRepo:
             start_at=start_at,
             end_at=end_at,
         )
+        day_counts = self.session.execute(
+            select(Article.publication_day, func.count(Article.id))
+            .where(Article.published_at.is_(None))
+            .where(Article.publication_day >= date_from)
+            .where(Article.publication_day <= date_to)
+            .group_by(Article.publication_day)
+        ).all()
+        for day, count in day_counts:
+            published_counts[day] = published_counts.get(day, 0) + int(count)
         discovered_counts = self._daily_article_counts(
             field=Article.discovered_at,
             start_at=start_at,
@@ -1068,7 +1089,7 @@ class WeeklyAnalyticsRepo:
             select(Article)
             .where(Article.published_at >= start_at)
             .where(Article.published_at < end_at)
-            .order_by(Article.rank_score.desc(), Article.published_at.desc())
+            .order_by(Article.rank_score.desc(), Article.published_at.desc().nulls_last())
             .limit(limit)
         )
         return list(self.session.scalars(stmt).all())
@@ -1082,11 +1103,12 @@ class WeeklyAnalyticsRepo:
         reverse: bool = True,
     ) -> list[WeeklyAnalyticsItem]:
         if sort_key == "published_at":
-            ordered = sorted(rows, key=lambda row: row.published_at, reverse=reverse)
+            ordered = sorted(rows, key=lambda row: row.published_at or row.discovered_at,
+                             reverse=reverse)
         else:
             ordered = sorted(
                 rows,
-                key=lambda row: (row.rank_score, row.published_at),
+                key=lambda row: (row.rank_score, row.published_at or row.discovered_at),
                 reverse=reverse,
             )
         return [
@@ -1221,7 +1243,9 @@ class WeeklyAnalyticsRepo:
                 grouped[topic_key] = {"recent": row, "tokens": tokens}
                 continue
             current = existing["recent"]
-            if (row.rank_score, row.published_at) > (current.rank_score, current.published_at):
+            if (row.rank_score, row.published_at or row.discovered_at) > (
+                current.rank_score, current.published_at or current.discovered_at
+            ):
                 existing["recent"] = row
         return grouped
 

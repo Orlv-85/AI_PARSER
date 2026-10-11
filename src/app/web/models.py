@@ -39,9 +39,19 @@ class NewsCollectionStatusResponse(BaseModel):
     message: str | None = None
 
 
-class NewsItem(BaseModel):
+class ArticleEvidenceFields(BaseModel):
+    publication_day: date | None = None
+    publication_status: str | None = None
+    publication_precision: str | None = None
+    publication_literal: str | None = None
+    modified_at: datetime | None = None
+    material_type: str | None = None
+    compared_products: list[str] = Field(default_factory=list)
+
+
+class NewsItem(ArticleEvidenceFields):
     title: str
-    published_at: datetime
+    published_at: datetime | None
     rank_score: float
     url_canonical: str
     source_id: int | None = None
@@ -51,12 +61,12 @@ class NewsItem(BaseModel):
     category_confidence: float | None = None
 
 
-class NewsArticleDetail(BaseModel):
+class NewsArticleDetail(ArticleEvidenceFields):
     article_id: int
     title: str
     summary: str | None = None
     content: str | None = None
-    published_at: datetime
+    published_at: datetime | None
     rank_score: float
     url: str
     url_canonical: str
@@ -65,10 +75,10 @@ class NewsArticleDetail(BaseModel):
     source_name: str | None = None
 
 
-class DigestLinkFeedItem(BaseModel):
+class DigestLinkFeedItem(ArticleEvidenceFields):
     article_id: int
     title: str
-    published_at: datetime
+    published_at: datetime | None
     url: str
     url_canonical: str
     source_id: int | None = None
