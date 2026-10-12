@@ -48,6 +48,12 @@ class WeeklyEnricher:
         self.logger = logging.getLogger("ai_news.weekly")
 
     def _key(self, task: str, state: Any) -> str:
+        if task.startswith("narrative"):
+            return str(fingerprint({"task": task, "state": state, "topics": self.topics,
+                "taxonomy": self.taxonomy_version, "model": self.settings.weekly_deepseek_model,
+                "prompt": self.settings.weekly_narrative_prompt_version,
+                "input_bytes": self.settings.weekly_narrative_input_byte_cap,
+                "output_tokens": self.settings.weekly_narrative_output_token_cap}))
         return str(fingerprint({"task": task, "state": state, "taxonomy": self.taxonomy_version,
                             "topics": self.topics, "jev_model": self.settings.weekly_jev_model,
                             "ds_model": self.settings.weekly_deepseek_model,
@@ -70,7 +76,7 @@ class WeeklyEnricher:
             raise ValueError("Provider unavailable")
         # Conservative bound: prompt characters (including JSON) cannot exceed the
         # token cap. This deliberately overestimates ordinary English token usage.
-        if len(encoded(body)) > self.settings.weekly_input_token_cap:
+        if len(encoded(body).encode()) > self.input_cap(kind):
             raise ValueError("Provider input cap exceeded")
         url = ("https://api.typesafe.ai/v1/systemone" if provider == "jev"
                else "https://api.deepseek.com/chat/completions")
@@ -113,6 +119,10 @@ class WeeklyEnricher:
                 raise
         raise ValueError("Provider attempts exhausted")
 
+    def input_cap(self, kind: str) -> int:
+        return int(self.settings.weekly_narrative_input_byte_cap if kind == "narrative"
+                   else self.settings.weekly_input_token_cap)
+
     def jev(self, state: Any, questions: dict) -> dict:
         key = self._key("jev", {"state": state, "questions": questions})
         cached = self.store.decision(key)
@@ -143,14 +153,7 @@ class WeeklyEnricher:
         cached = self.store.decision(key)
         if cached is not None:
             return dict(cached)
-        data = self._post("deepseek", {
-            "model": self.settings.weekly_deepseek_model, "temperature": 0,
-            "thinking": {"type": "disabled"},
-            "max_tokens": self.settings.weekly_output_token_cap,
-            "response_format": {"type": "json_object"},
-            "messages": [{"role": "system", "content": _INSTRUCTIONS + instruction},
-                         {"role": "user", "content": encoded(state)}],
-        }, kind)
+        data = self._post("deepseek", self.deepseek_body(state, instruction, kind), kind)
         choice = data["choices"][0]
         if choice.get("finish_reason") != "stop":
             raise ValueError("Incomplete JSON completion")
@@ -159,6 +162,19 @@ class WeeklyEnricher:
             raise ValueError("Expected JSON object")
         self.store.save_decision(key, kind, value)
         return dict(value)
+
+    def deepseek_body(self, state: Any, instruction: str, kind: str) -> dict:
+        version = ("Narrative prompt version: " + self.settings.weekly_narrative_prompt_version +
+                   ". " if kind == "narrative" else "")
+        return {
+            "model": self.settings.weekly_deepseek_model, "temperature": 0,
+            "thinking": {"type": "disabled"},
+            "max_tokens": (self.settings.weekly_narrative_output_token_cap if kind == "narrative"
+                           else self.settings.weekly_output_token_cap),
+            "response_format": {"type": "json_object"},
+            "messages": [{"role": "system", "content": _INSTRUCTIONS + version + instruction},
+                         {"role": "user", "content": encoded(state)}],
+        }
 
     # pylint: disable=too-many-return-statements,too-many-boolean-expressions
     def assignment_text(self, row: dict) -> str:
