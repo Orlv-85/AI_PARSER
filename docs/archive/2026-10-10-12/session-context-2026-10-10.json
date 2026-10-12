@@ -1,0 +1,79 @@
+{
+  "archive_metadata": {"status":"historical_superseded","archived_at":"2026-10-12","original_path":"session-context-2026-10-10.json","usage":"Reference only. Do not resume commands, infer current approvals, or use saved runtime/head/budget as current state.","index":"README.md"},
+  "date": "2026-10-11",
+  "workspace": "/Users/vyacheslavorlovskiy/GitHub/AI_PARSER",
+  "purpose": "Resume the same work; this is saved context, not a new specification.",
+  "preferences": {
+    "communication": "Russian; all product text and analytics English. Save prompts to files. Be concise and act without unnecessary permission loops.",
+    "workflow": "Read AGENTS.md and RTK.md; use rtk, venv1 and apply_patch. Preserve unrelated/untracked files. Before commit/push: full make lint and pytest. Use file-backed isolated SQLite for full tests; in-memory SQLite breaks threaded web tests."
+  },
+  "completed": {
+    "pr12": "Merged deterministic non-news prefilter; not semantic admission.",
+    "pr13": "Merged semantic admission with durable candidate ledger/cache, fail-closed JEV outage, retry before feed/list fetch and 304, English pause notice. Existing articles are skipped; no per-article DeepSeek fallback.",
+    "pr14": {
+      "url": "https://github.com/Orlv-85/AI_PARSER/pull/14",
+      "merge_sha": "ef7eb3f5b906a300c4f41fc26c2b9b22af2f502f",
+      "release": "v0.1.78",
+      "policy": "Both deploy workflows enforce JEV=true, semantic admission=true, weekly v2=false and weekly cron=0. Production Compose defaults match; generic local Settings remain disabled. Old managed flags are replaced, JEV_API_KEY preserved. Activation report included.",
+      "validation": "Full lint passed; full pytest 739 passed / 2 PostgreSQL skipped (no isolated DB); 15 focused tests and shell syntax passed.",
+      "deployment": "Tag pushed; CI/deployment completion deliberately not awaited at user's request. Do not claim v0.1.78 is verified on production."
+    }
+  },
+  "production_last_verified": {
+    "at": "2026-10-10 21:55 UTC",
+    "image": "v0.1.77",
+    "migration": "f31a640c9b33",
+    "semantic_admission_enabled": true,
+    "jev_enabled": true,
+    "weekly_v2_enabled": false,
+    "active_weekly_cron_entries": 0,
+    "health": "ok",
+    "first_ordinary_cycle": {
+      "sources": 152,
+      "fetched": 3454,
+      "saved": 846,
+      "rejected": 437,
+      "unresolved": 186,
+      "source_fetch_errors": 6,
+      "screening_paused": false,
+      "articles_before": 8300,
+      "articles_after": 9146,
+      "pending_candidates": 1366
+    },
+    "report": "docs/semantic-admission-production-activation-2026-10-10.md"
+  },
+  "authorization": {
+    "ordinary_jev_collection": "Explicitly approved and enabled.",
+    "legacy_cleanup": "User explicitly approved JEV evaluation of old stored articles and deletion of confirmed non-AI/non-editorial junk. No cleanup has run yet. Do not ask again for general permission for JEV or confirmed-junk deletion.",
+    "cleanup_budget": "Not specified. Previous $2 budget applied only to a historical weekly pilot; do not inherit it.",
+    "weekly": "Must stay disabled, including cron. No paid weekly/history analytics or automatic reactivation.",
+    "deepseek": "Not authorized for cleanup. Daily digest is separate and was not invoked during activation."
+  },
+  "next_task": {
+    "objective": "Clean legacy articles with JEV; preserve useful AI news/research/reviews/tutorials/evergreen guides. Keep ambiguous/insufficient-evidence/provider-error cases.",
+    "prompt": "docs/prompt-cleanup-legacy-articles-jev-2026-10-11.md",
+    "requirements": "Freeze current IDs/evidence, reuse valid admission cache, bound and record paid requests, inventory aliases/digest/weekly/snapshot references, backup and test targeted restore on isolated PostgreSQL, delete exact confirmed IDs transactionally, retain reject cache so collection cannot reinsert junk. Published report copies do not disappear just by deleting articles.",
+    "old_tool": "scripts/non_news_cleanup.py and storage/non_news_cleanup.py support dry-run/backup only. Their table export omits new admission_decisions/collection_status."
+  },
+  "semantics": {
+    "new": "Not already in articles, not necessarily published today. Known stored articles skip JEV; reject/unresolved cache is reused until evidence/model/policy/prompt changes; outages retry pending.",
+    "period": "No fixed publication-date window. Current RSS entries and HTML listing (up to 50 links/source) may include old publications.",
+    "remaining_date_bug": "Missing published_at is still replaced by discovery time in articles; cleanup must not use age/missing date/low old score as proof of junk.",
+    "weekly_deferred": "Existing pilot has weak coverage/event grouping and Russian text on English site. Weekly v2 measures topic attention rather than desired industry briefing; do not restart this work during cleanup."
+  },
+  "ops": {
+    "ssh": "root@5kzt.l.time4vps.cloud; private SERVER_PASSWORD in local .env. Never print credentials/full environments; use sshpass -e.",
+    "helper": "tmp/enable_semantic_admission_production.py inspect can read safe status. Do not rerun activation/fetch automatically.",
+    "backup": "/opt/ai-news/backups/semantic-admission-enable-20261010T213941Z/"
+  },
+  "preserve_untracked": [
+    ".codex/rules/",
+    "scripts/weekly_historical_preview.py",
+    "tests/unit/test_weekly_historical_preview.py",
+    "sources.existing.json",
+    "sources.search-prompt.md",
+    "specs/010-weekly-ai-analytics-for-management-dashboard/historical-backfill-diagnostic.md",
+    "weekly-pilot-session-report-2026-10-10.md",
+    "local session context and prompt files"
+  ]
+}

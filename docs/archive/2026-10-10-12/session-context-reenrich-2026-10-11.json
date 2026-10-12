@@ -1,0 +1,704 @@
+{
+  "archive_metadata": {"status":"historical_superseded","archived_at":"2026-10-12","original_path":"session-context-reenrich-2026-10-11.json","usage":"Reference only. Do not resume commands, infer current approvals, or use saved runtime/head/budget as current state.","index":"README.md"},
+  "schema_version": 1,
+  "user_preferences": {
+    "other_session_prompts": "Always save every task or handoff prompt intended for another session to a file before delivering it. Use docs/prompt-<task>-<YYYY-MM-DD>.md and include a clickable file link in the response; inline text alone is insufficient. Preserve this rule in future session-context and handoff artifacts.",
+    "rule_file": "AGENTS.md",
+    "latest_handoff_prompt": "docs/prompt-verify-daily-cycle-and-resolve-holds-2026-10-11.md"
+  },
+  "created_at_utc": "2026-10-11T06:38:20Z",
+  "purpose": "Resume re-enrichment and publication-date repair in a new session using completed private artifacts, without repeating downloads.",
+  "language": {
+    "conversation": "Russian",
+    "product_text_summaries_categories": "English"
+  },
+  "repository": {
+    "root": "/Users/vyacheslavorlovskiy/GitHub/AI_PARSER",
+    "branch": "feat/reenrich-publication-dates-2026-10-11",
+    "head_commit": "d1bc3fcbb4bb4d436bcff5acafd7e9e45aeefc47",
+    "new_work_committed": false,
+    "new_pr_created": false,
+    "worktree": "Dirty with both session-owned and pre-existing untracked files. Preserve everything; do not reset/clean/switch away or overwrite unrelated user files.",
+    "instructions": [
+      "AGENTS.md",
+      "/Users/vyacheslavorlovskiy/.codex/RTK.md"
+    ],
+    "shell_rule": "Prefix shell commands with rtk; prefer venv1.",
+    "session_owned_files": [
+      "scripts/reenrich_articles.py",
+      "src/app/ingest/date_evidence.py",
+      "src/app/storage/article_evidence_cache.py",
+      "tests/unit/test_article_evidence_cache.py",
+      "tests/unit/test_reenrich_script.py",
+      "docs/article-source-cache.md",
+      "docs/reenrich-fetch-report-2026-10-11.md",
+      "docs/reenrich-taxonomy-proposal-2026-10-11.md",
+      "docs/reenrich-stage-checkpoints-2026-10-11.md",
+      "docs/reenrich-pilot-preparation-2026-10-11.md",
+      "docs/reenrich-pilot-checkpoint-2026-10-11.md",
+      "docs/reenrich-pilot-results-2026-10-11.md",
+      "docs/reenrich-pilot-offline-review-2026-10-11.md",
+      "scripts/reenrich_pilot.py",
+      "src/app/core/reenrich_pilot.py",
+      "src/app/storage/reenrich_pilot_journal.py",
+      "tests/unit/test_reenrich_pilot.py",
+      "docs/prompt-reenrich-and-fix-publication-dates-2026-10-11.md",
+      "session-context-reenrich-2026-10-11.json",
+      "docs/reenrich-rubric-validation-2026-10-11.md",
+      "docs/reenrich-jev-rubric-clarification-2026-10-11.json",
+      "docs/prompt-resume-reenrich-2026-10-11.md",
+      "src/app/storage/reenrich_apply.py",
+      "src/app/storage/migrations/versions/a42b750d0c44_add_article_evidence.py",
+      "tests/unit/test_publication_semantics.py",
+      "tests/unit/test_reenrich_apply.py",
+      "docs/reenrich-production-results-2026-10-11.md"
+    ],
+    "preexisting_unrelated_files_to_preserve": [
+      ".codex/rules/",
+      "docs/pr-13-review-2026-10-10.md",
+      "docs/prompt-cleanup-legacy-articles-jev-2026-10-11.md",
+      "docs/prompt-persist-production-screening-2026-10-11.md",
+      "docs/prompt-resume-2026-10-11.md",
+      "docs/prompt-retention-800-days-2026-10-11.md",
+      "docs/semantic-admission-agent-prompt-2026-10-10.md",
+      "scripts/weekly_historical_preview.py",
+      "session-context-2026-10-10.json",
+      "sources.existing.json",
+      "sources.search-prompt.md",
+      "specs/010-weekly-ai-analytics-for-management-dashboard/historical-backfill-diagnostic.md",
+      "tests/unit/test_weekly_historical_preview.py",
+      "weekly-pilot-session-report-2026-10-10.md"
+    ]
+  },
+  "read_first": [
+    "session-context-reenrich-2026-10-11.json",
+    "AGENTS.md",
+    "/Users/vyacheslavorlovskiy/.codex/RTK.md",
+    "docs/reenrich-rubric-validation-2026-10-11.md",
+    "docs/reenrich-jev-rubric-clarification-2026-10-11.json",
+    "docs/prompt-resume-reenrich-2026-10-11.md",
+    "docs/prompt-reenrich-and-fix-publication-dates-2026-10-11.md",
+    "docs/reenrich-fetch-report-2026-10-11.md",
+    "docs/reenrich-taxonomy-proposal-2026-10-11.md",
+    "docs/article-source-cache.md",
+    "docs/reenrich-pilot-offline-review-2026-10-11.md",
+    "docs/reenrich-pilot-results-2026-10-11.md",
+    "docs/reenrich-pilot-checkpoint-2026-10-11.md",
+    "docs/reenrich-pilot-preparation-2026-10-11.md"
+  ],
+  "status_and_approvals": {
+    "current_stage": "COMPLETED: production applied and verified. 5270 rows updated, 1467 confirmed rejects deleted, 406 enriched, 5963 articles remain. PostgreSQL 14/18 migration/apply/rollback/restore passed; health/news/topic/detail/stats API 200.",
+    "working_topic_list_accepted": true,
+    "topic_acceptance_user_text": "Предложенные 10 категорий выглядят разумно; Comparison отдельно от темы — тоже.",
+    "comparison_separate_from_topic_accepted": true,
+    "compared_products_separate_metadata_accepted": true,
+    "pilot_total_usd_proposed": 1.5,
+    "pilot_budget_approved": true,
+    "pilot_jev_cap_usd": 0.25,
+    "pilot_deepseek_cap_usd": 1.25,
+    "pilot_budget_approval_user_text": "Да, $1.50: JEV $0.25 / DeepSeek $1.25",
+    "mass_budget_approved": true,
+    "mass_budget_usd": null,
+    "provider_calls": {
+      "jev": 3387,
+      "deepseek": 1470
+    },
+    "provider_spend_usd": 1.543343,
+    "provider_spend_note": "Cumulative conservative usage-priced peak estimate, not invoice. Known billing; no failed/inflight calls. One archived zero-cost preconnect failure.",
+    "superseded_budget_proposals": "Earlier $0.50/$0.25 suggestions were superseded. Pilot $1.50 total (JEV $0.25 / DeepSeek $1.25) is explicitly approved and must not be asked again. The old $2 cleanup budget belongs to a completed operation. Mass budget is still unapproved.",
+    "other_material_types_and_ui_details": "News, Research, Tutorial / Guide, Review, Commentary and detailed UI/legacy behavior are proposed in the document; only Comparison has explicit format agreement.",
+    "stop_between_stages": false,
+    "do_not_repeat_topic_list_approval": "Use the accepted ten-topic list as the working list. Ask only about genuinely pending money/details or material scope changes.",
+    "no_per_subtopic_interruptions": "Accumulate poorly fitting cases and review them together at checkpoints; do not silently change taxonomy mid-pass.",
+    "mass_budget_authorization": "Latest user explicitly waived separate budget/stage approval and authorised checks, backup, PostgreSQL restore rehearsal and production application of confirmed changes."
+  },
+  "agreed_sequence": [
+    "Completed: ordinary script downloaded the 3681 unresolved source URLs, cached HTML/text/date evidence without model calls.",
+    "Completed: bounded mixed source review, initially 80 then 92 materials, from unresolved and previously accepted articles.",
+    "Completed: pilot prepared on existing cache and explicit $1.50 total / JEV $0.25 / DeepSeek $1.25 approval received.",
+    "Completed: original paid pilot 80/80, 38 summaries, original cost $0.058944. Original plan/results/approval immutable; successful requests retained.",
+    "Completed: offline review and three versioned JEV/DeepSeek clarification passes using identical cached source inputs. Final candidate v3; cumulative pilot/validation $0.196297. Stop at this completed major-stage handoff before mass processing; prepare scope and estimate before requesting its separate budget.",
+    "Mass JEV: admission and primary topic in one request, with conservative destructive guardrails and bounded source evidence.",
+    "DeepSeek: grounded English summaries for accepted articles, separate from source evidence and admission cache.",
+    "Other-article dates: use saved proof first; additional URL fetches only for missing/conflicting proof; reuse any cached URL.",
+    "Review results, build exact manifest, backup and isolated PostgreSQL restore rehearsal; stop before production apply and release/migration."
+  ],
+  "privacy_and_execution_constraints": [
+    "Do not download the 3681 URLs again or recreate the run in a new directory. Use the existing cache.",
+    "Do not print snapshot.json, private article HTML/text, the entire corpus or provider responses into Codex context, logs or Git.",
+    "Codex receives aggregates and a bounded sample only. Article model processing runs through JEV/DeepSeek with cached source text, not URLs alone.",
+    "Scripts perform bulk download, extraction and date metadata parsing without model calls.",
+    "Do not regenerate sample summaries merely to make a new session understand the task; current proposal and sample metadata are already ready.",
+    "User disliked excessive test/tool development and repetitive progress details; prioritise operating the prepared artifacts, explain actual processing stage plainly, and avoid unnecessary new tests/refactors.",
+    "User reiterated: prefer a DeepSeek call over Codex for textual article analysis. Codex operates tools and reads aggregates; article processing uses JEV/DeepSeek under confirmed monetary caps.",
+    "Keep weekly and weekly cron off; no weekly/history analytics or frozen-report rewrite.",
+    "Retention remains 800 days, size thresholds 5/4 GiB; never silently change pruning during date application.",
+    "Do not restore the 1119 deleted rejects or 711 previously pruned records.",
+    "Fetch only saved source URLs with rate limits; no source archive crawling.",
+    "404, timeout, CAPTCHA, paywall, login/home redirects and incomplete extraction are unresolved/error, not evidence for deleting an original article.",
+    "Do not turn topic expansion into cancellation of existing unchanged admission rejects.",
+    "User explicitly authorised actual targeted JEV/DeepSeek validation within the approved cumulative pilot budget and objected to repeated approval pauses over small paid checks. Prefer DeepSeek for textual processing; do not re-ask the approved pilot caps. Stop between major stages; mass processing needs its own scope/budget."
+  ],
+  "download_and_cache": {
+    "run_dir": "/Users/vyacheslavorlovskiy/GitHub/AI_PARSER/tmp/reenrich-2026-10-11",
+    "relative_run_dir": "tmp/reenrich-2026-10-11",
+    "cache_size_at_completion_bytes": 3685412914,
+    "cache_private_and_git_ignored": true,
+    "original_review_ids": 3681,
+    "unique_original_urls": 3681,
+    "snapshot_missing_ids": 0,
+    "snapshot_changed_canonical_identity_ids": 0,
+    "download_process_exit_code": 0,
+    "download_worker_still_running": false,
+    "states": {
+      "completed": 3533,
+      "blocked": 135,
+      "failed": 13,
+      "pending": 0,
+      "started": 0
+    },
+    "quality": {
+      "extracted": 3240,
+      "unresolved": 441
+    },
+    "quality_note": "An extraction pass is NOT JEV admission and is not proof that a page is an article. The 441 unresolved cases comprise 293 saved responses with quality issues plus 148 blocked/failed URLs.",
+    "network_failures": {
+      "ConnectError": 2,
+      "ReadError": 7,
+      "ReadTimeout": 4
+    },
+    "publication_evidence_for_saved_responses": {
+      "confirmed": 2729,
+      "conflict": 37,
+      "unknown": 767
+    },
+    "publication_evidence_note": "Counts are metadata results across 3533 responses, including quality-unresolved pages; no dates applied. Another 148 URLs lack downloaded article evidence.",
+    "paths": {
+      "snapshot": "tmp/reenrich-2026-10-11/snapshot.json",
+      "frozen_plan": "tmp/reenrich-2026-10-11/plan.json",
+      "original_review_copy": "tmp/reenrich-2026-10-11/review-origin.json",
+      "fetch_status_and_error_aggregates": "tmp/reenrich-2026-10-11/fetch-status.json",
+      "per_url_errors": "tmp/reenrich-2026-10-11/pages/<url_key>/attempt.json",
+      "per_url_quality_and_dates": "tmp/reenrich-2026-10-11/pages/<url_key>/evidence.json",
+      "per_url_response_metadata": "tmp/reenrich-2026-10-11/pages/<url_key>/response.json",
+      "per_url_raw_body": "tmp/reenrich-2026-10-11/pages/<url_key>/body.bin",
+      "per_url_html": "tmp/reenrich-2026-10-11/pages/<url_key>/page.html",
+      "per_url_source_text": "tmp/reenrich-2026-10-11/pages/<url_key>/text.txt",
+      "robots_cache": "tmp/reenrich-2026-10-11/robots/",
+      "cache_verification": "tmp/reenrich-2026-10-11/cache-verification.json",
+      "offline_date_audit": "tmp/reenrich-2026-10-11/offline-date-audit.json",
+      "tool_validation": "tmp/reenrich-2026-10-11/tool-validation.json"
+    },
+    "url_key_formula": "sha256(original_url.split('#', 1)[0].encode()).hexdigest(); use existing exact original URL, not a newly canonicalised URL, to locate the saved page.",
+    "permissions": "Private run/directories 0700; source artifact files 0600. Keep these modes.",
+    "canonical_normalized_snapshot_hash": "bfa2d9330e06db140c462b4d09bf09627e2c21f266226e038215abf348a57971",
+    "snapshot_file_sha256": "efd3416f445f9e119ee3d795a30e2efa73326290e3e988d633915f16ec99969e",
+    "plan_file_sha256": "cc10158945175783838d0cbdbc01b36339e922dfebe961936fde2ca04150e452",
+    "cache_verified_responses": 3533,
+    "cache_verification_errors": 0,
+    "artifact_inventory_hash": "0c0e538bd91ac85323b9ce30d189c16b8cc55caaab42091ee3ce4320ef442c0e",
+    "cache_verification_file_sha256": "da7bbfdc9015688ff43d36ce1ae19fddd56f420d9c657add7f7cd453fbff473b"
+  },
+  "sample_and_taxonomy": {
+    "private_sample_path": "tmp/reenrich-2026-10-11/taxonomy-sample.json",
+    "sample_file_sha256": "b7ca75db28df54b252adcbf828b9b365c32b18b233c1f03713a373617db16829",
+    "count": 92,
+    "cohorts": {
+      "previously_accepted_saved_content": 40,
+      "unresolved_fresh_cached_text": 52
+    },
+    "hostnames": 70,
+    "method": "Deliberate topic/title/category coverage with publisher balancing and negative controls; 12 targeted gap-check examples added to initial 80. Bounded source excerpts, not a statistical prevalence/accuracy sample.",
+    "accepted_controls_scope": "Diagnostic controls only; no broad recategorization of the other 3749 accepted records is approved.",
+    "proposal_path": "docs/reenrich-taxonomy-proposal-2026-10-11.md",
+    "working_topics_in_proposed_order": [
+      "Models & Research",
+      "AI Coding",
+      "Agent Frameworks",
+      "RAG & Data Systems",
+      "QA & Observability",
+      "Security & Safety",
+      "Infrastructure",
+      "AI Applications",
+      "Business & Industry",
+      "Policy & Regulation"
+    ],
+    "primary_topics_per_article": 1,
+    "comparison": {
+      "separate_material_type": true,
+      "compared_products_separate_field": true,
+      "example": {
+        "topic": "AI Coding",
+        "material_type": "Comparison",
+        "products": [
+          "Cursor",
+          "GitHub Copilot"
+        ]
+      }
+    },
+    "prompting_structured_outputs": "Application-engineering subtopics of AI Applications in the current ten-topic proposal, not an eleventh topic.",
+    "important_boundaries": [
+      "Code-model release integrated into a coding workflow -> AI Coding; neural training mathematics -> Models & Research; coding-vendor GPU kernels -> Infrastructure.",
+      "Retrieval-specific embeddings remain RAG; model benchmarks incidental to a release do not automatically make QA.",
+      "A financing story about a coding company -> Business & Industry; a government-user product release is not automatically Policy.",
+      "AI laws/standards/governance obligations -> Policy; implementation of monitoring/defences -> QA or Security when central.",
+      "AI cyber/biosecurity/alignment risks -> Security & Safety; generic non-AI cyber/news remains outside admission.",
+      "Mixed newsletters with no clear primary subject can remain unclassified; collect boundary cases instead of forcing labels."
+    ],
+    "legacy_compatibility": "Keep old Security and Business & Product values readable/filterable; do not mechanically map Business & Product to one new label or rewrite frozen reports.",
+    "taxonomy_version_draft": "article-topics-2",
+    "category_cache_requirement": "Version/hash actual criteria and evidence; do not reuse old categories as new-taxonomy results. Separate summary cache from admission evidence/key.",
+    "category_min_confidence_initial": 0.7,
+    "known_quality_gap": {
+      "description": "Catalogues, pricing and product/app listings can contain enough text to pass extraction. Do not treat all 3240 quality passes as accepted editorial articles.",
+      "deterministic_url_flags_among_extraction_passes": {
+        "taxonomy_page": 25,
+        "site_home": 20,
+        "directory_page": 23,
+        "corporate_page": 8
+      },
+      "action": "Use existing eligibility/admission and conservative source-based guardrails; no deletion based only on these aggregate flags or sponsored/CTA wording."
+    }
+  },
+  "other_article_dates": {
+    "other_existing_articles_in_snapshot": 3749,
+    "offline_source_evidence": {
+      "confirmed": 651,
+      "unknown": 3093,
+      "conflict": 5
+    },
+    "current_date_only_fetch_candidates": 3098,
+    "additional_date_only_fetches_run": 0,
+    "cleanup_copies_excluded": 1119,
+    "limitations": "Original literal precision is unavailable for legacy normalised timestamps. Article published_at/discovered_at equality is not proof of fallback. Never use cleanup copies as original source publication proof.",
+    "audit_file_sha256": "cf7070fc7e8f094407ac95dcb1574f1d98e47f6e363a282d4776890d3bb70192",
+    "audit_legacy_snapshot_hash_note": "Its legacy_snapshot_hash fingerprints the legacy tables object, not the full canonical snapshot; do not confuse it with the original cleanup snapshot hash."
+  },
+  "production": {
+    "observations_are_historical_not_current": true,
+    "baseline_checked_at_utc": "2026-10-10T23:21:57.394570Z",
+    "fresh_source_snapshot_exported_at_utc": "2026-10-10T23:29:49.142251Z",
+    "image_at_preflight": "ghcr.io/orlv-85/ai-parser:v0.1.79",
+    "migration_at_preflight": "f31a640c9b33",
+    "articles_at_snapshot": 7430,
+    "jev_enabled": true,
+    "semantic_admission_enabled": true,
+    "jev_model": "jev-1.13.0",
+    "admission_policy": "semantic-admission-2026-10-10",
+    "admission_prompt": "semantic-admission-prompt-1",
+    "weekly_v2_enabled": false,
+    "active_weekly_cron": 0,
+    "active_collector_cron_at_preflight": 1,
+    "retention_days": 800,
+    "size_thresholds_constraint_gib": {
+      "max": 5,
+      "target": 4
+    },
+    "effective_size_thresholds_live_rechecked_this_session": false,
+    "previous_completed_changes": {
+      "pr_15": "https://github.com/Orlv-85/AI_PARSER/pull/15",
+      "pr_15_state": "MERGED",
+      "cleanup_implementation_commit": "c787ce0f7ae9dbf0836899fa1b99db2eefc2e005",
+      "cleanup_deleted_confirmed_rejects": 1119,
+      "cleanup_articles_before_after": [
+        8549,
+        7430
+      ],
+      "retention_800_and_screening_enabled_weekly_off": "Already applied before this operation; do not revert.",
+      "previously_pruned_711": "Not automatically restored by increased retention; outside current operation."
+    },
+    "this_session_production_changes": {
+      "read_only_snapshot_written_privately": "/opt/ai-news/backups/reenrich-20261010T232951Z/snapshot.json",
+      "article_data_updates": 0,
+      "article_deletions": 0,
+      "generated_summaries_saved": 0,
+      "new_categories_saved": 0,
+      "publication_date_updates": 0,
+      "schema_migrations": 0,
+      "application_deployment": false,
+      "runtime_setting_changes": false
+    },
+    "prepared_only": "Local download/cache and date extractor; offline audit; topic/sample proposal. Fixing normal ingestion's discovery/updated-date fallback and NULL-date consumers is NOT implemented or deployed yet.",
+    "before_apply": "Recheck live production, rows/evidence/dependencies against frozen hashes; coordinate collector and maintenance; full private backup; isolated PostgreSQL targeted restore rehearsal; atomic apply and compatible admission cache/pending handling."
+  },
+  "validation": {
+    "initial_combined_targeted_pytest": {
+      "passed": 65,
+      "scope": "New evidence-cache/script plus HTML/RSS regressions; isolated local SQLite setting."
+    },
+    "later_script_pytest": {
+      "passed": 4,
+      "scope": "Includes added offline cache verification test."
+    },
+    "ruff": "Passed for src/tests and scripts/reenrich_articles.py at recorded check.",
+    "mypy": "Passed for src/tests, 140 source files.",
+    "pylint": "Scoped new source/test files passed 10.00/10 after import placement correction.",
+    "cache_integrity": "3533 response/HTML/text/evidence hashes verified, zero errors; public source/redirect URL and content-file permission checks passed.",
+    "not_run": [
+      "Final full make lint gate",
+      "Full repository pytest",
+      "Isolated PostgreSQL migration/apply/targeted restore checks"
+    ],
+    "why_not_run": "No commit/push or schema/data application was performed in the download/sample stages. Run required final gates before commit/push and PostgreSQL checks before apply; do not claim all repo checks passed.",
+    "receipt_caveat": "tool-validation.json is a historical receipt, not a hash manifest of every subsequent script/test edit. Initial download launched before later verification/URL-guard edits; final cached URLs/redirects were separately verified.",
+    "code_sha256_at_handoff": {
+      "scripts/reenrich_articles.py": "76d722d509424949fbeb6c41d97e67ee7490b34e93f520f8c413d9f517680aad",
+      "src/app/ingest/date_evidence.py": "42d629055514adb0f7ddf3fc15b2f71411f0666cbfee13e10d8082cb22a55128",
+      "src/app/storage/article_evidence_cache.py": "56544a8f5c541c4e454162fd964a2af749dfff378a30577cf83851cc00968ea6",
+      "tests/unit/test_article_evidence_cache.py": "59bc23a84dd4a5f69b0c458cfb5ad4bbbd97203fd3ada6e25fabb6be3f8f687f",
+      "tests/unit/test_reenrich_script.py": "8e6eb9f3ac649245d2be2abb876b7d7674ec2e3d22216fb365cb4e504e13f595"
+    }
+  },
+  "exact_resume_commands": {
+    "working_directory": "/Users/vyacheslavorlovskiy/GitHub/AI_PARSER",
+    "cache_status": "rtk proxy env AINEWS_AUTH_SECRET=reenrich-local-validation-secret-32-chars AINEWS_DATABASE_URL=sqlite:///./tmp/reenrich-tool-validation.db ./venv1/bin/python scripts/reenrich_articles.py status --run-dir tmp/reenrich-2026-10-11",
+    "cache_verify": "rtk proxy env AINEWS_AUTH_SECRET=reenrich-local-validation-secret-32-chars AINEWS_DATABASE_URL=sqlite:///./tmp/reenrich-tool-validation.db ./venv1/bin/python scripts/reenrich_articles.py verify --run-dir tmp/reenrich-2026-10-11",
+    "sample_metadata_only": "rtk proxy ./venv1/bin/python -c 'import json; from pathlib import Path; s=json.loads(Path(\"tmp/reenrich-2026-10-11/taxonomy-sample.json\").read_text()); print({\"count\":s[\"count\"],\"provider_calls\":s[\"model_provider_calls\"]})'",
+    "scope_note": "These commands reuse the existing cache without network/model calls. status/verify update only private local receipts. The AUTH_SECRET override is a public local-validation placeholder, not a production credential or production config change; the SQLite URL is explicit isolation. Never replace .env or production auth settings.",
+    "paid_pilot_command": "rtk proxy env AINEWS_AUTH_SECRET=reenrich-local-validation-secret-32-chars AINEWS_DATABASE_URL=sqlite:///./tmp/reenrich-tool-validation.db ./venv1/bin/python scripts/reenrich_pilot.py run --run-dir tmp/reenrich-2026-10-11 --approved-total-usd 1.50 --approved-jev-usd 0.25 --approved-deepseek-usd 1.25 --approval-note 'User explicitly confirmed: pilot only total USD 1.50, JEV USD 0.25, DeepSeek USD 1.25; stop after pilot results.' --summary-output-cap 4096",
+    "paid_pilot_command_note": "Pilot is complete; no rerun is needed. This is the exact successful continuation command. It reuses the unchanged approval/paid-plan identity and cumulative journal. Never reset the journal, change the approval note, redownload source URLs or regenerate successful summaries. Original default-300 command is obsolete for continuation. Pilot money is approved; mass money is not.",
+    "do_not_run_for_handoff": [
+      "fetch",
+      "prepare",
+      "tmp/select_reenrich_sample.py",
+      "tmp/extend_reenrich_sample.py"
+    ],
+    "no_repeat_note": "Download completed. prepare must not use a new snapshot to overwrite this run; sample selectors are already executed and extension is not idempotent. Resume from saved plan/sample instead."
+  },
+  "pricing_snapshot_for_pilot_planning": {
+    "checked_date": "2026-10-11",
+    "jev": {
+      "model": "jev-1.13.0",
+      "input_usd_per_million": 0.042,
+      "output_usd_per_million": 0,
+      "public_limits": "100K tokens/s, 80 requests/s; may change",
+      "source": "https://docs.typesafe.ai/models"
+    },
+    "deepseek": {
+      "model": "deepseek-flash",
+      "peak_cache_miss_input_usd_per_million": 0.3,
+      "peak_output_usd_per_million": 1.2,
+      "off_peak_factor": 0.5,
+      "public_concurrency": 2500,
+      "source": "https://api-docs.deepseek.com/quick_start/pricing/"
+    },
+    "account_balance_entitlements_checked": false,
+    "estimate_not_invoice": "80-record pilot estimated under $0.20 with bounded text and <=300-token non-thinking summaries; rough chars/4 heuristic, not a guaranteed cap. Enforce approved journalled limits. Recheck pricing/model availability before paid work.",
+    "mass_estimate_not_approved": "3240 quality passes have 17841873 bounded title/source characters (~4.46M source tokens at chars/4). Rough JEV $0.30-$0.60 including criteria; DeepSeek up to ~$2.80 if all are accepted, at peak rates with brief summaries. Counts/quality and actual usage require pilot validation; date assistance/recovery are extra scope estimates."
+  },
+  "pilot_preparation": {
+    "report": "docs/reenrich-pilot-preparation-2026-10-11.md",
+    "script": "scripts/reenrich_pilot.py",
+    "private_plan": "tmp/reenrich-2026-10-11/pilot-plan.json",
+    "private_preparation_receipt": "tmp/reenrich-2026-10-11/pilot-preparation.json",
+    "plan_hash": "0ce41006e7dabebe468f6d8c249434e3a6ae502a7c5822ce6e2c227ba82d3b20",
+    "plan_file_sha256": "af251a13e7cded1d7a126d7c65e7cdee9ed660e87b79c39b2d973530b2a7405f",
+    "count": 80,
+    "cohorts": {
+      "previously_accepted": 28,
+      "unresolved_fresh": 52
+    },
+    "hostnames": 60,
+    "estimate_usd": {
+      "jev": 0.011238591,
+      "deepseek": 0.08389635,
+      "total": 0.095134941
+    },
+    "conservative_reservation_sum_usd": {
+      "jev": 0.21504,
+      "deepseek": 0.298375,
+      "total": 0.513415
+    },
+    "proposed_caps_usd": {
+      "total": 1.5,
+      "jev": 0.25,
+      "deepseek": 1.25
+    },
+    "budget_confirmed": true,
+    "approval_and_payment_journal_exist": true,
+    "source_downloads_this_preparation": 0,
+    "provider_calls": {
+      "jev": 80,
+      "deepseek": 43
+    },
+    "scoped_tests_passed": 85,
+    "limits": "Serial requests; cumulative journal reservations; no automatic retries; unknown billing and invalid/missing usage stop dispatch. Summaries only for JEV accepts. Literal supporting quotes checked; semantic support needs pilot review.",
+    "production_taxonomy_ui_schema_changes": false,
+    "unpaid_draft_refresh": "An initial rubric draft is preserved privately. prepare --refresh-unpaid-plan refuses paid/approved runs and different frozen source inputs.",
+    "pending_question": null,
+    "next_stop": "Pilot completed; current stop is before mass processing. No mass budget is inferred."
+  },
+  "paid_pilot_checkpoint": {
+    "report": "docs/reenrich-pilot-results-2026-10-11.md",
+    "private_report": "tmp/reenrich-2026-10-11/pilot-report.json",
+    "private_journal": "tmp/reenrich-2026-10-11/pilot-journal.sqlite3",
+    "private_results": "tmp/reenrich-2026-10-11/pilot-results.json",
+    "private_approval": "tmp/reenrich-2026-10-11/pilot-budget-approval.json",
+    "assessed": 80,
+    "remaining_unassessed": 0,
+    "accepted": 38,
+    "reject_candidates": 3,
+    "unresolved": 39,
+    "complete_summaries": 38,
+    "incomplete_summaries": 0,
+    "superseded_billed_attempts_retained": 5,
+    "comparisons": 17,
+    "boundary_review": 21,
+    "checked_cohort": "All 52 fresh unresolved and 28 accepted diagnostic controls",
+    "cohort_outcomes": {
+      "unresolved_fresh": {
+        "accepted": 12,
+        "reject_candidates": 3,
+        "unresolved": 37
+      },
+      "previously_accepted": {
+        "accepted": 26,
+        "reject_candidates": 0,
+        "unresolved": 2
+      }
+    },
+    "stopped": null,
+    "diagnosis": "Completed after authorised recovery. All 38 accepts have summaries. Known failures retained with cost and review reasons; zero unknown billing, failed or inflight calls. Unknown product metadata stays unknown, not guessed.",
+    "usage_priced_usd": {
+      "jev": 0.010636,
+      "deepseek": 0.048308,
+      "total": 0.058944
+    },
+    "provider_calls": {
+      "jev": 80,
+      "deepseek": 43
+    },
+    "unknown_usage_calls": 0,
+    "repeat_paid_requests": 0,
+    "report_sha256": "e18c8cf5328f23afb3445be4f14a2dbedc565c2e2d032521a8cbf5e334a86025",
+    "usage_sha256": "f3f14200cee52bf9a925256a179551ff5c00115c1a272c32b0f55880541efa56",
+    "results_sha256": "242b23fcba7242015e1ac8dbbd8fe9caf8e3e4311a30499c6b5f83d78ad3aa46",
+    "approval_sha256": "0cfa325341f707db95c6d2de914128309bc7e7aea53e3ca96b079dba3d5f503e",
+    "scoped_tests_passed": 92,
+    "summary_versions": {
+      "reenrich-source-summary-1": 3,
+      "reenrich-source-summary-2": 31,
+      "reenrich-source-summary-3": 4
+    },
+    "summary_validation": "Every saved quote is an exact source substring; whitespace-only differences are mapped back to literal source. Semantic support still needs pilot review. The 80-word target is advisory (12 longer summaries flagged); one unclear product name is excluded and its record marked partial.",
+    "historical_partial_checkpoint": "docs/reenrich-pilot-checkpoint-2026-10-11.md; private pilot-report/results/usage-before-recovery.json preserve the initial 21/80 state",
+    "continuation_user_text": "смело продолжай.почему остановился. вообще про токены не думай.",
+    "held_reject_choices": {
+      "non_editorial": 30,
+      "non_ai": 9
+    },
+    "unresolved_semantics": "These are cleanup holding outcomes after valid JEV rejects, not source errors or JEV insufficient_evidence responses.",
+    "next_action": "Mass stage and production apply completed; original pilot artifacts remain immutable. Held cases require review only when requested."
+  },
+  "offline_pilot_review": {
+    "report": "docs/reenrich-pilot-offline-review-2026-10-11.md",
+    "private_audit": "tmp/reenrich-2026-10-11/pilot-offline-guard-category-review.json",
+    "private_audit_sha256": "1cfd0b27c5c2ac85ca4e51223380fe59b9314a2675d5c69fe5cddab83ca79eb9",
+    "held_rejects": {
+      "non_editorial": 30,
+      "non_ai": 9
+    },
+    "overlapping_failed_guards": {
+      "admission_confidence_below_0.95": 30,
+      "no_deterministic_non_editorial_corroboration": 27,
+      "relevance_above_0.05": 7,
+      "source_too_short": 0
+    },
+    "disjoint_guard_combinations": [
+      {
+        "choice": "non_editorial",
+        "confidence_and_corroboration": 18
+      },
+      {
+        "choice": "non_editorial",
+        "confidence_only": 3
+      },
+      {
+        "choice": "non_editorial",
+        "corroboration_only": 9
+      },
+      {
+        "choice": "non_ai",
+        "confidence_and_relevance": 7
+      },
+      {
+        "choice": "non_ai",
+        "confidence_only": 2
+      }
+    ],
+    "unclassified_accepted": 13,
+    "raw_other_choices_among_unclassified": 0,
+    "diagnostic_hypotheses": {
+      "primary_topic_boundaries": 10,
+      "mixed_newsletter": 1,
+      "admission_or_applied_ml_scope_review": 2
+    },
+    "clipped_source_ids": [
+      72188,
+      96193,
+      66561
+    ],
+    "near_threshold_ids_confidence_0_67_to_0_69": [
+      69427,
+      96207,
+      69428,
+      96977
+    ],
+    "business_raw_choices": {
+      "total": 6,
+      "non_editorial": 3,
+      "non_ai": 2,
+      "accepted_low_category_confidence": 1,
+      "raw_category_confidence_at_least_0_7": 4
+    },
+    "new_provider_calls": 0,
+    "new_spend_usd": 0,
+    "threshold_changes": 0,
+    "stored_result_changes": 0,
+    "verification": "Read-only journal; exact request and response/admission checks; all 80 entries audited; source/paid-plan/result/usage/journal hashes unchanged. Bounded cached fragments reviewed, not the full corpus.",
+    "important_limit": "Diagnostics are provisional source/rubric readings. Saved answers cannot establish a causal effect of changing questions or input. No automatic category assignments or admission reversals."
+  },
+  "remaining_implementation_and_apply": [
+    "Completed scope. Held cases remain available for review; do not restart mass processing or repeat paid successes.",
+    "693 legacy publication values still lack usable source proof; 92 conflict and 812 unknown statuses are explicit. 446 calendar dates have unknown time/timezone.",
+    "69 rows qualify for future ordinary retention after confirmed date repair; no prune ran. Retention 800 and 5/4 GiB remain unchanged.",
+    "Source changes remain uncommitted/unpushed in the feature worktree. Production uses pinned local image ai-news-reenrich:20261011; include these tested changes in the next regular release."
+  ],
+  "short_resume_prompt": "Задача выполнена и применена в production. Прочитай docs/reenrich-production-results-2026-10-11.md. 5270 обновлений, 1467 подтверждённых удалений, 406 enriched. API и PostgreSQL 14/18 проверены. Кэш и оплаты не повторять. Спорные случаи сохранены; код пока не закоммичен.",
+  "targeted_rubric_validation": {
+    "completed": true,
+    "candidate_version": "pilot-rubric-clarification-3",
+    "production_policy_changed": false,
+    "public_report": "docs/reenrich-rubric-validation-2026-10-11.md",
+    "public_exact_questions": "docs/reenrich-jev-rubric-clarification-2026-10-11.json",
+    "resume_prompt": "docs/prompt-resume-reenrich-2026-10-11.md",
+    "question_set_hash": "19011af1ca5ca9b60b13b19bfcd27d3a87c8555fe8a5090d683971cbbb3799a0",
+    "rubric_draft_fingerprint": "b6b328b7c34d81216cff2bf0b6d94afe5f497f8f5ab7586808fe234a9ee3efc1",
+    "final_plan_fingerprint": "9b669ba4ca8c5015e5dbb0bb6900a5ee749ae9842b78e7783922861b957c2291",
+    "passes": [
+      {
+        "version": 1,
+        "records": 64,
+        "new_confident_topics_of_13": 8,
+        "admission_agreement": 52,
+        "verified_reference_quotes": 57
+      },
+      {
+        "version": 2,
+        "records": 35,
+        "new_confident_topics_of_13": 9,
+        "admission_agreement": 29,
+        "verified_reference_quotes": 35
+      },
+      {
+        "version": 3,
+        "records": 35,
+        "new_confident_topics_of_13": 9,
+        "admission_agreement": 30,
+        "verified_reference_quotes": 35,
+        "kept": 27,
+        "held_rejects": 5,
+        "safe_reject_candidates": 3
+      }
+    ],
+    "original_13": {
+      "confident_accepted_topics": 9,
+      "all_nine_match_blinded_deepseek": true,
+      "non_ai_ids": [
+        64922
+      ],
+      "non_ai_not_deletion_confirmed": true,
+      "remaining_unclassified_ids": [
+        66561,
+        72254,
+        96193
+      ],
+      "intentional_mixed_newsletter_id": 96193
+    },
+    "final_controls": {
+      "positive_admission_and_topics_preserved": 9,
+      "safe_reject_ids_unchanged": [
+        70223,
+        73387,
+        78251
+      ]
+    },
+    "final_admission_disagreement_ids": [
+      66561,
+      72121,
+      73718,
+      75989,
+      94704
+    ],
+    "method": "DeepSeek drafted wording; JEV classified identical original source states; DeepSeek independently reviewed without JEV predictions. Source summaries excluded; three clipped inputs not expanded. All 35 final reference quotes present in saved source. Iteratively selected/reused diagnostic set, not holdout, accuracy estimate, ground truth or semantic-entailment proof.",
+    "thresholds_unchanged": {
+      "category": 0.7,
+      "reject_confidence": 0.95,
+      "non_ai_relevance_max": 0.05,
+      "deterministic_corroboration": true
+    },
+    "taxonomy_and_comparison_unchanged": true,
+    "cumulative_usage": {
+      "jev_calls": 214,
+      "deepseek_calls": 114,
+      "jev_usd": 0.030643,
+      "deepseek_usd": 0.165654,
+      "total_usd": 0.196297,
+      "validation_increment_usd": 0.137353,
+      "jev_headroom_usd": 0.219357,
+      "deepseek_headroom_usd": 1.084346,
+      "total_headroom_usd": 1.303703,
+      "unknown_or_inflight_or_failed_calls": 0,
+      "pricing": "Conservative usage-priced estimate; not provider invoice"
+    },
+    "shared_journal": "tmp/reenrich-2026-10-11/pilot-journal.sqlite3",
+    "unchanged_approval": "tmp/reenrich-2026-10-11/pilot-budget-approval.json",
+    "private_final_artifacts": {
+      "draft": "tmp/reenrich-2026-10-11/rubric-clarification-v3-draft.json",
+      "plan": "tmp/reenrich-2026-10-11/rubric-validation-v3-plan.json",
+      "results": "tmp/reenrich-2026-10-11/rubric-validation-v3-results.json",
+      "reference": "tmp/reenrich-2026-10-11/rubric-validation-v3-reference.json",
+      "report": "tmp/reenrich-2026-10-11/rubric-validation-v3-report.json",
+      "usage": "tmp/reenrich-2026-10-11/rubric-validation-v3-usage.json"
+    },
+    "private_final_sha256": {
+      "draft": "36370cc44b041818c83c9af5dc59819c41bbf136813a8c735567523209557fcf",
+      "plan": "4f78ea155dadca5569827ad7b95681e8923d35bcd3ead4c3dea4f17db0405ecc",
+      "report": "b43a6071a96c208843a1a4f149d5445e5dfa249f10c7f0ecd72c2a30e5265e5b",
+      "results": "1607a7655ccda613ebac1d4fb9fdd198c48fd2cf5653942e91e99df3026d4990",
+      "reference": "5ce524d2ad2e2a8058746d64731e294843ac95757c166e038f86b0909b226282"
+    },
+    "private_operational_scripts_already_executed": [
+      "tmp/run_rubric_validation.py",
+      "tmp/run_rubric_validation_v2.py",
+      "tmp/run_rubric_validation_v3.py"
+    ],
+    "validation": "Original paid plan/results/approval hashes unchanged; choices/IDs/complete responses/source quote presence checked; scoped Ruff passed for all three private operational scripts. No application behaviour edited in this stage; full pytest/make lint not rerun, no commit/push or production apply.",
+    "next_action": "Mass stage and production apply completed; original pilot artifacts remain immutable. Held cases require review only when requested."
+  },
+  "completed_mass_stage": {
+    "report": "docs/reenrich-production-results-2026-10-11.md",
+    "production_image": "ai-news-reenrich:20261011",
+    "migration": "a42b750d0c44",
+    "manifest_hash": "3476a430fce0972d0f083158d84170528fd060de3b0e0d4854482eb78a1d3c00",
+    "updated": 5270,
+    "deleted": 1467,
+    "enriched": 406,
+    "articles_after": 5963,
+    "full_lint_passed": true,
+    "pytest": {
+      "passed": 824,
+      "skipped": 9
+    },
+    "postgres_rehearsals": [
+      14,
+      18
+    ],
+    "all_applied_rows_verified": true,
+    "api_http_200": true,
+    "server_operation_directory": "/opt/ai-news/backups/reenrich-final-20261011",
+    "private_local_run": "tmp/reenrich-2026-10-11",
+    "source_changes_committed": false,
+    "total_usage_priced_usd": 1.543343
+  }
+}
