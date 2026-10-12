@@ -1,6 +1,7 @@
 """Verified manifest input and isolated, durable weekly calculation."""
 # pylint: disable=too-many-instance-attributes,protected-access
 
+import copy
 import fcntl
 import hashlib
 import json
@@ -9,7 +10,7 @@ import os
 import sqlite3
 import time
 from collections import Counter
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from datetime import UTC, date, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -23,6 +24,7 @@ from app.core.admission import bounded_evidence, evidence_hash
 from app.core.weekly_analytics import windows
 from app.core.weekly_enrichment import BudgetExhausted, WeeklyEnricher
 from app.core.weekly_input import instant, parsed, source_fingerprint
+from app.core.weekly_narrative import explain
 from app.core.weekly_worker import build_snapshot
 from app.storage.legacy_cleanup import fingerprint as journal_fingerprint
 from app.storage.legacy_cleanup import private_write
@@ -310,6 +312,132 @@ def recover(input_root: Path, source: Path, root: Path, expected_hash: str, reas
                 "provider_dispatches": 0, "lineage": lineage}
 
 
+SECTIONS = ("new", "trending_up", "trending_down", "other_signals")
+PROSE_FIELDS = {"summary", "claims", "narrative_mode", "narrative_reason", "narrative_support",
+               "narrative_diagnostics"}
+
+
+def narrative_invariants(payload: dict) -> dict:
+    """Exact comparison of everything except explicitly authorized prose/provenance."""
+    value = copy.deepcopy(payload)
+    for key in ("snapshot_id", "input_fingerprint", "revision", "generated_at", "narrative_mode"):
+        value.pop(key, None)
+    for key in ("durable_provider_usage", "provider_calls", "provider_tokens",
+                "narrative_revision"):
+        value["quality"].pop(key, None)
+    for section in SECTIONS:
+        value[section] = [{k: v for k, v in item.items() if k not in PROSE_FIELDS}
+                          for item in value[section]]
+    return value
+
+
+# pylint: disable=too-many-branches
+def prepare_narrative_revision(source: Path, root: Path, expected_hash: str,
+                               topics: list[str], settings: Settings, *,
+                               reuse_root: Path | None = None) -> dict:
+    """Preserve completed calculation and paid artifacts; freeze a prose-only revision."""
+    if source.resolve() == root.resolve() or not topics or len(topics) != len(set(topics)):
+        raise ValueError("Separate root and distinct selected topics required")
+    with ExitStack() as locks:
+        locks.enter_context(locked(source))
+        if reuse_root and reuse_root.resolve() != source.resolve():
+            locks.enter_context(locked(reuse_root))
+        locks.enter_context(locked(root))
+        if file_hash(source / "candidate.json") != expected_hash:
+            raise ValueError("Parent candidate differs from the reviewed hash")
+        old = json.loads((source / "frozen.json").read_text())
+        parent = json.loads((source / "candidate.json").read_text())
+        if old["version"] != VERSION or old["prices"] != PRICES:
+            raise ValueError("Parent version/pricing differs")
+        old_id = fingerprint(old)
+        paid_source = reuse_root or source
+        paid_frozen = json.loads((paid_source / "frozen.json").read_text())
+        paid_identity = fingerprint(paid_frozen)
+        if reuse_root and (paid_frozen.get("lineage", {}).get("parent_candidate_sha256")
+                           != expected_hash or paid_frozen["packet"] != old["packet"]
+                           or paid_frozen["caps_usd"] != old["caps_usd"]):
+            raise ValueError("Reused paid artifacts belong to a different calculation")
+        if parent["snapshot_id"] != old_id or parent["input_fingerprint"] != old_id:
+            raise ValueError("Parent candidate identity differs")
+        available = {i["topic_id"] for section in SECTIONS for i in parent[section]}
+        if not set(topics) <= available:
+            raise ValueError("Unknown selected topic")
+        config = {k: getattr(settings, k) for k in (
+            "weekly_narrative_prompt_version", "weekly_narrative_input_byte_cap",
+            "weekly_narrative_output_token_cap")}
+        lineage = {"parent_identity": old_id, "parent_candidate_sha256": expected_hash,
+                   "parent_frozen_sha256": file_hash(source / "frozen.json"),
+                   "parent_journal_sha256": file_hash(source / "journal.sqlite3"),
+                   "parent_weekly_sha256": file_hash(source / "weekly.sqlite"),
+                   "reused_artifacts_identity": paid_identity,
+                   "reused_frozen_sha256": file_hash(paid_source / "frozen.json"),
+                   "reused_journal_sha256": file_hash(paid_source / "journal.sqlite3"),
+                   "reused_weekly_sha256": file_hash(paid_source / "weekly.sqlite")}
+        new = {**old, "code_hashes": code_hashes(), "lineage": lineage,
+               "narrative_revision": {"topics": topics, "configuration": config,
+                                      "invariants_sha256": fingerprint(
+                                          narrative_invariants(parent))}}
+        identity = fingerprint(new)
+        if (root / "frozen.json").exists():
+            if json.loads((root / "frozen.json").read_text()) != new:
+                raise ValueError("Narrative revision differs; use a separate root")
+            return {"input_fingerprint": identity, "already_prepared": True}
+        if any(p.name != "run.lock" for p in root.iterdir()):
+            raise ValueError("Narrative destination must be empty")
+        caps = {k: microdollars(v) for k, v in old["caps_usd"].items()}
+        for name in ("journal.sqlite3", "weekly.sqlite"):
+            with sqlite3.connect(f"file:{paid_source / name}?mode=ro", uri=True) as original:
+                if original.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                    raise ValueError("Parent database is corrupt")
+                if name == "journal.sqlite3":
+                    if original.execute("SELECT value FROM identity").fetchone()[0] != (
+                        journal_fingerprint({"identity": paid_identity, "caps_micro_usd": caps})
+                    ) or original.execute("SELECT 1 FROM calls WHERE state='inflight'").fetchone():
+                        raise ValueError("Parent journal identity/inflight dispatch differs")
+                elif original.execute("SELECT 1 FROM weekly_jobs WHERE lease_token "
+                                      "IS NOT NULL").fetchone():
+                    raise ValueError("Parent weekly job is leased")
+                with sqlite3.connect(root / name) as copied:
+                    original.backup(copied)
+                    if name == "journal.sqlite3":
+                        copied.execute("UPDATE identity SET value=?", (journal_fingerprint(
+                            {"identity": identity, "caps_micro_usd": caps}),))
+            (root / name).chmod(0o600)
+        private_write(root / "parent-candidate.json", parent)
+        private_write(root / "frozen.json", new)
+        return {"input_fingerprint": identity, "lineage": lineage, "provider_dispatches": 0}
+
+
+def narrative_parent(root: Path, frozen: dict) -> dict:
+    if file_hash(root / "parent-candidate.json") != frozen["lineage"]["parent_candidate_sha256"]:
+        raise ValueError("Narrative parent bytes differ")
+    parent = json.loads((root / "parent-candidate.json").read_text())
+    if fingerprint(narrative_invariants(parent)) != (
+        frozen["narrative_revision"]["invariants_sha256"]
+    ):
+        raise ValueError("Narrative parent invariants differ")
+    return dict(parent)
+
+
+def revise_narratives(root: Path, frozen: dict, service: WeeklyEnricher) -> dict:
+    payload = copy.deepcopy(narrative_parent(root, frozen))
+    definitions = {t["id"]: t for t in payload["topic_registry"]}
+    items = {i["topic_id"]: i for section in SECTIONS for i in payload[section]}
+    for topic_id in frozen["narrative_revision"]["topics"]:
+        explain(items[topic_id], service, definitions[topic_id])
+    modes = [i.get("narrative_mode", "template") for s in SECTIONS for i in payload[s]]
+    payload["narrative_mode"] = ("deepseek" if all(m == "deepseek" for m in modes)
+                                 else "mixed" if "deepseek" in modes else "template")
+    payload["input_fingerprint"] = fingerprint(frozen)
+    payload["quality"]["narrative_revision"] = frozen["narrative_revision"] | {
+        "parent_identity": frozen["lineage"]["parent_identity"]}
+    if fingerprint(narrative_invariants(payload)) != (
+        frozen["narrative_revision"]["invariants_sha256"]
+    ):
+        raise ValueError("Narrative revision changed calculated facts")
+    return payload
+
+
 class JournalEnricher(WeeklyEnricher):
     def __init__(self, *args, journal, **kwargs):
         super().__init__(*args, **kwargs)
@@ -319,7 +447,7 @@ class JournalEnricher(WeeklyEnricher):
         secret = self.settings.jev_api_key if provider == "jev" else self.settings.ds_api_key
         if not secret or not secret.get_secret_value().strip():
             raise PilotStopped("provider_credentials_missing")
-        if len(encoded(body)) > self.settings.weekly_input_token_cap:
+        if len(encoded(body).encode()) > self.input_cap(kind):
             raise ValueError("Provider input cap exceeded")
         timeout = (self.settings.jev_timeout_seconds if provider == "jev"
                    else self.settings.weekly_deepseek_timeout_seconds)
@@ -360,7 +488,8 @@ def run(root: Path, settings: Settings) -> dict:
                 store = WeeklyStore(session)
                 job = session.get(WeeklyJob, identity)
                 if job is None:
-                    if session.scalar(select(WeeklyJob.id).limit(1)):
+                    if (not frozen.get("narrative_revision")
+                            and session.scalar(select(WeeklyJob.id).limit(1))):
                         raise ValueError("Isolated database belongs to a different revision")
                     session.add(WeeklyJob(id=identity, report_date=date.fromisoformat(
                         packet["report_date"]), methodology_version=packet["methodology_version"],
@@ -381,11 +510,13 @@ def run(root: Path, settings: Settings) -> dict:
                     return {"status": "leased", "usage": journal.report()}
                 packet = {**packet, "job_id": identity}
                 settings = settings.model_copy(update={**packet["provider_configuration"],
-                                                        **frozen["admission_configuration"]})
+                    **frozen["admission_configuration"],
+                    **frozen.get("narrative_revision", {}).get("configuration", {})})
                 service = JournalEnricher(settings, store, client, packet["topics"],
                     packet["taxonomy_version"], journal=journal)
                 try:
-                    payload = build_snapshot(packet, service)
+                    payload = (revise_narratives(root, frozen, service) if frozen.get(
+                        "narrative_revision") else build_snapshot(packet, service))
                     payload["quality"]["durable_provider_usage"] = journal.report()
                     WeeklyAnalyticsResponse.model_validate(payload)
                     # Publication is ONLY into this isolated SQLite candidate database.
@@ -405,13 +536,22 @@ def run(root: Path, settings: Settings) -> dict:
             engine.dispose()
 
 
-def publish_prepared(root: Path, store: WeeklyStore, expected_sha256: str) -> dict:
+def publish_prepared(root: Path, store: WeeklyStore, expected_sha256: str, *,
+                     expected_previous_snapshot_id: str | None = None) -> dict:
     """Stage 4 only: validate and publish a reviewed payload without any provider replay."""
     path = root / "candidate.json"
     if file_hash(path) != expected_sha256:
         raise ValueError("Candidate hash differs from the reviewed payload")
     payload = json.loads(path.read_text())
     frozen = json.loads((root / "frozen.json").read_text())
+    if frozen["code_hashes"] != code_hashes():
+        raise ValueError("Code differs from the frozen publication revision")
+    if frozen.get("narrative_revision"):
+        narrative_parent(root, frozen)
+        if fingerprint(narrative_invariants(payload)) != (
+            frozen["narrative_revision"]["invariants_sha256"]
+        ):
+            raise ValueError("Narrative publication changed calculated facts")
     identity = fingerprint(frozen)
     packet = frozen["packet"]
     WeeklyAnalyticsResponse.model_validate(payload)
@@ -425,6 +565,12 @@ def publish_prepared(root: Path, store: WeeklyStore, expected_sha256: str) -> di
     existing = store.session.get(WeeklySnapshot, identity)
     if existing is not None:
         return {"snapshot_id": identity, "revision": existing.revision, "already_stored": True}
+    store.lock_date(date.fromisoformat(packet["report_date"]))
+    current = store.published(date.fromisoformat(packet["report_date"]))
+    if expected_previous_snapshot_id is not None and (
+        (current["snapshot_id"] if current else "absent") != expected_previous_snapshot_id
+    ):
+        raise ValueError("Target publication drifted from the reviewed snapshot")
     job = store.session.get(WeeklyJob, identity)
     if job is None:
         store.session.add(WeeklyJob(id=identity,

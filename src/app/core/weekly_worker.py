@@ -80,7 +80,10 @@ def build_snapshot(packet: dict, enricher: WeeklyEnricher) -> dict[str, Any]:
     for item in selected:
         modes.append(explain(item, enricher, definitions[item["topic_id"]]))
     if modes and any(modes):
-        payload["narrative_mode"] = "deepseek" if all(modes) else "mixed"
+        all_items = [i for section in ("new", "trending_up", "trending_down", "other_signals")
+                     for i in payload[section]]
+        payload["narrative_mode"] = ("deepseek" if all(
+            i.get("narrative_mode") == "deepseek" for i in all_items) else "mixed")
     payload["quality"]["provider_calls"] = dict(enricher.calls)
     payload["quality"]["provider_tokens"] = dict(enricher.tokens)
     return dict(payload)

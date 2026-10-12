@@ -156,6 +156,10 @@ class WeeklyAnalyticsItemPayload(BaseModel):
     first_observed_at: datetime | None = None
     evidence: list[WeeklyEvidence] = Field(default_factory=list)
     claims: list[dict] = Field(default_factory=list)
+    narrative_mode: Literal["deepseek", "template"] = "template"
+    narrative_reason: str | None = None
+    narrative_support: list[dict] = Field(default_factory=list)
+    narrative_diagnostics: list[dict] = Field(default_factory=list)
 
 
 class WeeklyAnalyticsResponse(BaseModel):

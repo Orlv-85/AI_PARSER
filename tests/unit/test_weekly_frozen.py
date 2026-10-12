@@ -16,8 +16,10 @@ from app.core.weekly_frozen import (
     FILES,
     compatible_assignments,
     file_hash,
+    narrative_invariants,
     packet_from_manifest,
     prepare,
+    prepare_narrative_revision,
     publish_prepared,
     run,
     verified_input,
@@ -266,6 +268,69 @@ def test_frozen_runner_resumes_budget_and_publishes_without_models(tmp_path, mon
         with pytest.raises(ValueError, match="Candidate hash"):
             publish_prepared(root, store, "changed")
     assert len(requests) == 3
+    engine.dispose()
+
+
+def test_narrative_revision_preserves_calculation_resumes_and_publishes_without_providers(
+    tmp_path, monkeypatch
+):
+    inputs, parent, root = (tmp_path / name for name in ("inputs", "parent", "prose"))
+    config = Settings(_env_file=None, jev_api_key="key", ds_api_key="key")
+    prepare(inputs, parent, write_input(inputs),
+            {"total": "1", "jev": "0.5", "deepseek": "0.5"}, config)
+    requests = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        requests.append(body)
+        if request.url.host == "api.deepseek.com":
+            packet = json.loads(body["messages"][1]["content"])
+            evidence = packet["evidence"][0]
+            claim = {"text": "Coding agents help software engineers build and test applications.",
+                     "evidence_ids": [evidence["id"]], "quotes": [{"evidence_id": evidence["id"],
+                         "span": evidence["excerpt"]}]}
+            return httpx.Response(200, json={"choices": [{"finish_reason": "stop", "message": {
+                "content": encoded({"topic_id": "coding-agents", "claims": [claim]})}}],
+                "usage": {"prompt_tokens": 100, "completion_tokens": 100}})
+        questions = body["questions"]
+        answers = ({name: {"noul": 0.99} for name in questions} if "supported" in questions else {
+            "relevant": {"noul": 0.95}, "topic": {"choice": "coding-agents", "confidence": 0.95}})
+        return httpx.Response(200, json={"answers": answers, "usage": {"input_tokens": 100}})
+
+    client_type = httpx.Client
+    monkeypatch.setattr("app.core.weekly_frozen.httpx.Client", lambda **_: client_type(
+        transport=httpx.MockTransport(handler)))
+    monkeypatch.setattr("app.core.weekly_worker.explain", lambda *args: False)
+    assert run(parent, config)["status"] == "complete"
+    original = json.loads((parent / "candidate.json").read_text())
+    parent_bytes = {p.name: p.read_bytes() for p in parent.iterdir() if p.is_file()}
+    prepare_narrative_revision(parent, root, file_hash(parent / "candidate.json"),
+                               ["coding-agents"], config)
+    monkeypatch.setattr("app.core.weekly_frozen.build_snapshot", lambda *args: pytest.fail(
+        "Must not recompute admission/classification/events/metrics"))
+    count = len(requests)
+    assert run(root, config)["status"] == "complete"
+    assert len(requests) == count + 2
+    revised = json.loads((root / "candidate.json").read_text())
+    assert revised["other_signals"][0]["narrative_mode"] == "deepseek"
+    assert revised["other_signals"][0]["narrative_support"][0]["score"] >= 0.85
+    assert narrative_invariants(revised) == narrative_invariants(original)
+    assert all((parent / name).read_bytes() == value for name, value in parent_bytes.items())
+    count = len(requests)
+    assert run(root, config)["status"] == "complete" and len(requests) == count
+    engine = create_engine(f"sqlite:///{tmp_path / 'target.sqlite'}")
+    Base.metadata.create_all(engine)
+    with Session(engine) as session:
+        with pytest.raises(ValueError, match="publication drifted"):
+            publish_prepared(root, WeeklyStore(session), file_hash(root / "candidate.json"),
+                             expected_previous_snapshot_id="unexpected")
+        result = publish_prepared(root, WeeklyStore(session), file_hash(root / "candidate.json"))
+        assert result["provider_calls"] == 0
+        assert len(requests) == count
+        revised["other_signals"][0]["event_count_current"] += 1
+        (root / "candidate.json").write_text(encoded(revised))
+        with pytest.raises(ValueError, match="changed calculated facts"):
+            publish_prepared(root, WeeklyStore(session), file_hash(root / "candidate.json"))
     engine.dispose()
 
 

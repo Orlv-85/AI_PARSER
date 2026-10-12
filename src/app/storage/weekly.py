@@ -253,6 +253,8 @@ class WeeklyStore:
                     "weekly_jev_model", "weekly_deepseek_model", "weekly_prompt_version",
                     "jev_timeout_seconds", "weekly_deepseek_timeout_seconds",
                     "weekly_input_token_cap", "weekly_output_token_cap",
+                    "weekly_narrative_prompt_version", "weekly_narrative_input_byte_cap",
+                    "weekly_narrative_output_token_cap",
                     "weekly_publisher_overrides")}}
 
     def enqueue(self, report_date: date, settings: Settings) -> str:

@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     weekly_wall_seconds: int = Field(default=900, ge=1, le=900)
     weekly_input_token_cap: int = Field(default=16000, ge=100, le=16000)
     weekly_output_token_cap: int = Field(default=1200, ge=100, le=4000)
+    weekly_narrative_prompt_version: str = "weekly-narrative-5"
+    weekly_narrative_input_byte_cap: int = Field(default=16000, ge=2000, le=32000)
+    weekly_narrative_output_token_cap: int = Field(default=2400, ge=100, le=4096)
     weekly_input_safety_cap: int = Field(default=100000, ge=1)
     weekly_publisher_overrides: dict[str, str] = Field(default_factory=dict)
     respect_robots_txt: bool = True
