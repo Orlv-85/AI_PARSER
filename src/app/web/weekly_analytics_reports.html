@@ -129,6 +129,11 @@
         <p class="muted">Select any published weekly report and open the full analytics page.</p>
       </section>
 
+      <section id="latest-reviews" class="report-list hidden">
+        <h2>Latest weekly topic reviews</h2>
+        <p id="latest-reviews-note" class="muted"></p>
+        <ul id="latest-reviews-list" class="reports"></ul>
+      </section>
       <section id="reports-container" class="report-list hidden">
         <ul id="reports-list" class="reports"></ul>
       </section>
@@ -187,7 +192,29 @@
           return;
         }
         const payload = await response.json();
-        renderReports(payload.items || []);
+        const items = payload.items || [];
+        renderReports(items);
+        if (items.length) void loadLatestReviews(items[0].report_date);
+      }
+
+      async function loadLatestReviews(reportDate) {
+        const response = await fetch("/api/news/weekly-analytics?date=" + encodeURIComponent(reportDate));
+        if (!response.ok) return;
+        const payload = await response.json();
+        const reviews = ["new", "trending_up", "trending_down", "other_signals"]
+          .flatMap((section) => payload[section] || []).filter((item) => item.claims?.length);
+        if (!reviews.length) return;
+        document.getElementById("latest-reviews").classList.remove("hidden");
+        document.getElementById("latest-reviews-note").textContent =
+          `${payload.date_from} to ${payload.date_to}: ${reviews.length} source-supported topic reviews. ` +
+          (payload.status === "insufficient_data"
+            ? "Comparable coverage is insufficient to confirm attention trends."
+            : "Read the full report for attention metrics.");
+        document.getElementById("latest-reviews-list").innerHTML = reviews.slice(0, 8)
+          .map((item) => `<li class="report-item">
+            <h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.summary.replace(/ Comparable coverage is insufficient to confirm an attention trend\.$/, ""))}</p>
+            <p><a class="open-link" href="/weekly-ai-analytics?date=${encodeURIComponent(payload.report_date)}#topic-${encodeURIComponent(item.topic_id)}">View explanation and sources</a></p>
+          </li>`).join("");
       }
 
       void loadReports();

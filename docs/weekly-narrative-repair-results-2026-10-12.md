@@ -215,3 +215,33 @@ scheduler remains off, and rollout defaults remain disabled. A future ordinary
 release/recreation uses that disabled default and needs explicit web-view activation
 again; the exact activation command is retained in the private view receipt.
 No historical coverage restoration or other report rewrite was performed.
+
+## UI follow-up after the user's page review
+
+The user correctly identified a discovery gap: the daily weekly-preview showed
+only the empty New/Up/Down arrays, the report index showed the arithmetic summary,
+and full-report reviews were hidden inside a large collapsed technical list.
+This did not satisfy useful visibility on the two entry pages.
+
+The follow-up displays eight source-supported reviews directly on the daily page
+and report index, with links to their explanations/sources. The full report gives
+these reviews a visible section and preserves the observed counts (including
+10 to 15 for agent tooling) when comparable share is unavailable. Unselected
+topics with evidence are secondary collapsed rows; zero-evidence rows and repeated
+template/technical-status text are omitted from the primary presentation. API
+items and their states, counts, claims and evidence remain unchanged.
+
+Freshness was not a missing-data calculation: its public request returned HTTP
+401 because the operational endpoint requires sign-in. Auth remains unchanged.
+Anonymous viewers now see an operator sign-in explanation/link rather than an
+empty grid with permanent `...` placeholders. No private counters are invented
+or exposed publicly.
+
+Local browser checks on an isolated copy of the real report verified eight reviews
+on both entry pages, source-anchor navigation and original observed counts.
+JavaScript syntax checks and an executed three-page renderer fixture passed,
+including preservation of unconfirmed trend sections and the HTTP-401 UI branch.
+Repo-wide lint and 883 isolated SQLite/PostgreSQL tests were rerun before delivery.
+This follow-up requires no new model calls or report revision. The core product
+limitation remains: event reviews are useful, but they do not establish confirmed
+New/Up/Down trends without comparable historical coverage.

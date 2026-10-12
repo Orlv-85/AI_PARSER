@@ -127,6 +127,7 @@
         margin-top: 4px;
         font-size: 1.2rem;
       }
+      .hidden { display: none; }
       @media (max-width: 800px) {
         .grid {
           grid-template-columns: 1fr;
@@ -173,14 +174,21 @@
           These are news attention signals; they do not measure market adoption or sentiment.</p>
         </details>
       </section>
-      <details class="panel">
-        <summary>Stable topics and unconfirmed signals</summary>
+      <section id="weekly-reviews-panel" class="panel hidden">
+        <h2>Source-supported topic reviews</h2>
+        <p class="muted">Reported events from the available sources. Comparable coverage is
+          insufficient to confirm attention trends.</p>
+        <ul id="weekly-topic-reviews" class="item-list"></ul>
+      </section>
+      <details id="weekly-other-panel" class="panel">
+        <summary>Other observed topics</summary>
+        <p class="muted">Counts from available sources; they do not establish growth, decline or novelty.</p>
         <ul id="weekly-other" class="item-list"></ul>
       </details>
 
       <section class="panel">
         <h2>Freshness</h2>
-        <div class="metrics">
+        <div id="freshness-metrics" class="metrics">
           <div class="metric"><span>Articles</span><strong id="freshness-articles">...</strong></div>
           <div class="metric"><span>Fetched</span><strong id="freshness-fetched">...</strong></div>
           <div class="metric"><span>New</span><strong id="freshness-new">...</strong></div>
@@ -188,6 +196,7 @@
           <div class="metric"><span>Errors</span><strong id="freshness-errors">...</strong></div>
         </div>
         <p id="freshness-run" class="muted">Loading latest fetch run...</p>
+        <a id="freshness-sign-in" class="hidden" href="/login">Sign in to view collection status</a>
       </section>
 
       <section class="grid">
@@ -232,7 +241,12 @@
       }
 
       function topicMetrics(item) {
-        if (item.share_current == null) return "";
+        if (item.share_current == null) {
+          if (item.event_count_current == null) return "";
+          return `<p class="muted">Observed event groups: ${Number(item.observed_event_count_previous ?? item.event_count_previous)} → ${Number(item.observed_event_count_current ?? item.event_count_current)}<br>
+            Publisher groups: ${Number(item.publisher_count_previous)} → ${Number(item.publisher_count_current)}<br>
+            Comparable coverage share is unavailable.</p>`;
+        }
         const growth = item.growth_pct == null ? "" : ` / ${Number(item.growth_pct).toFixed(1)}%`;
         return `<p class="muted">Publisher-balanced share:
           ${(100 * Number(item.share_previous)).toFixed(1)}% → ${(100 * Number(item.share_current)).toFixed(1)}%
@@ -265,11 +279,11 @@
         node.innerHTML = items
           .map(
             (item) => `
-              <li>
+              <li ${item.topic_id ? `id="topic-${escapeHtml(item.topic_id)}"` : ""}>
                 ${safeUrl(item.url) ? `<a href="${safeUrl(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>` : escapeHtml(item.title)}
-                ${item.state ? `<p>${escapeHtml(item.state)}${item.reason ? " · " + escapeHtml(item.reason) : ""}</p>` : ""}
+                ${item.state && item.state !== "insufficient_evidence" ? `<p>${escapeHtml(item.state.replaceAll("_", " "))}</p>` : ""}
                 ${topicMetrics(item)}
-                <p class="muted">${escapeHtml(item.summary)}</p>
+                ${item.claims?.length || item.state !== "insufficient_evidence" ? `<p class="muted">${escapeHtml(item.summary.replace(/ Comparable coverage is insufficient to confirm an attention trend\.$/, ""))}</p>` : ""}
                 ${topicEvidence(item)}
               </li>
             `,
@@ -287,27 +301,40 @@
           return;
         }
         const payload = await response.json();
-        window.history.replaceState({}, "", "?date=" + encodeURIComponent(selectedDate));
+        window.history.replaceState({}, "", "?date=" + encodeURIComponent(selectedDate) + window.location.hash);
         summaryNode.textContent = payload.summary;
         document.getElementById("weekly-quality").textContent = payload.status === "legacy"
           ? "Legacy report: historical headline-based methodology; unverified attention signals."
-          : `Status: ${payload.status}. Compared ${payload.date_from}–${payload.date_to} with the preceding seven days.
-             Cohort: ${payload.quality?.cohort_size || 0} publisher groups.
-             Data quality: ${payload.quality?.reason || "comparable coverage"}.
-             Classification: ${(100 * Number(payload.quality?.weeks?.[0]?.assignment_rate || 0)).toFixed(1)}% current,
-             ${(100 * Number(payload.quality?.weeks?.[1]?.assignment_rate || 0)).toFixed(1)}% previous.
+          : `${payload.status === "insufficient_data" ? "Attention trends are unconfirmed." : "Report status: " + payload.status + "."}
+             Compared ${payload.date_from}–${payload.date_to} with the preceding seven days.
+             ${payload.quality?.cohort_size ? "Comparable publisher groups: " + payload.quality.cohort_size + "." : "No comparable publisher cohort is available."}
+             ${payload.quality?.coverage_reason === "coverage_unknown" ? "Historical source coverage is unknown." : ""}
+             ${payload.quality?.events_complete === false ? "Event matching is incomplete." : ""}
              Generated: ${payload.generated_at || "awaiting snapshot"}.
              Cutoff: ${payload.data_cutoff || "unknown"}. Revision: ${payload.revision || "—"}.`;
         renderList(newNode, payload.new, emptyMessage(payload, "new"));
         renderList(trendingUpNode, payload.trending_up, emptyMessage(payload, "trending_up"));
         renderList(trendingDownNode, payload.trending_down, emptyMessage(payload, "trending_down"));
-        renderList(document.getElementById("weekly-other"), payload.other_signals || [], "No other signals.");
+        const signals = payload.other_signals || [];
+        const reviews = signals.filter((item) => item.claims?.length);
+        document.getElementById("weekly-reviews-panel").classList.toggle("hidden", !reviews.length);
+        renderList(document.getElementById("weekly-topic-reviews"), reviews, "No topic reviews.");
+        renderList(document.getElementById("weekly-other"), signals.filter((item) =>
+          !item.claims?.length && item.evidence?.length), "No other observed topics.");
+        document.getElementById("weekly-other-panel").open = window.location.hash === "#weekly-other";
+        if (window.location.hash) {
+          document.getElementById(window.location.hash.slice(1))?.scrollIntoView({block: "start"});
+        }
       }
 
       async function loadFreshness(selectedDate) {
         const response = await fetch("/api/news/weekly-analytics/freshness?date=" + encodeURIComponent(selectedDate));
+        document.getElementById("freshness-metrics").classList.toggle("hidden", !response.ok);
+        document.getElementById("freshness-sign-in").classList.toggle("hidden", response.status !== 401);
         if (!response.ok) {
-          freshnessRunNode.textContent = "Freshness data is unavailable right now.";
+          freshnessRunNode.textContent = response.status === 401
+            ? "Collection status is available to signed-in operators."
+            : "Collection status is temporarily unavailable.";
           return;
         }
         const payload = await response.json();
