@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.config.settings import Settings, get_settings
 from app.config.sources import SourceConfig
+from app.core.canonicalize import canonical_url_hash
 from app.core.models import Article as InputArticle
 from app.core.weekly_analytics import calculate
 from app.core.weekly_audit import audit
@@ -96,12 +97,17 @@ def test_observation_provenance_keeps_alias_dates_unknown_and_raw_duplicates(ses
     record_observation(session, 2, item.model_copy(
         update={"published_at": now - timedelta(days=7)}))
     record_observation(session, 3, item.model_copy(update={"published_at": None}))
+    session.add(Article(source_id=1, title="Current announcement", url=str(item.url),
+                        url_canonical=str(item.url), url_canonical_hash=canonical_url_hash(
+                            str(item.url)), published_at=now, publication_status="confirmed",
+                        publication_precision="second", discovered_at=now))
     session.commit()
     packet = WeeklyStore(session).freeze_input(now.date(), settings())
-    assert len(packet["observations"]) == 2
-    assert len({r["published_at"] for r in packet["observations"]}) == 2
-    assert packet["quality_counters"]["invalid_dates"] == 1
-    assert packet["history_complete"] is False
+    assert len(packet["observations"]) == 1
+    assert packet["observations"][0]["title"] == "Current announcement"
+    assert len(packet["observations"][0]["historical_observation_ids"]) == 1
+    assert packet["quality_counters"]["orphan_observations"] == 0
+    assert packet["quality_counters"]["unverified_alias_observations"] == 2
 
 
 def test_complete_read_over_two_hundred_and_safety_cap_explicit(session) -> None:
@@ -110,6 +116,11 @@ def test_complete_read_over_two_hundred_and_safety_cap_explicit(session) -> None
         record_observation(session, 1, InputArticle(
             source_key="test", title=f"Unranked {i}", url=f"https://example.com/{i}",
             published_at=now - timedelta(days=1), summary="AI event evidence"))
+        session.add(Article(source_id=1, title=f"Unranked {i}",
+                            url=f"https://example.com/{i}", url_canonical=f"https://example.com/{i}",
+                            url_canonical_hash=canonical_url_hash(f"https://example.com/{i}"),
+                            publication_status="confirmed", publication_precision="second",
+                            published_at=now - timedelta(days=1), discovered_at=now))
     session.commit()
     packet = WeeklyStore(session).freeze_input(now.date(), settings())
     assert len(packet["observations"]) == 250
@@ -127,7 +138,8 @@ def test_legacy_dates_are_quality_counters_not_verified_publication(session) -> 
     session.commit()
     packet = WeeklyStore(session).freeze_input(now.date(), settings())
     assert packet["quality_counters"]["legacy_unverified_dates"] == 1
-    assert packet["observations"][0]["publication_provenance"] == "legacy_unverified"
+    assert not packet["observations"]
+    assert packet["unassigned_articles"][0]["date_reason"] == "legacy_unverified"
     assert not packet["history_complete"]
 
 

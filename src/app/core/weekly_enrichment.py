@@ -15,7 +15,7 @@ from typing import Any
 import httpx
 
 from app.config.settings import Settings
-from app.core.jev import _probability
+from app.core.jev import JevRelevanceScorer, _probability
 from app.storage.weekly import WeeklyStore, encoded, fingerprint
 
 _INSTRUCTIONS = (
@@ -161,11 +161,64 @@ class WeeklyEnricher:
         return dict(value)
 
     # pylint: disable=too-many-return-statements,too-many-boolean-expressions
-    def classify(self, row: dict) -> dict:
-        # Conservatively cap by characters (one character may be one token).
+    def assignment_text(self, row: dict) -> str:
         text = " ".join(str(row.get(k) or "") for k in ("title", "summary", "content"))
         reserved = 2 * len(encoded(self.topics)) + 2000
-        text = clean_text(text)[:max(0, self.settings.weekly_input_token_cap - reserved)]
+        return clean_text(text)[:max(0, self.settings.weekly_input_token_cap - reserved)]
+
+    def admission(self, row: dict) -> str:
+        if row.get("admission_state") == "accepted_compatible":
+            return "accepted_compatible"
+        # Admission evaluates the exact selected source, independently from daily categories.
+        questions = {"admission": JevRelevanceScorer(
+            None, self.settings.weekly_jev_model, self.logger,  # type: ignore[arg-type]
+            semantic_admission_enabled=True).questions()["admission"]}
+        text = clean_text(" ".join(str(row.get(k) or "") for k in ("title", "content")))
+        text = text[:max(0, self.settings.weekly_input_token_cap - len(encoded(questions)) - 2000)]
+        if not text:
+            return "unresolved"
+        state = {"source_text": text, "policy": self.settings.semantic_admission_policy_version,
+                 "prompt": self.settings.semantic_admission_prompt_version}
+        # Editorial admission is independent of the weekly topic taxonomy.
+        key = fingerprint({"task": "source_admission", "state": state, "questions": questions,
+                           "model": self.settings.weekly_jev_model,
+                           "input_cap": self.settings.weekly_input_token_cap})
+        try:
+            answer = self.store.decision(key)
+            if answer is None:
+                answer = self._post("jev", {"model": self.settings.weekly_jev_model,
+                    "state": encoded(state), "questions": questions}, "jev")["answers"]["admission"]
+                if answer["choice"] not in questions["admission"]["criteria"]:
+                    raise ValueError("Unknown admission Choice ID")
+                _probability(answer["confidence"])
+                self.store.save_decision(key, "admission", answer)
+            if answer["choice"] == "accepted_ai_editorial":
+                return "accepted_compatible"
+            if answer["choice"] in {"non_ai", "non_editorial"}:
+                return "rejected"
+        except (httpx.HTTPError, ValueError, KeyError, TypeError):
+            pass
+        return "unresolved"
+
+    # pylint: disable=too-many-return-statements,too-many-boolean-expressions
+    def classify(self, row: dict) -> dict:
+        if row.get("admission_required"):
+            admission_state = self.admission(row)
+            if admission_state != "accepted_compatible":
+                return {"topic_id": None, "eligible": admission_state != "rejected",
+                        "possible_topics": [], "classification_complete":
+                        admission_state == "rejected", "admission_state": admission_state}
+            assessment = self._classify_admitted(row)
+            if not assessment["eligible"]:
+                # A topic relevance result cannot silently override accepted source admission.
+                assessment = {"topic_id": None, "eligible": True, "possible_topics": [],
+                              "classification_complete": False, "admission_disagreement": True}
+            return {**assessment, "admission_state": admission_state}
+        return self._classify_admitted(row)
+
+    # pylint: disable=too-many-return-statements,too-many-boolean-expressions
+    def _classify_admitted(self, row: dict) -> dict:
+        text = self.assignment_text(row)
         if not text:
             return {"topic_id": None, "eligible": True, "possible_topics": [],
                     "classification_complete": False}
@@ -230,11 +283,18 @@ class WeeklyEnricher:
         except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError):
             return unresolved
 
+    # pylint: disable=too-many-statements
     def cluster(self, rows: list[dict]) -> tuple[list[dict], bool]:
         clustered: list[dict] = []
         exact: dict[str, str] = {}
         complete = True
-        for row in sorted(rows, key=lambda r: (r["published_at"], r["id"])):
+        for row in sorted(rows, key=lambda r: (r.get("published_at") or
+                           r.get("publication_interval", {}).get("start", ""), r["id"])):
+            if (row.get("admission_required")
+                    and row.get("admission_state") not in {"accepted_compatible", "rejected"}):
+                complete = False
+                clustered.append({**row, "event_id": row["id"]})
+                continue
             if not row.get("eligible", True):
                 clustered.append({**row, "event_id": row["id"]})
                 continue
@@ -244,10 +304,17 @@ class WeeklyEnricher:
             event = exact.get(exact_key) or exact.get(content_key)
             if not event:
                 event = row["id"]
+                if not row.get("published_at"):
+                    complete = False
+                    self.event_ambiguities.append({"article_id": row["id"],
+                                                   "reason": "unknown_utc_time"})
                 tokens = set(re.findall(r"\w{3,}", row["title"].casefold()))
                 candidates = []
                 candidate_events: set[str] = set()
                 for prior in reversed(clustered):
+                    if (not row.get("published_at") or not prior.get("published_at")
+                            or not prior.get("eligible", True)):
+                        continue
                     if prior.get("topic_id") != row.get("topic_id"):
                         continue
                     # Frozen timestamps are ISO UTC; coarse date bound limits comparisons.
@@ -298,7 +365,9 @@ class WeeklyEnricher:
         return clustered, complete
 
     def propose_topic(self, rows: list[dict]) -> dict | None:
-        unresolved = [r for r in rows if r["eligible"] and r["topic_id"] is None]
+        unresolved = [r for r in rows if r["eligible"] and r["topic_id"] is None
+                      and (not r.get("admission_required")
+                           or r.get("admission_state") == "accepted_compatible")]
         if len({r["event_id"] for r in unresolved}) < 3 or len(
             {r["publisher"] for r in unresolved}
         ) < 3:
