@@ -129,3 +129,10 @@ When a task clearly maps to one of these areas, review the matching `spec.md` fi
 - Summarize what changed, why, and how it was validated.
 - Include file references for non-trivial edits.
 - Call out assumptions, risks, and skipped checks explicitly.
+
+## Prompts For Other Sessions
+
+- Always save every task or handoff prompt intended for another session to a file before delivering it to the user.
+- Use `docs/prompt-<task>-<YYYY-MM-DD>.md` with a descriptive task name; preserve earlier prompts instead of overwriting unrelated files.
+- Include a clickable file link in the response. Inline prompt text is optional and does not replace the saved file.
+- Preserve this user preference in session-context and handoff artifacts so future sessions follow it.
