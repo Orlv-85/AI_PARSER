@@ -9,8 +9,11 @@ Incremental provider cost: **$0**. V2 remains disabled by default.
 Base: `origin/master` `f83594a24fa74ce78da8dc8e64eaab8694bd46bc` (production
 v0.1.86). Branch: `feat/weekly-stage2-manifest-v4`. Working checkout:
 `/private/tmp/ai-parser-weekly-stage2-20261012`. The shared archive checkout and
-its index were preserved. The implementation commit and PR are recorded in the
-follow-up version record below after committing this handoff.
+its index were preserved. Tested implementation commit:
+[`40f8a93a01f11e21167b12fa545a0eb6fd271a04`](https://github.com/Orlv-85/AI_PARSER/commit/40f8a93a01f11e21167b12fa545a0eb6fd271a04).
+Reviewable PR: [#23](https://github.com/Orlv-85/AI_PARSER/pull/23), open and unmerged.
+The subsequent handoff version record changes documentation only; frozen code hashes
+still identify this tested implementation.
 
 The public stage 1 handoff, four-stage plan and associated prompts are included
 in this PR. Existing untracked historical-preview scripts/tests and unrelated
