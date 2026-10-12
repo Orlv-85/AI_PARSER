@@ -41,10 +41,14 @@ def build_snapshot(packet: dict, enricher: WeeklyEnricher) -> dict[str, Any]:
         clustered, events_complete = enricher.cluster(_classify(packet, enricher))
     observations = [Observation(
         id=row["id"], event_id=row["event_id"], publisher=row["publisher"],
-        published_at=datetime.fromisoformat(row["published_at"]), topic_id=row["topic_id"],
+        published_at=(datetime.fromisoformat(row["published_at"])
+                      if row.get("published_at") else None), topic_id=row["topic_id"],
         title=row["title"], url=row["url"], article_id=row.get("article_id"),
         excerpt=clean_text(row.get("summary") or row.get("content") or row["title"])[:2000],
         eligible=row["eligible"], possible_topics=tuple(row["possible_topics"]),
+        calendar_date=row.get("calendar_date"),
+        publication_precision=row.get("publication_precision"),
+        publication_interval=row.get("publication_interval"),
     ) for row in clustered]
     payload = calculate(date.fromisoformat(packet["report_date"]), observations,
                         hydrate_coverage(packet["coverage"]), packet["topics"],
@@ -54,6 +58,9 @@ def build_snapshot(packet: dict, enricher: WeeklyEnricher) -> dict[str, Any]:
                         input_complete=packet["input_complete"] and events_complete)
     payload["quality"].update(packet["quality_counters"])
     payload["quality"]["events_complete"] = events_complete
+    payload["quality"]["admission_unresolved"] = sum(
+        bool(row.get("admission_required")) and row.get("admission_state") not in {
+            "accepted_compatible", "rejected"} for row in clustered)
     payload["quality"]["provider_calls"] = dict(enricher.calls)
     payload["quality"]["provider_tokens"] = dict(enricher.tokens)
     # All accepted assignments/event IDs and all candidates are retained for replay.
@@ -63,8 +70,11 @@ def build_snapshot(packet: dict, enricher: WeeklyEnricher) -> dict[str, Any]:
     payload["topic_registry"] = packet["topics"]
     payload["included_observation_ids"] = packet["included_ids"]
     payload["excluded_observations"] = packet.get("excluded_observations", [])
+    payload["unassigned_articles"] = packet.get("unassigned_articles", [])
     selected = [item for section in ("new", "trending_up", "trending_down")
                 for item in payload[section][:5]]
+    selected += sorted((item for item in payload["other_signals"] if item["evidence"]),
+                       key=lambda item: (-item["event_count_current"], item["topic_id"]))[:8]
     modes = []
     definitions = {t["id"]: t for t in packet["topics"]}
     for item in selected:

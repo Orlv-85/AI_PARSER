@@ -20,8 +20,10 @@ from app.config.settings import Settings
 from app.config.sources import SourceConfig
 from app.core.canonicalize import canonical_url_hash
 from app.core.weekly_analytics import DEFAULT_THRESHOLDS, METHODOLOGY_VERSION, Coverage, windows
+from app.core.weekly_input import compatible_admission, publication
 from app.core.weekly_topics import TAXONOMY_VERSION, topic_registry
 from app.storage.models_sql import (
+    AdmissionDecision,
     Article,
     Source,
     WeeklyCoverageAttempt,
@@ -175,47 +177,52 @@ class WeeklyStore:
         sources = {s.id: s for s in self.session.scalars(select(Source)).all()}
         provenance = list(self.session.scalars(select(WeeklyInputObservation).where(
             WeeklyInputObservation.discovered_at <= cutoff,
-            or_(WeeklyInputObservation.published_at.is_(None),
-                (WeeklyInputObservation.published_at >= start)
-                & (WeeklyInputObservation.published_at < end)),
         ).order_by(WeeklyInputObservation.id)).all())
         articles = list(self.session.scalars(select(Article).where(
-            Article.published_at >= start, Article.published_at < end,
             Article.discovered_at <= cutoff,
         ).order_by(Article.id)).all())
-        article_ids = {row.url_canonical_hash: row.id for row in articles}
+        current = {(row.source_id, row.url_canonical_hash): row for row in articles}
+        current_canonicals = {row.url_canonical_hash for row in articles}
+        admissions: dict[str, list[dict]] = defaultdict(list)
+        for decision in self.session.scalars(select(AdmissionDecision).where(
+                AdmissionDecision.updated_at <= cutoff)).all():
+            admissions[decision.url_canonical_hash].append({
+                column.name: getattr(decision, column.name)
+                for column in AdmissionDecision.__table__.columns})
+        histories: dict[tuple[int, str], list[str]] = defaultdict(list)
         rows = []
-        recorded: set[tuple[int, str]] = set()
         invalid_dates = 0
         excluded_observations = []
         for row in provenance:
-            recorded.add((row.source_id, row.canonical_hash))
-            if row.published_at is None:
-                invalid_dates += 1
+            identity = (row.source_id, row.canonical_hash)
+            if identity not in current:
                 excluded_observations.append({"id": row.id, "source_id": row.source_id,
-                                              "reason": "invalid_date"})
-                continue
-            source = sources.get(row.source_id)
-            data = json.loads(row.payload)
-            rows.append({**data, "id": row.id, "article_id": article_ids.get(row.canonical_hash),
-                         "source_id": row.source_id, "canonical_hash": row.canonical_hash,
-                         "published_at": row.published_at.isoformat(),
-                         "publisher": publisher_group(source.url if source else data["url"],
-                                                      settings.weekly_publisher_overrides)})
+                    "reason": "orphan_article" if row.canonical_hash not in current_canonicals
+                    else "unverified_alias_source"})
+            else:
+                histories[identity].append(row.id)
         legacy_dates = 0
+        unassigned = []
         for row in articles:
-            if (row.source_id, row.url_canonical_hash) in recorded:
+            data = {column.name: getattr(row, column.name) for column in Article.__table__.columns}
+            temporal = publication(data, periods)
+            if temporal["window_index"] is None:
+                if temporal["date_reason"] != "outside_scope":
+                    invalid_dates += 1
+                    legacy_dates += temporal["date_reason"] == "legacy_unverified"
+                    unassigned.append({"article_id": row.id, **temporal})
                 continue
-            legacy_dates += 1
             source = sources.get(row.source_id or -1)
-            published = row.published_at
-            if published.tzinfo is None:
-                published = published.replace(tzinfo=UTC)
+            refs = compatible_admission(data, admissions[row.url_canonical_hash])
             rows.append({"id": f"article-{row.id}", "article_id": row.id,
                          "canonical_hash": row.url_canonical_hash,
-                         "source_id": row.source_id, "published_at": published.isoformat(),
+                         "source_id": row.source_id, **temporal,
                          "title": row.title, "summary": row.summary, "content": row.content,
-                         "url": row.url_canonical, "publication_provenance": "legacy_unverified",
+                         "url": row.url_canonical, "publication_provenance": "current_article",
+                         "historical_observation_ids": histories[(row.source_id,
+                                                                    row.url_canonical_hash)],
+                         "admission_required": True, "admission_refs": refs,
+                         "admission_state": "accepted_compatible" if refs else "unresolved",
                          "publisher": publisher_group(source.url if source else row.url_canonical,
                                                       settings.weekly_publisher_overrides)})
         cap = settings.weekly_input_safety_cap
@@ -223,11 +230,19 @@ class WeeklyStore:
         return {"report_date": report_date.isoformat(), "data_cutoff": cutoff.isoformat(),
                 "observations": rows[:cap], "included_ids": [r["id"] for r in rows[:cap]],
                 "excluded_observations": excluded_observations,
+                "unassigned_articles": unassigned,
                 "coverage": self._coverage(start, end, cutoff), "topics": topics,
                 "taxonomy_version": taxonomy, "methodology_version": METHODOLOGY_VERSION,
                 "thresholds": asdict(DEFAULT_THRESHOLDS),
                 "input_complete": complete, "quality_counters": {
                     "retrieved": len(rows), "invalid_dates": invalid_dates,
+                    "articles_accounted": len(articles),
+                    "orphan_observations": sum(r["reason"] == "orphan_article"
+                                               for r in excluded_observations),
+                    "unverified_alias_observations": sum(r["reason"] == "unverified_alias_source"
+                                                         for r in excluded_observations),
+                    "admission_unresolved": sum(r["admission_state"] != "accepted_compatible"
+                                                for r in rows),
                     "legacy_unverified_dates": legacy_dates,
                     "unavailable_text": sum(not r.get("summary") and not r.get("content")
                                             for r in rows),
@@ -267,22 +282,24 @@ class WeeklyStore:
             })
         self.session.commit()
 
-    def claim(self, seconds: int) -> tuple[str, str] | None:
+    def claim(self, seconds: int, *, job_id: str | None = None) -> tuple[str, str] | None:
         now = datetime.now(UTC)
         available = or_(WeeklyJob.status.in_(["pending", "retry"]),
                         (WeeklyJob.status == "running") & (WeeklyJob.lease_until < now))
-        ids = self.session.scalars(select(WeeklyJob.id).where(available).order_by(
-            WeeklyJob.created_at, WeeklyJob.id)).all()
-        for job_id in ids:
+        query = select(WeeklyJob.id).where(available)
+        if job_id is not None:
+            query = query.where(WeeklyJob.id == job_id)
+        ids = self.session.scalars(query.order_by(WeeklyJob.created_at, WeeklyJob.id)).all()
+        for candidate_id in ids:
             token = uuid4().hex
             result = self.session.execute(update(WeeklyJob).where(
-                WeeklyJob.id == job_id, available,
+                WeeklyJob.id == candidate_id, available,
             ).values(status="running", lease_token=token,
                      lease_until=now + timedelta(seconds=seconds + 120),
                      attempts=WeeklyJob.attempts + 1))
             self.session.commit()
             if result.rowcount:  # type: ignore[attr-defined]
-                return job_id, token
+                return candidate_id, token
         return None
 
     def publish(self, job_id: str, token: str, payload: dict, packet: dict) -> None:

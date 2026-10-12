@@ -43,10 +43,13 @@ def priced_usage(provider, data):
 
 
 class PilotJournal:
-    def __init__(self, path, identity, caps):
+    def __init__(self, path, identity, caps, *, key_function=request_key,
+                 reservation_function=reservation):
         if set(caps) != {"total", "jev", "deepseek"}:
             raise ValueError("All three caps required")
         self.caps = {k: microdollars(v) for k, v in caps.items()}
+        self.key_function = key_function
+        self.reservation_function = reservation_function
         if self.caps["jev"] + self.caps["deepseek"] > self.caps["total"]:
             raise ValueError("Provider caps exceed total cap")
         fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
@@ -185,8 +188,8 @@ class PilotJournal:
         return True
 
     def call(self, provider, body, client, secret):
-        key = request_key(provider, body)
-        amount = reservation(provider, body)
+        key = self.key_function(provider, body)
+        amount = self.reservation_function(provider, body)
         saved = self.db.execute("SELECT state,response,actual FROM calls WHERE key=?",
                                 (key,)).fetchone()
         if saved:

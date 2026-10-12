@@ -44,7 +44,7 @@ class Observation:
     id: str
     event_id: str
     publisher: str
-    published_at: datetime
+    published_at: datetime | None
     topic_id: str | None
     title: str = ""
     url: str = ""
@@ -52,11 +52,34 @@ class Observation:
     article_id: int | None = None
     eligible: bool = True
     possible_topics: tuple[str, ...] = ()
+    calendar_date: str | None = None
+    publication_precision: str | None = None
+    publication_interval: dict | None = None
 
     def __post_init__(self) -> None:
+        if self.published_at is None:
+            if not self.publication_interval:
+                raise ValueError("Calendar observation requires a UTC uncertainty interval")
+            low, high = (datetime.fromisoformat(self.publication_interval[k])
+                         for k in ("start", "end"))
+            if low.tzinfo is None or high.tzinfo is None or low >= high:
+                raise ValueError("Calendar interval requires ordered timezone-aware bounds")
+            return
         if self.published_at.tzinfo is None:
             raise ValueError("Observation publication time requires a timezone")
         object.__setattr__(self, "published_at", self.published_at.astimezone(UTC))
+
+
+def in_window(row: Observation, start: datetime, end: datetime) -> bool:
+    if row.published_at is not None:
+        return start <= row.published_at < end
+    interval = row.publication_interval or {}
+    return (start <= datetime.fromisoformat(interval["start"])
+            and datetime.fromisoformat(interval["end"]) <= end)
+
+
+def order_time(row: Observation) -> datetime:
+    return row.published_at or datetime.fromisoformat((row.publication_interval or {})["start"])
 
 
 @dataclass(frozen=True)
@@ -141,7 +164,8 @@ def _metrics(rows: list[Observation], topic_id: str, cohort: set[str]) -> dict[s
                 if denominators[p]) / len(cohort) if cohort else 0.0
     return {"share": share, "events": len({r.event_id for r in selected}),
             "publishers": len({r.publisher for r in selected}),
-            "days": len({r.published_at.date() for r in selected}), "rows": selected}
+            "days": len({r.published_at.date() for r in selected if r.published_at is not None}),
+            "rows": selected}
 
 
 def _supported(metrics: dict[str, Any], thresholds: Thresholds) -> bool:
@@ -155,8 +179,8 @@ def _evidence(rows: list[Observation], periods: list[tuple[datetime, datetime]])
     events: set[str] = set()
     publishers: set[str] = set()
     # Alternate weeks; Down naturally selects the prior side when W0 is empty.
-    ordered = sorted(rows, key=lambda r: (r.published_at, r.id), reverse=True)
-    sides = [[r for r in ordered if start <= r.published_at < end]
+    ordered = sorted(rows, key=lambda r: (order_time(r), r.id), reverse=True)
+    sides = [[r for r in ordered if in_window(r, start, end)]
              for start, end in periods[:2]]
     previous_seed = next((r for r in sides[1]
                           if not sides[0] or r.publisher != sides[0][0].publisher), None)
@@ -170,7 +194,11 @@ def _evidence(rows: list[Observation], periods: list[tuple[datetime, datetime]])
         publishers.add(row.publisher)
         selected.append({"id": row.id, "article_id": row.article_id,
                          "event_id": row.event_id, "title": row.title, "url": row.url,
-                         "publisher": row.publisher, "published_at": row.published_at.isoformat(),
+                         "publisher": row.publisher, "published_at": (
+                             row.published_at.isoformat() if row.published_at else None),
+                         "calendar_date": row.calendar_date,
+                         "publication_precision": row.publication_precision,
+                         "publication_interval": row.publication_interval,
                          "window": "current" if row in sides[0] else "previous",
                          "excerpt": row.excerpt[:2000]})
         if len(selected) == 6:
@@ -188,7 +216,7 @@ def calculate(report_date: date, observations: list[Observation], coverage: list
         if not row.eligible:
             continue
         for i, (start, end) in enumerate(periods):
-            if start <= row.published_at < end:
+            if in_window(row, start, end):
                 unique.setdefault((row.event_id, row.publisher, i), row)
                 break
     rows = [[r for (_, _, w), r in unique.items() if w == i] for i in range(5)]
@@ -202,6 +230,7 @@ def calculate(report_date: date, observations: list[Observation], coverage: list
     elif (len(cohort) < thresholds.min_publishers or not healthy[1]
           or len(cohort) / len(healthy[1]) < thresholds.retention):
         reason = "source_outage" if healthy[1] else "coverage_unknown"
+    coverage_reason = reason if reason in {"coverage_unknown", "source_outage"} else None
     if not input_complete:
         reason = "input_incomplete"
     if now < periods[0][1]:
@@ -219,9 +248,15 @@ def calculate(report_date: date, observations: list[Observation], coverage: list
         "status": "provisional" if reason == "partial_window" else (
             "insufficient_data" if reason else "ready"), "narrative_mode": "template",
         "quality": {"reason": reason, "cohort": sorted(cohort), "cohort_size": len(cohort),
+                    "coverage_reason": coverage_reason, "input_complete": input_complete,
+                    "topic_count_scope": "observed" if reason else "comparable_cohort",
+                    "normalized_metrics_available": bool(cohort),
                     "weeks": stats, "novelty_cohort": sorted(novelty),
                     "novelty_weeks": novelty_stats, "history_ready": history_ready,
                     "input_count": len(observations), "counted_observations": len(unique),
+                    "observed_weeks": [{"window": i, "observations": len(week),
+                                        "unresolved": sum(r.topic_id is None for r in week)}
+                                       for i, week in enumerate(rows)],
                     "excluded_ineligible": sum(not r.eligible for r in observations),
                     "excluded_publishers": sorted({r.publisher for r in observations} - cohort),
                     "excluded_publisher_observations": [sum(r.publisher not in cohort for r in week)
@@ -232,6 +267,8 @@ def calculate(report_date: date, observations: list[Observation], coverage: list
     for topic in topics:
         topic_id = topic["id"]
         current, previous = [_metrics(rows[i], topic_id, cohort) for i in range(2)]
+        observed_current, observed_previous = [
+            _metrics(rows[i], topic_id, {r.publisher for r in rows[i]}) for i in range(2)]
         historical = [r for week in rows[1:] for r in week if r.topic_id == topic_id]
         ambiguous_history = any(r.topic_id is None and (not r.possible_topics
                                 or topic_id in r.possible_topics) for week in rows[1:]
@@ -266,23 +303,32 @@ def calculate(report_date: date, observations: list[Observation], coverage: list
                       and delta <= -thresholds.delta_pp
                       and previous["events"] - current["events"] >= thresholds.event_delta):
                     state = "down"
-        evidence = _evidence(current["rows"] + previous["rows"], periods)
+        facts_current, facts_previous = ((observed_current, observed_previous) if reason else
+                                        (current, previous))
+        evidence = _evidence(facts_current["rows"] + facts_previous["rows"], periods)
         first = min((r.published_at.isoformat() for r in observations
-                     if r.topic_id == topic_id), default=None)
+                     if r.topic_id == topic_id and r.published_at is not None), default=None)
         item = {"topic_id": topic_id, "title": topic["label"], "state": state,
-                "reason": topic_reason, "event_count_current": current["events"],
-                "event_count_previous": previous["events"],
-                "publisher_count_current": current["publishers"],
-                "publisher_count_previous": previous["publishers"],
-                "share_current": current["share"], "share_previous": previous["share"],
-                "delta_pp": delta, "growth_pct": 100 * growth if growth is not None else None,
+                "reason": topic_reason, "event_count_current": facts_current["events"],
+                "event_count_previous": facts_previous["events"],
+                "publisher_count_current": facts_current["publishers"],
+                "publisher_count_previous": facts_previous["publishers"],
+                "observed_event_count_current": observed_current["events"],
+                "observed_event_count_previous": observed_previous["events"],
+                "share_current": current["share"] if cohort else None,
+                "share_previous": previous["share"] if cohort else None,
+                "delta_pp": delta if cohort else None,
+                "growth_pct": 100 * growth if growth is not None and cohort else None,
                 "first_observed_at": first, "evidence": evidence,
                 "url": evidence[0]["url"] if evidence else "",
-                "summary": (f"Publisher-balanced coverage share changed from "
+                "summary": ((f"Observed event groups: {facts_previous['events']} to "
+                             f"{facts_current['events']}. Trend confirmation is unavailable; "
+                             "growth, decline and novelty are unconfirmed.") if reason else
+                            (f"Publisher-balanced coverage share changed from "
                             f"{previous['share']:.1%} to {current['share']:.1%} "
                             f"({delta:+.2f} percentage points). Distinct events: "
                             f"{previous['events']} to {current['events']}. "
-                            "This measures news attention within the monitored corpus.")}
+                            "This measures news attention within the monitored corpus."))}
         section = next((k for k, v in SECTION_STATES.items() if v == state), "other_signals")
         result[section].append(item)
     for section in SECTION_STATES:

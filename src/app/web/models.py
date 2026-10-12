@@ -125,7 +125,10 @@ class WeeklyEvidence(BaseModel):
     title: str
     url: HttpUrl
     publisher: str
-    published_at: datetime
+    published_at: datetime | None = None
+    calendar_date: date | None = None
+    publication_precision: str | None = None
+    publication_interval: dict | None = None
     window: Literal["current", "previous"]
     excerpt: str
 
@@ -142,6 +145,8 @@ class WeeklyAnalyticsItemPayload(BaseModel):
     reason: str | None = None
     event_count_current: int | None = None
     event_count_previous: int | None = None
+    observed_event_count_current: int | None = None
+    observed_event_count_previous: int | None = None
     publisher_count_current: int | None = None
     publisher_count_previous: int | None = None
     share_current: float | None = None
