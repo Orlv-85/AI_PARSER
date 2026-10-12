@@ -317,6 +317,9 @@ def _screen_candidate(
     was_cached = state in relevance_scorer.cache
     assessment = relevance_scorer.classify(item)
     if assessment is None:
+        if getattr(relevance_scorer, "input_held", False):
+            admission_state.unresolved += 1
+            return ("unresolved", None)
         admission_state.paused = True
         if logger:
             logger.error("semantic_paused", {"reason": "provider_failed"})

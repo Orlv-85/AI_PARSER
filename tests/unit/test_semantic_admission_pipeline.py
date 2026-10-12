@@ -25,6 +25,7 @@ from app.storage.models_sql import (
     WeeklyInputObservation,
 )
 from app.storage.models_sql import Article as StoredArticle
+from app.storage.reenrich_pilot_journal import PilotJournal
 
 
 class Scenario:  # pylint: disable=too-many-instance-attributes
@@ -118,6 +119,47 @@ class Scenario:  # pylint: disable=too-many-instance-attributes
     def rows(self, model):
         with self.sessions() as session:
             return list(session.scalars(select(model)))
+
+
+def test_oversized_journal_input_stays_pending_without_pausing_other_articles(
+    tmp_path, monkeypatch,
+):
+    scenario = Scenario(tmp_path, monkeypatch, "rss", False)
+    scenario.settings.daily_enrichment_enabled = True
+    scenario.items[0].content = "Long non-ASCII source: " + "\u00e9" * 16000
+    requests = []
+
+    @contextmanager
+    def scorer(*_args):
+        def respond(request):
+            requests.append(json.loads(request.content))
+            return httpx.Response(200, json={"model": "jev-1.13.0",
+                "usage": {"input_tokens": 100}, "answers": {
+                    "ai_relevant": {"noul": 0.99},
+                    "admission": {"choice": "accepted_ai_editorial", "confidence": 0.99},
+                    "category": {"choice": "AI Coding", "confidence": 0.99},
+                    "comparison": {"choice": "NotComparison", "confidence": 0.99}}})
+
+        journal = PilotJournal(tmp_path / "journal.sqlite3", {"version": "test"},
+                               {"total": "2", "jev": "1", "deepseek": "1"})
+        with httpx.Client(transport=httpx.MockTransport(respond),
+                          headers={"Authorization": "Bearer test-key"}) as client:
+            yield JevRelevanceScorer(client, "jev-1.13.0", getLogger("semantic-test"),
+                semantic_admission_enabled=True, daily_enrichment_enabled=True,
+                payment_journal=journal)
+        assert journal.report()["providers"]["jev"]["calls"] == 2
+        journal.close()
+
+    monkeypatch.setattr("app.core.pipeline.jev_relevance_scorer", scorer)
+    first = scenario.run()
+    assert first.new == 2 and first.screening_paused == 0
+    assert first.semantic_unresolved == 1
+    pending = [row for row in scenario.rows(AdmissionDecision) if row.provider_status == "pending"]
+    assert len(pending) == 1
+    assert json.loads(pending[0].payload)["candidate"]["url"] == str(scenario.items[0].url)
+    assert not any(row.paused for row in scenario.rows(CollectionStatus))
+    scenario.run()
+    assert len(requests) == 2
 
 
 @pytest.mark.parametrize("batch", [False, True])

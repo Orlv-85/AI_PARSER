@@ -13,6 +13,7 @@ from sqlalchemy import or_, select
 
 from app.core.categories import REENRICH_TOPIC_ORDER
 from app.core.daily_rubric import QUESTIONS, RUBRIC_VERSION
+from app.core.jev import JevInputTooLarge
 from app.core.reenrich_pilot import (
     DEEPSEEK_MODEL,
     JEV_MODEL,
@@ -219,7 +220,10 @@ def enrich(article, row, journal, client, keys):
         # Ingestion deliberately drops unresolved classifications from its saved proof.
         return "topic_or_type_unresolved"
     if data is None:
-        data = journal.call("jev", body, client, keys["jev"])
+        try:
+            data = journal.call("jev", body, client, keys["jev"])
+        except JevInputTooLarge:
+            return "source_input_too_large"
     try:
         verdict = parse_jev(row, data)
     except (ValueError, KeyError, TypeError, IndexError):
