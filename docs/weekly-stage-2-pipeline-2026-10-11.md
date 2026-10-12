@@ -183,3 +183,15 @@ Next-session prompt:
 [stage 3 from this frozen revision](prompt-weekly-stage-3-from-frozen-v4-2026-10-12.md).
 Every future session/handoff prompt must first be saved in a descriptive
 `docs/prompt-<task>-<YYYY-MM-DD>.md`, preserving prior prompts, and linked to the user.
+
+## Stage 3 completion after recovery
+
+The subsequent authorized recovery is committed as
+`18b49a7e5c6d9f3143166568e9cce01e8a7ed36a` in the same PR #23. Final lint and
+875 isolated SQLite/PostgreSQL tests passed, and GitHub lint/tests passed.
+The complete journal/cache was transferred to private root
+`weekly-stage3-20261011-manifest-v4-r4` with immutable parent lineage and unchanged
+cumulative caps. The r3 checkpoint remains preserved history. Stage 3 has now
+calculated and verified the candidate; use
+[the completed result](weekly-stage-3-result-2026-10-11.md) for its exact root,
+hash, limitations and stage 4 publication command. Do not regenerate it from r3.
