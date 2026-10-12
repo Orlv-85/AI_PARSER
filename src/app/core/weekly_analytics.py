@@ -308,6 +308,8 @@ def calculate(report_date: date, observations: list[Observation], coverage: list
         evidence = _evidence(facts_current["rows"] + facts_previous["rows"], periods)
         first = min((r.published_at.isoformat() for r in observations
                      if r.topic_id == topic_id and r.published_at is not None), default=None)
+        if any(r.topic_id == topic_id and r.published_at is None for r in observations):
+            first = None
         item = {"topic_id": topic_id, "title": topic["label"], "state": state,
                 "reason": topic_reason, "event_count_current": facts_current["events"],
                 "event_count_previous": facts_previous["events"],

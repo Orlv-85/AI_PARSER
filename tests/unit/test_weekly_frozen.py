@@ -165,6 +165,12 @@ def test_calendar_facts_have_no_invented_day_support_or_timestamp_matching():
     assert item["event_count_current"] == 1 and item["share_current"] is None
     assert item["state"] == "insufficient_evidence" and item["evidence"][0]["published_at"] is None
     assert _metrics([row], "coding-agents", {"example.com"})["days"] == 0
+    precise = Observation("2", "2", "another.com", datetime(2026, 10, 10, tzinfo=UTC),
+                          "coding-agents")
+    mixed = calculate(date(2026, 10, 11), [row, precise], [],
+                      [{"id": "coding-agents", "label": "Coding"}],
+                      now=datetime(2026, 10, 12, tzinfo=UTC))
+    assert mixed["other_signals"][0]["first_observed_at"] is None
     requests = []
     with httpx.Client(transport=httpx.MockTransport(requests.append)) as client:
         service = WeeklyEnricher(Settings(_env_file=None), None, client, [], "test")  # type: ignore[arg-type]
