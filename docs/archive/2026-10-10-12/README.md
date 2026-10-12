@@ -15,7 +15,9 @@ The archive mirrors original repository-relative paths. Shell commands, plain pa
 
 ## Remaining work
 
-The historical preview runner and its four mock tests remain untracked in their original working-copy locations pending a separate decision on support/readiness. The next scheduled-cycle verification prompt also remains local and unfinished. They are deliberately excluded from this archival PR; this cleanup does not run either task.
+The historical preview runner and its four mock tests are preserved below as unsupported pilot snapshots, outside the active `scripts/` and `tests/` trees. Their contents and mirrored relative layout are unchanged. The runner reserves narrative cost using `weekly_output_token_cap` (1200 by default), while the current adapter uses `weekly_narrative_output_token_cap` (2400 by default); its four mock tests bypass narrative generation and do not establish readiness for new paid runs. The maintained frozen-report entrypoint is `scripts/weekly_frozen_report.py`.
+
+The [next scheduled-cycle verification prompt](../../prompt-verify-next-scheduled-daily-cycle-2026-10-12.md) and [weekly editorial prototype prompt](../../prompt-weekly-editorial-prototype-2026-10-12.md) remain outside the archive as separate pending tasks. This archival cleanup does not execute either task. The [weekly stage index](../../weekly-report-stages-2026-10-12.md) points to the specific frozen-v4 stage-3 handoff. The completed narrative task is recorded in the [repair/delivery results](../../weekly-narrative-repair-results-2026-10-12.md), including the v0.1.89 UI follow-up.
 
 Local private source caches, paid responses, journals, receipts and backups remain under their existing ignored paths. Do not reset or regenerate them to understand the archive.
 
@@ -38,6 +40,11 @@ Local private source caches, paid responses, journals, receipts and backups rema
 | [session-context-reenrich-2026-10-11.json](session-context-reenrich-2026-10-11.json) | Superseded prompt/context or completed-stage receipt |
 | [specs/010-weekly-ai-analytics-for-management-dashboard/historical-backfill-diagnostic.md](specs/010-weekly-ai-analytics-for-management-dashboard/historical-backfill-diagnostic.md) | Historical pilot receipt; later follow-ups are separate |
 | [weekly-pilot-session-report-2026-10-10.md](weekly-pilot-session-report-2026-10-10.md) | Historical pilot receipt; later follow-ups are separate |
+| [docs/prompt-assess-weekly-preview-readiness-2026-10-12.md](docs/prompt-assess-weekly-preview-readiness-2026-10-12.md) | Superseded by the four-stage weekly delivery flow |
+| [docs/prompt-deliver-weekly-report-2026-10-12.md](docs/prompt-deliver-weekly-report-2026-10-12.md) | Superseded as a single-run task by the four-stage flow |
+| [docs/prompt-fix-weekly-narratives-2026-10-12.md](docs/prompt-fix-weekly-narratives-2026-10-12.md) | Completed task; see the current repair/delivery results |
+| [scripts/weekly_historical_preview.py](scripts/weekly_historical_preview.py) | Unsupported historical pilot runner snapshot |
+| [tests/unit/test_weekly_historical_preview.py](tests/unit/test_weekly_historical_preview.py) | Four historical mock tests; outside normal pytest discovery |
 
 ## Continuing user preference
 

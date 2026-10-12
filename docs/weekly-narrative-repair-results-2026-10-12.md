@@ -245,3 +245,22 @@ Repo-wide lint and 883 isolated SQLite/PostgreSQL tests were rerun before delive
 This follow-up requires no new model calls or report revision. The core product
 limitation remains: event reviews are useful, but they do not establish confirmed
 New/Up/Down trends without comparable historical coverage.
+
+The UI follow-up is delivered in [PR #25](https://github.com/Orlv-85/AI_PARSER/pull/25)
+(implementation `97efc5646351b76744f2318a321fb684c1ed5580`, merge
+`262c727cda0bbb89da92e4f5e95d95d7067cd9fc`) and
+[v0.1.89](https://github.com/Orlv-85/AI_PARSER/releases/tag/v0.1.89).
+[PR CI](https://github.com/Orlv-85/AI_PARSER/actions/runs/38298986734),
+[master CI](https://github.com/Orlv-85/AI_PARSER/actions/runs/38299335280) and
+[release/deploy](https://github.com/Orlv-85/AI_PARSER/actions/runs/38299342867) passed.
+Live browser checks confirmed eight reviews on both
+[the daily entry page](https://5kzt.l.time4vps.cloud/?date=2026-10-11) and
+[the reports page](https://5kzt.l.time4vps.cloud/weekly-ai-analytics/reports), plus
+eight visible full-report reviews, collapsed secondary topics, original counts,
+the operator-only Freshness message and hidden anonymous counter placeholders.
+The same revision 1, all metrics, exact explanations and evidence IDs were verified
+again after v0.1.89. Other app environment and host `.env` remained unchanged.
+Private receipts are `production-api-v0.1.89.json`,
+`production-view-verification-v0.1.89.json` and `production-ui-verification.json`.
+The historical coverage/trend classification goal remains unmet; the delivered
+result is a sourced event review with honest unconfirmed trend states.
