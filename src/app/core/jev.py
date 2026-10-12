@@ -37,6 +37,10 @@ def _probability(value: object) -> float:
     return float(value)
 
 
+class JevInputTooLarge(ValueError):
+    """Source evidence exceeds the local request bound before provider dispatch."""
+
+
 class JevRelevanceScorer:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self, client: httpx.Client, model: str, logger: Logger,
@@ -49,6 +53,7 @@ class JevRelevanceScorer:  # pylint: disable=too-many-instance-attributes
         self.model = model
         self.logger = logger
         self.failed = False
+        self.input_held = False
         self.cache: dict[str, JevAssessment] = {}
         self.category_min_confidence = category_min_confidence
         self.semantic_admission_enabled = semantic_admission_enabled
@@ -113,6 +118,7 @@ class JevRelevanceScorer:  # pylint: disable=too-many-instance-attributes
         return questions
 
     def classify(self, article: Article) -> JevAssessment | None:
+        self.input_held = False
         state = (
             f"Title: {article.title[:1024]}\n"
             f"Summary: {(article.summary or '')[:4000]}\n"
@@ -138,6 +144,10 @@ class JevRelevanceScorer:  # pylint: disable=too-many-instance-attributes
             admission_choice, admission_confidence = (None, None)
             if self.semantic_admission_enabled:
                 admission_choice, admission_confidence = self._admission(answers)
+        except JevInputTooLarge:
+            self.input_held = True
+            self.logger.info("jev_input_held", {"reason": "conservative_input_bound"})
+            return None
         except (httpx.HTTPError, ValueError, KeyError, TypeError, RuntimeError) as exc:
             # Stop calling a failed provider for the remainder of this fetch cycle.
             self.failed = True

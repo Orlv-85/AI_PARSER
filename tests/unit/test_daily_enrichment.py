@@ -164,6 +164,21 @@ def test_changed_source_invalidates_cached_summary(session):
     assert not daily.reusable(row)
 
 
+def test_oversized_source_holds_without_dispatch_and_preserves_other_publication(
+    session, tmp_path, monkeypatch,
+):
+    held = article(session)
+    held.content = "\u00e9" * 16000
+    article(session, 2, proof=True)
+    session.commit()
+    mock_client(monkeypatch, lambda _r: pytest.fail("Oversized input must not be dispatched"))
+    report = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    assert report["state"] == "published_with_holds"
+    assert report["published_count"] == 1
+    assert report["held"] == [{"article_id": held.id, "reason": "source_input_too_large"}]
+    assert report["usage"]["total_committed_usd"] == 0
+
+
 def test_ordinary_ingestion_uses_rubric_journal_and_reusable_admission(tmp_path, session):
     from logging import getLogger  # pylint: disable=import-outside-toplevel
 

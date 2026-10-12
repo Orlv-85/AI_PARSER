@@ -4,7 +4,7 @@ import re
 from logging import getLogger
 from math import ceil
 
-from app.core.jev import JevAssessment, JevRelevanceScorer, _probability
+from app.core.jev import JevAssessment, JevInputTooLarge, JevRelevanceScorer, _probability
 from app.core.legacy_cleanup import CLEANUP_POLICY, cleanup_verdict
 from app.storage.legacy_cleanup import encoded, fingerprint
 
@@ -156,7 +156,7 @@ def reservation(provider, body):
     if provider == "jev":
         # Bound the whole request below even the stricter state+question limit.
         if byte_bound > 32000:
-            raise ValueError("JEV conservative input bound exceeded")
+            raise JevInputTooLarge("JEV conservative input bound exceeded")
         return ceil(64000 * PRICES[provider]["input"])
     if byte_bound > 64000 or body.get("max_tokens") not in {300, 4096}:
         raise ValueError("DeepSeek conservative input/output bound exceeded")
