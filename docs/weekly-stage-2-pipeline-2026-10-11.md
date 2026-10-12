@@ -10,7 +10,7 @@ Base: `origin/master` `f83594a24fa74ce78da8dc8e64eaab8694bd46bc` (production
 v0.1.86). Branch: `feat/weekly-stage2-manifest-v4`. Working checkout:
 `/private/tmp/ai-parser-weekly-stage2-20261012`. The shared archive checkout and
 its index were preserved. Tested implementation commit:
-[`40f8a93a01f11e21167b12fa545a0eb6fd271a04`](https://github.com/Orlv-85/AI_PARSER/commit/40f8a93a01f11e21167b12fa545a0eb6fd271a04).
+[`8743fb00f39c3a4df9f7b1afbbff2253cf790405`](https://github.com/Orlv-85/AI_PARSER/commit/8743fb00f39c3a4df9f7b1afbbff2253cf790405).
 Reviewable PR: [#23](https://github.com/Orlv-85/AI_PARSER/pull/23), open and unmerged.
 The subsequent handoff version record changes documentation only; frozen code hashes
 still identify this tested implementation.
@@ -36,7 +36,8 @@ fingerprints and compact weekly keys are computed separately.
   cannot replace current input. Confirmed Articles need no observation to qualify.
   Unknown/conflicting/normalized dates are kept in explicit quality/accounting pools.
 - Calendar evidence retains its literal date and possible UTC interval. A week-safe
-  date does not become a timestamp or a support day. Timestamp-based event matching
+  date does not become a timestamp or a support day; mixed calendar evidence also
+  prevents claiming a precise `first_observed_at`. Timestamp-based event matching
   skips these records; uncertain event groups remain facts with incomplete matching.
 - The calculator retains observed event groups, publisher counts, unresolved
   denominators and source evidence when no comparable cohort exists. Unavailable
@@ -97,11 +98,12 @@ Real assignment precision and explanations have not been certified in stage 2.
 
 Use the above checkout, with `PYTHONPATH=src` so the shared `venv1` imports this
 checkout's code. The already prepared **current** private run root is:
-`/Users/vyacheslavorlovskiy/GitHub/AI_PARSER/tmp/weekly-stage3-20261011-manifest-v4-r2`.
-The earlier zero-call preparation without `-r2` is superseded and retained for audit.
+`/Users/vyacheslavorlovskiy/GitHub/AI_PARSER/tmp/weekly-stage3-20261011-manifest-v4-r3`.
+The earlier zero-call preparations without a suffix and with `-r2` are superseded
+and retained for audit.
 
 Frozen input/cache/budget identity:
-`af8c25822c3b2e461bfb5e56995cd3831b5a1f5c27c1f407d68f95902fbea6ff`.
+`614fcdd4c8e81d19686452b653e9e9b478d5e1e089f8ba88e7d235de73eea790`.
 `frozen.json` includes input hashes, selected packet, compatible imports, admission
 configuration, code hashes, prices and immutable cumulative monetary caps.
 Code or preparation changes require a separate revision; do not overwrite this input.
@@ -111,7 +113,7 @@ Reproducible preparation, with **zero model calls**:
 ```sh
 rtk proxy env PYTHONPATH=src ./venv1/bin/python scripts/weekly_frozen_report.py prepare \
   --input-root /Users/vyacheslavorlovskiy/GitHub/AI_PARSER/tmp/weekly-stage1-20261011 \
-  --root /Users/vyacheslavorlovskiy/GitHub/AI_PARSER/tmp/weekly-stage3-20261011-manifest-v4-r2 \
+  --root /Users/vyacheslavorlovskiy/GitHub/AI_PARSER/tmp/weekly-stage3-20261011-manifest-v4-r3 \
   --hashes docs/weekly-stage-1-hashes-2026-10-11.json \
   --total-budget-usd 10 --jev-budget-usd 7 --deepseek-budget-usd 3
 ```
@@ -120,7 +122,7 @@ The paid calculation command is for **stage 3 only**; it was not run in stage 2:
 
 ```sh
 rtk proxy env PYTHONPATH=src ./venv1/bin/python scripts/weekly_frozen_report.py run \
-  --root /Users/vyacheslavorlovskiy/GitHub/AI_PARSER/tmp/weekly-stage3-20261011-manifest-v4-r2 \
+  --root /Users/vyacheslavorlovskiy/GitHub/AI_PARSER/tmp/weekly-stage3-20261011-manifest-v4-r3 \
   --env-file /Users/vyacheslavorlovskiy/GitHub/AI_PARSER/.env \
   --approve-paid
 ```
@@ -166,7 +168,7 @@ named `WEEKLY_TARGET_DATABASE_URL` (never print its value):
 
 ```sh
 rtk proxy env PYTHONPATH=src ./venv1/bin/python scripts/weekly_frozen_report.py publish \
-  --root /Users/vyacheslavorlovskiy/GitHub/AI_PARSER/tmp/weekly-stage3-20261011-manifest-v4-r2 \
+  --root /Users/vyacheslavorlovskiy/GitHub/AI_PARSER/tmp/weekly-stage3-20261011-manifest-v4-r3 \
   --candidate-sha256 <reviewed-stage-3-file-hash> \
   --database-url-env WEEKLY_TARGET_DATABASE_URL --approve-publication
 ```

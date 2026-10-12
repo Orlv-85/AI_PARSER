@@ -8,9 +8,9 @@
 Используй code commit/PR из `docs/weekly-stage-2-pipeline-2026-10-11.md`, checkout
 `/private/tmp/ai-parser-weekly-stage2-20261012`, `venv1` и `PYTHONPATH=src`.
 Выполни именно `run` из handoff этапа 2, на private root
-`/Users/vyacheslavorlovskiy/GitHub/AI_PARSER/tmp/weekly-stage3-20261011-manifest-v4-r2`.
+`/Users/vyacheslavorlovskiy/GitHub/AI_PARSER/tmp/weekly-stage3-20261011-manifest-v4-r3`.
 Сначала проверь five input hashes, frozen identity и code hashes. Артефакт без
-суффикса `-r2` — ранняя superseded подготовка с нулём calls, не вход этого этапа.
+суффикса и с `-r2` — ранние superseded подготовки с нулём calls, не вход этого этапа.
 
 Scope: все 932 week-assigned Article, W0/W1/H2/H3/H4 266/158/95/199/214.
 110 имеют совместимый admission, 822 требуют JEV admission на выбранном source
