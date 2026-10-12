@@ -243,6 +243,64 @@ def test_robots_denial_is_cached_and_never_fetches_article(tmp_path):
     assert cache.status(urls)["states"] == {"blocked": 2}
 
 
+@pytest.mark.parametrize("disallow", [False, True])
+def test_cached_robots_redirect_uses_final_rules_without_refetch(tmp_path, disallow):
+    from app.storage.article_evidence_cache import url_key  # pylint: disable=import-outside-toplevel
+
+    cache = PageCache(tmp_path / "run")
+    robots = cache.root / "robots"
+    robots.mkdir()
+    path = robots / (url_key("https://example.com") + ".json")
+    path.write_text(json.dumps({"status_code": 301, "final_url": "https://example.com/robots.txt",
+                               "location": "https://new.example.com/robots.txt", "body": ""}))
+    calls = []
+
+    def transport(request):
+        calls.append(str(request.url))
+        if request.url.path == "/robots.txt":
+            assert request.url.host == "new.example.com"
+            return httpx.Response(200, text="User-agent: *\nDisallow: " +
+                                  ("/private/" if disallow else "") + "\n")
+        return httpx.Response(200, text=_html(), headers={"Content-Type": "text/html"})
+
+    url = "https://example.com/private/a"
+    _fetch(cache, transport, [url], respect_robots=True)
+    assert calls == ["https://new.example.com/robots.txt"] + ([] if disallow else [url])
+    assert cache.attempt(url)["state"] == ("blocked" if disallow else "completed")
+    assert json.loads(path.read_text())["redirects"][0]["status_code"] == 301
+    _fetch(cache, transport, [url], respect_robots=True)
+    assert len(calls) == (1 if disallow else 2)
+
+
+def test_robots_redirect_loop_is_bounded_and_preserved(tmp_path):
+    calls = []
+
+    def transport(request):
+        calls.append(str(request.url))
+        return httpx.Response(302, headers={"Location": "/robots.txt"})
+
+    cache = PageCache(tmp_path / "run")
+    _fetch(cache, transport, ["https://example.com/a"], respect_robots=True)
+    assert len(calls) == 6
+    _fetch(cache, transport, ["https://example.com/b"], respect_robots=True)
+    assert len(calls) == 6
+    assert cache.status(["https://example.com/a", "https://example.com/b"])["states"] == {
+        "blocked": 2}
+
+
+def test_robots_redirect_to_private_address_is_never_fetched(tmp_path):
+    calls = []
+
+    def transport(request):
+        calls.append(str(request.url))
+        return httpx.Response(302, headers={"Location": "http://127.0.0.1/robots.txt"})
+
+    cache = PageCache(tmp_path / "run")
+    _fetch(cache, transport, ["https://example.com/a"], respect_robots=True)
+    assert calls == ["https://example.com/robots.txt"]
+    assert cache.attempt("https://example.com/a")["quality"] == "unresolved"
+
+
 @pytest.mark.parametrize("url", ["file:///etc/passwd", "http://127.0.0.1/a",
                                 "http://[::1]/a", "http://localhost/a",
                                 "http://user:password@example.com/a"])
