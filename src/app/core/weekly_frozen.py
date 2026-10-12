@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import os
+import sqlite3
 import time
 from collections import Counter
 from contextlib import contextmanager
@@ -23,9 +24,10 @@ from app.core.weekly_analytics import windows
 from app.core.weekly_enrichment import BudgetExhausted, WeeklyEnricher
 from app.core.weekly_input import instant, parsed, source_fingerprint
 from app.core.weekly_worker import build_snapshot
+from app.storage.legacy_cleanup import fingerprint as journal_fingerprint
 from app.storage.legacy_cleanup import private_write
 from app.storage.models_sql import Base, WeeklyJob, WeeklySnapshot
-from app.storage.reenrich_pilot_journal import PRICES, PilotJournal, PilotStopped
+from app.storage.reenrich_pilot_journal import PRICES, PilotJournal, PilotStopped, microdollars
 from app.storage.weekly import WeeklyStore, encoded, fingerprint
 from app.web.models import WeeklyAnalyticsResponse
 
@@ -236,6 +238,78 @@ def prepare(input_root: Path, root: Path, hashes: dict, caps: dict, settings: Se
             "caps_usd": caps, "paid_calls": 0}
 
 
+def _copy_recovery_database(source, root, name, identities, caps):
+    old_id, identity = identities
+    with sqlite3.connect(f"file:{source / name}?mode=ro", uri=True) as original:
+        if original.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+            raise ValueError("Recovery source database is corrupt")
+        if name == "journal.sqlite3":
+            expected = journal_fingerprint({"identity": old_id, "caps_micro_usd": caps})
+            if original.execute("SELECT value FROM identity").fetchone()[0] != expected:
+                raise ValueError("Recovery source journal identity differs")
+            if original.execute("SELECT 1 FROM calls WHERE state='inflight'").fetchone():
+                raise ValueError("Concurrent inflight dispatch cannot be reviewed")
+        elif (original.execute("SELECT count(*) FROM weekly_snapshots").fetchone()[0]
+              or original.execute("SELECT 1 FROM weekly_jobs WHERE id!=? OR lease_token "
+                                  "IS NOT NULL", (old_id,)).fetchone()):
+            raise ValueError("Recovery requires one stopped unpublished job")
+        with sqlite3.connect(root / name) as copied:
+            original.backup(copied)
+            if name == "journal.sqlite3":
+                copied.execute("UPDATE identity SET value=?", (journal_fingerprint(
+                    {"identity": identity, "caps_micro_usd": caps}),))
+            else:
+                copied.execute("UPDATE weekly_jobs SET id=?,input_fingerprint=?,"
+                               "status='pending',error=NULL WHERE id=?",
+                               (identity, identity, old_id))
+    (root / name).chmod(0o600)
+
+
+def recover(input_root: Path, source: Path, root: Path, expected_hash: str, reason: str) -> dict:
+    """Copy a stopped revision with complete accounting into a new code revision."""
+    if not reason.strip() or source.resolve() == root.resolve():
+        raise ValueError("Recovery requires a review reason and a separate directory")
+    with locked(source), locked(root):
+        if file_hash(source / "frozen.json") != expected_hash:
+            raise ValueError("Recovery source hash differs from the reviewed checkpoint")
+        old = json.loads((source / "frozen.json").read_text())
+        if old["version"] != VERSION or old["prices"] != PRICES:
+            raise ValueError("Recovery source version/pricing differs")
+        if old["packet"] != packet_from_manifest(verified_input(input_root, old["input_hashes"])):
+            raise ValueError("Recovery would change frozen input")
+        old_id = fingerprint(old)
+        lineage = {"parent_identity": old_id, "parent_frozen_sha256": expected_hash,
+                   "parent_journal_sha256": file_hash(source / "journal.sqlite3"),
+                   "parent_weekly_sha256": file_hash(source / "weekly.sqlite")}
+        new = {**old, "code_hashes": code_hashes(), "lineage": lineage,
+               "transport_recovery": {"reason": reason, "max_attempts": 2}}
+        identity = fingerprint(new)
+        if (root / "frozen.json").exists():
+            if json.loads((root / "frozen.json").read_text()) != new:
+                raise ValueError("Recovery destination belongs to a different revision")
+            return {"input_fingerprint": identity, "already_prepared": True}
+        if any(path.name != "run.lock" for path in root.iterdir()):
+            raise ValueError("Recovery destination must be empty")
+        caps = {k: microdollars(v) for k, v in old["caps_usd"].items()}
+        for name in ("journal.sqlite3", "weekly.sqlite"):
+            _copy_recovery_database(source, root, name, (old_id, identity), caps)
+        journal = PilotJournal(root / "journal.sqlite3", identity, old["caps_usd"],
+                               transport_review_reason=reason)
+        try:
+            failed = journal.db.execute("SELECT key FROM calls WHERE state='failed'").fetchall()
+            for (key,) in failed:
+                if not journal.review_transport_failure(key, reason):
+                    raise ValueError("Non-transport failure still requires separate review")
+            private_write(root / "recovery-receipt.json", {"lineage": lineage,
+                "identity": identity, "usage": journal.report(), "scope": len(
+                    new["packet"]["observations"]), "provider_dispatches": 0})
+        finally:
+            journal.close()
+        private_write(root / "frozen.json", new)
+        return {"input_fingerprint": identity, "scope": len(new["packet"]["observations"]),
+                "provider_dispatches": 0, "lineage": lineage}
+
+
 class JournalEnricher(WeeklyEnricher):
     def __init__(self, *args, journal, **kwargs):
         super().__init__(*args, **kwargs)
@@ -247,14 +321,12 @@ class JournalEnricher(WeeklyEnricher):
             raise PilotStopped("provider_credentials_missing")
         if len(encoded(body)) > self.settings.weekly_input_token_cap:
             raise ValueError("Provider input cap exceeded")
-        key = fingerprint({"provider": provider, "body": body, "version": VERSION})
-        if not self.journal.db.execute("SELECT 1 FROM calls WHERE key=?", (key,)).fetchone():
-            self._budget(kind)
         timeout = (self.settings.jev_timeout_seconds if provider == "jev"
                    else self.settings.weekly_deepseek_timeout_seconds)
         self.client.timeout = httpx.Timeout(min(timeout, max(0.1,
             self.settings.weekly_wall_seconds - (time.monotonic() - self.started))))
-        return dict(self.journal.call(provider, body, self.client, secret.get_secret_value()))
+        return dict(self.journal.call(provider, body, self.client, secret.get_secret_value(),
+                                     before_dispatch=lambda: self._budget(kind)))
 
 
 def weekly_reservation(provider, body):
@@ -281,7 +353,8 @@ def run(root: Path, settings: Settings) -> dict:
         Base.metadata.create_all(engine)
         journal = PilotJournal(root / "journal.sqlite3", identity, frozen["caps_usd"],
             key_function=lambda p, b: fingerprint({"provider": p, "body": b, "version": VERSION}),
-            reservation_function=weekly_reservation)
+            reservation_function=weekly_reservation,
+            transport_review_reason=frozen.get("transport_recovery", {}).get("reason"))
         try:
             with Session(engine) as session, httpx.Client(timeout=60) as client:
                 store = WeeklyStore(session)

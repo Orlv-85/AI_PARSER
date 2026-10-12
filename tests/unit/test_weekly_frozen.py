@@ -345,3 +345,45 @@ def test_source_admission_cache_survives_taxonomy_changes(tmp_path):
         assert service.admission(row) == "accepted_compatible"
     assert len(requests) == 1
     engine.dispose()
+
+
+def test_recovery_preserves_input_and_cumulative_unknown_expense(tmp_path, monkeypatch):
+    from app.core.weekly_frozen import recover  # pylint: disable=import-outside-toplevel
+
+    inputs = tmp_path / "input"
+    expected = write_input(inputs)
+    old_root, new_root = tmp_path / "old", tmp_path / "recovered"
+    config = Settings(_env_file=None, jev_api_key="key", ds_api_key="key")
+    prepare(inputs, old_root, expected, {"total": "1", "jev": "0.5", "deepseek": "0.5"}, config)
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        if len(requests) <= 2:
+            raise httpx.ReadError("unknown billing", request=request)
+        return httpx.Response(200, json={"answers": {"relevant": {"noul": 0.95},
+            "topic": {"choice": "coding-agents", "confidence": 0.95}},
+            "usage": {"input_tokens": 100}})
+
+    client_type = httpx.Client
+    monkeypatch.setattr("app.core.weekly_frozen.httpx.Client", lambda **_: client_type(
+        transport=httpx.MockTransport(handler)))
+    monkeypatch.setattr("app.core.weekly_worker.explain", lambda *args: False)
+    first = run(old_root, config)
+    hashes = {name: file_hash(old_root / name) for name in ("frozen.json", "journal.sqlite3",
+                                                          "weekly.sqlite")}
+    receipt = recover(inputs, old_root, new_root, hashes["frozen.json"], "Operator review")
+    assert receipt["provider_dispatches"] == 0
+    assert receipt["lineage"]["parent_identity"] == first["snapshot_id"]
+    repeated = recover(inputs, old_root, new_root, hashes["frozen.json"], "Operator review")
+    assert repeated["already_prepared"]
+    completed = run(new_root, config)
+    assert completed["status"] == "complete" and len(requests) == 2
+    assert completed["usage"]["providers"]["jev"]["unknown_usage_calls"] == 2
+    assert completed["usage"]["total_committed_usd"] == 0.005376
+    payload = json.loads((new_root / "candidate.json").read_text())
+    assert payload["quality"]["observed_weeks"][0]["unresolved"] == 1
+    assert payload["assignments"][0]["eligible"] is True
+    assert payload["assignments"][0]["classification_complete"] is False
+    assert run(new_root, config)["status"] == "complete" and len(requests) == 2
+    assert all(file_hash(old_root / name) == digest for name, digest in hashes.items())

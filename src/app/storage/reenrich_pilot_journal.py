@@ -44,12 +44,13 @@ def priced_usage(provider, data):
 
 class PilotJournal:
     def __init__(self, path, identity, caps, *, key_function=request_key,
-                 reservation_function=reservation):
+                 reservation_function=reservation, transport_review_reason=None):
         if set(caps) != {"total", "jev", "deepseek"}:
             raise ValueError("All three caps required")
         self.caps = {k: microdollars(v) for k, v in caps.items()}
         self.key_function = key_function
         self.reservation_function = reservation_function
+        self.transport_review_reason = transport_review_reason
         if self.caps["jev"] + self.caps["deepseek"] > self.caps["total"]:
             raise ValueError("Provider caps exceed total cap")
         fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
@@ -67,6 +68,8 @@ class PilotJournal:
             CREATE TABLE IF NOT EXISTS reviews (
                 key TEXT PRIMARY KEY, reason TEXT NOT NULL,
                 reviewed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+            CREATE TABLE IF NOT EXISTS request_attempts (
+                request_key TEXT PRIMARY KEY, attempt_key TEXT UNIQUE NOT NULL);
         """)
         value = fingerprint({"identity": identity, "caps_micro_usd": self.caps})
         stored = self.db.execute("SELECT value FROM identity").fetchone()
@@ -80,12 +83,13 @@ class PilotJournal:
     def close(self):
         self.db.close()
 
-    def reserve(self, key, provider, amount):
+    def reserve(self, key, provider, amount, parent_key=None):
         self.db.execute("BEGIN IMMEDIATE")
         try:
             unsafe = self.db.execute(
                 "SELECT COUNT(*) FROM calls WHERE state IN ('inflight','failed') "
-                "OR actual IS NULL").fetchone()[0]
+                "OR (actual IS NULL AND NOT (state='reviewed_transport' AND EXISTS "
+                "(SELECT 1 FROM reviews WHERE reviews.key=calls.key)))").fetchone()[0]
             if unsafe:
                 raise PilotStopped("unknown_or_failed_previous_call_requires_review")
             total = self.db.execute("SELECT COALESCE(SUM(committed),0) FROM calls").fetchone()[0]
@@ -93,8 +97,12 @@ class PilotJournal:
                                     "WHERE provider=?", (provider,)).fetchone()[0]
             if total + amount > self.caps["total"] or spent + amount > self.caps[provider]:
                 raise PilotStopped("cumulative_budget_limit")
+            if self.db.execute("SELECT 1 FROM calls WHERE key=?", (key,)).fetchone():
+                raise PilotStopped("concurrent_dispatch_requires_review")
             self.db.execute("INSERT INTO calls(key,provider,committed,state) VALUES (?,?,?,?)",
                             (key, provider, amount, "inflight"))
+            if parent_key:
+                self.db.execute("INSERT INTO request_attempts VALUES (?,?)", (parent_key, key))
             self.db.commit()
         except BaseException:
             self.db.rollback()
@@ -104,6 +112,47 @@ class PilotJournal:
         self.db.execute("UPDATE calls SET state='failed',error_type=? WHERE key=?",
                         (error_type, key))
         self.db.commit()
+
+    def review_transport_failure(self, key, reason):
+        """Accept the reserved expense without inventing usage or a semantic answer."""
+        if not isinstance(reason, str) or not reason.strip():
+            raise ValueError("A transport review reason is required")
+        self.db.execute("BEGIN IMMEDIATE")
+        try:
+            row = self.db.execute("SELECT state,error_type,response,actual FROM calls WHERE key=?",
+                                  (key,)).fetchone()
+            allowed = {"ReadError", "ReadTimeout", "ConnectError", "ConnectTimeout",
+                       "WriteError", "WriteTimeout", "RemoteProtocolError", "PoolTimeout"}
+            if not row or row[0] != "failed" or row[1] not in allowed or row[2:] != (None, None):
+                self.db.rollback()
+                return False
+            self.db.execute("INSERT INTO reviews(key,reason) VALUES (?,?)", (key, reason))
+            self.db.execute("UPDATE calls SET state='reviewed_transport' WHERE key=?", (key,))
+            self.db.commit()
+            return True
+        except BaseException:
+            self.db.rollback()
+            raise
+
+    def _attempt(self, request):
+        key = request
+        while True:
+            saved = self.db.execute("SELECT state,response,actual FROM calls WHERE key=?",
+                                    (key,)).fetchone()
+            if not saved or saved[0] == "response":
+                return key, saved
+            if self.transport_review_reason and saved[0] == "failed":
+                if self.review_transport_failure(key, self.transport_review_reason):
+                    saved = ("reviewed_transport", saved[1], saved[2])
+            if saved[0] != "reviewed_transport" or not self.transport_review_reason:
+                raise PilotStopped("unknown_or_failed_previous_call_requires_review")
+            if not self.db.execute("SELECT 1 FROM reviews WHERE key=?", (key,)).fetchone():
+                raise PilotStopped("transport_review_provenance_missing")
+            if key != request:
+                raise ValueError("Reviewed transport attempts exhausted; result unresolved")
+            second = self.db.execute("SELECT attempt_key FROM request_attempts WHERE request_key=?",
+                                     (request,)).fetchone()
+            key = second[0] if second else fingerprint({"request_key": request, "attempt": 2})
 
     def has_response(self, provider, body):
         saved = self.db.execute("SELECT 1 FROM calls WHERE key=? AND state='response' "
@@ -187,11 +236,10 @@ class PilotJournal:
             self.db.execute("UPDATE calls SET state='response' WHERE key=?", (key,))
         return True
 
-    def call(self, provider, body, client, secret):
-        key = self.key_function(provider, body)
+    def call(self, provider, body, client, secret, *, before_dispatch=None):
+        request = self.key_function(provider, body)
+        key, saved = self._attempt(request)
         amount = self.reservation_function(provider, body)
-        saved = self.db.execute("SELECT state,response,actual FROM calls WHERE key=?",
-                                (key,)).fetchone()
         if saved:
             if saved[0] != "response" or saved[2] is None:
                 raise PilotStopped("unknown_or_failed_previous_call_requires_review")
@@ -201,12 +249,17 @@ class PilotJournal:
                 self.fail(key, "InvalidSavedResponse")
                 raise PilotStopped("saved_response_requires_review")
             return received["body"]
-        self.reserve(key, provider, amount)
+        if before_dispatch:
+            before_dispatch()
+        self.reserve(key, provider, amount, parent_key=request if key != request else None)
         try:
             response = client.post(ENDPOINTS[provider], json=body,
                                    headers={"Authorization": "Bearer " + secret})
         except httpx.HTTPError as exc:
             self.fail(key, type(exc).__name__)
+            if self.transport_review_reason and self.review_transport_failure(
+                    key, self.transport_review_reason):
+                return self.call(provider, body, client, secret, before_dispatch=before_dispatch)
             raise PilotStopped("provider_outage_unknown_billing") from None
         try:
             data = response.json()

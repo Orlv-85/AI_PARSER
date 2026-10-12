@@ -9,7 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.config.settings import Settings
-from app.core.weekly_frozen import prepare, publish_prepared, run
+from app.core.weekly_frozen import prepare, publish_prepared, recover, run
 from app.storage.weekly import WeeklyStore
 
 
@@ -24,6 +24,12 @@ def main():
     prep.add_argument("--total-budget-usd", required=True)
     prep.add_argument("--jev-budget-usd", required=True)
     prep.add_argument("--deepseek-budget-usd", required=True)
+    recovery = commands.add_parser("recover", help="Copy stopped input/cache/journal; no models")
+    recovery.add_argument("--input-root", required=True, type=Path)
+    recovery.add_argument("--source-root", required=True, type=Path)
+    recovery.add_argument("--root", required=True, type=Path)
+    recovery.add_argument("--source-frozen-sha256", required=True)
+    recovery.add_argument("--review-reason", required=True)
     runner = commands.add_parser("run", help="Resume exactly the frozen revision")
     runner.add_argument("--root", required=True, type=Path)
     runner.add_argument("--approve-paid", required=True, action="store_true")
@@ -38,6 +44,9 @@ def main():
         result = prepare(args.input_root, args.root, json.loads(args.hashes.read_text()),
                          {"total": args.total_budget_usd, "jev": args.jev_budget_usd,
                           "deepseek": args.deepseek_budget_usd}, Settings())
+    elif args.command == "recover":
+        result = recover(args.input_root, args.source_root, args.root,
+                         args.source_frozen_sha256, args.review_reason)
     elif args.command == "run":
         result = run(args.root, Settings(_env_file=args.env_file))
     else:
