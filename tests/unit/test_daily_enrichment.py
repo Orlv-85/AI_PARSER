@@ -235,6 +235,32 @@ def test_review_schema_recovery_does_not_regenerate_summary(
     assert second["state"] == "published" and len(calls) == 4
 
 
+@pytest.mark.parametrize("missing", ["category", "comparison"])
+def test_unresolved_ingestion_proof_holds_article_and_continues_without_rebilling(
+    session, tmp_path, monkeypatch, missing,
+):
+    held = article(session)
+    article(session, 2, proof=True)
+    assessment = {"relevance_score": 0.99, "admission_choice": "accepted_ai_editorial",
+                  "admission_confidence": 0.99, "category": "AI Applications",
+                  "category_confidence": 0.99, "comparison_choice": "NotComparison",
+                  "comparison_confidence": 0.99}
+    assessment["category" if missing == "category" else "comparison_choice"] = None
+    assessment[missing + "_confidence"] = None
+    held.enrichment_provenance = encoded({"rubric": daily.RUBRIC_VERSION,
+        "admission_source_hash": fingerprint(daily.source_state(
+            {"title": held.title, "content": SOURCE})), "admission_assessment": assessment})
+    session.commit()
+    mock_client(monkeypatch, lambda _r: pytest.fail("Unresolved proof must not be re-billed"))
+    first = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    assert first["state"] == "published_with_holds"
+    assert first["scope_complete"] and first["scope_count"] == 2
+    assert first["published_count"] == 1
+    assert first["held"] == [{"article_id": held.id, "reason": "topic_or_type_unresolved"}]
+    assert first["usage"]["total_committed_usd"] == 0
+    assert held.summary is None
+
+
 def test_explicit_unsupported_review_holds_one_article_and_reuses_billed_work(
     session, tmp_path, monkeypatch,
 ):

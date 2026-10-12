@@ -213,6 +213,11 @@ def grounded_summary(row, comparison, journal, client, secret):
 def enrich(article, row, journal, client, keys):
     body = {"model": JEV_MODEL, "state": source_state(row), "questions": QUESTIONS}
     data = admission_from_proof(article, row)
+    if data is not None and any(
+        data["answers"][name]["confidence"] is None for name in ("category", "comparison")
+    ):
+        # Ingestion deliberately drops unresolved classifications from its saved proof.
+        return "topic_or_type_unresolved"
     if data is None:
         data = journal.call("jev", body, client, keys["jev"])
     try:

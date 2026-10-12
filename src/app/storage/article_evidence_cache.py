@@ -248,6 +248,20 @@ class SourcePageDownloader:  # pylint: disable=too-many-instance-attributes
                             "retry_after": response.headers.get("retry-after"),
                             "fetched_at": datetime.now(UTC).isoformat()}
 
+    async def _follow_robots_redirects(self, saved: dict[str, Any]) -> dict[str, Any]:
+        history = list(saved.get("redirects", []))
+        for _ in range(max(0, 5 - len(history))):
+            if (saved["status_code"] not in {301, 302, 303, 307, 308}
+                    or not saved.get("location") or saved.get("truncated")):
+                break
+            destination = urljoin(saved["final_url"], saved["location"])
+            history.append({k: v for k, v in saved.items() if k not in {"body", "redirects"}})
+            response = await self._get(destination, None)
+            body = response.pop("body")
+            saved = {**response, "body": body.decode("utf-8", errors="replace"),
+                     "redirects": history}
+        return saved
+
     async def _robots_allowed(self, url: str) -> bool:
         validate_source_url(url)
         if not self.respect_robots:
@@ -265,7 +279,8 @@ class SourcePageDownloader:  # pylint: disable=too-many-instance-attributes
                     response = await self._get(origin + "/robots.txt", None)
                     body = response.pop("body")
                     saved = {**response, "body": body.decode("utf-8", errors="replace")}
-                    private_write(path, saved)
+                saved = await self._follow_robots_redirects(saved)
+                private_write(path, saved)
                 parser = RobotFileParser()
                 if saved["status_code"] == 200 and not saved["truncated"]:
                     parser.parse(saved["body"].splitlines())
