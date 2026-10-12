@@ -169,7 +169,79 @@ Repair usage: **$0.025418 incremental usage-priced peak estimate (18 DeepSeek / 
 
 ## Delivery record
 
-Base PR #23 was merged into `e03b057`; production was verified on v0.1.87 with
-no v2 publication, no snapshots for the target date, no leased weekly jobs, and
-v2 visibility disabled. Delivery details, target backup, CI, release and live
-API/page verification will be appended after the normal release/publication flow.
+Base PR #23 was merged into `e03b057`; initial production was verified on v0.1.87
+with no v2 publication, no snapshots for the target date, no leased weekly jobs,
+and v2 visibility disabled. The existing legacy report was backed up and retained.
+
+- Implementation commit: `27cc83cfb5d44d51402916905d800d4035dbb327`.
+- [PR #24](https://github.com/Orlv-85/AI_PARSER/pull/24) merged as
+  `66b7fdb307fe6ca62e5f592bace49e4fe71ac2c2`.
+- [PR CI](https://github.com/Orlv-85/AI_PARSER/actions/runs/38280172116),
+  [master CI](https://github.com/Orlv-85/AI_PARSER/actions/runs/38280477712) and
+  [release deployment](https://github.com/Orlv-85/AI_PARSER/actions/runs/38294390210)
+  all passed, including lint/tests and the normal production image deployment.
+- [Release v0.1.88](https://github.com/Orlv-85/AI_PARSER/releases/tag/v0.1.88)
+  is deployed as `ghcr.io/orlv-85/ai-parser:v0.1.88`.
+- Target publication: **revision 1**, snapshot
+  `933f4c67f1bc4f14513b87fed58a1dc129dc1ee3e3d386dce208d1d46ad011d5`.
+  Import used the regular frozen publisher, verified deployed code hashes,
+  compared the backed-up expected pointer (`absent`) under its date lock, and
+  made zero provider calls. There is one target snapshot and no leased weekly job.
+- Production backup:
+  `/app/data/weekly_narrative_backups/20261012-before-r10/before.json`, SHA256
+  `4aa6784793c4631328912b5c8459a9f01b6ba11b4b973e63cf64d91290298fac`.
+  The local private copy/receipt is `r10/production-backup.json`. All legacy
+  weekly report/item rows and all daily report/group/item rows compare unchanged.
+  Auth/semantic runtime configuration also compares unchanged.
+- Remote reviewed artifacts:
+  `/app/data/weekly_narrative_revisions/20261011-r10/`, including the immutable
+  parent, frozen identity, candidate and `publication-receipt.json`.
+- [Live report](https://5kzt.l.time4vps.cloud/weekly-ai-analytics?date=2026-10-11)
+  and [API](https://5kzt.l.time4vps.cloud/api/news/weekly-analytics?date=2026-10-11)
+  were verified: 25 topics, eight exact English explanations, 17 unselected
+  templates, source IDs, `mixed` mode and unchanged metrics/statuses. API timestamp
+  serialization uses `Z` rather than `+00:00`; the instants compare equal.
+  The browser visibly shows the new source-supported explanations, previous-week
+  labels, expanded source links, revision 1 and insufficient comparable coverage
+  in all three trend sections.
+- Local delivery receipts are `production-publication.json`,
+  `production-api.json` and `production-view-verification.json` under r10.
+
+V2 visibility was enabled **only in the running web container**, using an
+explicit compose environment override after verified publication. The complete
+remaining app environment compares unchanged; host `.env` compares byte-identical,
+so daily batch configuration and scheduler settings remain unchanged. The weekly
+scheduler remains off, and rollout defaults remain disabled. A future ordinary
+release/recreation uses that disabled default and needs explicit web-view activation
+again; the exact activation command is retained in the private view receipt.
+No historical coverage restoration or other report rewrite was performed.
+
+## UI follow-up after the user's page review
+
+The user correctly identified a discovery gap: the daily weekly-preview showed
+only the empty New/Up/Down arrays, the report index showed the arithmetic summary,
+and full-report reviews were hidden inside a large collapsed technical list.
+This did not satisfy useful visibility on the two entry pages.
+
+The follow-up displays eight source-supported reviews directly on the daily page
+and report index, with links to their explanations/sources. The full report gives
+these reviews a visible section and preserves the observed counts (including
+10 to 15 for agent tooling) when comparable share is unavailable. Unselected
+topics with evidence are secondary collapsed rows; zero-evidence rows and repeated
+template/technical-status text are omitted from the primary presentation. API
+items and their states, counts, claims and evidence remain unchanged.
+
+Freshness was not a missing-data calculation: its public request returned HTTP
+401 because the operational endpoint requires sign-in. Auth remains unchanged.
+Anonymous viewers now see an operator sign-in explanation/link rather than an
+empty grid with permanent `...` placeholders. No private counters are invented
+or exposed publicly.
+
+Local browser checks on an isolated copy of the real report verified eight reviews
+on both entry pages, source-anchor navigation and original observed counts.
+JavaScript syntax checks and an executed three-page renderer fixture passed,
+including preservation of unconfirmed trend sections and the HTTP-401 UI branch.
+Repo-wide lint and 883 isolated SQLite/PostgreSQL tests were rerun before delivery.
+This follow-up requires no new model calls or report revision. The core product
+limitation remains: event reviews are useful, but they do not establish confirmed
+New/Up/Down trends without comparable historical coverage.

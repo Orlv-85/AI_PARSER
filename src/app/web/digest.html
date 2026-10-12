@@ -223,6 +223,12 @@
         <p id="weekly-preview-summary" class="lede">
           Loading the weekly summary for this digest date...
         </p>
+        <section id="weekly-topic-reviews" class="hidden">
+          <h3>Source-supported topic reviews</h3>
+          <p id="weekly-reviews-note" class="lede"></p>
+          <ul id="weekly-preview-reviews" class="preview-list"></ul>
+          <p><a id="weekly-full-report" href="/weekly-ai-analytics">View full report and sources</a></p>
+        </section>
         <div class="preview-grid">
           <section class="preview-card">
             <h3>New</h3>
@@ -301,19 +307,19 @@
           .join("");
       }
 
-      function renderWeeklyPreviewList(node, items, message) {
+      function renderWeeklyPreviewList(node, items, message, limit = 3) {
         if (!items.length) {
           node.innerHTML = `<li class="preview-empty">${escapeHtml(message)}</li>`;
           return;
         }
 
-        node.innerHTML = items.slice(0, 3)
+        node.innerHTML = items.slice(0, limit)
           .map(
             (item) => `
               <li>
                 <a href="${/^https?:\/\//i.test(item.url) ? escapeHtml(item.url) : ""}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>
                 ${item.delta_pp == null ? "" : `<p>Share: ${(100 * Number(item.share_previous)).toFixed(1)}% → ${(100 * Number(item.share_current)).toFixed(1)}% (${Number(item.delta_pp).toFixed(2)} pp)</p>`}
-                <p>${escapeHtml(truncateText(item.summary, 360))}</p>
+                <p>${escapeHtml(node.id === "weekly-preview-reviews" ? item.summary.replace(/ Comparable coverage is insufficient to confirm an attention trend\.$/, "") : truncateText(item.summary, 360))}</p>
               </li>
             `,
           )
@@ -351,6 +357,7 @@
       }
 
       async function loadWeeklyPreview(selectedDate) {
+        document.getElementById("weekly-topic-reviews").classList.add("hidden");
         const response = await fetch("/api/news/weekly-analytics?date=" + encodeURIComponent(selectedDate));
         if (!response.ok) {
           weeklySummary.textContent = "Weekly analytics are unavailable right now.";
@@ -362,6 +369,19 @@
 
         const payload = await response.json();
         weeklySummary.textContent = payload.summary;
+        const reviews = ["new", "trending_up", "trending_down", "other_signals"]
+          .flatMap((section) => payload[section] || []).filter((item) => item.claims?.length);
+        if (reviews.length) {
+          document.getElementById("weekly-topic-reviews").classList.remove("hidden");
+          document.getElementById("weekly-reviews-note").textContent =
+            `${reviews.length} topic reviews for ${payload.date_from} to ${payload.date_to}. ` +
+            (payload.status === "insufficient_data"
+              ? "Reported events are available; comparable coverage is insufficient to confirm attention trends."
+              : "Reported events with source evidence; see the full report for attention metrics.");
+          renderWeeklyPreviewList(document.getElementById("weekly-preview-reviews"), reviews, "", 8);
+          document.getElementById("weekly-full-report").href =
+            "/weekly-ai-analytics?date=" + encodeURIComponent(payload.report_date) + "#weekly-reviews-panel";
+        }
         renderWeeklyPreviewList(weeklyNew, payload.new, payload.section_status?.new?.message
           || "No confirmed new topics in the observed 28-day history.");
         renderWeeklyPreviewList(weeklyTrendingUp, payload.trending_up, payload.section_status?.trending_up?.message
