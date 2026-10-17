@@ -3,6 +3,7 @@ import json
 import math
 import os
 import sqlite3
+import time
 from collections import Counter
 from decimal import Decimal
 
@@ -17,6 +18,10 @@ from app.core.reenrich_pilot import (
     reservation,
 )
 from app.storage.legacy_cleanup import encoded, fingerprint
+
+# Overload/rate-limit answers without usage are not billed; retry them in place.
+TRANSIENT_STATUS = {429, 500, 502, 503, 504}
+TRANSIENT_RETRY_DELAYS = (15, 60, 180)
 
 
 class PilotStopped(RuntimeError):
@@ -40,6 +45,18 @@ def priced_usage(provider, data):
         return None
     return math.ceil(tokens[0] * PRICES[provider]["input"] +
                      (0 if provider == "jev" else tokens[1] * PRICES[provider]["output"]))
+
+
+def _json_or_none(response):
+    try:
+        return response.json()
+    except ValueError:
+        return None
+
+
+def is_overload(status_code, data):
+    """An explicit error-only overload answer; anything else keeps unknown billing."""
+    return status_code in TRANSIENT_STATUS and isinstance(data, dict) and set(data) == {"error"}
 
 
 class PilotJournal:
@@ -141,6 +158,8 @@ class PilotJournal:
                                     (key,)).fetchone()
             if not saved or saved[0] == "response":
                 return key, saved
+            if saved[0] == "failed" and self._release_unbilled_transient(key):
+                return key, None
             if self.transport_review_reason and saved[0] == "failed":
                 if self.review_transport_failure(key, self.transport_review_reason):
                     saved = ("reviewed_transport", saved[1], saved[2])
@@ -153,6 +172,20 @@ class PilotJournal:
             second = self.db.execute("SELECT attempt_key FROM request_attempts WHERE request_key=?",
                                      (request,)).fetchone()
             key = second[0] if second else fingerprint({"request_key": request, "attempt": 2})
+
+    def _release_unbilled_transient(self, key):
+        """Drop a recorded overload answer without usage so a resume may redispatch."""
+        row = self.db.execute("SELECT error_type,actual,response FROM calls WHERE key=?",
+                              (key,)).fetchone()
+        if not row or row[0] != "HTTPOrJSONError" or row[1] is not None or row[2] is None:
+            return False
+        received = json.loads(row[2])
+        if not is_overload(received.get("status_code"), received.get("body")):
+            return False
+        with self.db:
+            self.db.execute("DELETE FROM calls WHERE key=?", (key,))
+            self.db.execute("DELETE FROM request_attempts WHERE attempt_key=?", (key,))
+        return True
 
     def has_response(self, provider, body):
         saved = self.db.execute("SELECT 1 FROM calls WHERE key=? AND state='response' "
@@ -253,18 +286,20 @@ class PilotJournal:
             before_dispatch()
         self.reserve(key, provider, amount, parent_key=request if key != request else None)
         try:
-            response = client.post(ENDPOINTS[provider], json=body,
-                                   headers={"Authorization": "Bearer " + secret})
+            for delay in (*TRANSIENT_RETRY_DELAYS, None):
+                response = client.post(ENDPOINTS[provider], json=body,
+                                       headers={"Authorization": "Bearer " + secret})
+                if delay is None or not is_overload(response.status_code,
+                                                    _json_or_none(response)):
+                    break
+                time.sleep(delay)
         except httpx.HTTPError as exc:
             self.fail(key, type(exc).__name__)
             if self.transport_review_reason and self.review_transport_failure(
                     key, self.transport_review_reason):
                 return self.call(provider, body, client, secret, before_dispatch=before_dispatch)
             raise PilotStopped("provider_outage_unknown_billing") from None
-        try:
-            data = response.json()
-        except ValueError:
-            data = None
+        data = _json_or_none(response)
         actual = priced_usage(provider, data)
         # Save received bytes before inspecting model answers. Resume only replays them.
         self.db.execute("UPDATE calls SET response=?,actual=?,committed=?,state='response', "
