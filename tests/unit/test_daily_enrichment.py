@@ -69,7 +69,8 @@ def mock_client(monkeypatch, handler):
                         real_client(transport=httpx.MockTransport(handler)))
 
 
-def provider_response(request, *, truncate=False, supported=True):
+def provider_response(request, *, truncate=False, supported=True, topic="AI Applications",
+                      category=("AI Applications", 0.99), comparison=("NotComparison", 0.99)):
     body = json.loads(request.content)
     if "questions" in body:
         assert body["questions"] == QUESTIONS
@@ -77,11 +78,15 @@ def provider_response(request, *, truncate=False, supported=True):
         return httpx.Response(200, json={"model": "jev-1.13.0", "usage": {"input_tokens": 500},
             "answers": {"ai_relevant": {"noul": 0.99},
                 "admission": {"choice": "accepted_ai_editorial", "confidence": 0.99},
-                "category": {"choice": "AI Applications", "confidence": 0.99},
-                "comparison": {"choice": "NotComparison", "confidence": 0.99}}})
-    is_review = "entailment" in body["messages"][0]["content"]
-    value = {"supported": supported, "english": True} if is_review else {
-        "facts": [{"sentence": SUMMARY, "quote": SUMMARY}], "compared_products": []}
+                "category": {"choice": category[0], "confidence": category[1]},
+                "comparison": {"choice": comparison[0], "confidence": comparison[1]}}})
+    system = body["messages"][0]["content"]
+    if daily.TOPIC_FALLBACK_VERSION in system:
+        value = {"topic": topic, "confidence": 0.8, "reason": "Hospital document extraction."}
+    elif "entailment" in system:
+        value = {"supported": supported, "english": True}
+    else:
+        value = {"facts": [{"sentence": SUMMARY, "quote": SUMMARY}], "compared_products": []}
     return httpx.Response(200, json={"model": "deepseek-flash",
         "usage": {"prompt_tokens": 500, "completion_tokens": 90},
         "choices": [{"finish_reason": "length" if truncate else "stop",
@@ -250,30 +255,126 @@ def test_review_schema_recovery_does_not_regenerate_summary(
     assert second["state"] == "published" and len(calls) == 4
 
 
-@pytest.mark.parametrize("missing", ["category", "comparison"])
-def test_unresolved_ingestion_proof_holds_article_and_continues_without_rebilling(
-    session, tmp_path, monkeypatch, missing,
-):
-    held = article(session)
-    article(session, 2, proof=True)
+def unresolved_proof(row, missing):
     assessment = {"relevance_score": 0.99, "admission_choice": "accepted_ai_editorial",
                   "admission_confidence": 0.99, "category": "AI Applications",
                   "category_confidence": 0.99, "comparison_choice": "NotComparison",
                   "comparison_confidence": 0.99}
     assessment["category" if missing == "category" else "comparison_choice"] = None
     assessment[missing + "_confidence"] = None
-    held.enrichment_provenance = encoded({"rubric": daily.RUBRIC_VERSION,
+    row.enrichment_provenance = encoded({"rubric": daily.RUBRIC_VERSION,
         "admission_source_hash": fingerprint(daily.source_state(
-            {"title": held.title, "content": SOURCE})), "admission_assessment": assessment})
+            {"title": row.title, "content": SOURCE})), "admission_assessment": assessment})
+
+
+def test_unresolved_ingestion_comparison_publishes_without_badge_or_jev_call(
+    session, tmp_path, monkeypatch,
+):
+    row = article(session)
+    unresolved_proof(row, "comparison")
     session.commit()
-    mock_client(monkeypatch, lambda _r: pytest.fail("Unresolved proof must not be re-billed"))
+    calls = []
+
+    def respond(request):
+        calls.append(json.loads(request.content))
+        assert "questions" not in calls[-1], "Saved admission proof must not be re-billed"
+        return provider_response(request)
+
+    mock_client(monkeypatch, respond)
+    result = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    assert result["state"] == "published" and result["published_count"] == 1
+    assert row.category == "AI Applications" and row.material_type is None
+    assert not any(daily.TOPIC_FALLBACK_VERSION in c["messages"][0]["content"] for c in calls)
+
+
+def test_unresolved_ingestion_topic_uses_deepseek_fallback_then_resumes_free(
+    session, tmp_path, monkeypatch,
+):
+    row = article(session)
+    article(session, 2, proof=True)
+    unresolved_proof(row, "category")
+    session.commit()
+    calls = []
+
+    def respond(request):
+        calls.append(json.loads(request.content))
+        assert "questions" not in calls[-1], "Saved admission proof must not be re-billed"
+        return provider_response(request, topic="Infrastructure")
+
+    mock_client(monkeypatch, respond)
     first = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
-    assert first["state"] == "published_with_holds"
-    assert first["scope_complete"] and first["scope_count"] == 2
-    assert first["published_count"] == 1
-    assert first["held"] == [{"article_id": held.id, "reason": "topic_or_type_unresolved"}]
-    assert first["usage"]["total_committed_usd"] == 0
+    assert first["state"] == "published" and first["published_count"] == 2
+    assert row.category == "Infrastructure" and row.category_confidence == 0.8
+    proof = json.loads(row.enrichment_provenance)
+    assert proof["topic_source"] == "deepseek_fallback"
+    assert proof["topic_fallback"]["version"] == daily.TOPIC_FALLBACK_VERSION
+    paid = len(calls)
+    assert sum(daily.TOPIC_FALLBACK_VERSION in c["messages"][0]["content"] for c in calls) == 1
+    second = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    assert second["state"] == "published" and len(calls) == paid
+
+
+@pytest.mark.parametrize("answer", [None, "Not A Topic"])
+def test_unresolved_fallback_topic_holds_only_that_article(
+    session, tmp_path, monkeypatch, answer,
+):
+    held = article(session)
+    article(session, 2, proof=True)
+    unresolved_proof(held, "category")
+    session.commit()
+    mock_client(monkeypatch, lambda r: provider_response(r, topic=answer))
+    result = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    assert result["state"] == "published_with_holds" and result["published_count"] == 1
+    assert result["held"] == [{"article_id": held.id, "reason": "topic_or_type_unresolved"}]
     assert held.summary is None
+
+
+def test_confident_topic_with_uncertain_comparison_is_published(session, tmp_path, monkeypatch):
+    row = article(session)
+    calls = []
+
+    def respond(request):
+        calls.append(json.loads(request.content))
+        return provider_response(request, category=("Infrastructure", 0.9),
+                                 comparison=("Comparison", 0.67))
+
+    mock_client(monkeypatch, respond)
+    result = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    assert result["state"] == "published" and result["published_count"] == 1
+    assert row.category == "Infrastructure" and row.material_type is None
+    assert json.loads(row.enrichment_provenance)["topic_source"] == "jev"
+    assert not any("messages" in c and daily.TOPIC_FALLBACK_VERSION in
+                   c["messages"][0]["content"] for c in calls)
+
+
+def test_low_confidence_jev_topic_uses_fallback(session, tmp_path, monkeypatch):
+    row = article(session)
+    mock_client(monkeypatch, lambda r: provider_response(
+        r, category=("AI Applications", 0.55), topic="Models & Research"))
+    result = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    assert result["state"] == "published"
+    assert row.category == "Models & Research"
+
+
+@pytest.mark.parametrize(("raw", "clean"), [
+    ("pplx-decider-v1.1-27b (Hugging Face Repo)", "pplx-decider-v1.1-27b"),
+    ("Introducing Clef-omni for audio (7 minute read)", "Introducing Clef-omni for audio"),
+    ("agent-kit (GitHub Repo) (3 min read)", "agent-kit"),
+    ("Best QA Tools Compared (2026)", "Best QA Tools Compared (2026)"),
+    ("Cheap GPUs for everyone (Sponsor)", "Cheap GPUs for everyone (Sponsor)"),
+    ("(5 minute read)", "(5 minute read)"),
+])
+def test_digest_title_strips_only_aggregator_decorations(raw, clean):
+    assert daily.digest_title(raw) == clean
+
+
+def test_digest_uses_clean_title_without_changing_stored_title(session):
+    row = article(session, proof=True)
+    row.title = "AI document extraction (4 minute read)"
+    session.commit()
+    groups = daily.digest_groups([row])
+    assert groups[0]["items"][0]["title"] == "AI document extraction"
+    assert row.title == "AI document extraction (4 minute read)"
 
 
 def test_explicit_unsupported_review_holds_one_article_and_reuses_billed_work(
