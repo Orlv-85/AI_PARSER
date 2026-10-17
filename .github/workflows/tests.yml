@@ -57,26 +57,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Build test image (Python 3.14)
-        uses: docker/build-push-action@v7
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v6
         with:
-          context: .
-          file: build/Dockerfile
-          target: test
-          load: true
-          push: false
-          tags: ai-news-test:${{ github.sha }}
-          build-args: |
-            PYTHON_IMAGE=python:3.14-slim
-          cache-from: type=gha,scope=test-image
-          cache-to: type=gha,scope=test-image,mode=max
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: |
+            build/requirements.txt
+            build/requirements-dev.txt
 
-      - name: Run tests in Docker with coverage
-        run: >-
-          docker run --rm --network host
-          -e AINEWS_COVERAGE_FAIL_UNDER=90
-          -e AINEWS_TEST_POSTGRES_URL=postgresql+psycopg://ainews_test:isolated_ci_test@127.0.0.1:5432/ainews_test
-          ai-news-test:${{ github.sha }}
+      - name: Install dependencies
+        run: |
+          pip install -r build/requirements-dev.txt
+          pip install --no-deps -e .
+
+      - name: Run tests with coverage
+        env:
+          AINEWS_COVERAGE_FAIL_UNDER: "90"
+          AINEWS_TEST_POSTGRES_URL: postgresql+psycopg://ainews_test:isolated_ci_test@127.0.0.1:5432/ainews_test
+        run: ./scripts/run_tests_with_coverage.sh
