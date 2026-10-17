@@ -298,3 +298,50 @@ def test_explicit_unsupported_review_holds_one_article_and_reuses_billed_work(
     second = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
     assert second["state"] == "published_with_holds"
     assert len(calls) == 4
+
+
+def test_ungrounded_quote_holds_one_article_instead_of_failing_day(
+    session, tmp_path, monkeypatch,
+):
+    article(session, proof=True)
+    held = article(session, 2)
+
+    def respond(request):
+        body = json.loads(request.content)
+        if "questions" in body or "entailment" in body["messages"][0]["content"]:
+            return provider_response(request)
+        value = {"facts": [{"sentence": SUMMARY, "quote": "A quote absent from the source."}],
+                 "compared_products": []}
+        return httpx.Response(200, json={"model": "deepseek-flash",
+            "usage": {"prompt_tokens": 500, "completion_tokens": 90},
+            "choices": [{"finish_reason": "stop", "message": {"content": json.dumps(value)}}]})
+
+    mock_client(monkeypatch, respond)
+    result = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    assert result["state"] == "published_with_holds"
+    assert result["published_count"] == 1
+    assert result["held"] == [{"article_id": held.id, "reason": "summary_not_supported"}]
+
+
+def test_provider_overload_is_retried_then_resumable(session, tmp_path, monkeypatch):
+    article(session)
+    sleeps = []
+    monkeypatch.setattr("app.storage.reenrich_pilot_journal.time.sleep", sleeps.append)
+    busy = {"remaining": 4}
+
+    def respond(request):
+        if busy["remaining"]:
+            busy["remaining"] -= 1
+            return httpx.Response(503, json={"error": {"code": "service_unavailable_error"}})
+        return provider_response(request)
+
+    mock_client(monkeypatch, respond)
+    first = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    assert first["state"] == "failed_preserved_previous"
+    assert first["reason"] == "provider_response_failed"
+    assert len(sleeps) == 3
+    # The unbilled overload answer must not block an explicit resume.
+    busy["remaining"] = 1
+    second = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    assert second["state"] == "published"
+    assert second["counts"] == {"enriched": 1}

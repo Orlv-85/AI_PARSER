@@ -206,9 +206,10 @@ def grounded_summary(row, comparison, journal, client, secret):
         except (ValueError, KeyError, TypeError, IndexError) as exc:
             # The journal retains the billed response; at most one different repair request.
             failures.append(str(exc) if isinstance(exc, ValueError) else type(exc).__name__)
-    if failures[-1] == "summary_not_entailed_or_not_english":
-        raise SummaryHeld("summary_not_supported")
-    raise PilotStopped("invalid_summary:" + ",".join(failures))
+    if "Unexpected DeepSeek model" in failures:
+        raise PilotStopped("invalid_summary:" + ",".join(failures))
+    # Ungrounded or malformed output for one source holds only that article.
+    raise SummaryHeld("summary_not_supported")
 
 
 def enrich(article, row, journal, client, keys):
