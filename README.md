@@ -44,6 +44,7 @@ For an existing database, run `./venv1/bin/alembic upgrade head` first.
 - [CLI usage](docs/cli.md) - web onboarding, fetch/cron, rollout knobs, search, MCP server, prune.
 - [Weekly attention analytics v2](docs/weekly-analytics.md) - worker, budgets, audit export, rollback.
 - [Article re-enrichment](docs/article-reenrichment.md) - implementation and operator guide.
+- [Troubleshooting](docs/troubleshooting.md) - known failures (flaky tests, local env) with causes and fixes.
 
 ## Article dates and one-time re-enrichment
 
@@ -67,6 +68,8 @@ pytest
 ```
 
 ## Troubleshooting
+
+See also [docs/troubleshooting.md](docs/troubleshooting.md) for known CI/test failures.
 
 - `ModuleNotFoundError`: activate `venv1` and reinstall with `pip install -e ".[dev]"`.
 - `sqlite3.OperationalError: unable to open database file`: create `data/` directory or fix `AINEWS_DATABASE_URL`.
