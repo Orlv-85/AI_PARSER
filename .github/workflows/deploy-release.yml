@@ -105,8 +105,8 @@ jobs:
           tags: ai-news-test:${{ github.sha }}
           build-args: |
             PYTHON_IMAGE=python:3.14-slim
+          # Tag refs only read master's cache; writing it here would never be reused.
           cache-from: type=gha,scope=test-image
-          cache-to: type=gha,scope=test-image,mode=max
 
       - name: Run tests in Docker with coverage
         run: >-
