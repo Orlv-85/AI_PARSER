@@ -392,7 +392,8 @@ def test_explicit_unsupported_review_holds_one_article_and_reuses_billed_work(
     first = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
     assert first["state"] == "published_with_holds"
     assert first["scope_count"] == 2 and first["published_count"] == 1
-    assert first["held"] == [{"article_id": held.id, "reason": "summary_not_supported"}]
+    assert first["held"] == [{"article_id": held.id, "reason": "summary_not_supported",
+                              "details": ["summary_not_entailed_or_not_english"] * 2}]
     assert held.enrichment_provenance is None
     # Identical repaired facts reuse the already billed unsupported review.
     assert len(calls) == 4
@@ -421,7 +422,8 @@ def test_ungrounded_quote_holds_one_article_instead_of_failing_day(
     result = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
     assert result["state"] == "published_with_holds"
     assert result["published_count"] == 1
-    assert result["held"] == [{"article_id": held.id, "reason": "summary_not_supported"}]
+    assert result["held"] == [{"article_id": held.id, "reason": "summary_not_supported",
+                               "details": ["Unsupported summary quote"] * 2}]
 
 
 def test_provider_overload_is_retried_then_resumable(session, tmp_path, monkeypatch):
