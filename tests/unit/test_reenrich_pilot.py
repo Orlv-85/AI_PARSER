@@ -11,13 +11,16 @@ from app.core.jev import JevRelevanceScorer
 from app.core.reenrich_pilot import (
     SUMMARY_RECOVERY_VERSION,
     TOPIC_CRITERIA,
+    TOPIC_FALLBACK_VERSION,
     jev_request,
     parse_jev,
     parse_summary,
     request_key,
     reservation,
     summary_request,
+    topic_request,
 )
+from app.storage.legacy_cleanup import fingerprint
 from app.storage.reenrich_pilot_journal import PilotJournal, PilotStopped
 
 ROW = {"url": "https://example.com/article/ai", "title": "Synthetic AI release",
@@ -314,3 +317,13 @@ def test_unclear_product_stays_unknown_without_discarding_grounded_summary():
     assert not result["compared_products"]
     assert result["unresolved_compared_products"] == 1
     assert result["compared_products_status"] == "partial_unresolved"
+
+
+def test_topic_fallback_request_is_bounded_versioned_and_summary_free():
+    body = topic_request(ROW)
+    assert body["max_tokens"] == 300 and reservation("deepseek", body) > 0
+    assert "old model summary" not in json.dumps(body)
+    assert set(json.loads(body["messages"][1]["content"])["topics"]) == set(TOPIC_CRITERIA)
+    assert request_key("deepseek", body) == fingerprint(
+        {"provider": "deepseek", "body": body, "version": TOPIC_FALLBACK_VERSION})
+    assert request_key("deepseek", body) != request_key("deepseek", summary_request(ROW, False))

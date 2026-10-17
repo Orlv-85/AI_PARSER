@@ -3,6 +3,7 @@
 import asyncio
 import hashlib
 import json
+import re
 from collections import Counter
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
@@ -13,17 +14,19 @@ from sqlalchemy import or_, select
 
 from app.core.categories import REENRICH_TOPIC_ORDER
 from app.core.daily_rubric import QUESTIONS, RUBRIC_VERSION
-from app.core.jev import JevInputTooLarge
+from app.core.jev import JevInputTooLarge, _probability
 from app.core.reenrich_pilot import (
     DEEPSEEK_MODEL,
     JEV_MODEL,
     SUMMARY_RECOVERY_VERSION,
+    TOPIC_FALLBACK_VERSION,
     _source_quote,
     parse_jev,
     parse_summary,
     request_key,
     source_state,
     summary_request,
+    topic_request,
 )
 from app.storage.article_evidence_cache import PageCache, SourcePageDownloader, make_http_client
 from app.storage.legacy_cleanup import encoded, fingerprint, private_write
@@ -33,6 +36,10 @@ from app.storage.repos import NewsDigestRepo
 
 DAILY_VERSION = "daily-publication-1"
 CAPS = {"total": "5", "jev": "1", "deepseek": "4"}
+# Aggregator decorations only; meaningful parentheticals such as "(Sponsor)" stay.
+TITLE_JUNK = re.compile(
+    r"\s*\((?:\d+ min(?:ute)? read|GitHub Repo|"
+    r"Hugging Face (?:Repo|Model|Space|Dataset|Paper))\)\s*$", re.IGNORECASE)
 
 
 class SummaryHeld(ValueError):
@@ -121,10 +128,11 @@ def admission_from_proof(article, row):
             "ai_relevant": {"noul": assessment["relevance_score"]},
             "admission": {"choice": assessment["admission_choice"],
                           "confidence": assessment["admission_confidence"]},
+            # Ingestion saves unresolved answers as null; treat them as unresolved here.
             "category": {"choice": assessment["category"] or "Other",
-                         "confidence": assessment["category_confidence"]},
-            "comparison": {"choice": assessment["comparison_choice"],
-                           "confidence": assessment["comparison_confidence"]},
+                         "confidence": assessment["category_confidence"] or 0.0},
+            "comparison": {"choice": assessment["comparison_choice"] or "Unknown",
+                           "confidence": assessment["comparison_confidence"] or 0.0},
         }}
     except (ValueError, TypeError, KeyError):
         return None
@@ -212,14 +220,40 @@ def grounded_summary(row, comparison, journal, client, secret):
     raise SummaryHeld("summary_not_supported")
 
 
+def parse_topic(data):
+    if data.get("model") not in {DEEPSEEK_MODEL, "deepseek-v4.1-flash"}:
+        raise ValueError("topic_model")
+    choice = data["choices"][0]
+    if choice["finish_reason"] != "stop":
+        raise ValueError("topic_truncated")
+    value = json.loads(choice["message"]["content"])
+    if not isinstance(value, dict) or (value.get("topic") is not None and
+                                       value["topic"] not in REENRICH_TOPIC_ORDER):
+        raise ValueError("topic_schema")
+    try:
+        confidence = _probability(value.get("confidence"))
+    except ValueError:
+        confidence = None
+    return value["topic"], confidence
+
+
+def fallback_topic(row, journal, client, secret):
+    """DeepSeek picks a topic only when JEV left it unresolved; None keeps the hold."""
+    body = topic_request(row)
+    data = journal.call("deepseek", body, client, secret)
+    try:
+        topic, confidence = parse_topic(data)
+    except (ValueError, KeyError, TypeError, IndexError):
+        return None
+    if topic is None:
+        return None
+    return {"topic": topic, "confidence": confidence, "version": TOPIC_FALLBACK_VERSION,
+            "request_key": request_key("deepseek", body)}
+
+
 def enrich(article, row, journal, client, keys):
     body = {"model": JEV_MODEL, "state": source_state(row), "questions": QUESTIONS}
     data = admission_from_proof(article, row)
-    if data is not None and any(
-        data["answers"][name]["confidence"] is None for name in ("category", "comparison")
-    ):
-        # Ingestion deliberately drops unresolved classifications from its saved proof.
-        return "topic_or_type_unresolved"
     if data is None:
         try:
             data = journal.call("jev", body, client, keys["jev"])
@@ -229,8 +263,20 @@ def enrich(article, row, journal, client, keys):
         verdict = parse_jev(row, data)
     except (ValueError, KeyError, TypeError, IndexError):
         raise PilotStopped("invalid_daily_assessment") from None
-    if verdict["outcome"] != "kept" or verdict["boundary_review"]:
-        return verdict["outcome"] if verdict["outcome"] != "kept" else "topic_or_type_unresolved"
+    if verdict["outcome"] != "kept":
+        return verdict["outcome"]
+    # An uncertain comparison only drops the material_type badge; the topic decides the hold.
+    topic, topic_confidence, fallback = verdict["topic"], verdict["topic_raw"]["confidence"], None
+    if topic is None:
+        try:
+            fallback = fallback_topic(row, journal, client, keys["deepseek"])
+        except ValueError as exc:
+            if "conservative input/output bound" not in str(exc):
+                raise
+            return "source_input_too_large"
+        if fallback is None:
+            return "topic_or_type_unresolved"
+        topic, topic_confidence = fallback["topic"], fallback["confidence"]
     comparison = verdict["material_type"] == "Comparison"
     try:
         summary, review = grounded_summary(row, comparison, journal, client, keys["deepseek"])
@@ -239,8 +285,8 @@ def enrich(article, row, journal, client, keys):
     article.title = row["title"][:512]
     article.content = row["content"]
     article.summary = summary["generated_summary"]
-    article.category = verdict["topic"]
-    article.category_confidence = verdict["topic_raw"]["confidence"]
+    article.category = topic
+    article.category_confidence = topic_confidence
     article.ai_relevance_score = verdict["assessment"]["relevance_score"]
     article.material_type = verdict["material_type"]
     article.compared_products = encoded([p["name"] for p in summary["compared_products"]])
@@ -249,14 +295,23 @@ def enrich(article, row, journal, client, keys):
         "jev_key": request_key("jev", body), "source_origin": row["origin"],
         "source_content_hash": fingerprint(row["content"]),
         "summary": summary, "summary_review": review,
+        "topic_source": "jev" if fallback is None else "deepseek_fallback",
+        **({} if fallback is None else {"topic_fallback": fallback}),
     })
     return "enriched"
+
+
+def digest_title(title):
+    cleaned = title
+    while (stripped := TITLE_JUNK.sub("", cleaned)) != cleaned:
+        cleaned = stripped
+    return cleaned.strip() or title
 
 
 def digest_groups(articles):
     groups = []
     for topic in REENRICH_TOPIC_ORDER:
-        items = [{"title": a.title, "summary": a.summary, "url": a.url}
+        items = [{"title": digest_title(a.title), "summary": a.summary, "url": a.url}
                  for a in articles if a.category == topic and reusable(a)]
         if items:
             groups.append({"title": topic, "items": items})
