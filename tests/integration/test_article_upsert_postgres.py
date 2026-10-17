@@ -1,8 +1,9 @@
 import os
 from datetime import UTC, datetime
+from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker
 
 from app.storage.models_sql import Article, Base
@@ -17,8 +18,14 @@ pytestmark = pytest.mark.skipif(
 
 
 def test_upsert_articles_batch_uses_postgres_on_conflict_round_trip() -> None:
-    engine = create_engine(str(POSTGRES_TEST_URL), future=True)
-    Base.metadata.drop_all(engine)
+    # Own schema so parallel xdist workers never share tables.
+    schema = "upsert_" + uuid4().hex
+    admin = create_engine(str(POSTGRES_TEST_URL), future=True)
+    with admin.begin() as connection:
+        connection.execute(text(f'CREATE SCHEMA "{schema}"'))
+    engine = create_engine(
+        str(POSTGRES_TEST_URL), future=True, connect_args={"options": "-csearch_path=" + schema}
+    )
     Base.metadata.create_all(engine)
     session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
     now = datetime(2026, 2, 24, 13, 0, tzinfo=UTC)

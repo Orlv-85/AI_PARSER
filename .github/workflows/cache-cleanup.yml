@@ -1,0 +1,31 @@
+name: cache-cleanup
+
+on:
+  schedule:
+    - cron: "0 4 1 * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only report what would be deleted"
+        type: boolean
+        default: true
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Delete caches of old refs (keep 5 newest, never the default branch)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+        run: |
+          flags=""
+          if [ "${DRY_RUN}" = "true" ]; then flags="--dry-run"; fi
+          python3 scripts/cleanup_gha_caches.py --keep 5 ${flags}
