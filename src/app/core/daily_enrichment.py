@@ -45,6 +45,10 @@ TITLE_JUNK = re.compile(
 class SummaryHeld(ValueError):
     """A complete semantic review could not establish a supported English summary."""
 
+    def __init__(self, reason, failures=()):
+        super().__init__(reason)
+        self.failures = list(failures)
+
 
 def day_articles(session, target):
     start = datetime.combine(target, time.min, tzinfo=UTC)
@@ -217,7 +221,7 @@ def grounded_summary(row, comparison, journal, client, secret):
     if "Unexpected DeepSeek model" in failures:
         raise PilotStopped("invalid_summary:" + ",".join(failures))
     # Ungrounded or malformed output for one source holds only that article.
-    raise SummaryHeld("summary_not_supported")
+    raise SummaryHeld("summary_not_supported", failures)
 
 
 def parse_topic(data):
@@ -251,7 +255,7 @@ def fallback_topic(row, journal, client, secret):
             "request_key": request_key("deepseek", body)}
 
 
-def enrich(article, row, journal, client, keys):
+def enrich(article, row, journal, client, keys, *, details=None):
     body = {"model": JEV_MODEL, "state": source_state(row), "questions": QUESTIONS}
     data = admission_from_proof(article, row)
     if data is None:
@@ -280,7 +284,9 @@ def enrich(article, row, journal, client, keys):
     comparison = verdict["material_type"] == "Comparison"
     try:
         summary, review = grounded_summary(row, comparison, journal, client, keys["deepseek"])
-    except SummaryHeld:
+    except SummaryHeld as exc:
+        if details is not None:
+            details.extend(exc.failures)
         return "summary_not_supported"
     article.title = row["title"][:512]
     article.content = row["content"]
@@ -350,14 +356,16 @@ def publish_day(session, settings, target: date, root: Path):
                     counts["reused"] += 1
                     continue
                 row = source_row(article, cache)
+                details: list[str] = []
                 if row is None or article.publication_status != "confirmed":
                     state = "insufficient_source_or_date_evidence"
                 else:
-                    state = enrich(article, row, journal, client, keys)
+                    state = enrich(article, row, journal, client, keys, details=details)
                     session.commit()
                 counts[state] += 1
                 if state != "enriched":
-                    held.append({"article_id": article.id, "reason": state})
+                    held.append({"article_id": article.id, "reason": state,
+                                 **({"details": details} if details else {})})
                 private_write(run / "progress.json", {"counts": dict(counts), "held": held})
         groups = digest_groups(articles)
         if not groups:
