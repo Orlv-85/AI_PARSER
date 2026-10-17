@@ -1,4 +1,5 @@
 PYTHON ?= ./venv1/bin/python
+PYLINT_JOBS ?= 1
 
 .PHONY: help lint lint-ruff lint-mypy lint-pylint
 
@@ -18,4 +19,4 @@ lint-mypy:
 	$(PYTHON) -m mypy
 
 lint-pylint:
-	PYLINTHOME=.pylint.d $(PYTHON) -m pylint src tests
+	PYLINTHOME=.pylint.d $(PYTHON) -m pylint --jobs=$(PYLINT_JOBS) src tests
