@@ -193,8 +193,30 @@ def review_summary(summary, journal, client, secret):
     raise PilotStopped("invalid_semantic_review:" + ",".join(errors))
 
 
+def salvage_supported_facts(candidates, journal, client, secret):
+    """Keep only facts that pass the entailment review on their own; None if none do."""
+    for summary, key in candidates:
+        if len(summary["support"]) < 2:
+            continue
+        kept, reviews = [], []
+        for fact in summary["support"]:
+            review = review_summary({**summary, "support": [fact]}, journal, client, secret)
+            reviews.append({k: review[k] for k in ("supported", "reason", "request_key")})
+            if review["supported"]:
+                kept.append(fact)
+        text = " ".join(f["sentence"].strip() for f in kept)
+        if kept and len(text.split()) <= 80 and len(text) <= 400:
+            return ({**summary, "generated_summary": text, "support": kept,
+                     "summary_words": len(text.split()), "request_key": key,
+                     "partial": {"kept": len(kept), "dropped": len(reviews) - len(kept)}},
+                    {"supported": True, "partial_fact_reviews": reviews,
+                     "model_review_not_ground_truth": True})
+    return None
+
+
 def grounded_summary(row, comparison, journal, client, secret):
     failures = []
+    candidates = []
     review_reason = ""
     for attempt in range(2):
         # Quote problems get the short-quote repair; an unsupported sentence is rewritten
@@ -226,6 +248,7 @@ def grounded_summary(row, comparison, journal, client, secret):
         data = journal.call("deepseek", body, client, secret)
         try:
             summary = parse_summary(row, data, comparison, prompt_version=SUMMARY_RECOVERY_VERSION)
+            candidates.append((summary, request_key("deepseek", body)))
             if summary["summary_words"] > 80 or len(summary["generated_summary"]) > 400:
                 raise ValueError("summary_length_limit")
             review = review_summary(summary, journal, client, secret)
@@ -238,6 +261,10 @@ def grounded_summary(row, comparison, journal, client, secret):
             failures.append(str(exc) if isinstance(exc, ValueError) else type(exc).__name__)
     if "Unexpected DeepSeek model" in failures:
         raise PilotStopped("invalid_summary:" + ",".join(failures))
+    # Publish only the facts that are individually supported rather than losing the article.
+    salvaged = salvage_supported_facts(candidates, journal, client, secret)
+    if salvaged is not None:
+        return salvaged
     # Ungrounded or malformed output for one source holds only that article.
     raise SummaryHeld("summary_not_supported", failures)
 
