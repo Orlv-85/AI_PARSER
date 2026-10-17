@@ -12,11 +12,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Build test image (Python 3.14)
-        run: docker build -f build/Dockerfile --target test --build-arg PYTHON_IMAGE=python:3.14-slim -t ai-news-test:${{ github.sha }} .
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: |
+            build/requirements.txt
+            build/requirements-dev.txt
 
-      - name: Run linters in Docker test image
-        run: docker run --rm ai-news-test:${{ github.sha }} make lint PYTHON=python
+      - name: Install dependencies
+        run: |
+          pip install -r build/requirements-dev.txt
+          pip install --no-deps -e .
+
+      - name: Run linters in parallel
+        run: make -j3 --output-sync=target lint PYTHON=python
 
   tests:
     runs-on: ubuntu-24.04

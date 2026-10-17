@@ -10,23 +10,60 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
+  actions: read
   contents: read
   packages: write
 
 jobs:
+  # Reuse the green `tests` run of the same commit (push to a branch) instead of
+  # repeating lint/tests on the tag. Any doubt falls back to running them here.
+  check-ci:
+    runs-on: ubuntu-24.04
+    outputs:
+      passed: ${{ steps.ci.outputs.passed }}
+    steps:
+      - name: Look for a green tests run on this commit
+        id: ci
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          count="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/tests.yml/runs?head_sha=${GITHUB_SHA}&event=push&status=success&per_page=1" --jq '.total_count' 2>/dev/null || echo 0)"
+          if [ "${count}" -ge 1 ] 2>/dev/null; then
+            echo "passed=true" >> "$GITHUB_OUTPUT"
+            echo "Found a successful tests run for ${GITHUB_SHA}; lint/tests are skipped"
+          else
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+            echo "No successful tests run for ${GITHUB_SHA}; lint/tests will run"
+          fi
+
   lint:
+    needs: check-ci
+    if: needs.check-ci.outputs.passed != 'true'
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Build test image (Python 3.14)
-        run: docker build -f build/Dockerfile --target test --build-arg PYTHON_IMAGE=python:3.14-slim -t ai-news-test:${{ github.sha }} .
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: |
+            build/requirements.txt
+            build/requirements-dev.txt
 
-      - name: Run linters in Docker test image
-        run: docker run --rm ai-news-test:${{ github.sha }} make lint PYTHON=python
+      - name: Install dependencies
+        run: |
+          pip install -r build/requirements-dev.txt
+          pip install --no-deps -e .
+
+      - name: Run linters in parallel
+        run: make -j3 --output-sync=target lint PYTHON=python
 
   tests:
+    needs: check-ci
+    if: needs.check-ci.outputs.passed != 'true'
     runs-on: ubuntu-24.04
     services:
       postgres:
@@ -56,10 +93,10 @@ jobs:
           -e AINEWS_TEST_POSTGRES_URL=postgresql+psycopg://ainews_test:isolated_ci_test@127.0.0.1:5432/ainews_test
           ai-news-test:${{ github.sha }}
 
+  # Runs in parallel with lint/tests; only version tags are pushed here.
+  # `latest` is promoted after verification (see promote-latest).
   build-image:
-    needs:
-      - lint
-      - tests
+    needs: check-ci
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -118,14 +155,79 @@ jobs:
           tags: |
             ghcr.io/orlv-85/ai-parser:${{ github.ref_name }}
             ghcr.io/orlv-85/ai-parser:sha-${{ github.sha }}
-            ghcr.io/orlv-85/ai-parser:latest
           build-args: |
             RUNTIME_BASE_IMAGE=${{ steps.deps.outputs.base_image }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # build-image now runs alongside lint/tests, so drop its image when they fail;
+  # otherwise it would occupy one of the "keep 5" slots used for rollbacks.
+  discard-unverified-image:
+    needs: [lint, tests, build-image]
+    if: ${{ always() && needs.build-image.result == 'success' && (needs.lint.result == 'failure' || needs.tests.result == 'failure') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Delete the image built for the failed tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          gh api --paginate --slurp /users/orlv-85/packages/container/ai-parser/versions > /tmp/ghcr_versions.json
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          release_tag = os.environ["RELEASE_TAG"]
+          own_tags = {release_tag, f"sha-{os.environ['COMMIT_SHA']}"}
+
+          with open("/tmp/ghcr_versions.json", "r", encoding="utf-8") as fh:
+              pages = json.load(fh)
+
+          for page in pages:
+              for version in page:
+                  tags = set((((version.get("metadata") or {}).get("container") or {}).get("tags") or []))
+                  if release_tag not in tags:
+                      continue
+                  if tags - own_tags:
+                      # Never delete an image that also carries tags of another release.
+                      print(f"Skipping version_id={version['id']}: extra tags {sorted(tags - own_tags)}")
+                      continue
+                  print(f"Deleting version_id={version['id']} tags={sorted(tags)}")
+                  subprocess.run(
+                      [
+                          "gh",
+                          "api",
+                          "--method",
+                          "DELETE",
+                          f"/users/orlv-85/packages/container/ai-parser/versions/{version['id']}",
+                      ],
+                      check=True,
+                  )
+          PY
+
+  promote-latest:
+    needs: [check-ci, lint, tests, build-image]
+    if: ${{ !cancelled() && needs.check-ci.result == 'success' && needs.build-image.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.lint.result) && contains(fromJSON('["success","skipped"]'), needs.tests.result) }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Point latest at the verified release image
+        run: docker buildx imagetools create -t ghcr.io/orlv-85/ai-parser:latest ghcr.io/orlv-85/ai-parser:${{ github.ref_name }}
+
   deploy:
-    needs: build-image
+    needs: [check-ci, lint, tests, build-image]
+    if: ${{ !cancelled() && needs.check-ci.result == 'success' && needs.build-image.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.lint.result) && contains(fromJSON('["success","skipped"]'), needs.tests.result) }}
     runs-on: ubuntu-24.04
     steps:
       - name: Validate deploy config
