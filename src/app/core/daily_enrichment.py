@@ -152,7 +152,9 @@ def parse_review(data):
     if (not isinstance(review, dict) or not isinstance(review.get("supported"), bool) or
             not isinstance(review.get("english"), bool)):
         raise ValueError("review_schema")
-    return review["supported"] and review["english"]
+    reason = review.get("reason")
+    return (review["supported"] and review["english"],
+            reason[:200] if isinstance(reason, str) else "")
 
 
 def review_summary(summary, journal, client, secret):
@@ -180,7 +182,8 @@ def review_summary(summary, journal, client, secret):
                 "Use false whenever support or English language cannot be established.")
         data = journal.call("deepseek", body, client, secret)
         try:
-            return {"supported": parse_review(data),
+            supported, reason = parse_review(data)
+            return {"supported": supported, "reason": reason,
                     "request_key": request_key("deepseek", body),
                     "schema_recovery": errors,
                     "model_review_not_ground_truth": True}
@@ -192,10 +195,15 @@ def review_summary(summary, journal, client, secret):
 
 def grounded_summary(row, comparison, journal, client, secret):
     failures = []
-    for repair in (False, True):
+    review_reason = ""
+    for attempt in range(2):
+        # Quote problems get the short-quote repair; an unsupported sentence is rewritten
+        # as a close paraphrase of a long quote, with the reviewer's reason as a hint.
+        entailment_repair = attempt == 1 and bool(review_reason)
+        repair = attempt == 1 and not entailment_repair
         body = summary_request(row, comparison, output_cap=4096, repair_quotes=repair)
         body["messages"][0]["content"] += " The complete summary must be at most 400 characters."
-        if not repair:
+        if attempt == 0:
             body["messages"][0]["content"] += (
                 " Prefer exactly ONE informative English sentence, at most 25 words. "
                 "Use a contiguous exact supporting quote of 30-80 words that supports "
@@ -206,6 +214,15 @@ def grounded_summary(row, comparison, journal, client, secret):
                 "at most 25 words, and a contiguous exact quote of 30-80 words supporting "
                 "EVERY assertion. Attribute vendor claims. No background knowledge. "
                 "Prefer a narrower fact over inferred capabilities or numbers.")
+        if entailment_repair:
+            body["messages"][0]["content"] += (
+                " Semantic repair daily-summary-3: the previous sentence had details its "
+                "quote did not support. Return exactly ONE English sentence, at most 25 "
+                "words, as a close paraphrase of a contiguous exact quote of 30-80 words. "
+                "Use only names, numbers, roles and claims that appear in that quote; omit "
+                "everything else, including negations such as what was not said. Attribute "
+                "vendor claims. No background knowledge. Untrusted reviewer note on the "
+                "previous attempt: " + json.dumps(review_reason))
         data = journal.call("deepseek", body, client, secret)
         try:
             summary = parse_summary(row, data, comparison, prompt_version=SUMMARY_RECOVERY_VERSION)
@@ -213,6 +230,7 @@ def grounded_summary(row, comparison, journal, client, secret):
                 raise ValueError("summary_length_limit")
             review = review_summary(summary, journal, client, secret)
             if not review["supported"]:
+                review_reason = review["reason"]
                 raise ValueError("summary_not_entailed_or_not_english")
             return {**summary, "request_key": request_key("deepseek", body)}, review
         except (ValueError, KeyError, TypeError, IndexError) as exc:
