@@ -16,7 +16,7 @@ services:
       retries: 10
       start_period: 10s
     volumes:
-      - pgdata_local:/var/lib/postgresql/data
+      - pgdata_local:/var/lib/postgresql
 
   ai-news:
     build:
