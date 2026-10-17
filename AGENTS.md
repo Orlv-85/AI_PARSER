@@ -112,6 +112,11 @@ When editing `sources.yaml`:
   - `--coverage-cmd "<coverage command>"`
   - `--coverage-fail-under <percent>`
 
+## Troubleshooting
+
+- Before debugging a failing test, CI run, or runtime error, read `docs/troubleshooting.md`; it holds known cases (symptom, cause, fix) as JSON.
+- After resolving a new non-obvious failure, add a case to that file in the same change.
+
 ## Specs
 
 Relevant specs currently present:
