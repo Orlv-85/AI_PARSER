@@ -165,8 +165,6 @@ jobs:
           tags: ${{ steps.deps.outputs.base_image }}
           build-args: |
             PYTHON_IMAGE=python:3.14-slim
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
       - name: Build and push app image
         uses: docker/build-push-action@v7
@@ -179,8 +177,6 @@ jobs:
             ghcr.io/orlv-85/ai-parser:sha-${{ github.sha }}
           build-args: |
             RUNTIME_BASE_IMAGE=${{ steps.deps.outputs.base_image }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   # build-image now runs alongside lint/tests, so drop its image when they fail;
   # otherwise it would occupy one of the "keep 5" slots used for rollbacks.
