@@ -1,0 +1,180 @@
+# CLI Usage
+
+## Upload and review sources in the web UI
+
+Open `/admin` and choose **Onboarding**. Upload a JSON file, or paste JSON and
+click **Import & check**. The app opens the latest batch automatically and checks
+new candidates in the background. **Check this batch** can also review an older
+batch. **Connect recommended** enables technically validated, recommended draft
+sources; uncertain sources remain available for individual review. Use
+**Update > Run update** afterward to collect news.
+
+Supported JSON shapes are `{"sources": [{"name": "AI Blog", "type": "rss",
+"url": "https://example.com/feed.xml"}]}` and a top-level array of source objects
+or URL strings. Only source `url` fields are imported: evidence links,
+`website_url`, replacements and unverified recommendations are ignored. Plain
+URLs/Markdown remain supported. Limits: 200 JSON records and a 1 MB file.
+
+Verification reads only the feed/list page (at most 1 MB, 10-second network
+timeout, bounded redirects), never the article archive. Jev receives at most
+five publication samples in a 6,000-character brief. Confident decisions use
+Jev alone; uncertain cases receive a DeepSeek second opinion using the same
+brief, with thinking disabled and a 400-token output limit. A batch makes at
+most 50 DeepSeek requests. Missing keys, provider failures or insufficient
+evidence leave manual review; a provider failure stops further calls to that
+provider in the batch. Successful model reviews are reused for unchanged
+evidence for seven days. Overlapping source families always require review.
+
+This workflow uses existing `JEV_API_KEY` / `AINEWS_JEV_ENABLED` settings and
+`DS_API_KEY`. The second-opinion model is configured by
+`AINEWS_SOURCE_REVIEW_DEEPSEEK_MODEL` (default `deepseek-flash`). Keys stay on the
+server. Completed candidate results persist across restarts; interrupted pending
+work can be restarted with **Check this batch**.
+
+## Show configured sources
+
+```bash
+ai-news sources
+```
+
+## Fetch once
+
+```bash
+ai-news fetch --once
+```
+
+## Cron-friendly auto-update (every 30 minutes)
+
+Use the helper script for repeated cron runs. It defaults to the tuned settings
+`AINEWS_CONCURRENCY_LIMIT=10`, `AINEWS_RSS_FULL_TEXT_CONCURRENCY_LIMIT=4`,
+and disables RSS full-text extraction by default with
+`AINEWS_RSS_EXTRACT_FULL_TEXT=0`. You can override them via environment variables.
+
+```bash
+chmod +x scripts/auto_update_once.sh
+./scripts/auto_update_once.sh
+```
+
+Example `crontab` entry (adjust paths/venv as needed):
+
+```cron
+*/30 * * * * cd /opt/ai-news && \
+  . /opt/ai-news/venv1/bin/activate && \
+  AINEWS_CONCURRENCY_LIMIT=10 \
+  AINEWS_RSS_FULL_TEXT_CONCURRENCY_LIMIT=4 \
+  AINEWS_RSS_EXTRACT_FULL_TEXT=0 \
+  /opt/ai-news/scripts/auto_update_once.sh >> /var/log/ai-news-auto-update.log 2>&1
+```
+
+Notes:
+- The script writes logs to stdout/stderr (cron-compatible).
+- Overlapping cron runs are not ideal (extra fetch work/load). Article deduplication prevents duplicate rows, but prefer schedules that avoid overlap.
+- `scripts/deploy_prod.sh` can install/update a managed cron entry automatically on the server (default disabled) using Docker Compose + `10/4`, with RSS full-text extraction disabled by default for cron (`AUTO_UPDATE_RSS_EXTRACT_FULL_TEXT=0`).
+- Deploy-time cron knobs: `AUTO_UPDATE_ENABLED`, `AUTO_UPDATE_CRON_SCHEDULE`, `AUTO_UPDATE_LOG_PATH`, `AUTO_UPDATE_CONCURRENCY_LIMIT`, `AUTO_UPDATE_FULLTEXT_CONCURRENCY_LIMIT`, `AUTO_UPDATE_RSS_EXTRACT_FULL_TEXT`.
+
+## Fetch optimization rollout (recommended for production)
+
+Safe defaults now favor stability on a small VPS:
+
+- Keep RSS full-text extraction disabled unless you are debugging extraction quality.
+- Start with conservative concurrency (`10/4`) and increase only after measuring a full run.
+- Keep cron auto-update disabled by default; prefer manual/UI-triggered runs until the source set is stable.
+- Keep `update_execution_mode=thread` as the default web setting; switch to `process` only when you need to isolate a long-running web-triggered update from the request-serving process.
+- Enable `article_batch_upsert_enabled` only after verifying the database path on staging or a controlled production window.
+
+Recommended starting values for the new runtime knobs:
+
+- `fetch_http_max_connections=20`
+- `fetch_http_max_keepalive_connections=10`
+- `rss_known_streak_stop=20`
+- `html_known_streak_stop=20`
+- `html_max_links_per_source=50`
+- `article_batch_upsert_enabled=false`
+- `fetch_emit_source_metrics=true`
+
+Suggested rollout order:
+
+1. Run with source metrics enabled and batch upsert disabled.
+2. Watch a few update runs and confirm `not_modified_sources`, `skipped_known_html_links`, `early_stop_hits`, and total duration move in the expected direction.
+3. If the app stays stable, enable `article_batch_upsert_enabled` and repeat the same checks.
+4. Only after that, consider increasing concurrency or relaxing `html_max_links_per_source`.
+
+Fast rollback toggles if an update regresses:
+
+- disable `article_batch_upsert_enabled`
+- lower `concurrency_limit`
+- lower `html_max_links_per_source`
+- set `rss_known_streak_stop=0` or `html_known_streak_stop=0` to disable early-stop logic
+- keep `fetch_emit_source_metrics=true` while investigating so the logs stay comparable
+
+## Benchmark snapshot
+
+Local fixture benchmark for HTML link extraction (`tests/fixtures/html/list_page.html`, 1000 iterations, Python 3.14.2, `venv1`):
+
+- `lxml`: `0.0413s`
+- `selectolax`: `0.0341s`
+- measured speedup: `1.21x`
+
+This is a parser micro-benchmark, not a full end-to-end fetch run, but it is stable and reproducible for before/after comparisons of the hot link-extraction path.
+
+## Top news
+
+```bash
+ai-news top --hours 24 --limit 30
+```
+
+## Search
+
+```bash
+ai-news search --query "gpt" --days 7
+```
+
+## Run MCP server (for agent clients)
+
+```bash
+ai-news mcp-serve
+```
+
+MCP authentication configuration:
+- `AINEWS_MCP_AUTH_ENABLED=false` (default, backward-compatible local mode)
+- `AINEWS_MCP_AUTH_ENABLED=true` (enforce token on all MCP tools)
+- `AINEWS_MCP_AUTH_TOKEN=<strong-random-token>` (required when auth is enabled)
+
+Recommended secure startup:
+
+```bash
+export AINEWS_MCP_AUTH_ENABLED=true
+export AINEWS_MCP_AUTH_TOKEN="replace-with-long-random-token"
+ai-news mcp-serve
+```
+
+If auth is enabled and token is missing/blank, startup fails fast.
+
+Available MCP tools:
+- `news.update`
+- `news.update_status`
+- `news.list`
+- `news.get`
+
+When MCP auth is enabled, pass `auth_token` in each tool call:
+- `news.update(..., auth_token="...")`
+- `news.update_status(auth_token="...")`
+- `news.list(..., auth_token="...")`
+- `news.get(article_id=..., auth_token="...")`
+
+Auth audit logging:
+- `mcp_auth_success` and `mcp_auth_failed` events are emitted.
+- Raw tokens are never written to logs.
+
+Typical agent flow:
+1. Call `news.update` (`wait=false` for async or `wait=true` for blocking mode).
+2. Poll `news.update_status` until `finished`/`failed`.
+3. Call `news.list` to get dataset slice.
+4. Call `news.get` for full plain-text article content.
+
+## Prune old news
+
+```bash
+ai-news prune --older-than-days 800
+ai-news prune --older-than-days 800 --dry-run
+```
