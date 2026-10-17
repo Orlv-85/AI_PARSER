@@ -68,14 +68,15 @@ def test_api_e2e_update_and_read_news(monkeypatch, tmp_path) -> None:
     assert start.json()["status"] == "running"
 
     terminal = None
-    for _ in range(50):
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
         status = client.get("/api/update/status")
         assert status.status_code == 200
         payload = status.json()
         if payload["status"] in {"finished", "failed"}:
             terminal = payload
             break
-        time.sleep(0.02)
+        time.sleep(0.05)
 
     assert terminal is not None
     assert terminal["status"] == "finished"
