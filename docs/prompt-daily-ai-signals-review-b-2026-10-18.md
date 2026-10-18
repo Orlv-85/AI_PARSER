@@ -12,8 +12,8 @@ this code. Find real defects; do not rewrite style.
 cd /Users/vyacheslavorlovskiy/GitHub/AI_PARSER
 git fetch origin
 SHA=$(gh pr view 39 --json headRefOid -q .headRefOid)
-git worktree add --detach ../AI_PARSER-review-b "$SHA"
-cd ../AI_PARSER-review-b
+git worktree add --detach ../AI_PARSER-review-b-<model> "$SHA"
+cd ../AI_PARSER-review-b-<model>
 ```
 
 Record `$SHA` in your report. Tests: use `/Users/vyacheslavorlovskiy/GitHub/AI_PARSER/venv1` with
@@ -59,7 +59,10 @@ production access, no network writes. You may run the app locally on a free port
 
 ## Output
 
-Write `/Users/vyacheslavorlovskiy/GitHub/AI_PARSER/docs/daily-ai-signals-pr39-review-b-2026-10-18.md`
+Write `/Users/vyacheslavorlovskiy/GitHub/AI_PARSER/docs/daily-ai-signals-pr39-review-b-<model>-2026-10-18.md`,
+where `<model>` is a short lowercase name of the model you run as (e.g. `claude`, `gpt`, `gemini`);
+if that file already exists, append `-2`, `-3` instead of overwriting. Use your worktree name
+`../AI_PARSER-review-b-<model>` in Setup for the same reason
 (do not commit; do not touch other files in the main folder):
 
 - Header: SHA reviewed, what you ran and results.
@@ -69,4 +72,4 @@ Write `/Users/vyacheslavorlovskiy/GitHub/AI_PARSER/docs/daily-ai-signals-pr39-re
 - "Verified OK" list of risky areas checked and found correct.
 - Verdict: merge-ready / merge after fixes / rework.
 
-Stop after writing the report. Do not fix code, push, comment on the PR or remove the worktree.
+Do not read other reviewers' report files. Stop after writing the report. Do not fix code, push, comment on the PR or remove the worktree.
