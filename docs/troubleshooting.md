@@ -34,6 +34,15 @@ the Troubleshooting section of `README.md`.
       "cause": "The local .env enables auth or sets auth values, and Settings validation requires the full auth set. Exporting AINEWS_AUTH_ENABLED=false is not enough because other auth values are still read.",
       "fix": "Run the suite in a clean copy without .env (rsync the repo excluding .env, venv1 and .git, then run with PYTHONPATH=src), as CI does.",
       "verification": "tests/e2e/test_api_e2e.py passes in such a copy."
+    },
+    {
+      "id": "public-api-post-auth-bypass",
+      "date": "2026-10-18",
+      "area": "src/app/web/app.py auth_middleware",
+      "symptom": "With auth enabled, an empty-body POST to /api/news/digests or /api/news/weekly-analytics returned 422 (validation) instead of 401, so anyone could overwrite a public digest or weekly report. After the fix, digest_generator.py publish commands fail with 'Unauthorized POST ... AINEWS_PUBLISH_API_TOKEN is not set' (or 'was rejected').",
+      "cause": "is_public_news_api was a path-only allowlist; the same paths also serve POST handlers that write data. Publishers now need credentials.",
+      "fix": "The allowlist is public for GET/HEAD only; other methods on /api/ require a session cookie, or AINEWS_PUBLISH_API_TOKEN as 'Authorization: Bearer <token>' for POST to the two publish paths. In production the token comes from the AINEWS_PUBLISH_API_TOKEN repository secret (deploy workflows write it to .env); give the publisher the same value.",
+      "verification": "tests/unit/test_public_api_write_auth.py; production probe: curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{}' https://<host>/api/news/digests returns 401."
     }
   ]
 }

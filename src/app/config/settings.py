@@ -80,6 +80,7 @@ class Settings(BaseSettings):
     auth_cookie_secure: bool = False
     mcp_auth_enabled: bool = False
     mcp_auth_token: str | None = None
+    publish_api_token: str | None = Field(default=None, repr=False)
 
     @property
     def is_auth_enabled(self) -> bool:
@@ -124,6 +125,18 @@ class Settings(BaseSettings):
             )
         if len(self.mcp_auth_token.strip()) < 16:
             raise ValueError("AINEWS_MCP_AUTH_TOKEN must be at least 16 characters long")
+        return self
+
+    @model_validator(mode="after")
+    def validate_publish_api_token(self) -> Settings:
+        # Bearer token for machine publishers of digests and weekly reports.
+        token = (self.publish_api_token or "").strip()
+        if not token:
+            self.publish_api_token = None
+            return self
+        if len(token) < 32:
+            raise ValueError("AINEWS_PUBLISH_API_TOKEN must be at least 32 characters long")
+        self.publish_api_token = token
         return self
 
 

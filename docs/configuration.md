@@ -83,6 +83,29 @@ For an existing database, apply the additive migration before starting this code
 To keep local tests independent of a configured live API, run them with
 `AINEWS_JEV_ENABLED=false ./venv1/bin/pytest`.
 
+### Publish API token
+
+When web auth is enabled, the public API paths `/api/news/digests` and
+`/api/news/weekly-analytics` are public for `GET`/`HEAD` only. Every other
+method on any `/api/` path (except `/api/auth/login` and `/api/auth/logout`)
+requires authentication. Writes accept either a valid admin session cookie or,
+for machine publishers, a bearer token:
+
+```dotenv
+AINEWS_PUBLISH_API_TOKEN=<openssl rand -hex 32>
+```
+
+- The token must be at least 32 characters; an empty value disables bearer auth.
+- It is accepted only for `POST /api/news/digests` and
+  `POST /api/news/weekly-analytics`, not for other admin APIs.
+- `scripts/digest_generator.py` sends `Authorization: Bearer <token>` on every
+  POST to the app when `AINEWS_PUBLISH_API_TOKEN` is set in its environment.
+  `scripts/run_weekly_analytics_job.sh` reads the token from the app container
+  when it is not exported.
+- With auth disabled (local dev), writes stay open as before.
+- In production the deploy workflows write the value from the repository secret
+  `AINEWS_PUBLISH_API_TOKEN` into the server `.env` (see [deploy](deploy.md)).
+
 ## 2) Source list (`sources.yaml`)
 
 Project includes a starter `sources.yaml` with RSS + HTML sources.

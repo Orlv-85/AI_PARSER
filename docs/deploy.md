@@ -67,6 +67,9 @@ Repository Secrets:
 - `AINEWS_AUTH_PASSWORD_HASH`
 - `AINEWS_AUTH_SECRET`
 - `AINEWS_MCP_AUTH_TOKEN` (required if `AINEWS_MCP_AUTH_ENABLED=true`)
+- `AINEWS_PUBLISH_API_TOKEN` (optional; bearer token for machine POSTs of
+  digests/weekly reports, at least 32 characters, `openssl rand -hex 32`.
+  Empty or missing disables bearer auth, so only admin sessions can publish)
 
 ### 1) Prepare server once
 
@@ -79,6 +82,11 @@ cp deploy/.env.prod.example .env
 ```
 
 Edit `.env` and set strong `POSTGRES_PASSWORD`.
+`AINEWS_PUBLISH_API_TOKEN` comes from the repository secret: both deploy
+workflows write it to `.env` on every deploy, replacing any earlier line, so a
+value edited by hand on the server is overwritten. To rotate or disable the token,
+change the secret and redeploy (see
+[Configuration](configuration.md#publish-api-token)).
 Set `CADDY_SITE_ADDRESS` to your public domain/host (for example `5kzt.l.time4vps.cloud`).
 
 ### Daily digest generation (DeepSeek)
