@@ -331,15 +331,18 @@ backfill order. Each entity has a stable surrogate id keyed by a deterministic `
    `aws -> amazon`, `amazon web services -> amazon`, `alphabet -> google`, `meta platforms -> meta`).
    Two vendors are equivalent when one token list is a prefix of the other ("google" ~ "google deepmind"
    ~ "google cloud"; "epic" ~ "epic games"); classes are the connected components; the class key is the
-   shortest member (tie lexicographic). Mention `vendor_class` = class of its vendor, else `""`.
+   shortest member (tie lexicographic). Mention `vendor_class` = class of its vendor if the class is
+   **org-backed** (rule 7), else `""`. (T1.6 deviation from CP1, which named only prefix stripping: two
+   gate mentions give "Gemini" as the vendor of Gemini 4 Argon, which split the entity into `google` and
+   `gemini` classes and made the second a false New; an unbacked vendor now counts as no vendor for
+   identity. The vendor spelling is still stored and shown when the entity has no class.)
 7. **Base name** (independent of whether the mention names a vendor): if the name's leading tokens equal
    the token list of a vendor-class member seen in evidence, strip the longest such prefix, provided at
    least one token remains, the remainder is not a stoplist entry, has >= 2 characters and does not start
    with a digit, and the class is **org-backed**: some member of the class equals the company-rule
    `name_key` of an `org` mention in the evidence (CP1, gate finding 5: a product named as a vendor,
    e.g. vendor "Gemini", must not turn "Gemini 4 Argon" into `4argon`). A mention without a vendor then
-   gets that class as an **inferred** vendor. `base_key = join(base tokens)`. Explicit vendor classes
-   (rule 6) are unaffected; only stripping and inference need the org backing.
+   gets that class as an **inferred** vendor. `base_key = join(base tokens)`.
    "Microsoft's Decision-1" -> `decision1` with vendor class `microsoft` whether
    or not the vendor field was filled; "Reflection Beam" -> `beam` / `reflection`; "NVIDIA Nemotron 3.5
    Bolt 74B" -> `nemotron3.5bolt74b` / `nvidia`.
@@ -1123,6 +1126,7 @@ int = Field(default=2700, ge=60, le=14400)`; `daily_signals_max_usd: str = "0.50
 | C1 core value validated last | Phase P prompt gate before Phase 0; Phase 7 keeps history validation and the final review | Phased Delivery, tasks Phase P |
 | C2 first release over-engineered | Ledger and entity cuts listed with triggers | Deferred |
 | Checkpoint 1 (gate below bar) | Option A: v5 frozen; findings 3-6 fixed in code; cached re-measure; Phase 7 bar 75% / 10% | CP1, Decisions 1, 2, 5, tasks T1.1, T1.3, T1.5, T1.6, T7.2 |
+| T1.6 finding: unbacked vendor splits an entity | Org backing also required for identity vendor classes (deviation, reported at checkpoint 2) | Decision 2 rule 6, `prompt-gate.md` "After code fixes" |
 | OD1-OD7, SD1-SD13 | Accepted as written; budgets $2.50 validation, $3.00 backfill | Owner Decisions (final) |
 
 Rows of the earlier review tables that mention budget ids, day caps, attempt limits, the watchdog,

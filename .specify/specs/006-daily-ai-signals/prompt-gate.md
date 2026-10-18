@@ -265,3 +265,47 @@ Argon vs Gemini 3.1 Pro" (7 articles, 2 publishers, mostly SEO comparison pages)
 
 Recommendation: A, with the fixes from findings 3-6 as tasks in Phase 1, because the remaining errors are
 judgment-grey and a third prompt round is unlikely to reach 80% without losing recall again.
+
+## After code fixes (T1.6, checkpoint 1 decision CP1)
+
+**Date**: 2026-10-18 | **Spend**: $0 (cached v5 responses only; a cache miss aborts the script)
+**Script**: `tmp/daily-signals-gate/remeasure.py` (not committed), output `out-remeasure.txt`.
+
+Method: same corpus (369 items), same background check and same rubric as above, but extraction
+validation, identity, New gate, ordering, clustering and spikes now come from the production Phase 1
+modules (`app.core.daily_signals_extract`, `daily_signals_entities`, `daily_signals_compute`), not from
+the throwaway gate code. Background hits (first seen 2026-08-03..10-11) are replayed as history evidence
+and the snapshots recomputed, as stored history would do in production. Every item below was already
+judged in Phase P; no verdict was re-judged.
+
+| Day | Displayed OK / BAD / uncertain | Changes against Phase P (v5) |
+| --- | --- | --- |
+| 10-12 | 7 / 0 / 1 (Maia 300) | Blueprints AI, Honeyjar, Atomic Machines move below the cap; Humanity's Sixth Sense, TasteVal, VisionQ shown |
+| 10-13 | 5 / 0 / 3 (Game Finder, Dynamic Model Escalation, Xbox Labs) | AlphaProtein Novo removed (rule 5a); Deckhand, HomePod Mini 2 below the cap; Priming, Dynamic Model Escalation, Xbox Labs shown |
+| 10-14 | 7 / 0 / 1 (Geospatial Reasoning agent) | Qwen 3.8-27B removed (rule 5a); CedarDB Cloud below the cap; LendRecoup, PathSeer shown |
+| 10-15 | 8 / 0 / 0 | Figma Specs, Maka, Universal Cart below the cap; Bee Frontier, DolphinBench, TheoPhysEval shown |
+| 10-16 | 7 / 0 / 1 (Nvidia RTX Spark N1X) | Code Review for Claude Code below the cap; Nemotron-pretraining-Indic-v1 shown |
+| **Total** | **34 / 0 / 6 = 85% OK, 0% BAD** | Phase P v5: 27 / 4 / 9 (67.5% OK, 10% BAD) |
+
+- CP1 bar for Phase 7 (OK >= 75%, BAD <= 10%, no non-AI, generic or established-company item displayed):
+  met on these cached days.
+- Uncapped New list (59 items): 42 OK / 3 BAD / 14 uncertain (71% / 5%), was 42 / 5 / 14 of 61. The 3
+  BAD items are now hidden by the cap but still New: Blueprints AI (established), Maka (non-AI),
+  "on-demand capacity mode" (generic feature). On a day with fewer early models/benchmarks they would be
+  displayed; the gain is mostly ordering, not better judgments.
+- Recall (same 42 launch entities, uncapped list): 34/42 = 81%, unchanged; none of the removed items is
+  a launch entity.
+- Rule 5a (retrospective) changed `is_new` on 4 mentions, all correct: Gemma 4 ("released by Google in
+  April 2026"), AlphaProtein Novo ("We introduced"), Qwen 3.8-27B ("On August 14"), Jev ("Published in
+  limited release on September 15"). No mention gained or lost `is_new` otherwise.
+- Rule 5 base-name match: no effect on this data (in the Beam and Pluto articles the model itself returned
+  `is_new = false`); kept for the pinned unit cases.
+- Identity: the org-backed vendor rule also had to apply to vendor classes, not only to prefix stripping.
+  Two mentions name "Gemini" as the vendor of Gemini 4 Argon; with "Gemini" as a class the entity split
+  into `...:google` (19 mentions) and `...:gemini` (2), and the second would be a false New on 10-13 without
+  history. Now one entity (plan Decision 2 rule 6, recorded as a deviation for checkpoint 2).
+- Top stories: identical to Phase P on all five days. Spikes: 10-16 identical (Beam, NVIDIA RTX Spark,
+  Reflection, DeepSeek, Surface Laptop Ultra); on 10-15 Gemini 3.8 Flash (4 vs 0.33) is a new spike, so
+  ComfyUI (3 vs 0, still a spike) falls below the display cap of 6 (ties by name).
+- Caveat: one reviewer judged both runs; the result is only on the five cached days. Phase 7 re-measures
+  with extracted history (T7.2).

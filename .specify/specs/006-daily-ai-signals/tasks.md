@@ -44,7 +44,7 @@
 
 ## Phase 0: Fixtures
 
-- [ ] **T0.1 Copy durable fixtures**
+- [x] **T0.1 Copy durable fixtures**
   - Files: `tests/fixtures/daily_signals/signals_2026-10-12.json` .. `signals_2026-10-16.json`, short
     `README` note in that directory (origin; no article bodies; v1/v2 extraction fields)
   - Steps: copy from `tmp/daily-signals-dryrun/fixtures/` (keys, article ids, titles, URLs, publishers,
@@ -54,7 +54,7 @@
 
 ## Phase 1: Pure core
 
-- [ ] **T1.1 [P] Normalization, keys, stoplist, family relation**
+- [x] **T1.1 [P] Normalization, keys, stoplist, family relation**
   - Files: `src/app/core/daily_signals_entities.py`, `tests/unit/test_daily_signals_entities.py`
   - Test first: join rule ("GPT-6" = "GPT 6" = "gpt6"; "Qwen 3 8B" -> "qwen3-8b" != "Qwen 38B"; v1 vs
     v1.1; 7B vs 70B; 1.2 vs 12; parentheses; possessive); company rule (Reflection AI -> reflection; Z.ai
@@ -74,7 +74,7 @@
   - Done when: tests pass; pure, typed.
   - Depends on: -
 
-- [ ] **T1.2 Reconciliation (pure)**
+- [x] **T1.2 Reconciliation (pure)**
   - Files: `src/app/core/daily_signals_entities.py` (`reconcile`), same test file
   - Test first: permutation invariance over all insertion orders of a mixed set; Gemini 4 Argon fixture
     mentions (Google x15, Google DeepMind/Deepmind x2, none x3) -> one entity `auto:artifact:gemini4argon`;
@@ -87,7 +87,7 @@
   - Done when: tests pass; output is a pure function of (evidence, overrides).
   - Depends on: T1.1
 
-- [ ] **T1.3 [P] Extraction bodies, key, reservation, validation**
+- [x] **T1.3 [P] Extraction bodies, key, reservation, validation**
   - Files: `src/app/core/daily_signals_extract.py`, `tests/unit/test_daily_signals_extract.py`
   - Test first: exact base body (plan Decision 1); recovery and retry bodies have different keys;
     reservation and 32,000-byte bound; validation: wrong model; truncation; non-JSON; `novelty_claim` as
@@ -111,7 +111,7 @@
     (Phase P candidate: `daily-signals-extract-5`).
   - Depends on: T1.1
 
-- [ ] **T1.4 Story clustering (strict majority)**
+- [x] **T1.4 Story clustering (strict majority)**
   - Files: `src/app/core/daily_signals_compute.py` (`ArticleObs`, `EntityMention`, `cluster`),
     `tests/unit/test_daily_signals_compute.py`
   - Test first (fixtures, with entities reconciled over all five days): Gemini 4 Argon 10-13 = 7 articles /
@@ -123,7 +123,7 @@
   - Done when: tests pass; no story appears twice among any fixture day's top 5.
   - Depends on: T0.1, T1.2
 
-- [ ] **T1.5 Snapshot computation, states, status, payload hash**
+- [x] **T1.5 Snapshot computation, states, status, payload hash**
   - Files: `src/app/core/daily_signals_compute.py` (`Thresholds`, `DayCoverage`, `compute_snapshot`,
     `payload_hash`, `METHODOLOGY_VERSION = "daily-signals-1"`), same test file
   - Test first: New gate (primary + `is_new` in the same article); Glimpse model New on D although a
@@ -140,13 +140,14 @@
   - Done when: tests pass.
   - Depends on: T1.4
 
-- [ ] **T1.6 Re-measure the gate days after the code fixes ($0)**
+- [x] **T1.6 Re-measure the gate days after the code fixes ($0)**
   - Files: throwaway script in `tmp/daily-signals-gate/` using the Phase 1 modules on the cached v5
     responses (no provider calls; a cache miss aborts); `prompt-gate.md` section "After code fixes"
   - Steps: same corpus, background check and rubric as Phase P; report displayed New per day with
     verdicts, precision, BAD share, recall and which items the fixes added or removed.
   - Done when: section committed before checkpoint 2 (informational; the binding bar is T7.2).
   - Depends on: T1.3, T1.5
+  - Result: displayed 34 OK / 0 BAD / 6 uncertain (85% / 0%), recall 34/42; uncapped 42 / 3 / 14 of 59.
 
 **Checkpoint 1**: `./venv1/bin/pytest tests/unit/test_daily_signals_entities.py tests/unit/test_daily_signals_extract.py tests/unit/test_daily_signals_compute.py -q`
 
