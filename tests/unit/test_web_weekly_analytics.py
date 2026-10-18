@@ -2,6 +2,7 @@ from datetime import UTC, date, datetime
 from importlib import import_module
 from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -10,6 +11,21 @@ from app.config.settings import get_settings
 from app.storage.models_sql import Article, Base, FetchRun, Source
 from app.storage.repos import WeeklyAnalyticsRepo
 from app.web.app import create_app
+
+
+class _NoSignalsRepo:
+    """These tests fake SessionLocal; the signals read on / gets no stored report."""
+
+    def __init__(self, _session, **_kwargs) -> None:
+        pass
+
+    def get_report(self, _report_date):
+        return None
+
+
+@pytest.fixture(autouse=True)
+def _no_daily_signals(monkeypatch) -> None:
+    monkeypatch.setattr(import_module("app.web.app"), "DailySignalRepo", _NoSignalsRepo)
 
 
 def test_public_digest_page_links_to_weekly_ai_analytics(monkeypatch, tmp_path) -> None:

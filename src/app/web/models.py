@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
@@ -336,3 +336,90 @@ class SourceOnboardingEditResponse(BaseModel):
     candidate_type: str
     raw_input: str
     review_note: str | None = None
+
+
+class DailySignalLink(BaseModel):
+    title: str
+    url: str
+    publisher: str
+
+
+class DailySignalEntityItem(BaseModel):
+    entity_id: int
+    name: str
+    type: str
+    vendor: str | None = None
+    level: Literal["confirmed", "early"]
+    variant_of: str | None = None
+    variants: list[str] = Field(default_factory=list)
+    novelty_quote: str | None = None
+    articles: int
+    publishers: int
+    links: list[DailySignalLink] = Field(default_factory=list)
+
+
+class DailySignalTrendItem(BaseModel):
+    entity_id: int
+    name: str
+    type: str
+    vendor: str | None = None
+    current_7d: int | None = None
+    previous_7d: int | None = None
+    expected_7d: float | None = None
+    today: int
+    trailing_mean: float | None = None
+    spike: bool = False
+    publishers: int
+    links: list[DailySignalLink] = Field(default_factory=list)
+
+
+class DailySignalStory(BaseModel):
+    label: str
+    event_type: str
+    articles: int
+    publishers: int
+    entities: list[str] = Field(default_factory=list)
+    links: list[DailySignalLink] = Field(default_factory=list)
+
+
+class DailySignalEventCount(BaseModel):
+    event_type: str
+    label: str
+    stories: int
+    articles: int
+    links: list[DailySignalLink] = Field(default_factory=list)
+
+
+class DailySignalSectionState(BaseModel):
+    state: Literal["ready", "building", "empty", "spikes_only", "hidden"]
+    note: str | None = None
+
+
+class DailySignalCoverage(BaseModel):
+    items: int = 0
+    matched: int = 0
+    extracted: int = 0
+    failed: int = 0
+    skipped: int = 0
+    pending: int = 0
+    unmatched: int = 0
+
+
+class DailySignalsResponse(BaseModel):
+    report_date: date
+    status: Literal["ready", "partial", "building_history", "unavailable"]
+    methodology_version: str | None = None
+    extraction_version: str | None = None
+    generated_at: datetime | None = None
+    novelty_history_days: int = 0
+    comparable_complete_days: int = 0
+    coverage: DailySignalCoverage = Field(default_factory=DailySignalCoverage)
+    notes: list[str] = Field(default_factory=list)
+    sections: dict[str, DailySignalSectionState] = Field(default_factory=dict)
+    thresholds: dict[str, Any] = Field(default_factory=dict)
+    new: list[DailySignalEntityItem] = Field(default_factory=list)
+    top_stories: list[DailySignalStory] = Field(default_factory=list)
+    rising: list[DailySignalTrendItem] = Field(default_factory=list)
+    cooling: list[DailySignalTrendItem] = Field(default_factory=list)
+    event_counts: list[DailySignalEventCount] = Field(default_factory=list)
+    article_event_types: dict[str, str] = Field(default_factory=dict)
