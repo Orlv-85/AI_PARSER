@@ -863,12 +863,14 @@ exit 0
   documented states, 1 for unexpected errors; ignored either way.
 - Report date resolved once (explicit argument unchanged; otherwise yesterday UTC, equal to the CLI
   default). Timer, unit and lock path unchanged.
-- Logging: one JSON line (captured in `logs/daily-digest.log`) and `data/daily-signals/<D>/report.json`:
-  `{"report_date", "state", "status", "counts": {"items", "matched", "reused", "extracted", "failed",
-  "skipped", "pending", "unmatched"}, "progress": <newly extracted>, "run": {"physical_calls",
-  "transient", "unknown", "error_billed", "replays", "tokens", "usd"}, "day_total_usd",
-  "max_usd", "incomplete_days": [...], "terminal_reasons": {...},
-  "sections": {...}, "reports_written": [...], "duration_seconds"}`. No keys or article text.
+- Logging (as implemented, simpler than revision 5): one JSON line (captured in
+  `logs/daily-digest.log`) and, for paid runs, `data/daily-signals/runs/<run_id>.json` (mode 0600):
+  `{"run_id", "report_date", "extraction_version", "state", "terminal_reason", "days",
+  "missing_days", "run": {"calls", "usd", "states": {<ledger state>: n}}, "articles": {"cached",
+  "dispatched", "replayed", "ok", "skipped", "pending", "attempt_<state>", ...}, "progress",
+  "incomplete_days": {D: {"items", "matched", "extracted", "failed", "skipped", "pending",
+  "reason"}}, "reports_written", "reports_unchanged", "entities", "seconds"}`. No keys or article
+  text (tested).
 - Kill switch `AINEWS_DAILY_SIGNALS_ENABLED` (default false; gates paid extraction only). Production
   compose enumerates env vars, so `docker-compose.prod.yml` needs `AINEWS_DAILY_SIGNALS_ENABLED:
   ${AINEWS_DAILY_SIGNALS_ENABLED:-false}` (owner-approved). Other settings: defaults or `-e` overrides.
@@ -1129,6 +1131,7 @@ int = Field(default=2700, ge=60, le=14400)`; `daily_signals_max_usd: str = "0.50
 | C2 first release over-engineered | Ledger and entity cuts listed with triggers | Deferred |
 | Checkpoint 1 (gate below bar) | Option A: v5 frozen; findings 3-6 fixed in code; cached re-measure; Phase 7 bar 75% / 10% | CP1, Decisions 1, 2, 5, tasks T1.1, T1.3, T1.5, T1.6, T7.2 |
 | T1.6 finding: unbacked vendor splits an entity | Org backing also required for identity vendor classes (deviation, reported at checkpoint 2) | Decision 2 rule 6, `prompt-gate.md` "After code fixes" |
+| CI: legacy cleanup refuses unknown FKs to `articles` | Guard accepts exactly `article_signals.article_id` and `daily_signal_scope.article_id` with ON DELETE CASCADE; any other FK still refuses (checkpoint 3) | Decision 4 Retention, `storage/legacy_cleanup.py` |
 | OD1-OD7, SD1-SD13 | Accepted as written; budgets $2.50 validation, $3.00 backfill | Owner Decisions (final) |
 
 Rows of the earlier review tables that mention budget ids, day caps, attempt limits, the watchdog,

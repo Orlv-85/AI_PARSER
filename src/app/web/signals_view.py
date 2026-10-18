@@ -16,14 +16,17 @@ from app.web.models import (
 UNAVAILABLE = "Daily signals are not available for this date yet."
 READ_ERROR = "Daily signals are temporarily unavailable."
 _HTTP = re.compile(r"^https?://", re.IGNORECASE)
-_SINGULAR_EXCEPTIONS = {"analysis"}
+# Singular forms of the plural event labels (EVENT_LABELS in daily_signals_compute).
+SINGULAR = {"model releases": "model release", "product launches": "product launch",
+            "funding rounds": "funding round", "acquisitions": "acquisition",
+            "partnerships": "partnership", "infrastructure deals": "infrastructure deal",
+            "security incidents": "security incident", "people moves": "people move",
+            "benchmark results": "benchmark result"}
 
 
 def event_label(count: int, label: str) -> str:
-    """'1 model release', '3 model releases', '2 analysis'."""
-    if count == 1 and label.endswith("s") and label not in _SINGULAR_EXCEPTIONS:
-        label = label[:-1]
-    return f"{count} {label}"
+    """'1 model release', '3 model releases', '1 product launch', '2 analysis'."""
+    return f"{count} {SINGULAR.get(label, label) if count == 1 else label}"
 
 
 def _status(text: str) -> str:

@@ -407,9 +407,16 @@
       const signalsBody = document.getElementById("daily-signals-body");
       const SIGNALS_UNAVAILABLE = "Daily signals are not available for this date yet.";
 
+      const EVENT_SINGULAR = {
+        "model releases": "model release", "product launches": "product launch",
+        "funding rounds": "funding round", "acquisitions": "acquisition",
+        "partnerships": "partnership", "infrastructure deals": "infrastructure deal",
+        "security incidents": "security incident", "people moves": "people move",
+        "benchmark results": "benchmark result",
+      };
+
       function eventLabel(count, label) {
-        const text = count === 1 && label.endsWith("s") && label !== "analysis" ? label.slice(0, -1) : label;
-        return count + " " + text;
+        return count + " " + (count === 1 ? EVENT_SINGULAR[label] || label : label);
       }
 
       function signalStatus(text) {

@@ -274,7 +274,7 @@
 
 ## Phase 4: Public API
 
-- [ ] **T4.1 `GET /api/news/daily-signals`**
+- [x] **T4.1 `GET /api/news/daily-signals`**
   - Files: `src/app/web/models.py`, `src/app/web/app.py`, `tests/unit/test_web_daily_signals_api.py`
   - Test first: stored; missing; invalid date 422; corrupt payload -> unavailable + note; public with auth
     enabled; no provider code (patch `app.core.daily_signals.run_signals` and `SignalsLedger.dispatch` to
@@ -284,8 +284,9 @@
 
 ## Phase 5: Main page UI
 
-- [ ] **T5.1 Server-rendered block with isolated read**
-  - Files: `src/app/web/app.py`, `src/app/web/digest.html`, `tests/unit/test_web_public_digest.py`,
+- [x] **T5.1 Server-rendered block with isolated read**
+  - Files: `src/app/web/app.py`, `src/app/web/signals_view.py` (renderer kept out of the already
+    too-long `app.py`), `src/app/web/digest.html`, `tests/unit/test_web_public_digest.py`,
     `tests/unit/test_web_weekly_analytics.py` and other tests that fake `SessionLocal`
   - Test first: escaped names (`<script>`), counts, early badge, variant line, "Source says" quote,
     http(s)-only links; unavailable line without cards; partial line; spikes card; cooling hidden; signals
@@ -293,14 +294,14 @@
   - Done when: tests pass; changed existing tests listed in the commit message.
   - Depends on: T4.1
 
-- [ ] **T5.2 Client-side re-render**
+- [x] **T5.2 Client-side re-render**
   - Files: `src/app/web/digest.html`
   - Test first: page contains `/api/news/daily-signals?date=`, `renderSignals`, the out-of-order guard,
     and `loadDigest` calls `loadSignals`.
   - Done when: test passes.
   - Depends on: T5.1
 
-- [ ] **T5.3 Manual UI check**
+- [x] **T5.3 Manual UI check**
   - Steps: scratch DB `tmp/daily-signals-ui/ai_news.db`; `AINEWS_DATABASE_URL=sqlite:///tmp/daily-signals-ui/ai_news.db
     ./venv1/bin/alembic upgrade head`; seed via a `tmp/` script that builds observations from T0.1
     fixtures and calls `recompute_reports`; run `./run_web.sh` with explicit SQLite env; desktop and
@@ -309,7 +310,7 @@
 
 ## Phase 6: Job, deploy config, docs
 
-- [ ] **T6.1 Daily job: one lock, one budget, outer limit**
+- [x] **T6.1 Daily job: one lock, one budget, outer limit**
   - Files: `scripts/run_daily_digest_job.sh`, `tests/unit/test_deepseek_digest.py`
   - Test first (fake `docker`, `flock`, `timeout` on PATH): publish ok -> two docker calls with the same
     `--report-date 2026-10-03`, second has `--name ai-news-signals-2026-10-03` and `--max-seconds` <= 2520,
@@ -323,11 +324,11 @@
   - Done when: tests pass; `bash -n scripts/*.sh`; `test_daily_timers.py` green.
   - Depends on: T3.4
 
-- [ ] **T6.2 Production compose env line (owner approval)**
+- [x] **T6.2 Production compose env line (owner approval)**
   - Files: `docker-compose.prod.yml` (`AINEWS_DAILY_SIGNALS_ENABLED: ${AINEWS_DAILY_SIGNALS_ENABLED:-false}`)
   - Depends on: T6.1, owner approval
 
-- [ ] **T6.3 [P] Docs**
+- [x] **T6.3 [P] Docs**
   - Files: `docs/daily-signals.md` (OD answers, methodology, day states, readiness, ledger and per-run
     caps, budget tracking with `--max-usd`, operator commands under the host lock, overrides workflow,
     `needs_review` query, retention and cleanup notes, cost, deferred items),

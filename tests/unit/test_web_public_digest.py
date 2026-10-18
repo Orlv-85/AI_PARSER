@@ -10,8 +10,10 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import get_settings
+from app.core.daily_signals_compute import EVENT_LABELS
 from app.storage.models_sql import Base, DailySignalReport
 from app.web.app import create_app
+from app.web.signals_view import SINGULAR, event_label
 
 
 def test_public_digest_page_renders_digest_shell_with_yesterday_selected(
@@ -250,3 +252,13 @@ def test_signals_client_rendering_hooks() -> None:
     load_digest = template.split("async function loadDigest", 1)[1].split("\n      }\n", 1)[0]
     assert "loadSignals(selectedDate)" in load_digest
     assert "escapeHtml(item.name)" in template and "/^https?:\\/\\//i.test(link.url)" in template
+
+
+def test_event_labels_singular_and_plural() -> None:
+    assert event_label(1, "product launches") == "1 product launch"
+    assert event_label(2, "product launches") == "2 product launches"
+    assert event_label(1, "analysis") == "1 analysis"
+    assert set(SINGULAR) <= set(EVENT_LABELS.values())
+    template = (Path(__file__).resolve().parents[2] / "src/app/web/digest.html").read_text()
+    for plural, singular in SINGULAR.items():
+        assert f'"{plural}": "{singular}"' in template
