@@ -166,3 +166,12 @@ def test_concurrent_writer_finishes_before_locked_hash_recheck(database, tmp_pat
         release.set()
         thread.join(10)
         timer.cancel()
+
+
+def test_unknown_article_foreign_key_still_refuses_cleanup(database, tmp_path):
+    engine, saved, manifest, _ = database
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE extra_refs (id INTEGER PRIMARY KEY, "
+                                "article_id INTEGER REFERENCES articles(id))"))
+    with pytest.raises(ValueError, match="Unknown article FK dependency: extra_refs"):
+        apply_cleanup(engine, saved, manifest, tmp_path / "backup.json")

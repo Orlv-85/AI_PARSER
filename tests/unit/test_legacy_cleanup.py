@@ -8,7 +8,13 @@ import pytest
 from app.core.jev import JevAssessment
 from app.core.legacy_cleanup import cleanup_verdict
 from app.storage.cleanup_journal import CleanupJournal, CleanupStopped
-from app.storage.legacy_cleanup import build_manifest, cache_key, fingerprint, verify_manifest
+from app.storage.legacy_cleanup import (
+    build_manifest,
+    cache_key,
+    fingerprint,
+    known_article_fk,
+    verify_manifest,
+)
 from app.storage.non_news_cleanup import EXPORT_TABLES
 
 
@@ -177,3 +183,15 @@ def test_timestamp_normalization():
     row = dict(normalized["tables"]["articles"][0])
     row["published_at"] = datetime(2026, 10, 10, 20, tzinfo=UTC)
     assert fingerprint(row) == fingerprint(normalized["tables"]["articles"][0])
+
+
+def test_cleanup_guard_accepts_only_known_article_foreign_keys():
+    cascade = {"constrained_columns": ["article_id"], "options": {"ondelete": "CASCADE"}}
+    plain = {"constrained_columns": ["article_id"], "options": {}}
+    assert known_article_fk("article_aliases", plain)
+    assert known_article_fk("article_signals", cascade)
+    assert known_article_fk("daily_signal_scope", cascade)
+    assert not known_article_fk("article_signals", plain)
+    assert not known_article_fk("other_table", cascade)
+    assert not known_article_fk("daily_signal_scope",
+                                 {**cascade, "constrained_columns": ["source_id"]})
