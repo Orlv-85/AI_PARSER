@@ -1,8 +1,10 @@
 import ast
 import importlib.util
 import json
-import os
+import shutil
 import subprocess
+import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -304,13 +306,9 @@ def test_missing_key_fails_before_fetch_or_publish(monkeypatch) -> None:
         )
 
 
-@pytest.mark.parametrize("fallback", ["0", "1"])
-@pytest.mark.parametrize("provider_exit", [0, 1])
-def test_daily_job_uses_release_image_and_never_falls_back(
-    tmp_path,
-    fallback,
-    provider_exit,
-) -> None:
+def _daily_job(tmp_path, *, publish_exit=0, signals_exit=0, with_timeout=True, env=None,
+               args=("2026-10-03",), from_scripts_dir=False):
+    """Run the job script with fake docker/flock/timeout and only the tools it needs on PATH."""
     scripts = tmp_path / "scripts"
     scripts.mkdir()
     script = scripts / "run_daily_digest_job.sh"
@@ -319,32 +317,99 @@ def test_daily_job_uses_release_image_and_never_falls_back(
     )
     (tmp_path / ".env").write_text('DS_API_KEY="test-only-key"\n', encoding="utf-8")
     (tmp_path / ".last_deploy_image").write_text("release:tested\n", encoding="utf-8")
-    binary = tmp_path / "docker"
-    binary.write_text(
-        '#!/bin/sh\nprintf "%s|image=%s\\n" "$*" "$APP_IMAGE" >> "$TEST_LOG"\n'
-        f'exit {provider_exit}\n',
-        encoding="utf-8",
-    )
-    binary.chmod(0o755)
-    lock = tmp_path / "flock"
-    lock.write_text('#!/bin/sh\nshift 3\nexec "$@"\n', encoding="utf-8")
-    lock.chmod(0o755)
-    env = {
-        **os.environ,
-        "PATH": f"{tmp_path}:/usr/bin:/bin",
-        "TEST_LOG": str(tmp_path / "calls"),
-        "AINEWS_DIGEST_APP_BASE_URL": "http://example.test",
-        "DS_API_KEY": "",
-        "AINEWS_DIGEST_ALLOW_FALLBACK": fallback,
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for tool in ("sh", "date", "cat", "dirname", "basename"):
+        (bin_dir / tool).symlink_to(shutil.which(tool))
+    fakes = {
+        "docker": ('printf "docker %s|image=%s\\n" "$*" "$APP_IMAGE" >> "$TEST_LOG"\n'
+                   'case "$*" in *daily-publish*) exit "$PUBLISH_EXIT";; '
+                   '*daily-signals*) exit "$SIGNALS_EXIT";; esac\nexit 0\n'),
+        "flock": 'printf "flock %s\\n" "$*" >> "$TEST_LOG"\nshift 3\nexec "$@"\n',
     }
+    if with_timeout:
+        fakes["timeout"] = 'printf "timeout %s\\n" "$*" >> "$TEST_LOG"\nshift 3\nexec "$@"\n'
+    for name, body in fakes.items():
+        (bin_dir / name).write_text("#!/bin/sh\n" + body, encoding="utf-8")
+        (bin_dir / name).chmod(0o755)
+    values = {
+        "PATH": str(bin_dir), "HOME": str(tmp_path),
+        "TEST_LOG": str(tmp_path / "calls"),
+        "PUBLISH_EXIT": str(publish_exit), "SIGNALS_EXIT": str(signals_exit),
+        "DS_API_KEY": "",
+        **(env or {}),
+    }
+    command = ["sh", "./run_daily_digest_job.sh"] if from_scripts_dir else ["sh", str(script)]
     result = subprocess.run(
-        ["sh", str(script), "2026-10-03"], env=env, capture_output=True, text=True, check=False
+        [*command, *args], env=values, capture_output=True, text=True, check=False,
+        cwd=scripts if from_scripts_dir else tmp_path,
     )
-    calls = (tmp_path / "calls").read_text(encoding="utf-8").splitlines()
-    assert "ai-news daily-publish --report-date 2026-10-03" in calls[0]
-    assert calls[0].endswith("image=release:tested")
-    assert "test-only-key" not in calls[0].split("|", 1)[0]
+    log = tmp_path / "calls"
+    calls = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+    return result, calls
+
+
+@pytest.mark.parametrize("fallback", ["0", "1"])
+def test_daily_job_publishes_then_runs_signals_under_one_lock(tmp_path, fallback) -> None:
+    result, calls = _daily_job(tmp_path, env={"AINEWS_DIGEST_ALLOW_FALLBACK": fallback})
+    assert result.returncode == 0, result.stderr
+    flocks = [c for c in calls if c.startswith("flock ")]
+    assert len(flocks) == 1 and "-w 7200 /tmp/ai-news-auto-update.lock" in flocks[0]
+    docker = [c for c in calls if c.startswith("docker ")]
+    assert len(docker) == 2
+    assert "ai-news daily-publish --report-date 2026-10-03" in docker[0]
+    assert all(c.endswith("image=release:tested") for c in docker)
+    assert "--name ai-news-signals-2026-10-03 app ai-news daily-signals" in docker[1]
+    assert "--report-date 2026-10-03 --max-seconds 2520" in docker[1]
+    assert [c for c in calls if c.startswith("timeout ")] == [
+        "timeout -k 30 2700 docker compose -f docker-compose.prod.yml run --rm --name "
+        "ai-news-signals-2026-10-03 app ai-news daily-signals --report-date 2026-10-03 "
+        "--max-seconds 2520"]
     assert "antigravity" not in " ".join(calls)
-    assert result.returncode == provider_exit
-    assert len(calls) == 1
-    assert "test-only-key" not in result.stdout + result.stderr
+    assert "test-only-key" not in " ".join(calls) + result.stdout + result.stderr
+
+
+def test_daily_job_publish_failure_skips_signals(tmp_path) -> None:
+    result, calls = _daily_job(tmp_path, publish_exit=1)
+    assert result.returncode == 1
+    docker = [c for c in calls if c.startswith("docker ")]
+    assert len(docker) == 1 and "daily-publish" in docker[0]
+
+
+def test_daily_job_signals_failure_keeps_success_and_removes_container(tmp_path) -> None:
+    result, calls = _daily_job(tmp_path, signals_exit=124)
+    assert result.returncode == 0
+    assert "daily-signals failed or timed out" in result.stderr
+    assert calls[-1].startswith("docker rm -f ai-news-signals-2026-10-03")
+
+
+def test_daily_job_skips_signals_when_budget_is_spent(tmp_path) -> None:
+    started = str(int(time.time()) - 14000)
+    result, calls = _daily_job(tmp_path, args=(), env={
+        "AINEWS_DAILY_JOB_LOCKED": "1", "REPORT_DATE": "2026-10-03",
+        "AINEWS_DAILY_JOB_START": started})
+    assert result.returncode == 0
+    assert "daily-signals skipped" in result.stderr
+    assert [c for c in calls if c.startswith("flock ")] == []
+    docker = [c for c in calls if c.startswith("docker ")]
+    assert len(docker) == 1 and "--report-date 2026-10-03" in docker[0]
+
+
+def test_daily_job_without_timeout_binary_runs_signals_directly(tmp_path) -> None:
+    result, calls = _daily_job(tmp_path, with_timeout=False)
+    assert result.returncode == 0, result.stderr
+    assert not any(c.startswith("timeout ") for c in calls)
+    assert "ai-news daily-signals" in [c for c in calls if c.startswith("docker ")][1]
+
+
+def test_daily_job_locked_entry_without_start_or_date_falls_back(tmp_path) -> None:
+    result, calls = _daily_job(tmp_path, args=(), env={"AINEWS_DAILY_JOB_LOCKED": "1"})
+    assert result.returncode == 0, result.stderr
+    yesterday = (datetime.now(UTC).date() - timedelta(days=1)).isoformat()
+    assert f"daily-publish --report-date {yesterday}" in calls[0]
+
+
+def test_daily_job_started_by_relative_path(tmp_path) -> None:
+    result, calls = _daily_job(tmp_path, from_scripts_dir=True)
+    assert result.returncode == 0, result.stderr
+    assert len([c for c in calls if c.startswith("docker ")]) == 2

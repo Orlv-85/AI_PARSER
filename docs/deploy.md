@@ -94,6 +94,12 @@ header, not in CLI arguments.
   runs `ai-news daily-publish` inside compose. The worker selects the complete
   stored UTC day, including more than 200 records, and uses a persistent private
   source cache and provider journal under `data/daily-enrichment/`.
+- After a successful publication, the same locked job runs `ai-news daily-signals`
+  for the same date with an outer `timeout` (at most 2700 s, less when the 4 h job
+  budget is short). Signals never change the job result: a failure or timeout is
+  logged and the container removed. Paid extraction stays off until
+  `AINEWS_DAILY_SIGNALS_ENABLED=true` is set in the server `.env`; see
+  [Daily AI Signals](daily-signals.md).
 - Summaries require complete JSON, exact supporting quotes, English semantic
   support review, at most 80 words and 400 characters. The worker permits one
   narrow repair, preserves usage/cost, and reuses validated summaries on resume.

@@ -44,6 +44,7 @@ For an existing database, run `./venv1/bin/alembic upgrade head` first.
 - [CLI usage](docs/cli.md) - web onboarding, fetch/cron, rollout knobs, search, MCP server, prune.
 - [Weekly attention analytics v2](docs/weekly-analytics.md) - worker, budgets, audit export, rollback.
 - [Article re-enrichment](docs/article-reenrichment.md) - implementation and operator guide.
+- [Daily AI Signals](docs/daily-signals.md) - signals block on `/`, methodology, operator commands, costs, rollback.
 - [Troubleshooting](docs/troubleshooting.md) - known failures (flaky tests, local env) with causes and fixes.
 
 ## Article dates and one-time re-enrichment

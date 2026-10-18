@@ -144,8 +144,9 @@ def daily_signals(
     cache_dir: str = typer.Option("data/daily-signals", "--cache-dir"),
     recompute_only: bool = typer.Option(False, "--recompute-only",
                                         help="No provider calls; works with the flag off."),
-    recompute_all: bool = typer.Option(False, "--recompute-all",
-                                       help="Recompute every comparable day, not only 400."),
+    recompute_all: bool = typer.Option(
+        False, "--recompute-all",
+        help="Recompute every comparable day, not only the last 400 days."),
     retry_skipped: bool = typer.Option(False, "--retry-skipped"),
 ) -> None:
     """Extract daily AI signals for a published digest day and recompute snapshots."""
