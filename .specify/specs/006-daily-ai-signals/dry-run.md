@@ -19,14 +19,19 @@
 Differences from the production design in `plan.md` (stated so nobody over-reads the numbers):
 
 - Dry-run calls were **batched** (12 articles per call) with a **1,500-character** excerpt, to fit 5 days
-  into 40 calls. Production uses **one call per article** with up to 6,000 characters; recall should be
-  equal or better, precision is not expected to change much (same instructions and schema).
+  into 40 calls. Production uses **one call per article** with up to 6,000 characters and a different
+  prompt (v3, with novelty quotes). Neither precision nor recall of v3 has been measured; that is T7.2.
 - First-seen history in the dry-run is the extracted target days plus a **lexical** check of background
-  titles/summaries. Production instead extracts history-only days with the same prompt (plan, Decision 4).
+  titles/summaries. Production instead extracts history-only days with the same prompt and keeps them as mention
+  evidence (plan, Decision 4).
 - Rising and Cooling could not be computed: comparable (grounded) history starts on 2026-10-10, so no day
   has 14 comparable days yet. Only spikes were computed.
 - The prompt used for 4 of the 5 days is v1 (article-level `novelty_claim` only). v2 adds an entity-level
-  `is_new` flag; it was run on 2026-10-13 only (budget). The plan adopts v2.
+  `is_new` flag; it was run on 2026-10-13 only (budget). The plan uses v3 (v2 plus quote and stricter
+  retrospective rules), which was never run.
+- All entity/story results below use the dry-run script's revision-1 identity keys, not the plan's
+  reconciliation (revision 3). Clustering numbers are reproduced old-extraction evidence, not a
+  validation of the combined production pipeline.
 
 ## 2. Data facts that changed the plan
 
@@ -39,7 +44,8 @@ Differences from the production design in `plan.md` (stated so nobody over-reads
    open-weight AI model to rival Chinese models at lower compute cost". On 2026-10-16 (4 publishers) it is
    therefore not new; it surfaces as a **spike** (4 articles, 4 publishers, trailing mean 0) and as the
    top story of the day. SC-002 as written cannot be shown on a displayed day (see plan, Spec deltas).
-3. Legacy digest URLs join to stored articles at 99-100% (checked 08-12, 09-16, 10-05, 10-07, 10-09),
+3. Legacy digest URLs join to stored articles at 98-100% by exact URL (08-12 39/39, 09-16 35/35, 10-05 45/45,
+   10-07 60/61, 10-09 79/80; canonical fallback untested),
    so history-only extraction by URL is feasible.
 4. The model emitted `hardware` (Maia 300, NVIDIA B300, GB300 NVL72, M5 Ultra) and `regulation_policy`
    (EU AI Act, SR 11-7) as entity types although they were not offered: 24 entities lost. Both matter
@@ -61,7 +67,10 @@ Differences from the production design in `plan.md` (stated so nobody over-reads
 | 5 | Story edges: `model_release` and `product_launch` treated as one family ("launch") | Gemini 4 Argon 10-13 merged from 3 stories into one (5 publishers, 7 articles); Beam 10-16 into one (4/4); Muse Spark Open 10-15 into one (7/7) |
 | 6 | Spike requires >= 2 distinct publishers on D and excludes entities already in New | Removed "Emergent" (5 articles, all from emergent.sh about its own product) and Muse Spark Open (already New) |
 
-## 4. Final results (thresholds as in plan, Section "Thresholds")
+## 4. Final results (revision-1 rules)
+
+Verdict column: `my verdict -> independent review verdict` where they differ (review of 2026-10-18,
+evidence by corpus key). Section 7 summarizes the changes.
 
 Notation: C = confirmed (>= 2 publishers), E = early signal (1 publisher). Up to 8 New items shown (UI max).
 My verdict per item: OK = concrete and genuinely new to the corpus; ? = concrete but uncertain novelty or
@@ -72,13 +81,13 @@ relevance; BAD = should not be listed.
 | New | Type / vendor | Count | Verdict |
 | --- | --- | --- | --- |
 | C Muse Wonder (+ variant Muse Wonder Full) | model / Meta | 6 pub | OK |
-| E AlphaProof Nexus | model / Google DeepMind | 1 | OK |
+| E AlphaProof Nexus | model / Google DeepMind | 1 | OK -> ? (article reports a study; model novelty unclear) |
 | E Clef-omni | model / Cloudflare | 1 | OK |
-| E Microsoft-Decision-1 | model / Microsoft | 1 | OK |
+| E Microsoft-Decision-1 | model / Microsoft | 1 | OK -> BAD ("Microsoft's Decision-1" already in the 2026-10-10 digest; alias/history miss) |
 | E pplx-decider-v1.1-27b | model / - | 1 | OK (vendor Perplexity missed) |
 | E Ambi | company | 1 | ? |
 | E Atomic Machines | company | 1 | OK |
-| E Multi-Agent Self-Supervision | technology / Sakana AI | 1 | ? (method name) |
+| E Multi-Agent Self-Supervision | technology / Sakana AI | 1 | ? -> OK (named method, explicitly introduced) |
 
 Top stories: (1) Muse Wonder release - 6 publishers, 6 articles; (2) Claude false murder tip to
 Philadelphia police - 2/2. Spikes: none (no comparable trailing days in the dry-run).
@@ -93,11 +102,11 @@ infrastructure_deal 1.
 | E Helix World | model / Noiz AI | 1 | OK |
 | E LFM2.5-24B-A2B | model / - | 1 | OK (vendor Liquid missed) |
 | E Nemotron 3.5 Bolt 74B-A9B 24GB | model / NVIDIA | 1 | OK (display name should drop packaging) |
-| E Apple HomeView | product / Apple | 1 | ? |
-| E Moltbook | product | 1 | ? |
-| E PixelBoard | product | 1 | ? |
-| E Your Algorithm | product / Meta | 1 | BAD (generic feature phrase) |
-| E agent-engineer | product | 1 | ? (repository name) |
+| E Apple HomeView | product / Apple | 1 | ? -> OK (new smart display announced) |
+| E Moltbook | product | 1 | ? -> BAD (article: "In late January, Moltbook launched"; v2 gate failed) |
+| E PixelBoard | product | 1 | ? -> OK (newly released app) |
+| E Your Algorithm | product / Meta | 1 | BAD -> ? (quoted named feature; launched on Instagram before) |
+| E agent-engineer | product | 1 | ? -> OK (named open-source plugin) |
 
 Top stories: (1) Gemini 4 Argon release - 5/7; (2) FBI arrests OpenAI employee over recording device -
 3/3; (3) Muse Wonder follow-up - 2/2; (4) Mind Robotics hires Doug Field - 2/2.
@@ -111,10 +120,10 @@ event, acceptable.
 | E Google Earth AI | product / Google | 2 art, 1 pub | BAD (existing product; v1 prompt) |
 | E Grok Voice 3.0 | model | 1 | OK |
 | E HiRO-ACEv2 | model | 1 | OK |
-| E HiROv2 | model | 1 | ? (same paper as above; not merged) |
+| E HiROv2 | model | 1 | ? -> OK (distinct component of HiRO-ACEv2, must not merge) |
 | E Orion-1 | model / Artemis Security | 1 | OK |
 | E Amazon SageMaker JumpStart | product / Amazon | 1 | BAD (existing product; v1 prompt) |
-| E Deep Review | product / Google | 1 | ? |
+| E Deep Review | product / Google | 1 | ? -> OK (public release after pilots) |
 | E Epic Games Launcher | product / Epic | 1 | BAD (non-AI, existing; v1 prompt) |
 
 Top stories: (1) OpenAI employee arrested (day 2) - 4/4; (2) Gemini 4 Argon on Google Cloud - 2/2.
@@ -129,8 +138,8 @@ Top stories: (1) OpenAI employee arrested (day 2) - 4/4; (2) Gemini 4 Argon on G
 | C Black Forest Labs | company | 3 pub | BAD (established company, first seen in corpus only) |
 | C Volvo | company | 2 pub | BAD (non-AI company) |
 | E Granite Switch 4.1 | model | 1 | OK (vendor IBM missed) |
-| E Attie | product / Bluesky | 1 | ? |
-| E Bee Frontier (+ Bee) | product / Bee | 1 | ? |
+| E Attie | product / Bluesky | 1 | ? -> BAD ("initially launched earlier this year") |
+| E Bee Frontier (+ Bee) | product / Bee | 1 | ? (Frontier is new; grouping the existing Bee as its variant is wrong) |
 
 Top stories: (1) Muse Spark Open - 7/7; (2) Nemotron 3.5 Super VL - 3/4; (3) FLUX 3 Image Klein - 3/3;
 (4) Anthropic Q3 revenue ahead of IPO - 2/2; (5) Gemini 4 Argon robots + pricing page - 2/2 (weak:
@@ -142,14 +151,14 @@ Spikes: NVIDIA (9 vs trailing mean 2.33, 5 pub), Apple (4 vs 1.0), Claude Code (
 
 | New | Type / vendor | Count | Verdict |
 | --- | --- | --- | --- |
-| C RTX Spark N1X | hardware-like product / Nvidia | 2 pub | OK |
+| C RTX Spark N1X | hardware-like product / Nvidia | 2 pub | OK -> ? (reviews; RTX Spark seen 09-03 and 10-07; N1X may be the same chip) |
 | E GPT-Live-1.1 | model / OpenAI | 1 | OK |
-| E GPT-Rosalind | model / OpenAI | 1 | OK |
+| E GPT-Rosalind | model / OpenAI | 1 | OK -> ? (article launches an academic plan, not the model) |
 | E Glimpse | model / Elorian | 1 | OK |
 | E MAI-Base-2 | model / Microsoft | 1 | OK |
 | E d1-ultra | model / Liquid | 1 | OK |
-| E CodeOwnership | product | 1 | ? |
-| E Evidence Desk | product | 1 | ? |
+| E CodeOwnership | product | 1 | ? -> OK (named implemented tool) |
+| E Evidence Desk | product | 1 | ? -> OK (named implemented tool) |
 
 Suppressed as already seen: Beam (2026-10-05), Reflection AI (2026-10-05), Surface Laptop Ultra (10-07).
 Top stories: (1) Reflection Beam - 4/4; (2) RTX Spark laptops + Surface Laptop Ultra reviews - 4/4
@@ -159,11 +168,15 @@ Surface Laptop Ultra (3 vs 0).
 
 ## 5. Honest quality assessment
 
-- **New (40 displayed items)**: 22 OK, 12 uncertain, 6 BAD. Five BAD items are on v1 days: 3
-  established products on 10-14, Black Forest Labs and Volvo on 10-15. On the v2 day (10-13), the only
-  BAD item is a generic feature phrase ("Your Algorithm"). v2 is a hypothesis
-  supported by one day, not a measured improvement on all days. SC-001 therefore **fails with v1 and is
-  not yet proven with v2**; the plan makes a v2 re-check on all 5 days a Phase B gate (task T5.3).
+- **New (40 displayed items)**: my revision-1 count was 22 OK / 12 uncertain / 6 BAD; the independent
+  review, with per-item evidence, counts **26 OK / 6 uncertain / 8 BAD**, and I accept its evidence.
+  BAD items: Google Earth AI, SageMaker JumpStart, Epic Games Launcher (10-14, v1), Black Forest Labs and
+  Volvo (10-15, v1), Attie (10-15, v1, launched earlier this year), Microsoft-Decision-1 (10-12, already
+  in the 10-10 digest under "Microsoft's Decision-1"), and Moltbook on the **v2** day (retrospective:
+  "In late January, Moltbook launched"). So v2 did not remove retrospective false positives; plan
+  revision 2 adds prompt rules ("false when the article says it launched earlier") and a grounded launch
+  quote. SC-001 **fails with v1 and is not proven with any prompt yet**; the plan makes a re-check with
+  the final prompt on all 5 days a Phase B gate (task T7.2).
 - **Generic terms**: none reached New. The stoplist rejected 10 mentions (Copilot, Transformer,
   transformers, Benchmark, X ...); it wrongly rejected "Z.ai" and "pi0" because of normalization bugs
   that the plan fixes (keep Unicode letters; do not strip "ai" when the rest is shorter than 3 chars).
@@ -176,17 +189,54 @@ Surface Laptop Ultra (3 vs 0).
   The UI shows "hard" events first and folds analysis/other (plan, UI).
 - **Vendor recall** is weak for some models (Perplexity, Liquid, IBM missed): vendor only when named in
   the article text is the right grounding rule; the UI shows the vendor only when known.
-- **Not measured**: Rising/Cooling (no 14 comparable days), production single-article prompt, v2 on 4 of
-  5 days, PostgreSQL behaviour, page performance.
+- **Not measured**: Rising/Cooling (no 14 comparable days), production single-article prompt (v3 with
+  quotes was never run), v2 on 4 of 5 days, recall (missed eligible entities), PostgreSQL behaviour,
+  page performance.
+- **Lexical background is not deterministic evidence**: `analyze.py::lexical_hit` returns the first hit
+  of the first alias in set order, so suppression dates can differ between runs (e.g. Meta 08-05 vs
+  08-19). Displayed New did not change, but the dates in the "suppressed" lists are illustrative only.
+  Beam's 10-05 title was checked directly.
 
-## 6. Final values carried into the plan
+## 6. Values carried into the plan (see plan Decision 5 for the evidence column)
 
 | Threshold | Value | Reason |
 | --- | --- | --- |
 | New confirmed | >= 2 distinct publishers | Spec default; matched every real release in the sample |
 | New early | 1 publisher, entity `is_new` | Without the novelty gate, 20-45 early items per day |
-| New eligibility | type not in {person, other}; primary in >= 1 article on D; `is_new` in >= 1 article on D; first_seen_day == D | Removed every BAD product item on the v2 day |
-| Story edge | shared primary non-company entity + same event family; or shared primary company + same family + title Jaccard >= 0.2; or title simhash distance <= 6 | Launch family fixed all observed splits; Jaccard rule fired 4 times, simhash never (kept as safety net for articles without entities) |
+| New eligibility | type group not person/other; first_seen_day == D; primary and `is_new` with quote in the same article of D (plan revision 4) | v2 removed Facebook, Google Play, Character.AI, Run:ai on 10-13 but kept Moltbook (retrospective); grounded quote untested |
+| Story edge | same event family and (shared primary-in-both non-org resolution key; or shared primary org key + title Jaccard >= 0.2; or simhash <= 6); greedy strict-majority linkage (plan revision 4) | Launch family fixed all observed splits; strict majority removed the RTX Spark/Surface over-merge (section 7); simhash never fired |
 | Top story minimum | >= 2 distinct publishers, max 5 | Single-article "top stories" carry no signal |
-| Spike | count on D >= 3 articles, >= 2 publishers, >= 3x trailing mean (mean floor 1/3), >= 3 comparable trailing days (window up to 7) | Removed single-publisher self-promotion; caught Beam |
-| Rising / Cooling | Spec values plus volume adjustment (plan) | Not validated; re-tune on 2026-10-30 (task T7.2) |
+| Spike | count on D >= 3 articles, >= 2 publishers, >= 3x trailing mean (mean floor 1/3), >= 3 complete comparable trailing days (window up to 7) | Computed on 2 days only (10-15, 10-16; 10-10/11 were not extracted); removed single-publisher self-promotion; caught Beam |
+| Rising / Cooling | Spec values plus volume adjustment (plan) | Not validated; re-tune after 2026-10-30 (task T8.2) |
+
+## 7. Post-review re-runs (2026-10-18, offline, no provider calls)
+
+Changes after the independent review of revision 1 (plan "Review Response"):
+
+- **Clustering**: average-link grouping (join a story only with edges to >= half its members; simhash
+  edges only within the same event family) re-run on the same extractions:
+  - 2026-10-16: RTX Spark laptop reviews (theverge, extremetech) and Surface Laptop Ultra reviews
+    (arstechnica, wired) are now two 2-publisher stories instead of one 4-publisher story.
+  - 2026-10-14: the x.com post about the OpenAI recording-device arrest no longer joins its story
+    (4 -> 3 publishers) - a small recall loss.
+  - Unchanged: Gemini 4 Argon 10-13 (7 articles / 5 publishers), Muse Spark Open 10-15 (7/7),
+    Beam 10-16 (4/4), Muse Wonder 10-12 (6/6). The 10-15 Gemini robotics + pricing-page pair stays one
+    story (known limit).
+- **Identity**: revision-1 normalization merged distinct things (Glimpse the CT-inspection company on
+  2026-10-06 vs Elorian's Glimpse model on 10-16; pplx-decider v1 vs v1.1; sizes 7B/70B; "1.2" vs "12").
+  Revision 2 keeps versions/sizes/dots in keys and separates type groups. Not re-run end-to-end on this
+  data (the analysis script still uses revision-1 keys); covered by T1.1/T2.3 tests and T7.2.
+- **Fixtures**: `tmp/daily-signals-dryrun/fixtures/signals_2026-10-12..16.json` (titles, URLs,
+  publisher domains, published_at, extracted entities and event types; no article bodies) for T0.1.
+- **Cost**: revision-1 estimates for backfills were arithmetic errors; corrected in plan Decision 1
+  ($0.00093 per article; 75 days ~$1.93-2.02).
+- **Review 2 follow-up**: strict majority linkage (an article joins a story only with edges to more than
+  half of its members; nulls in `published_at` ordered last, ties by key) gives exactly the same
+  stories as the ">= half" rule on all five days (`cluster-avg-strict.txt` vs `cluster-avg.txt`).
+  Fixtures regenerated with `article_id` (0 missing; 24 rows have null `published_at`).
+- **Review 3 follow-up (revision 4)**: review 3 re-implemented the revision-3 identity rules on the
+  fixtures and found that vendor spellings split Gemini 4 Argon ("Google" x15, "Google DeepMind" x2, none
+  x3) and reduced the 10-13 story to 4/5 + 2/2. Revision 4 groups vendors into equivalence classes and
+  builds story edges on resolution keys `(type_group, base_key)`, which matches how this dry-run's
+  revision-1 keys behaved (7/5). Not re-run with a full revision-4 implementation; pinned in T1.2/T1.4.
+

@@ -1,89 +1,105 @@
-# Daily AI Signals - Phase A Report (2026-10-17)
+# Daily AI Signals - Phase A Report (2026-10-17; revisions 2-4 on 2026-10-18)
 
 For: coordinator session. Scope: planning only; no production code, migrations or tests were written.
 
 Deliverables:
 
-- Plan: `.specify/specs/006-daily-ai-signals/plan.md`
+- Plan (revision 4): `.specify/specs/006-daily-ai-signals/plan.md`
 - Tasks: `.specify/specs/006-daily-ai-signals/tasks.md`
 - Dry-run: `.specify/specs/006-daily-ai-signals/dry-run.md`
-- Raw dry-run data and scripts (gitignored, not committed): `tmp/daily-signals-dryrun/`
+- Raw dry-run data, scripts and test fixtures (gitignored, not committed): `tmp/daily-signals-dryrun/`
+
+Revision 2 addressed review 1 ("rework"; R01-R17). Revision 3 addresses review 2 ("rework"; S01-S15:
+order-dependent identity, family rules, snapshot invalidation, hard deadline, validation budget,
+missing vs empty days, quote overclaim, wrong-history stickiness, ledger accounting). Revision 4
+addresses review 3 ("rework", narrow; T01-T20: vendor spellings splitting entities and stories, version
+bumps erasing history, overrides keyed on derived keys, vendor-dependent base keys, article id reuse).
+All are mapped in plan.md "Review Response".
 
 ## Decisions and why
 
-1. **Separate DeepSeek call per article** (`daily-signals-extract-2`), not an extension of the summary
-   call: keeps the digest's pinned prompts and journal replays intact, isolates failures, allows history
-   backfill. Extra cost ~$0.02/day. Batching was used only in the dry-run to fit the call budget.
-2. **Entity-level `is_new` flag + primary role** gate New. The v1 prompt (article-level novelty only)
-   listed Volvo, Epic Games Launcher, Google Earth AI, SageMaker JumpStart as New; v2 removed this class
-   of errors on the one day it was tested.
-3. **Globally unique canonical key** (compact, packaging-stripped) with vendor-strip aliases; never
-   auto-merge on fuzzy evidence; merge candidates + operator CLI.
-4. **Deterministic story clustering** (shared primary non-company entity + event family, conservative
-   company rule, simhash safety net). Treating `model_release`/`product_launch` as one family fixed all
-   observed splits.
-5. **Comparable data starts 2026-10-10** (first grounded `daily-publish` digest). Legacy digests are
-   history-only for "first seen"; never in Rising/Cooling/spike baselines. Full Rising from 2026-10-23,
-   spikes from 2026-10-13, Cooling hidden until then.
-6. **Volume-adjusted Rising/Cooling** (daily volume tripled in October) and spikes need >= 2 publishers.
-7. **Event counts per story**, not per article (a release covered 9 times is one release).
-8. **Job integration**: second command in `run_daily_digest_job.sh`, after a successful
-   `daily-publish`, same flock, exit status ignored; separate tables; kill switch
-   `AINEWS_DAILY_SIGNALS_ENABLED` default false.
-9. **UI**: server-rendered block inside the hero before the digest groups, JS re-render on date change,
-   English, Cooling collapsed and hidden until 14 comparable days, chips display-only by default.
-10. **Guarded migration** (`has_table` checks) because `deploy_prod.sh` starts the app before
-    `alembic upgrade head` and routes call `create_all()`.
+1. **Separate DeepSeek call per article** (`daily-signals-extract-3`): keeps digest prompts and replays
+   intact, isolates failures, allows history backfill. Cost ~$0.06-0.09 per day.
+2. **New signals ledger instead of `PilotJournal`**: one physical POST per dispatch with a hard
+   streaming deadline; run, scope-day and budget-id USD caps checked atomically before every POST;
+   usage accounted on any status; bounded automatic recovery; new request keys for deliberate retries.
+3. **Entities are derived** from stored mention evidence by a pure, order-independent reconciliation:
+   versions/sizes kept; vendor spellings grouped into classes (Google ~ Google DeepMind); vendor prefixes
+   stripped regardless of the vendor field; type groups separate homonyms; genuinely different vendors
+   split, with a review entity only when no vendor dominates; overrides use stable selectors and
+   `manual:<n>` targets.
+4. **New** (default, owner decision OD1): first appearance in the corpus of an entity an article
+   presents as newly announced/released, with a grounded launch quote; named versions count, packaging
+   variants, ports, features and retrospectives do not.
+5. **Strict-majority story clustering** with event families, both-primary entity rule and same-family
+   simhash; removed the RTX Spark/Surface over-merge without breaking large stories.
+6. **Comparable data from 2026-10-10**; legacy digests are history-only evidence; explicit day states
+   (missing vs observed empty vs incomplete); **per-section readiness** (spikes from 3 complete days,
+   Rising/Cooling from two 7-day windows with >= 6 complete days each).
+7. **Full in-memory recompute** of all comparable days after every run or entity command; reports
+   written when their payload hash changes.
+8. **Retention-safe evidence**: derived tables cascade with articles; the mention-evidence table has no
+   FK, so pruning keeps first-seen history while corrections of existing articles still apply.
+9. **Job**: one host lock and one time budget; signals only after a successful publication, under an
+   outer `timeout` with container cleanup; failure, timeout or skip never changes the job result; kill
+   switch `AINEWS_DAILY_SIGNALS_ENABLED` default false (gates paid extraction only).
+10. **UI**: server-rendered block before the digest groups, isolated read (signals errors never break
+    `/`), JS re-render with an out-of-order guard; English; chips display-only.
 
-## Proposed spec changes (detail in plan.md "Spec Deltas")
+## Owner decisions needed (defaults in plan "Owner Decisions Required")
 
-SD1 legacy history-only scope; SD2 spikes-only Rising and hidden Cooling during building_history;
-SD3 SC-002 rewrite (Beam first appeared 2026-10-05, a legacy day, so it is correctly not New on
-2026-10-16 - it shows as a spike and top story instead); SD4 add `is_new`, `hardware`, `policy`;
-SD5 New gate = primary + `is_new`; SD6 events per story; SD7 volume adjustment, spike publisher floor;
-SD8 global canonical key; SD9 weekly preview needs no move; SD10 SC-001 judged with v2.
+1. OD1 - meaning of New (default above). Do new named versions count? Do ports/new platforms count?
+   Previews: does the GA release of "X" after a known "X Preview" count as New (default yes)?
+2. OD2 - legacy digests suppress New (default yes); snapshots for legacy dates (default no; this is why
+   SC-002 for Beam needs rewording - Beam's first day is 2026-10-05).
+3. OD3 - spikes-only Rising and hidden Cooling until two complete weeks; volume-adjusted comparison.
+4. OD4 - event chips filter the digest now (optional T6.4) or later (default later).
+5. OD5 - validation budget $2.50 in two stages (v3 on 5 target days ~$0.35, then history ~$1.6; one
+   prompt revision fits, more needs ~$5), production backfill budget (~$2.0), who flips the flag;
+   approval of the one-line `docker-compose.prod.yml` change.
+6. OD6 - first-seen evidence of retention-deleted articles is kept; corrections of existing articles
+   replace evidence (default).
+7. OD7 - thresholds are code constants recorded in snapshots (narrower than FR-008 "configurable").
+
+## Proposed spec changes
+
+SD1 legacy history-only scope; SD2 per-section readiness; SD3 SC-002 rewording (or restore it on
+2026-10-05 if legacy snapshots are wanted); SD4 `is_new`, `is_new_quote`, `hardware`, `policy`;
+SD5 New definition per OD1; SD6 events per story; SD7 volume adjustment and spike publisher floor;
+SD8 withdrawn; SD9 weekly preview needs no move; SD10 SC-001 judged with the final prompt and a
+recall rubric; SD11 thresholds as code constants; SD12 first_seen from retained evidence; SD13 chips
+display-only.
 
 ## Dry-run highlights
 
-- 39 of 40 allowed provider calls, ~$0.17, 369 articles over 2026-10-12..16 (+90 re-extracted with v2).
-- New, 40 displayed items: 22 OK, 12 uncertain, 6 bad (5 of the bad ones on v1-prompt days).
-  Good catches: Muse Wonder (10-12), Muse Spark Open, Nemotron 3.5 Super VL, FLUX 3 Image Klein (10-15),
-  Glimpse, GPT-Rosalind, MAI-Base-2 (10-16).
-- Top stories: no duplicate events after tuning; one borderline over-merge (RTX Spark / Surface, 10-16).
-- Spikes: Beam and Reflection AI on 10-16 (4 publishers each, trailing mean 0).
-- Rising/Cooling: not computable yet (no 14 comparable days) - thresholds are spec defaults plus volume
-  adjustment, flagged as unvalidated with a re-tune task after 2026-10-30.
-
-## Open questions for the owner
-
-1. Approve the legacy history-only backfill (~2,072 articles, ~$1.2 one-off) so New is meaningful from
-   day one? Without it, New is relative to history since 2026-10-10 only.
-2. Approve the one-line `docker-compose.prod.yml` change for the kill switch (default false), and who
-   flips `AINEWS_DAILY_SIGNALS_ENABLED=true` on the server after the backfill review.
-3. Approve Phase 7 validation spend (~$1.2 for the full 75-day local backfill, or ~$0.35 minimum).
-4. Open Q4: should event chips filter the digest list in this iteration (optional task T6.4)?
-5. Should established companies that appear for the first time in the corpus ever be shown as New
-   (the plan says no unless the article presents them as new, e.g. founded / out of stealth)?
-6. Accept SD3 (SC-002 rewrite) and SD4 (new entity types)?
+- 39 of 40 allowed provider calls, $0.170, 369 articles over 2026-10-12..16 (+90 re-extracted with v2).
+- New, 40 displayed items: independent re-judgment 26 OK / 6 uncertain / 8 BAD (my original count
+  22/12/6 was too generous: Microsoft-Decision-1 was already seen on 10-10; Moltbook and Attie are
+  retrospective). v2 did not remove retrospective false positives; revision 2 adds rules and a grounded
+  launch quote, untested until T7.2.
+- Top stories: no duplicate events; average-link re-run removed the 10-16 over-merge.
+- Spikes (2 days computable): Beam and Reflection AI on 10-16 (4 publishers each, trailing mean 0).
+- Rising/Cooling: not computable yet; flagged unvalidated, re-tune after 2026-10-30.
 
 ## Risks (top)
 
-Entity duplicates/aliases; generic or non-AI items in New (v2 tested on one day only); short comparable
-history until 2026-10-23; provider outage (handled as partial, digest unaffected); cost (bounded,
-~$0.08/day); SQLite vs PostgreSQL (portable DDL, guarded migration, manual PG check in rollout); page
-performance (one indexed row read). Full table in plan.md.
+Wrong merges or duplicates; retrospective/established items in New; short and patchy history; stale
+snapshots; provider outage and unknown billing; cost; job timeout; retention conflicts; SQLite vs
+PostgreSQL; migration race with `create_all()` (idempotent, not serialized; documented recovery); page
+breakage (isolated read). Full table in plan.md.
 
 ## Not verified
 
-- The production single-article prompt was not run; the dry-run used 12-article batches with
-  1,500-character excerpts.
-- v2 prompt on 4 of 5 days; Rising/Cooling on any day; PostgreSQL migration; page rendering and
-  performance; job script behaviour on the server.
-- Production DB contents were not read directly: inputs were the public digest API plus the local
-  SQLite copy (all 369 target URLs matched locally; local digests themselves are stale and were not used).
+- The production prompt v3 (single article, 6,000 chars, novelty quotes) was never run.
+- Revision-3 reconciliation and day-state rules were not re-run end-to-end on the dry-run data
+  (covered by tests and T7.2); clustering evidence uses old identity keys.
+- Rising/Cooling on any day; recall; PostgreSQL migration and prune; page rendering and performance;
+  job script on the server.
+- Production DB was not read directly: inputs were the public digest API plus the local SQLite copy.
 
 ## Side observation (out of scope, not changed)
 
 `POST /api/news/digests` and `POST /api/news/weekly-analytics` are reachable without auth when auth is
 enabled, because `auth_middleware` allowlists paths regardless of method (`src/app/web/app.py`,
-`is_public_news_api`). Worth a separate fix.
+`is_public_news_api`). Worth a separate fix. Also `docs/configuration.md` says migrations run before
+the app starts, but `scripts/deploy_prod.sh` starts the app first.
