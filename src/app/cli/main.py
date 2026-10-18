@@ -4,10 +4,18 @@ from pathlib import Path
 
 import typer
 import uvicorn
+from sqlalchemy import select
 
 from app.config.settings import get_settings
 from app.config.sources import load_sources
 from app.core.daily_enrichment import publish_day
+from app.core.daily_signals import (
+    EntityCommandError,
+    RunOptions,
+    alias_entity,
+    merge_entities,
+    run_signals,
+)
 from app.core.pipeline import run_fetch_cycle
 from app.core.source_onboarding import import_source_candidates, run_source_validation_batch
 from app.core.weekly_audit import audit
@@ -15,6 +23,9 @@ from app.core.weekly_worker import drain
 from app.mcp.server import run_mcp_server
 from app.observability import setup_json_logging
 from app.storage import SessionLocal, create_all
+from app.storage.daily_signals import DailySignalRepo, OverrideConflict
+from app.storage.models_sql import AIEntityOverride
+from app.storage.reenrich_pilot_journal import microdollars
 from app.storage.repos import ArticleRepo, SourceCandidateRepo, SourceImportBatchRepo
 from app.storage.weekly import WeeklyStore
 
@@ -109,6 +120,124 @@ def daily_publish(
     typer.echo(json.dumps(result))
     if result["state"] == "failed_preserved_previous":
         raise typer.Exit(1)
+
+
+def _completed_day(report_date: str | None) -> date:
+    try:
+        target = date.fromisoformat(report_date) if report_date else (
+            datetime.now(UTC).date() - timedelta(days=1))
+    except ValueError as exc:
+        raise typer.BadParameter("report-date must be YYYY-MM-DD") from exc
+    if target >= datetime.now(UTC).date():
+        raise typer.BadParameter("Only completed UTC days can be used")
+    return target
+
+
+@app.command("daily-signals")
+def daily_signals(
+    *,
+    report_date: str | None = _WEEKLY_DATE_OPTION,
+    backfill_days: int = typer.Option(1, "--backfill-days", min=1, max=800),
+    max_calls: int | None = typer.Option(None, "--max-calls", min=1),
+    max_seconds: int | None = typer.Option(None, "--max-seconds", min=1),
+    max_usd: str | None = typer.Option(None, "--max-usd"),
+    cache_dir: str = typer.Option("data/daily-signals", "--cache-dir"),
+    recompute_only: bool = typer.Option(False, "--recompute-only",
+                                        help="No provider calls; works with the flag off."),
+    recompute_all: bool = typer.Option(False, "--recompute-all",
+                                       help="Recompute every comparable day, not only 400."),
+    retry_skipped: bool = typer.Option(False, "--retry-skipped"),
+) -> None:
+    """Extract daily AI signals for a published digest day and recompute snapshots."""
+    target = _completed_day(report_date)
+    settings = get_settings()
+    usd = max_usd if max_usd is not None else settings.daily_signals_max_usd
+    try:
+        microdollars(usd)
+    except (ValueError, ArithmeticError) as exc:
+        raise typer.BadParameter("max-usd must be a positive dollar amount") from exc
+    options = RunOptions(
+        report_date=target, backfill_days=backfill_days,
+        max_calls=max_calls or settings.daily_signals_max_calls,
+        max_seconds=max_seconds or settings.daily_signals_max_seconds, max_usd=usd,
+        cache_dir=Path(cache_dir), recompute_only=recompute_only, recompute_all=recompute_all,
+        retry_skipped=retry_skipped)
+    create_all()
+    with SessionLocal() as session:
+        result = run_signals(session, settings, options)
+    typer.echo(json.dumps(result, sort_keys=True))
+
+
+entities_app = typer.Typer(help="Daily signals entity overrides (no provider calls).")
+app.add_typer(entities_app, name="daily-signals-entities")
+
+
+def _entity_command(action) -> None:
+    settings = get_settings()
+    create_all()
+    with SessionLocal() as session:
+        repo = DailySignalRepo(session, comparable_from=settings.daily_signals_comparable_from,
+                               publisher_overrides=settings.weekly_publisher_overrides)
+        try:
+            output = action(repo)
+        except (EntityCommandError, OverrideConflict, ValueError) as exc:
+            session.rollback()
+            typer.echo(json.dumps({"state": "refused", "error": str(exc)}))
+            raise typer.Exit(1) from exc
+        result = repo.recompute_reports(datetime.now(UTC).date() - timedelta(days=1))
+        session.commit()
+        output["reports_written"] = [d.isoformat() for d in result.written]
+    typer.echo(json.dumps(output, sort_keys=True))
+
+
+def _override_json(row) -> dict:
+    return {"id": row.id, "kind": row.kind, "type_group": row.type_group,
+            "match_key": row.match_key, "vendor_class": row.vendor_class,
+            "target_base_key": row.target_base_key,
+            "target_vendor_class": row.target_vendor_class,
+            "target_entity_key": row.target_entity_key, "note": row.note}
+
+
+@entities_app.command("merge")
+def entities_merge(source: int = typer.Option(..., "--source", min=1),
+                   target: int = typer.Option(..., "--target", min=1)) -> None:
+    """Merge entity SOURCE into TARGET (ids from ai_entities), then recompute."""
+    _entity_command(lambda repo: {"state": "ok", "override": _override_json(
+        merge_entities(repo, source, target))})
+
+
+@entities_app.command("alias")
+def entities_alias(entity: int = typer.Option(..., "--entity", min=1),
+                   name: str = typer.Option(..., "--name")) -> None:
+    """Resolve mentions named NAME to ENTITY, then recompute."""
+    _entity_command(lambda repo: {"state": "ok", "override": _override_json(
+        alias_entity(repo, entity, name))})
+
+
+@entities_app.command("overrides")
+def entities_overrides(delete: int | None = typer.Option(None, "--delete", min=1)) -> None:
+    """List overrides, or delete one (then recompute)."""
+    if delete is None:
+        create_all()
+        with SessionLocal() as session:
+            rows = [_override_json(o) for o in session.scalars(
+                select(AIEntityOverride).order_by(AIEntityOverride.id))]
+        typer.echo(json.dumps({"overrides": rows}, sort_keys=True))
+        return
+
+    def remove(repo):
+        if not repo.delete_override(delete):
+            raise EntityCommandError(f"override {delete} not found")
+        return {"state": "ok", "deleted": delete}
+
+    _entity_command(remove)
+
+
+@entities_app.command("purge-evidence")
+def entities_purge(article: int = typer.Option(..., "--article", min=1)) -> None:
+    """Remove stored evidence of a deleted article (e.g. after non-news cleanup), then recompute."""
+    _entity_command(lambda repo: {"state": "ok", "article": article,
+                                  "purged": repo.purge_evidence(article)})
 
 
 @app.command()

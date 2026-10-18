@@ -1,3 +1,5 @@
+from datetime import date
+from decimal import Decimal, InvalidOperation
 from functools import lru_cache
 from pathlib import Path
 
@@ -70,6 +72,11 @@ class Settings(BaseSettings):
     weekly_narrative_output_token_cap: int = Field(default=2400, ge=100, le=4096)
     weekly_input_safety_cap: int = Field(default=100000, ge=1)
     weekly_publisher_overrides: dict[str, str] = Field(default_factory=dict)
+    daily_signals_enabled: bool = False
+    daily_signals_comparable_from: date = date(2026, 10, 10)
+    daily_signals_max_calls: int = Field(default=200, ge=1)
+    daily_signals_max_seconds: int = Field(default=2700, ge=1)
+    daily_signals_max_usd: str = "0.50"
     respect_robots_txt: bool = True
     auth_enabled: bool = False
     auth_username: str | None = None
@@ -111,6 +118,16 @@ class Settings(BaseSettings):
             if self.auth_session_ttl_seconds <= 0:
                 raise ValueError("AINEWS_AUTH_SESSION_TTL_SECONDS must be greater than 0")
 
+        return self
+
+    @model_validator(mode="after")
+    def validate_daily_signals_usd(self) -> Settings:
+        try:
+            amount = Decimal(self.daily_signals_max_usd)
+        except InvalidOperation as error:
+            raise ValueError("AINEWS_DAILY_SIGNALS_MAX_USD must be a dollar amount") from error
+        if not amount.is_finite() or amount <= 0 or amount != amount.quantize(Decimal("0.000001")):
+            raise ValueError("AINEWS_DAILY_SIGNALS_MAX_USD must be a dollar amount")
         return self
 
     @model_validator(mode="after")

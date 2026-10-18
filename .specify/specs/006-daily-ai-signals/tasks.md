@@ -155,7 +155,7 @@
 
 ## Phase 2: Storage
 
-- [ ] **T2.1 Models and guarded migration**
+- [x] **T2.1 Models and guarded migration**
   - Files: `src/app/storage/models_sql.py` (6 models: `article_signals`, `daily_signal_scope`,
     `signal_mentions`, `ai_entities`, `ai_entity_overrides`, `daily_signal_reports`), migration
     `b6d1f0a7c3e5_add_daily_signals.py`,
@@ -166,7 +166,7 @@
   - Done when: tests pass.
   - Depends on: -
 
-- [ ] **T2.2 Membership and day states**
+- [x] **T2.2 Membership and day states**
   - Files: `src/app/storage/daily_signals.py` (`replace_membership`, `day_coverage`),
     `tests/unit/test_daily_signals_repo.py`
   - Test first: 4 items -> 2 exact, 1 canonical fallback, 1 unmatched (items 4, matched 3); kinds by
@@ -176,7 +176,7 @@
   - Done when: tests pass.
   - Depends on: T2.1
 
-- [ ] **T2.3 Extraction rows, evidence, entities, overrides**
+- [x] **T2.3 Extraction rows, evidence, entities, overrides**
   - Files: `src/app/storage/daily_signals.py` (`get_cached`, `save_extraction`, `save_failure`,
     `replace_evidence`, `apply_reconciliation`, `add_override`, `delete_override`),
     `tests/unit/test_daily_signals_repo.py`
@@ -190,7 +190,7 @@
   - Done when: tests pass.
   - Depends on: T2.2, T1.2, T1.3
 
-- [ ] **T2.4 first_seen and retention**
+- [x] **T2.4 first_seen and retention**
   - Files: `src/app/storage/daily_signals.py` (`recompute_first_seen`), same test file
   - Test first: different insertion orders -> same values; correcting an existing article's scope or
     extraction moves first_seen later; with `PRAGMA foreign_keys=ON`, `ArticleRepo.prune_older_than`
@@ -201,7 +201,7 @@
   - Done when: tests pass.
   - Depends on: T2.3
 
-- [ ] **T2.5 Observations, reports and full recompute**
+- [x] **T2.5 Observations, reports and full recompute**
   - Files: `src/app/storage/daily_signals.py` (`load_observations`, `save_report`, `get_report`,
     `recompute_reports(until, all_days=False)`), same test file
   - Test first: recompute creates reports for comparable published days that have none and rewrites only
@@ -212,6 +212,9 @@
     (only changed entities/assignments written).
   - Done when: tests pass.
   - Depends on: T2.4, T1.5
+  - Result: synthetic year (365 days x 60 articles x 5 mentions = 109,500 evidence rows, 3,000
+    entities): first recompute 16.0 s (365 reports), unchanged recompute 13.5 s (0 written), local
+    SQLite; setup script in the session scratchpad, not committed.
 
 **Checkpoint 2**: `./venv1/bin/pytest tests/unit/test_daily_signals_migration.py tests/unit/test_daily_signals_repo.py -q`
 
@@ -219,14 +222,14 @@
 
 ## Phase 3: Ledger, orchestration, settings, CLI
 
-- [ ] **T3.1 [P] Settings and configuration docs**
+- [x] **T3.1 [P] Settings and configuration docs**
   - Files: `src/app/config/settings.py`, `docs/configuration.md`, settings test
   - Test first: defaults (enabled False, comparable_from 2026-10-10, max_calls 200, max_seconds 2700,
     max_usd "0.50"); env overrides; invalid USD rejected.
   - Done when: tests pass; docs list the five variables.
   - Depends on: -
 
-- [ ] **T3.2 [P] Signals ledger**
+- [x] **T3.2 [P] Signals ledger**
   - Files: `src/app/storage/daily_signals_ledger.py`, `tests/unit/test_daily_signals_ledger.py`
   - Test first (fake transport, monkeypatched clock): one POST per dispatch (one ledger row per
     physical POST); replay of a saved 200 without POST; atomic pre-POST checks (calls, run USD with
@@ -238,7 +241,7 @@
   - Done when: tests pass.
   - Depends on: -
 
-- [ ] **T3.3 run_signals orchestration**
+- [x] **T3.3 run_signals orchestration**
   - Files: `src/app/core/daily_signals.py`, `tests/unit/test_daily_signals_run.py`
   - Test first: one dispatch per pending article; rerun 0 dispatches, 0 reports written; invalid output ->
     recovery -> `skipped`; `--retry-skipped` once; outage -> `provider_unavailable`; caps / deadline ->
@@ -247,7 +250,7 @@
   - Done when: tests pass.
   - Depends on: T2.5, T3.1, T3.2
 
-- [ ] **T3.4 CLI `ai-news daily-signals`**
+- [x] **T3.4 CLI `ai-news daily-signals`**
   - Files: `src/app/cli/main.py`, `tests/unit/test_cli_daily_signals.py`
   - Test first: dates; backfill oldest first with history-only days; `--recompute-only` with the flag off
     and no key dispatches nothing and writes reports; `--recompute-all`; cap flags (`--max-calls`,
@@ -255,7 +258,7 @@
   - Done when: tests pass.
   - Depends on: T3.3
 
-- [ ] **T3.5 CLI `ai-news daily-signals-entities`**
+- [x] **T3.5 CLI `ai-news daily-signals-entities`**
   - Files: `src/app/cli/main.py`, `src/app/storage/daily_signals.py`, `tests/unit/test_cli_daily_signals.py`
   - Test first: merge and alias each create an override (selectors, `manual:<n>` target) and then
     reconcile and recompute (no flag needed, no provider calls); `purge-evidence --article ID` only for
