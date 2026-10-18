@@ -1,15 +1,17 @@
 # Tasks: Daily AI Signals on the Main Page
 
-**Input**: `spec.md`, `plan.md` (revision 4), `dry-run.md` in `.specify/specs/006-daily-ai-signals/`
+**Input**: `spec.md`, `plan.md` (revision 5), `dry-run.md` in `.specify/specs/006-daily-ai-signals/`
 **Branch**: `feat/006-daily-ai-signals`
 **Rules**:
-- **Approval**: no Phase B task starts before the coordinator review and the owner's answers to OD1-OD7
-  (plan). If an answer differs from the plan default, the coordinator updates plan/tasks first.
+- **Approval**: owner decisions are final (plan "Owner Decisions (final)"; coordinator changes C1/C2
+  applied). Phase P runs first; Phase 0 starts only after the owner approves the Phase P result
+  (checkpoint 1). Items in plan "Deferred (not in first release)" are not built.
 - Test first in every task. No provider calls in tests (fake `httpx.MockTransport` / fake stream).
 - Commit per phase (or per task), each only after the full gate `make lint PYTHON=./venv1/bin/python`
   and `./venv1/bin/pytest` (AGENTS.md); clean-copy procedure in `docs/troubleshooting.md` if the local
   `.env` breaks auth settings.
-- Files ASCII. Real provider spend only in Phase 7 under an approved budget id.
+- Files ASCII. Real provider spend only in Phase P (hard stop $1.00) and Phase 7 (remainder of the
+  $2.50 validation budget, `--max-usd` per invocation).
 
 ## Format
 
@@ -17,6 +19,26 @@
 `[P]` = no dependency on another unfinished task of the same phase.
 
 ---
+
+## Phase P: Prompt gate (coordinator C1)
+
+- [ ] **TP.1 Prompt v3 on the five target days**
+  - Files: throwaway script and cache in `tmp/daily-signals-gate/` (not committed);
+    `.specify/specs/006-daily-ai-signals/prompt-gate.md`; plan Decision 1 if the prompt changes
+  - Steps: local `data/ai_news.db` joined to the public digests 2026-10-12..16 as in the dry-run (369
+    items); exact v3 body, system prompt and validation (plan Decision 1), one call per article, content
+    up to 6,000 chars; key from `.env` (never printed); responses cached on disk; spend logged; hard stop
+    at $1.00. First-seen: extracted target days plus the dry-run background check against 2026-08-03..
+    10-11 titles/summaries in deterministic order; identity rules (Decision 2) as far as needed; New gate
+    (Decision 5). Review every displayed New item with the T7.2 rubric, measure recall as T7.2 defines,
+    show Top stories per day.
+  - Pass bar: New precision >= 80% OK and <= 10% BAD over the 5 days; no generic, non-AI or
+    established-company items; Moltbook (10-13) and Attie (10-15) not New; Muse Spark Open New on 10-15;
+    Elorian Glimpse New on 10-16; Beam not New on 10-16. If missed: at most two prompt revisions (version
+    bump each) within the $1.00 limit, each recorded with its effect.
+  - Done when: `prompt-gate.md` committed (per-day tables, verdicts, precision/recall, spend, final prompt
+    text if changed); owner approves (checkpoint 1).
+  - Depends on: -
 
 ## Phase 0: Fixtures
 
@@ -54,9 +76,9 @@
     genuinely different vendors A (9 mentions), B (1), unknown U -> A dominant (>= 80%) absorbs U; A (5),
     B (5), U -> `?` entity with U, flagged and excluded later from New; adding unknown mentions never
     creates more entities; `entity_key` unchanged when a vendor is first named for a single-vendor key;
-    overrides: selectors by resolution key / article identity with `manual:<n>` targets, precedence
-    split > alias > merge, a merge still applies after a vendor appears later and after re-extraction,
-    conflicting selectors refused; attribute ties deterministic.
+    overrides: selectors by resolution key with `manual:<n>` targets, precedence alias > merge, a merge
+    still applies after a vendor appears later and after re-extraction, conflicting selectors refused;
+    attribute ties deterministic.
   - Done when: tests pass; output is a pure function of (evidence, overrides).
   - Depends on: T1.1
 
@@ -107,13 +129,13 @@
 ## Phase 2: Storage
 
 - [ ] **T2.1 Models and guarded migration**
-  - Files: `src/app/storage/models_sql.py` (7 models: `article_signals`, `daily_signal_scope`,
-    `signal_mentions`, `ai_entities`, `ai_entity_overrides`, `ai_entity_candidates`,
-    `daily_signal_reports`), migration `b6d1f0a7c3e5_add_daily_signals.py`,
+  - Files: `src/app/storage/models_sql.py` (6 models: `article_signals`, `daily_signal_scope`,
+    `signal_mentions`, `ai_entities`, `ai_entity_overrides`, `daily_signal_reports`), migration
+    `b6d1f0a7c3e5_add_daily_signals.py`,
     `tests/unit/test_daily_signals_migration.py`
   - Test first: upgrade from `a42b750d0c44`; tables, uniques, indexes; CASCADE on `article_signals` and
     `daily_signal_scope`; no FK on `signal_mentions.article_id`; upgrade after `create_all` succeeds;
-    downgrade drops the seven new tables and keeps pre-feature tables and rows.
+    downgrade drops the six new tables and keeps pre-feature tables and rows.
   - Done when: tests pass.
   - Depends on: -
 
@@ -129,7 +151,7 @@
 
 - [ ] **T2.3 Extraction rows, evidence, entities, overrides**
   - Files: `src/app/storage/daily_signals.py` (`get_cached`, `save_extraction`, `save_failure`,
-    `replace_evidence`, `apply_reconciliation`, `add_override`, `list_candidates`),
+    `replace_evidence`, `apply_reconciliation`, `add_override`, `delete_override`),
     `tests/unit/test_daily_signals_repo.py`
   - Test first: cache by content hash; replacement units (membership change of D replaces only
     `(D, article)` rows; re-extraction in version X replaces all version-X rows of the article); evidence
@@ -137,7 +159,7 @@
     deleted article's id leaves the old evidence intact; evidence set takes each article's newest `ok`
     version with fallback; reconciliation output persisted with
     stable `ai_entities.id` per `entity_key`; entities that lose all evidence become `active = false`;
-    overrides stored and applied; candidates recorded once.
+    overrides stored, applied and deleted.
   - Done when: tests pass.
   - Depends on: T2.2, T1.2, T1.3
 
@@ -173,28 +195,27 @@
 - [ ] **T3.1 [P] Settings and configuration docs**
   - Files: `src/app/config/settings.py`, `docs/configuration.md`, settings test
   - Test first: defaults (enabled False, comparable_from 2026-10-10, max_calls 200, max_seconds 2700,
-    max_usd "0.50", day cap "0.60"); env overrides; invalid USD rejected.
-  - Done when: tests pass; docs list the six variables.
+    max_usd "0.50"); env overrides; invalid USD rejected.
+  - Done when: tests pass; docs list the five variables.
   - Depends on: -
 
 - [ ] **T3.2 [P] Signals ledger**
   - Files: `src/app/storage/daily_signals_ledger.py`, `tests/unit/test_daily_signals_ledger.py`
-  - Test first (fake transport, monkeypatched clock): one POST per dispatch; replay without POST;
-    `attempt_seq`/`attempt_key` unique per physical attempt; atomic pre-POST checks (calls, run USD, day
-    USD across two runs and two versions, budget id across invocations, < 95 s remaining); a stream that
-    keeps sending chunks is aborted at 60 s -> `unknown`; usage on a non-200 response -> `error_billed`
-    with actual cost; actual > reservation -> run stops; overload -> `transient` cost 0; transport error
-    -> `unknown`; delayed headers -> 80 s watchdog closes the client -> `unknown`, late response
-    discarded; crash-left `reserved` -> `unknown`; per-key 2-unknown limit and per-(article, version,
-    content_hash) 4-POST limit that ignores `transient`, with precedence; reset of the article limit; 3 consecutive failures stop; `--budget-usd` change refused without raise; file 0600.
+  - Test first (fake transport, monkeypatched clock): one POST per dispatch (one ledger row per
+    physical POST); replay of a saved 200 without POST; atomic pre-POST checks (calls, run USD with
+    reservation, < 95 s remaining); a stream that keeps sending chunks is aborted at 60 s -> `unknown`;
+    httpx read timeout -> `unknown`; usage on a non-200 response -> `error_billed` with actual cost;
+    actual > reservation -> run stops; overload -> `transient` cost 0; transport error -> `unknown`;
+    crash-left `reserved` -> `unknown` and counted at its reservation; 3 consecutive failures stop;
+    file 0600. (Budget ids, day caps, attempt limits and the watchdog are deferred.)
   - Done when: tests pass.
   - Depends on: -
 
 - [ ] **T3.3 run_signals orchestration**
   - Files: `src/app/core/daily_signals.py`, `tests/unit/test_daily_signals_run.py`
   - Test first: one dispatch per pending article; rerun 0 dispatches, 0 reports written; invalid output ->
-    recovery -> `skipped`; `--retry-skipped` once; outage -> `provider_unavailable`; caps / deadline /
-    day cap -> states and `incomplete_days` reasons; `progress` field; disabled / missing key states;
+    recovery -> `skipped`; `--retry-skipped` once; outage -> `provider_unavailable`; caps / deadline ->
+    states and `incomplete_days` reasons; `progress` field; disabled / missing key states;
     digest tables identical before and after; report has no key or article text.
   - Done when: tests pass.
   - Depends on: T2.5, T3.1, T3.2
@@ -202,18 +223,18 @@
 - [ ] **T3.4 CLI `ai-news daily-signals`**
   - Files: `src/app/cli/main.py`, `tests/unit/test_cli_daily_signals.py`
   - Test first: dates; backfill oldest first with history-only days; `--recompute-only` with the flag off
-    and no key dispatches nothing and writes reports; `--recompute-all`; cap, day-cap and budget flags;
-    JSON line; exit codes.
+    and no key dispatches nothing and writes reports; `--recompute-all`; cap flags (`--max-calls`,
+    `--max-seconds`, `--max-usd`); JSON line; exit codes.
   - Done when: tests pass.
   - Depends on: T3.3
 
 - [ ] **T3.5 CLI `ai-news daily-signals-entities`**
   - Files: `src/app/cli/main.py`, `src/app/storage/daily_signals.py`, `tests/unit/test_cli_daily_signals.py`
-  - Test first: merge, split, alias each create an override (selectors, `manual:<n>` target) and then
+  - Test first: merge and alias each create an override (selectors, `manual:<n>` target) and then
     reconcile and recompute (no flag needed, no provider calls); `purge-evidence --article ID` only for
-    deleted articles; `reset-attempts --article ID`; split survives re-extraction of changed content; manual alias makes a
-    "GPT-6 Astra" mention resolve to the aliased entity (US1 scenario 3); cycles refused; suspects;
-    dismiss; overrides list/delete.
+    deleted articles; manual alias makes a "GPT-6 Astra" mention resolve to the aliased entity (US1
+    scenario 3); cycles refused; overrides list/delete (delete recomputes). Deferred: split, suspects,
+    dismiss, reset-attempts.
   - Done when: tests pass.
   - Depends on: T3.4
 
@@ -277,8 +298,9 @@
   - Depends on: T6.1, owner approval
 
 - [ ] **T6.3 [P] Docs**
-  - Files: `docs/daily-signals.md` (OD answers, methodology, day states, readiness, ledger/caps/budgets,
-    operator commands under the host lock, overrides workflow, retention and cleanup notes, cost),
+  - Files: `docs/daily-signals.md` (OD answers, methodology, day states, readiness, ledger and per-run
+    caps, budget tracking with `--max-usd`, operator commands under the host lock, overrides workflow,
+    `needs_review` query, retention and cleanup notes, cost, deferred items),
     `README.md`, `docs/configuration.md`
   - Done when: commands match CLI help.
   - Depends on: T3.5
@@ -288,7 +310,10 @@
   - Test first: chip buttons with `data-event` (event_type) and a clear control.
   - Depends on: T5.2
 
-## Phase 7: Validation on real data (approved budget id, $2.50)
+## Phase 7: History validation on real data (remainder of the $2.50 validation budget)
+
+Runs only after the coordinator approves checkpoint 3. Prompt quality on the five target days was
+settled in Phase P; this phase validates the full pipeline with extracted history.
 
 - [ ] **T7.1 Scratch DB with production digests**
   - Steps: copy `data/ai_news.db` to `tmp/daily-signals-validate/ai_news.db`;
@@ -301,17 +326,13 @@
 
 - [ ] **T7.2 Backfill and review**
   - Files: `.specify/specs/006-daily-ai-signals/dry-run.md` ("Phase B validation")
-  - Stage 1 (prompt check, ~$0.35): extract only 2026-10-12..16 (`--report-date 2026-10-16
-    --backfill-days 5`, same budget id and cache dir as below), review New/Top stories with the rubric
-    below; if the prompt changes, bump `EXTRACTION_VERSION` and repeat stage 1 once (budget allows one
-    revision; more requires a raised budget from the owner). Stage 2 only after the prompt is frozen.
-  - Stage 2 (history): repeat while the previous run reported `progress > 0` and `incomplete_days` is
-    non-empty:
+  - (Revision 4's stage 1 is replaced by Phase P.) History: repeat while the previous run reported
+    `progress > 0` and `incomplete_days` is non-empty, passing as `--max-usd` the remaining validation
+    budget ($2.50 minus Phase P spend minus earlier runs' `run.usd`):
     `AINEWS_DATABASE_URL=sqlite:///tmp/daily-signals-validate/ai_news.db AINEWS_DAILY_SIGNALS_ENABLED=true
     ./venv1/bin/ai-news daily-signals --report-date 2026-10-16 --backfill-days 75 --max-calls 700
-    --max-seconds 3500 --max-usd 0.90 --budget-id validation-2026-10 --budget-usd 2.50
-    --cache-dir tmp/daily-signals-validate/cache`. Stop on `progress == 0`, budget exhaustion or
-    `day_cap_exhausted`; record terminal reasons (raising a day cap needs owner approval).
+    --max-seconds 3500 --max-usd <remaining> --cache-dir tmp/daily-signals-validate/cache`. Stop on
+    `progress == 0` or budget exhaustion; record terminal reasons and the running total.
     Review 2026-10-12..16 with this rubric: for every displayed New item: OK / BAD-retrospective /
     BAD-established / BAD-generic / BAD-non-AI / BAD-identity / uncertain, plus whether the quote states a
     launch; **recall**: list the named entities of all `model_release`/`product_launch` stories with >= 2
@@ -336,6 +357,7 @@
 ## Dependency summary
 
 ```text
+TP.1 (owner approval) -> all of Phase 0-8
 T0.1 ; T1.1 -> T1.2, T1.3 ; T0.1 + T1.2 -> T1.4 -> T1.5
 T2.1 -> T2.2 -> T2.3 (needs T1.2, T1.3) -> T2.4 -> T2.5 (needs T1.5)
 T3.1, T3.2 ; T2.5 + T3.1 + T3.2 -> T3.3 -> T3.4 -> T3.5

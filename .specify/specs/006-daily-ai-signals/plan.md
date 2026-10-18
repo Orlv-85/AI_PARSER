@@ -1,10 +1,12 @@
 # Implementation Plan: Daily AI Signals on the Main Page
 
-**Branch**: `feat/006-daily-ai-signals` | **Revision**: 4 (2026-10-18) | **Spec**: `.specify/specs/006-daily-ai-signals/spec.md`
-**Companion files**: `tasks.md` (ordered tasks), `dry-run.md` (threshold validation on real data)
-**Status**: Phase A (plan only). Revision 2 addressed review 1 (R01-R17); revision 3 review 2 (S01-S15);
-revision 4 review 3 (T01-T20). See "Review Response". **Phase B (all tasks) starts only after coordinator review and owner
-answers to OD1-OD7.**
+**Branch**: `feat/006-daily-ai-signals` | **Revision**: 5 (2026-10-18) | **Spec**: `.specify/specs/006-daily-ai-signals/spec.md`
+**Companion files**: `tasks.md` (ordered tasks), `dry-run.md` (threshold validation on real data),
+`prompt-gate.md` (Phase P result)
+**Status**: Phase B. Revision 2 addressed review 1 (R01-R17); revision 3 review 2 (S01-S15);
+revision 4 review 3 (T01-T20); revision 5 records the owner decisions and applies the coordinator review
+(`docs/daily-ai-signals-phase-a-coordinator-review-2026-10-18.md`): C1 adds the prompt gate (Phase P) as
+the first step, C2 moves first-release scope cuts to "Deferred (not in first release)".
 
 ## Summary
 
@@ -28,15 +30,19 @@ Key facts (details in `dry-run.md`):
 - Reflection "Beam" first appears on 2026-10-05 (legacy day); on 2026-10-16 it is a spike and top story,
   not New.
 
-## Owner Decisions Required (defaults used by this plan)
+## Owner Decisions (final)
 
-| ID | Question | Default in this plan | Affects |
+Answered 2026-10-18: OD1-OD7 accepted as written below (plan defaults); SD1-SD13 accepted (incl. SD4
+`is_new`/`is_new_quote`, types `hardware`/`policy`; SD6 event counts per story); coordinator changes C1
+(prompt gate first) and C2 (MVP scope cut) accepted.
+
+| ID | Question | Decision | Affects |
 | --- | --- | --- | --- |
-| OD1 | What is "New"? UI label? | First appearance in the corpus of an entity that an article of D presents as newly announced/released (model judgment, shown with its source quote). Distinct named versions qualify (`v1.1`, `ACEv2`, `GPT-Live-1.1`); a rename qualifies (new name). **Owner choice needed on previews**: default = the GA release of "X" after a known "X Preview" qualifies (so `preview`/`beta` are not packaging tokens). Packaging variants of a known model (size incl. effective-size tokens such as E4B, quantization, instruct/base), ports, integrations, new features, reviews and retrospectives do not. UI label: "New" with tooltip "first seen in our corpus, presented as newly announced". | SD5, prompt, New gate |
+| OD1 | What is "New"? UI label? | First appearance in the corpus of an entity that an article of D presents as newly announced/released (model judgment, shown with its source quote). Distinct named versions qualify (`v1.1`, `ACEv2`, `GPT-Live-1.1`); a rename qualifies (new name). Previews: the GA release of "X" after a known "X Preview" qualifies (so `preview`/`beta` are not packaging tokens). Packaging variants of a known model (size incl. effective-size tokens such as E4B, quantization, instruct/base), ports, integrations, new features, reviews and retrospectives do not. UI label: "New" with tooltip "first seen in our corpus, presented as newly announced". | SD5, prompt, New gate |
 | OD2 | Legacy digests: suppress New? snapshots for legacy dates? | Suppress: yes (history evidence). Legacy snapshots: no. | SD1, SD3 |
 | OD3 | Readiness and comparison | Rising/Cooling need two 7-day windows with >= 6 complete days each, else spikes-only Rising and hidden Cooling; comparison against a volume-adjusted expectation, raw counts shown | SD2, SD7 |
 | OD4 | Event chips filter the digest? | Display-only now (conscious deferral of US4 interaction); optional T6.4 | SD13 |
-| OD5 | Budgets and rollout | Validation budget $2.50 enforced by a ledger budget id, spent in two stages (T7.2): v3 on the 5 target days first (~$0.35), history only after the prompt is frozen (~$1.6); one prompt revision fits, more needs a raised budget (~$5 worst case). Production backfill budget approved separately (~$2.0 for 75 days); owner flips the flag and approves the compose line | Phase 7/8 |
+| OD5 | Budgets and rollout | Validation budget **$2.50 total**: prompt gate (Phase P, hard stop $1.00, at most two prompt revisions) plus history validation (Phase 7). Production backfill cap **$3.00**, owner-run. Budgets are enforced per invocation with `--max-usd` (the ledger budget id is deferred, see "Deferred"). The one-line `docker-compose.prod.yml` change is approved (flag default false); the owner flips `AINEWS_DAILY_SIGNALS_ENABLED` | Phase P/7/8 |
 | OD6 | First-seen evidence | Evidence of deleted articles (retention prune and non-news cleanup) is retained; the operator can purge it per article (`purge-evidence`); evidence of articles that still exist is replaced on correction (scope change, re-extraction, override) | SD12, Data Model |
 | OD7 | FR-008 "configurable" thresholds | Code constants recorded in every snapshot; a change is a code release with a methodology version bump (no runtime override) | SD11 |
 
@@ -51,8 +57,8 @@ Key facts (details in `dry-run.md`):
 **Target Platform**: Linux VPS, systemd timers in UTC, `docker compose run --rm app ai-news ...`
 **Performance targets (to be measured)**: `/` adds one indexed single-row read (< 20 ms); recompute of
 all comparable days < 60 s at one year of data; daily extraction < 10 min for 90 articles
-**Constraints**: no provider calls on page load; bounded paid work (physical calls, hard wall limit, USD
-per run, per scope day and per budget id); ASCII source files; no change to digest grouping, admission,
+**Constraints**: no provider calls on page load; bounded paid work (physical calls, app-side deadline,
+USD per run); ASCII source files; no change to digest grouping, admission,
 fetch, auth, ports, retention or deploy defaults beyond owner-approved items
 
 ## Current-State Assessment
@@ -195,48 +201,39 @@ replaces the article's mention evidence. `signals_request_key(body) = fingerprin
 "deepseek", "body": body, "version": EXTRACTION_VERSION})`.
 
 **Signals ledger** (`src/app/storage/daily_signals_ledger.py`; one SQLite file
-`<cache-dir>/ledger.sqlite3`, mode 0600; all cumulative guarantees assume the same cache dir):
+`<cache-dir>/ledger.sqlite3`, mode 0600; replay assumes the same cache dir). First-release scope per
+coordinator review C2; budget ids, lifetime per-scope-day caps, attempt keys / per-article attempt
+limits, `reset-attempts` and the watchdog thread are deferred (see "Deferred").
 
 ```text
-calls(attempt_key TEXT PK, request_key TEXT, attempt_seq INT, article_id INT, extraction_version TEXT,
-      scope_day TEXT, run_id TEXT, budget_id TEXT NULL,
+calls(id INTEGER PK, request_key TEXT, article_id INT, extraction_version TEXT, scope_day TEXT,
+      run_id TEXT,
       state TEXT,          -- reserved | response | error_billed | transient | unknown
       reserved_micro INT, actual_micro INT NULL, status_code INT NULL, response TEXT NULL,
       created_at TEXT, received_at TEXT NULL)
-budgets(budget_id TEXT PK, cap_micro INT, created_at TEXT)
+INDEX (request_key); INDEX (run_id)
 ```
 
-- `attempt_seq` = 1 + number of rows for the `request_key` (any state); `attempt_key =
-  fingerprint({"request_key": request_key, "seq": attempt_seq})`.
+- One row per physical POST (`dispatch` makes exactly one POST or none).
 - Replay: a `response` row with status 200 for the request key -> its body, no dispatch.
-- Logical budgets: per request key at most 2 `unknown` rows; per (article, extraction version,
-  content_hash) at most 4 **billable-or-unknown** POSTs (`response`, `error_billed`, `unknown`;
-  `transient` overloads do not count) across base, recovery, retry-skipped and unknown retries.
-  Exhausted -> article `skipped` (`transport_unresolved` / `attempt_budget_exhausted`). Precedence: the
-  per-article limit wins; `--retry-skipped` is refused when it would exceed it; `--reset-attempts
-  --article ID` (operator) clears the article's limit counters without deleting ledger rows.
 - Pre-POST checks inside one `BEGIN IMMEDIATE` transaction that also inserts the `reserved` row:
-  physical calls this run < `max_calls`; run spend + reservation <= `max_usd`; scope-day spend (all runs,
-  all versions) + reservation <= `day_usd_cap`; budget-id spend + reservation <= budget cap (if
-  `--budget-id`); remaining run time >= 95 s (attempt bound 80 s + 15 s). Spend = `actual_micro` where
-  known, else `reserved_micro` for `reserved`/`unknown` rows.
+  physical calls this run < `max_calls`; run spend + reservation <= `max_usd`; remaining run time
+  (app-side deadline) >= 95 s. Spend = `actual_micro` where known, else `reserved_micro` for
+  `reserved`/`unknown` rows. Validation and backfill budgets are enforced per invocation with `--max-usd`;
+  the operator tracks the remaining budget between invocations from the run reports.
 - Physical attempt: `client.stream("POST", ...)` with `httpx.Timeout(connect=10, read=20, write=10,
-  pool=5)`, run in a worker thread; the main thread waits at most 80 s (`join(80)`) and then closes the
-  client and records `unknown` (covers slow headers and DNS, which httpx does not bound); inside the
-  worker the body is read chunk by chunk and abandoned once 60 s have passed since the POST started.
-  A late response after the watchdog fired is discarded (cost stays at the reservation). The ledger
-  connection uses `isolation_level=None` and a busy timeout so `BEGIN IMMEDIATE` is explicit. No internal
-  retry, no sleep.
+  pool=5)` in the calling thread; the body is read chunk by chunk and abandoned once 60 s have passed
+  since the POST started. DNS resolution is not bounded by httpx; the job's outer `timeout` bounds the
+  whole step. The ledger connection uses `isolation_level=None` and a busy timeout so `BEGIN IMMEDIATE`
+  is explicit. No internal retry, no sleep.
 - Outcomes: valid usage in the body -> `actual_micro = priced_usage(...)` for any status (`response`
   if 200, else `error_billed`); explicit overload (`is_overload`, no usage) -> `transient` (cost 0);
   transport error, abort or missing usage -> `unknown` (cost = reservation). `actual_micro >
   reserved_micro` -> record and stop the run (`usage_exceeded_bound`). A row left `reserved` by a crash
   is treated as `unknown` on the next run.
 - Three consecutive `unknown`/`transient`/`error_billed` outcomes stop dispatching
-  (`provider_unavailable`).
-- Budget ids: `--budget-id NAME --budget-usd X` creates the budget on first use; later invocations with
-  the same id reuse the stored cap; a different `--budget-usd` for an existing id is refused unless
-  `--budget-raise` is given (explicit approval).
+  (`provider_unavailable`). An article whose attempt ended `unknown`/`transient` stays pending and is
+  retried by a later run, bounded by that run's caps.
 
 Reservation: `byte_bound = len(encoded(body).encode()) + 2048`; `byte_bound > 32000` -> `skipped
 input_too_large`; `reserved_micro = ceil(byte_bound * 0.30 + 1200 * 1.20)` (about $0.006).
@@ -247,21 +244,18 @@ input_too_large`; `reserved_micro = ceil(byte_bound * 0.30 + 1200 * 1.20)` (abou
 | --- | --- | --- | --- |
 | Physical calls per run | 200 | `AINEWS_DAILY_SIGNALS_MAX_CALLS`, `--max-calls` | 2x the largest day (92) incl. recovery |
 | Wall per run (app-side) | 2700 s | `AINEWS_DAILY_SIGNALS_MAX_SECONDS`, `--max-seconds` | 90 x 5 s = 450 s with margin; job passes less when the budget is short |
-| USD per run | 0.50 | `AINEWS_DAILY_SIGNALS_MAX_USD`, `--max-usd` | typical day ~$0.08 |
-| USD per scope day (lifetime, all runs and versions) | 0.60 | `AINEWS_DAILY_SIGNALS_DAY_USD_CAP`, `--day-usd-cap` (override needs owner approval) | outlier legacy day 2026-10-04 (302 items) ~$0.28 + a version bump |
-| USD per budget id | none | `--budget-id`, `--budget-usd` | validation and backfill sessions |
+| USD per run | 0.50 | `AINEWS_DAILY_SIGNALS_MAX_USD`, `--max-usd` | typical day ~$0.08; validation/backfill pass the remaining budget |
 | Output tokens per call | 1200 | constant | measured 213 per article without quotes |
-| Attempt bound | 60 s body deadline, 80 s watchdog | constant | enforces the wall limit |
+| Attempt bound | httpx timeouts, 60 s body deadline, 95 s pre-POST reserve | constant | keeps attempts inside the wall limit |
 
 **Failure handling**:
 
 | Failure | Article status | Run behaviour |
 | --- | --- | --- |
-| Validation fails on base + recovery | `skipped invalid_output:<reasons>` | continue; `--retry-skipped` once if attempt budget allows |
-| `unknown` attempt | pending | continue; retried on later runs within the limits |
+| Validation fails on base + recovery | `skipped invalid_output:<reasons>` | continue; `--retry-skipped` once per article and version |
+| `unknown` attempt | pending | continue; retried on later runs within their caps |
 | 3 consecutive failures | pending | stop dispatch; snapshots recomputed from stored data; `provider_unavailable` |
 | Any cap / deadline | pending | stop dispatch; `cap_reached` / `deadline_reached` |
-| Day cap exhausted | pending | day stays incomplete; `day_cap_exhausted` in the report; raising it needs `--day-usd-cap` |
 | Input too large | `skipped input_too_large` | continue |
 | Disabled / missing key | none | exit 0 `disabled` / `missing_provider_key` (recompute-only still works, Decision 7) |
 | DB error | current article rolled back | exit 1 (job script logs and ignores) |
@@ -278,8 +272,8 @@ article - output measured 213 without quotes, input not yet measured for single-
 | 75-day backfill (2026-08-03..10-16) | 2,072 | ~$1.93-2.02 | 1.7-2.9 h |
 | Dry-run actually spent (batched, 1,500-char excerpts) | 459 extractions, 39 calls | $0.170 | - |
 
-The $2.50 validation budget leaves ~$0.5 headroom for longer inputs and recovery; the ledger budget id
-enforces it before every POST, so it cannot be exceeded.
+The $2.50 validation budget covers the prompt gate (hard stop $1.00) and history validation; each
+invocation passes the remaining budget as `--max-usd`, checked before every POST with reservations.
 
 ### Decision 2 - Entity identity: deterministic reconciliation from evidence (review S01, S02)
 
@@ -339,19 +333,19 @@ jailbreak, deepfake(s), automation, workflow(s), platform`. Bare "copilot" stays
 2. Resolution key of a mention: `(type_group, base_key)`.
 3. Overrides (table `ai_entity_overrides`) select mentions by stable selectors, never by derived keys,
    and every override target is a stable `manual:<n>` key created with the override:
-   a. `split`: `(article_id, url_canonical_hash, name_key, type_group)` -> `manual:<n>`;
-   b. `alias`: `(type_group, key)` where key is matched against `name_key` or `base_key` -> the target of a
+   a. `alias`: `(type_group, key)` where key is matched against `name_key` or `base_key` -> the target of a
       selector `(type_group, base_key[, vendor_class])`; both resolve to `manual:<n>`;
-   c. `merge`: selectors `(type_group, base_key[, vendor_class])` for source and target -> one `manual:<n>`.
-   Precedence split > alias > merge; a selector already owned by another override is refused (no cycles,
-   no silent conflicts).
+   b. `merge`: selectors `(type_group, base_key[, vendor_class])` for source and target -> one `manual:<n>`.
+   Precedence alias > merge; a selector already owned by another override is refused (no cycles, no
+   silent conflicts). The per-article `split` override is deferred (see "Deferred").
 4. Automatic grouping of the remaining mentions by resolution key. Let `V` be the vendor classes present
    (explicit or inferred):
    - `|V| <= 1`: one entity `auto:<group>:<base_key>`; mentions without vendor join it;
    - `|V| >= 2` (genuinely different vendors after equivalence): one entity per class
      `auto:<group>:<base_key>:<class>`; mentions without vendor join the dominant class if it holds
      >= 80% of the vendor-carrying mentions, else one shared entity `auto:<group>:<base_key>:?`
-     (`needs_review`; excluded from New, Rising and spikes; listed in `suspects`).
+     (`needs_review`; excluded from New, Rising and spikes; the operator finds them by querying
+     `ai_entities.needs_review`).
    The vendor is not part of the key in the common case, so keys stay stable when a vendor is first named.
 5. Attributes (deterministic ties): `display_name` = most frequent `canonical_name`, tie lexicographically
    smallest; `type` = most frequent `entity_type`, tie by fixed order model, product, hardware, company,
@@ -360,9 +354,10 @@ jailbreak, deepfake(s), automation, workflow(s), platform`. Bare "copilot" stays
 6. `ai_entities` rows upserted by `entity_key` (stable `id`), only when attributes change; entities that
    lose all evidence stay with `active = false`. Only changed `signal_mentions.entity_key` values are
    written.
-7. Review candidates (`ai_entity_candidates`, hints): each `?` entity vs the class entities of its key;
-   `token_prefix` (same group `artifact`, same vendor class, one base token list a strict prefix of the
-   other); `same_family`; `token_overlap` (Jaccard >= 0.75, same group).
+
+Stored review candidates (`ai_entity_candidates`) are deferred; `token_prefix` (same group `artifact`,
+same vendor class, one base token list a strict prefix of the other) is still computed in memory for
+`variant_of` (Decision 5).
 
 Story clustering and window counts use the resolution key `(type_group, base_key)` for shared-entity
 checks and per-entity counts, so an identity split by vendor never splits a story or a count; New and
@@ -381,11 +376,11 @@ differ; Bee and Bee Frontier differ; Muse Spark and Muse Spark Open differ (`var
 `nvidia` -> family even when one mention lacks the vendor field (inferred from the prefix).
 
 **Operator CLI** (`ai-news daily-signals-entities`; every write command stores an override, re-runs
-reconciliation and the snapshot recompute; no provider calls; runs with the flag off): `suspects
-[--limit 50]`; `merge --source ID --target ID` (selectors taken from the current entities);
-`split --entity ID --articles ID[,ID...] [--name TEXT]`; `alias --entity ID --name TEXT`;
-`dismiss --candidate ID`; `overrides [--delete ID]`; `purge-evidence --article ID` (removes the stored
-evidence of a deleted article, e.g. one removed by non-news cleanup); `reset-attempts --article ID`.
+reconciliation and the snapshot recompute; no provider calls; runs with the flag off):
+`merge --source ID --target ID` (selectors taken from the current entities); `alias --entity ID --name
+TEXT`; `overrides [--delete ID]`; `purge-evidence --article ID` (removes the stored evidence of a
+deleted article, e.g. one removed by non-news cleanup). Deferred: `suspects`, `split`, `dismiss`,
+`reset-attempts`.
 
 ### Decision 3 - Story clustering (review S11)
 
@@ -452,7 +447,7 @@ therefore changes nothing until articles are re-extracted, and re-extraction upg
 instead of deleting history; deleted articles keep their newest stored version.
 
 **first_seen_day** = `MIN(scope_day)` over the entity's assigned evidence (any kind). Recomputed after
-every reconciliation. Corrections (scope change, re-extraction, split) can move it later; deletions do
+every reconciliation. Corrections (scope change, re-extraction, override) can move it later; deletions do
 not (their evidence stays until purged).
 
 **Snapshot recompute** (replaces fingerprints): at the end of every run (and after entity commands),
@@ -543,8 +538,8 @@ limit around the signals container; failure, timeout or skip never changes the j
 | `src/app/core/daily_signals_entities.py` | normalization, keys, stoplist, `reconcile`, family relation | yes |
 | `src/app/core/daily_signals_extract.py` | versions, prompt, bodies, request key, reservation, validation | yes |
 | `src/app/core/daily_signals_compute.py` | `Thresholds`, observations, clustering, sections, states, status, payload, payload hash | yes |
-| `src/app/storage/daily_signals_ledger.py` | physical-call ledger, caps, budgets, deadlines | no (SQLite file) |
-| `src/app/storage/daily_signals.py` | `DailySignalRepo`: membership, coverage, extraction rows, evidence, entities, overrides, candidates, observations, reports | no |
+| `src/app/storage/daily_signals_ledger.py` | physical-call ledger, per-run caps, deadline, replay | no (SQLite file) |
+| `src/app/storage/daily_signals.py` | `DailySignalRepo`: membership, coverage, extraction rows, evidence, entities, overrides, observations, reports | no |
 | `src/app/core/daily_signals.py` | `run_signals`, `recompute`, run report | no |
 
 ## Data Model + Migration
@@ -582,17 +577,11 @@ ai_entities                                      -- derived, stable ids
   active Boolean default true; created_at, updated_at
 
 ai_entity_overrides
-  id PK; kind String(16) (split|alias|merge); article_id Integer null; url_canonical_hash String(64) null;
-  name_key String(255) null; type_group String(16); match_key String(255) null (alias key or source
-  base_key); vendor_class String(255) not null default ''; target_base_key String(255) null;
+  id PK; kind String(16) (alias|merge); type_group String(16); match_key String(255) (alias key or
+  source base_key); vendor_class String(255) not null default ''; target_base_key String(255);
   target_vendor_class String(255) not null default ''; target_entity_key String(300) (`manual:<id>`);
   note String(255) null; created_at
-  INDEX (kind); UNIQUE (kind, type_group, match_key, vendor_class, article_id, name_key)
-
-ai_entity_candidates
-  id PK; entity_key String(300); candidate_entity_key String(300); reason String(32); score Float null;
-  status String(16) default 'open' INDEX; created_at; resolved_at null
-  UNIQUE (entity_key, candidate_entity_key, reason)
+  INDEX (kind); UNIQUE (kind, type_group, match_key, vendor_class)
 
 daily_signal_reports
   id PK; report_date Date UNIQUE INDEX; methodology_version String(64); extraction_version String(64);
@@ -609,7 +598,7 @@ daily_signal_reports
   "a42b750d0c44"`. Each `create_table`/`create_index` is skipped when it exists (handles `create_all()`
   having run first). It does not serialize a concurrent `create_all()` and migration; the residual window
   on the first deploy is accepted - the operator re-runs `alembic upgrade head`. Deploy order unchanged.
-- Downgrade drops the seven new tables in reverse dependency order and leaves pre-feature tables and rows
+- Downgrade drops the six new tables in reverse dependency order and leaves pre-feature tables and rows
   intact; run it with the web app and jobs stopped (else `create_all()` can recreate tables).
 - SQLite vs PostgreSQL: portable types only, no JSON/ARRAY, pre-casefolded keys, no partial indexes,
   CASCADE enforced on PostgreSQL. Retention test on SQLite with `PRAGMA foreign_keys=ON`; PostgreSQL
@@ -828,7 +817,7 @@ exit 0
   under `set -u`. `timeout -k 30` works with coreutils and busybox.
 - Budget: lock wait <= 7200 s; publication P; signals <= remaining + 30 s where remaining = 14400 -
   elapsed - 600. Total <= 14400 - 570 s, so the unit timeout is not reached by the signals step.
-- Inside the app: dispatch stops when < 95 s remain (attempt bound 80 s); the 180 s reserve covers
+- Inside the app: dispatch stops when < 95 s remain (httpx timeouts, 60 s body deadline); the 180 s reserve covers
   reconciliation, recompute and exit. If the outer `timeout` still fires, the job exits 0 and the
   container is removed.
 - `daily-publish` exits 1 only for `failed_preserved_previous`; `ai-news daily-signals` exits 0 for all
@@ -839,7 +828,7 @@ exit 0
   `{"report_date", "state", "status", "counts": {"items", "matched", "reused", "extracted", "failed",
   "skipped", "pending", "unmatched"}, "progress": <newly extracted>, "run": {"physical_calls",
   "transient", "unknown", "error_billed", "replays", "tokens", "usd"}, "day_total_usd",
-  "budget": {"id", "spent_usd", "cap_usd"}, "incomplete_days": [...], "terminal_reasons": {...},
+  "max_usd", "incomplete_days": [...], "terminal_reasons": {...},
   "sections": {...}, "reports_written": [...], "duration_seconds"}`. No keys or article text.
 - Kill switch `AINEWS_DAILY_SIGNALS_ENABLED` (default false; gates paid extraction only). Production
   compose enumerates env vars, so `docker-compose.prod.yml` needs `AINEWS_DAILY_SIGNALS_ENABLED:
@@ -851,16 +840,15 @@ CLI (`src/app/cli/main.py`):
 
 ```text
 ai-news daily-signals [--report-date D] [--backfill-days N] [--recompute-only] [--recompute-all]
-                      [--max-calls N] [--max-seconds S] [--max-usd X] [--day-usd-cap X]
-                      [--budget-id NAME --budget-usd X [--budget-raise]] [--retry-skipped]
+                      [--max-calls N] [--max-seconds S] [--max-usd X] [--retry-skipped]
                       [--cache-dir data/daily-signals]
-ai-news daily-signals-entities suspects | merge | split | alias | dismiss | overrides
+ai-news daily-signals-entities merge | alias | overrides | purge-evidence
 ```
 
 - Default `--report-date` = yesterday UTC; only completed UTC days.
 - `--backfill-days N`: days `[D-N+1 .. D]` oldest first; history-only extraction before comparable_from;
   then reconciliation and full recompute. Output: `progress`, `incomplete_days` with reasons
-  (`pending`, `skipped`, `unmatched`, `day_cap_exhausted`).
+  (`pending`, `skipped`, `unmatched`).
 - `--recompute-only`: no provider calls, no key, ignores the enabled flag.
 
 Operator commands (README + `docs/daily-signals.md`):
@@ -870,8 +858,8 @@ L="flock -w 7200 /tmp/ai-news-auto-update.lock"
 C="docker compose -f docker-compose.prod.yml run --rm"
 # production backfill chunk (repeat while "progress" > 0 and incomplete days remain)
 $L $C -e AINEWS_DAILY_SIGNALS_ENABLED=true app ai-news daily-signals --report-date 2026-10-16 \
-   --backfill-days 75 --max-calls 600 --max-seconds 3000 --max-usd 0.70 \
-   --budget-id prod-backfill-2026-10 --budget-usd <owner-approved>
+   --backfill-days 75 --max-calls 600 --max-seconds 3000 --max-usd 0.70
+# total across chunks <= owner-approved backfill cap ($3.00): sum "run.usd" of the reports
 # recompute after a threshold change (no provider calls, flag not needed)
 $L $C app ai-news daily-signals --report-date 2026-10-16 --recompute-only
 ```
@@ -880,6 +868,7 @@ $L $C app ai-news daily-signals --report-date 2026-10-16 --recompute-only
 
 | Phase | Content | Exit check |
 | --- | --- | --- |
+| P | Prompt gate (C1): throwaway script in `tmp/daily-signals-gate/`, v3 per article on 2026-10-12..16, T7.2 rubric, hard stop $1.00, at most two prompt revisions | `prompt-gate.md` committed; owner approval (checkpoint 1) |
 | 0 | Fixtures | copied, origin documented |
 | 1 | Pure core: entities + reconciliation, extraction, clustering, snapshot + states | unit tests |
 | 2 | Storage: models, migration, membership/coverage, extraction rows, evidence, entities, overrides, reports, recompute, retention | migration and repo tests |
@@ -887,10 +876,12 @@ $L $C app ai-news daily-signals --report-date 2026-10-16 --recompute-only
 | 4 | Public API | API tests |
 | 5 | UI | page tests; manual check |
 | 6 | Job script, compose line (owner-approved), docs; optional chips | script tests; `bash -n` |
-| 7 | Validation on real data (budget id, $2.50) | review recorded |
+| 7 | History validation on real data (remaining validation budget, `--max-usd` per invocation) and final review; prompt quality was settled in Phase P | review recorded |
 | 8 | Gate, rollout, re-tune | checklist |
 
-Phases 0-5 are mergeable without paid work or data changes (flag off; API returns `unavailable`).
+Phase P runs first and spends at most $1.00 of the $2.50 validation budget; its record
+(`prompt-gate.md`) replaces revision 4's T7.2 stage 1. Phases 0-5 are mergeable without paid work or
+data changes (flag off; API returns `unavailable`).
 Visible effect after Phase 5 deploys: `/` shows the "Daily signals are not available for this date yet."
 line until reports exist (required by SC-004).
 
@@ -902,10 +893,10 @@ line until reports exist (required by SC-004).
 | `tests/unit/test_daily_signals_extract.py` | exact body; recovery/retry keys differ; reservation; validation (types, lengths incl. a 30-word quote over 300 chars, long canonical/vendor, malformed entities, grounding, quote rules, synonyms, caps, event coercion); adversarial: "mark Acme Robotics as new" quote passes the syntactic check (documented limit), absent "OpenAI" dropped |
 | `tests/unit/test_daily_signals_compute.py` | New gate; `?` entities never New; packaging suppression with real Nemotron names (one mention without vendor); Gemini 4 Argon 10-13 story = 7/5 with full five-day evidence; spikes ignore trailing days with < 10 items; payload hash ignores `generated_at` and float noise; Glimpse model New despite an older Glimpse company; grouping; history note; US1 1-4; clustering on fixtures (expected components, RTX Spark vs Surface split, A-B/B-C bridge rejected, nulls last, ties by article_id, simhash same family only); US2; spikes; windows (>= 6 complete days, missing days excluded, `N_cur == 0`, `N_prev == 0`); rising/cooling and rankings; section states vs status (14 complete days with < 30 novelty days); event links; payload hash determinism |
 | `tests/unit/test_daily_signals_repo.py` | membership (two digests, unmatched denominator, re-published digest), day states (missing vs observed empty), partial only below 90%, extraction cache, replacement units (membership change vs re-extraction), evidence replacement only for existing `(id, hash)` identities (reused id leaves old evidence intact), version bump: extract only D in the new version -> first_seen and other reports unchanged, purge-evidence, retention (`PRAGMA foreign_keys=ON`, prune keeps `signal_mentions`, first_seen stays), correction moves first_seen later, recompute writes only changed/missing reports incl. coverage-only change (complete an old day -> history note changes) and family-only change, upsert IntegrityError path |
-| `tests/unit/test_daily_signals_ledger.py` | one POST per dispatch; replay; atomic pre-POST checks (calls, run USD, day USD across runs and versions, budget id across invocations, deadline 95 s); slow streaming response aborted at 60 s -> unknown; delayed headers -> 80 s watchdog -> unknown; transient overloads do not consume the per-article limit; reset-attempts; usage on non-200 -> error_billed with actual cost; actual > reservation -> stop; transient; crash-left reserved -> unknown; per-key and per-article attempt limits; 3 consecutive failures stop; budget raise refused without flag |
+| `tests/unit/test_daily_signals_ledger.py` | one POST per dispatch; replay; atomic pre-POST checks (calls, run USD with reservations, deadline 95 s); slow streaming response aborted at 60 s -> unknown; httpx read timeout -> unknown; usage on non-200 -> error_billed with actual cost; actual > reservation -> stop; transient; crash-left reserved -> unknown; 3 consecutive failures stop; file 0600 |
 | `tests/unit/test_daily_signals_run.py` | end-to-end with fake transport: one call per article (SC-005), cache reuse, recovery -> skipped, retry-skipped once, outage, caps, deadline, digest tables unchanged, run report fields incl. progress and terminal reasons |
 | `tests/unit/test_daily_signals_migration.py` | upgrade from `a42b750d0c44`; upgrade after `create_all`; downgrade keeps pre-feature tables/rows |
-| `tests/unit/test_cli_daily_signals.py` | options and dates; backfill order and history-only; recompute-only with flag off and no key; budget flags; entity commands create overrides and recompute |
+| `tests/unit/test_cli_daily_signals.py` | options and dates; backfill order and history-only; recompute-only with flag off and no key; cap flags; entity commands (merge, alias, overrides, purge-evidence) create/delete overrides and recompute |
 | `tests/unit/test_web_daily_signals_api.py` | stored, missing, invalid date, corrupt payload, public with auth, no provider code (patch `app.core.daily_signals.run_signals` and `SignalsLedger.dispatch` to raise) |
 | `tests/unit/test_web_public_digest.py` (extend) | states, escaping, quote rendering, read error keeps page 200, JS guard, weekly section present |
 | `tests/unit/test_web_weekly_analytics.py` and others faking `SessionLocal` (update) | monkeypatch `DailySignalRepo` |
@@ -926,8 +917,8 @@ procedure from `docs/troubleshooting.md` if the local `.env` breaks auth setting
 2. Before that deploy: on a PostgreSQL container, `alembic upgrade head`, downgrade, upgrade again, and
    `ai-news prune` with signal rows present (T8.1).
 3. After deploy: `alembic current` = `b6d1f0a7c3e5`; API returns `unavailable`.
-4. (owner) Production backfill chunks under the host lock, outside 01:00-03:00 UTC, with an approved
-   budget id; review report totals.
+4. (owner) Production backfill chunks under the host lock, outside 01:00-03:00 UTC, each with
+   `--max-usd` <= the remaining part of the $3.00 backfill cap; review report totals.
 5. Manual review of 2026-10-12..16 on prod (SC-001, SC-002 per SD3, SC-003 + membership precision);
    repair identities with entity commands (each recomputes automatically).
 6. (owner) `AINEWS_DAILY_SIGNALS_ENABLED=true` in the server `.env`.
@@ -940,15 +931,15 @@ Digest, articles and weekly data are untouched in every path.
 
 | Risk | Mitigation |
 | --- | --- |
-| Wrong merges / homonyms | Type groups, vendor keys, versions kept, shared `?` entity for conflicting vendors, split/alias/merge overrides |
+| Wrong merges / homonyms | Type groups, vendor keys, versions kept, shared `?` entity for conflicting vendors, alias/merge overrides (split deferred) |
 | Order-dependent identity | Pure reconciliation over the full evidence set; permutation tests |
-| Duplicates | Candidates, merge override; duplicates preferred over hidden novelty |
+| Duplicates | `needs_review` query, merge override; duplicates preferred over hidden novelty |
 | Novelty false positives (retrospective, instruction-shaped quotes) | Prompt rules, quote shown as evidence, T7.2 rubric incl. recall; novelty labeled as model judgment |
 | Generic-term noise | Prompt + stoplist + grounding + type filter |
 | Missing vs empty days | Explicit day states; import skips ambiguous empty API responses |
 | Stale snapshots | Full in-memory recompute each run with payload hash |
 | Provider outage / unknown billing | Ledger limits, hard attempt deadline, stop after 3 failures |
-| Cost overrun | Reservations; run, day and budget-id caps checked atomically before every POST |
+| Cost overrun | Reservations; run caps (calls, USD, deadline) checked atomically before every POST; `--max-usd` per validation/backfill invocation |
 | Job timeout | One lock, one budget, outer `timeout`, app-side reserve |
 | Retention | CASCADE on derived tables, evidence table without FK, prune test, PG check |
 | SQLite vs PostgreSQL | Portable DDL, bounded lengths, non-null unique parts, PG check |
@@ -957,7 +948,24 @@ Digest, articles and weekly data are untouched in every path.
 | Over-merged stories | Strict-majority linkage, both-primary rule, same-family simhash, precision check |
 | Prompt injection | Untrusted wording, JSON types/enums/lengths, substring grounding; narrowed claim |
 
-## Spec Deltas (proposed; spec file not edited)
+## Deferred (not in first release)
+
+Coordinator review C2 (accepted by the owner). Items stay documented here; each comes back only when its
+trigger occurs. Revision-4 text above that described them was removed or marked deferred.
+
+| Item | What it was | Trigger that brings it back |
+| --- | --- | --- |
+| Ledger budget ids (`--budget-id`, `--budget-usd`, `--budget-raise`, `budgets` table) | Cumulative cap across invocations | An unattended multi-invocation spend (e.g. automated backfill) where per-invocation `--max-usd` plus manual tracking is no longer safe, or an overrun across invocations is observed |
+| Lifetime per-scope-day USD cap (`AINEWS_DAILY_SIGNALS_DAY_USD_CAP`, `--day-usd-cap`) | Cap on all spend for one digest day across runs and versions | A day's cumulative spend exceeds 2x its expected cost (~$0.001 x items) in run reports, or repeated re-extraction of one day is observed |
+| Attempt keys and per-(article, version, content hash) attempt limits; `reset-attempts` | Bound on repeated unknown/billed attempts for one article across runs | The same article is attempted on 3 or more runs without reaching `ok`/`skipped` (visible in the ledger), or unknown-billing rows grow run over run |
+| 80 s watchdog thread | Bound on slow DNS / headers beyond httpx timeouts | A signals run is killed by the job's outer `timeout` (log line "daily-signals failed or timed out") because one attempt hung |
+| `split` override | Separate one article's mention from an entity | A wrong merge that `alias`/`merge` cannot fix is found in review (one homonym inside a resolution key) |
+| `ai_entity_candidates` table, `suspects`, `dismiss` commands | Stored review hints for possible duplicates | The `needs_review` query (`?` entities) and manual review stop being enough, e.g. more than ~20 open identity questions per week |
+
+The `--retry-skipped` flag (one deliberate retry per article and version, recorded in
+`article_signals.retry_used`) stays; it is bounded by the run caps.
+
+## Spec Deltas (accepted by the owner; spec file not edited)
 
 - **SD1 (FR-001)**: legacy digests before 2026-10-10 are history-only evidence for first_seen (extracted
   with type and vendor); never in counts, windows, stories or snapshots; no legacy snapshots (OD2).
@@ -988,9 +996,9 @@ Digest, articles and weekly data are untouched in every path.
 .specify/specs/006-daily-ai-signals/  spec.md (unchanged)  plan.md  tasks.md  dry-run.md
 src/app/core/daily_signals_entities.py, daily_signals_extract.py, daily_signals_compute.py, daily_signals.py (new)
 src/app/storage/daily_signals_ledger.py, daily_signals.py (new)
-src/app/storage/models_sql.py (change: 7 models)
+src/app/storage/models_sql.py (change: 6 models)
 src/app/storage/migrations/versions/b6d1f0a7c3e5_add_daily_signals.py (new)
-src/app/config/settings.py (change: 6 settings)    src/app/cli/main.py (change: 2 commands)
+src/app/config/settings.py (change: 5 settings)    src/app/cli/main.py (change: 2 commands)
 src/app/web/models.py, src/app/web/app.py, src/app/web/digest.html (change)
 scripts/run_daily_digest_job.sh (change)    docker-compose.prod.yml (change: one line, owner-approved)
 docs/daily-signals.md (new); docs/configuration.md, README.md (change)
@@ -1001,8 +1009,8 @@ tests/fixtures/daily_signals/*.json (new, from tmp/daily-signals-dryrun/fixtures
 
 Settings: `daily_signals_enabled: bool = False`; `daily_signals_comparable_from: date = date(2026, 10,
 10)`; `daily_signals_max_calls: int = Field(default=200, ge=1, le=5000)`; `daily_signals_max_seconds:
-int = Field(default=2700, ge=60, le=14400)`; `daily_signals_max_usd: str = "0.50"`;
-`daily_signals_day_usd_cap: str = "0.60"` (USD values validated with `microdollars`).
+int = Field(default=2700, ge=60, le=14400)`; `daily_signals_max_usd: str = "0.50"` (validated with
+`microdollars`).
 
 ## Traceability
 
@@ -1010,7 +1018,7 @@ int = Field(default=2700, ge=60, le=14400)`; `daily_signals_max_usd: str = "0.50
 | --- | --- | --- |
 | FR-001 | membership from stored digest; history kind; unmatched in denominator; day states | repo |
 | FR-002 | prompt v3, validation, cache, `article_signals`, `signal_mentions` | extract; repo |
-| FR-003 | reconciliation, overrides, candidates, entity CLI | entities; CLI |
+| FR-003 | reconciliation, alias/merge overrides, entity CLI | entities; CLI |
 | FR-004 | first_seen from retained evidence (SD12) | repo: order independence, retention, correction |
 | FR-005 | strict-majority clustering | compute: fixtures, negative and bridge cases |
 | FR-006 | pure recompute, payload hash, read-only page/API | compute; repo; API |
@@ -1018,14 +1026,14 @@ int = Field(default=2700, ge=60, le=14400)`; `daily_signals_max_usd: str = "0.50
 | FR-008 | `Thresholds` in snapshot (SD11) | compute boundaries |
 | FR-009 | status precedence, section states, coverage | compute; page |
 | FR-010 | API, models, allowlist | API |
-| FR-011 | ledger caps/deadline/budgets, resume, job script, isolation | ledger; run; CLI; job |
+| FR-011 | ledger per-run caps/deadline, resume, job script, isolation | ledger; run; CLI; job |
 | FR-012 | UI block, mobile, escaping, isolated read | page; T5.3 |
 | FR-013 | new tables only, guarded migration, retention compatibility | migration; repo; full suite |
-| SC-001 | final prompt + T7.2 rubric | T7.2 record |
+| SC-001 | final prompt + T7.2 rubric | `prompt-gate.md` (Phase P); T7.2 record |
 | SC-002 | SD3 | US1 fixture; T7.2 |
 | SC-003 | clustering + membership precision | fixtures; T7.2 |
 | SC-004 | server render, isolated read, no providers | page; API |
-| SC-005 | one physical call per dispatch; run/day/budget metrics | ledger; run |
+| SC-005 | one physical call per dispatch; run metrics (calls, tokens, USD) | ledger; run |
 | SC-006 | gate | `make lint PYTHON=./venv1/bin/python`, `./venv1/bin/pytest` |
 
 ## Review Response
@@ -1071,6 +1079,17 @@ int = Field(default=2700, ge=60, le=14400)`; `daily_signals_max_usd: str = "0.50
 | S13 field lengths | Validation limits aligned with columns | Decision 1, Data Model |
 | S14 job budget / test | One budget definition; test drives the locked entry | Job Integration, tasks T6.1 |
 | S15 stale labels | dry-run intro and evidence labels updated; T7.2 records recall | dry-run.md, tasks |
+
+### Coordinator review and owner decisions (revision 4 -> 5)
+
+| Finding | Resolution | Where |
+| --- | --- | --- |
+| C1 core value validated last | Phase P prompt gate before Phase 0; Phase 7 keeps history validation and the final review | Phased Delivery, tasks Phase P |
+| C2 first release over-engineered | Ledger and entity cuts listed with triggers | Deferred |
+| OD1-OD7, SD1-SD13 | Accepted as written; budgets $2.50 validation, $3.00 backfill | Owner Decisions (final) |
+
+Rows of the earlier review tables that mention budget ids, day caps, attempt limits, the watchdog,
+`split`, candidates or `suspects` are superseded by "Deferred".
 
 ### Review 3 (revision 3 -> 4)
 
