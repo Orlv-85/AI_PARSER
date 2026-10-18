@@ -24,6 +24,16 @@ except ImportError:  # pragma: no cover - optional dependency
 _ARGON2_HASHER = _Argon2PasswordHasher() if _Argon2PasswordHasher is not None else None
 
 
+def verify_bearer_token(authorization: str | None, expected_token: str | None) -> bool:
+    """Check an ``Authorization: Bearer <token>`` header in constant time."""
+    if not expected_token or not authorization:
+        return False
+    scheme, _, provided = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not provided.strip():
+        return False
+    return hmac.compare_digest(provided.strip().encode("utf-8"), expected_token.encode("utf-8"))
+
+
 def _b64encode(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).decode("ascii").rstrip("=")
 

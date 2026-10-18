@@ -108,3 +108,44 @@ def test_production_compose_passes_weekly_v2_flag_to_all_app_commands() -> None:
     compose = yaml.safe_load(Path("docker-compose.prod.yml").read_text(encoding="utf-8"))
     assert compose["services"]["app"]["environment"]["AINEWS_WEEKLY_V2_ENABLED"] == (
         "${AINEWS_WEEKLY_V2_ENABLED:-false}")
+
+
+@pytest.mark.parametrize("workflow", ["deploy-release.yml", "deploy-by-tag.yml"])
+@pytest.mark.parametrize(
+    ("secret", "expected"),
+    [("publish-token-0123456789abcdef$0123", "publish-token-0123456789abcdef$$0123"), ("", "")],
+)
+def test_deploy_transports_publish_api_token(workflow, secret, expected, tmp_path) -> None:
+    config = yaml.safe_load(Path(".github/workflows", workflow).read_text(encoding="utf-8"))
+    steps = config["jobs"]["deploy"]["steps"]
+    payload = next(step for step in steps if step["name"] == "Prepare runtime env payload")
+    assert payload["env"]["AINEWS_PUBLISH_API_TOKEN"] == "${{ secrets.AINEWS_PUBLISH_API_TOKEN }}"
+    env_path = tmp_path / "runtime.env"
+    run = payload["run"].replace("/tmp/ai_news_auth.env", str(env_path))
+    environment = {
+        **os.environ,
+        **dict.fromkeys(payload["env"], "test-only-value"),
+        "AINEWS_PUBLISH_API_TOKEN": secret,
+    }
+    result = subprocess.run(
+        ["bash", "-c", run], env=environment, capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 0, result.stderr
+    if secret:
+        assert secret not in result.stdout + result.stderr
+    assert f"AINEWS_PUBLISH_API_TOKEN={expected}\n" in env_path.read_text(encoding="utf-8")
+
+    deploy = next(step for step in steps if "retry sshpass" in step.get("run", ""))
+    pattern = re.search(r"grep -vE '([^']+)'", deploy["run"])
+    assert pattern is not None
+    previous_env = tmp_path / "previous.env"
+    previous_env.write_text(
+        "AINEWS_PUBLISH_API_TOKEN=old-manual-token\nJEV_API_KEY=test-only-jev\n",
+        encoding="utf-8",
+    )
+    filtered = subprocess.run(["grep", "-vE", pattern[1], str(previous_env)],
+                              capture_output=True, text=True, check=True)
+    merged = filtered.stdout + env_path.read_text(encoding="utf-8")
+    assert merged.count("AINEWS_PUBLISH_API_TOKEN=") == 1
+    assert "old-manual-token" not in merged
+    assert "JEV_API_KEY=test-only-jev\n" in merged

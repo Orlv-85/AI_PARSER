@@ -29,6 +29,12 @@ else
   APP_BASE_URL="http://${APP_IP}:${APP_PORT}"
 fi
 
+# Cron does not load .env; reuse the app container's publish token for the POST.
+if [ -z "${AINEWS_PUBLISH_API_TOKEN:-}" ]; then
+  AINEWS_PUBLISH_API_TOKEN="$(docker exec "$APP_CONTAINER" printenv AINEWS_PUBLISH_API_TOKEN 2>/dev/null || true)"
+fi
+export AINEWS_PUBLISH_API_TOKEN
+
 if [ "$#" -ge 1 ]; then
   REPORT_DATE="$1"
 else

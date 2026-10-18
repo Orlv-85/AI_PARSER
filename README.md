@@ -47,6 +47,16 @@ For an existing database, run `./venv1/bin/alembic upgrade head` first.
 - [Daily AI Signals](docs/daily-signals.md) - signals block on `/`, methodology, operator commands, costs, rollback.
 - [Troubleshooting](docs/troubleshooting.md) - known failures (flaky tests, local env) with causes and fixes.
 
+## Publishing digests over HTTP (operators)
+
+With web auth enabled, `POST /api/news/digests` and
+`POST /api/news/weekly-analytics` require an admin session or
+`Authorization: Bearer $AINEWS_PUBLISH_API_TOKEN`; reads stay public. The deploy
+workflows write the token to the server `.env` from the repository secret
+`AINEWS_PUBLISH_API_TOKEN`; give the same value to any machine publisher such as
+`scripts/digest_generator.py`. See
+[Configuration](docs/configuration.md#publish-api-token).
+
 ## Article dates and one-time re-enrichment
 
 Publication, modification and discovery are separate. Unknown publication
