@@ -50,9 +50,10 @@ For an existing database, run `./venv1/bin/alembic upgrade head` first.
 
 With web auth enabled, `POST /api/news/digests` and
 `POST /api/news/weekly-analytics` require an admin session or
-`Authorization: Bearer $AINEWS_PUBLISH_API_TOKEN`; reads stay public. Set the
-same token (`openssl rand -hex 32`) in the server `.env` and in the environment
-of any machine publisher such as `scripts/digest_generator.py`. See
+`Authorization: Bearer $AINEWS_PUBLISH_API_TOKEN`; reads stay public. The deploy
+workflows write the token to the server `.env` from the repository secret
+`AINEWS_PUBLISH_API_TOKEN`; give the same value to any machine publisher such as
+`scripts/digest_generator.py`. See
 [Configuration](docs/configuration.md#publish-api-token).
 
 ## Article dates and one-time re-enrichment

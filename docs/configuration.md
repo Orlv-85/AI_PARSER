@@ -103,6 +103,8 @@ AINEWS_PUBLISH_API_TOKEN=<openssl rand -hex 32>
   `scripts/run_weekly_analytics_job.sh` reads the token from the app container
   when it is not exported.
 - With auth disabled (local dev), writes stay open as before.
+- In production the deploy workflows write the value from the repository secret
+  `AINEWS_PUBLISH_API_TOKEN` into the server `.env` (see [deploy](deploy.md)).
 
 ## 2) Source list (`sources.yaml`)
 
