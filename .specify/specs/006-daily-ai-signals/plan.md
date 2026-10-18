@@ -1,12 +1,15 @@
 # Implementation Plan: Daily AI Signals on the Main Page
 
-**Branch**: `feat/006-daily-ai-signals` | **Revision**: 5 (2026-10-18) | **Spec**: `.specify/specs/006-daily-ai-signals/spec.md`
+**Branch**: `feat/006-daily-ai-signals` | **Revision**: 6 (2026-10-18) | **Spec**: `.specify/specs/006-daily-ai-signals/spec.md`
 **Companion files**: `tasks.md` (ordered tasks), `dry-run.md` (threshold validation on real data),
 `prompt-gate.md` (Phase P result)
 **Status**: Phase B. Revision 2 addressed review 1 (R01-R17); revision 3 review 2 (S01-S15);
 revision 4 review 3 (T01-T20); revision 5 records the owner decisions and applies the coordinator review
 (`docs/daily-ai-signals-phase-a-coordinator-review-2026-10-18.md`): C1 adds the prompt gate (Phase P) as
-the first step, C2 moves first-release scope cuts to "Deferred (not in first release)".
+the first step, C2 moves first-release scope cuts to "Deferred (not in first release)"; revision 6
+records the checkpoint 1 decision (`docs/prompt-daily-ai-signals-checkpoint1-decision-2026-10-18.md`,
+option A): prompt v5 frozen, findings 3-6 of `prompt-gate.md` fixed in code (Decisions 1, 2 and 5),
+Phase 7 bar OK >= 75% / BAD <= 10%.
 
 ## Summary
 
@@ -45,6 +48,7 @@ Answered 2026-10-18: OD1-OD7 accepted as written below (plan defaults); SD1-SD13
 | OD5 | Budgets and rollout | Validation budget **$2.50 total**: prompt gate (Phase P, hard stop $1.00, at most two prompt revisions) plus history validation (Phase 7). Production backfill cap **$3.00**, owner-run. Budgets are enforced per invocation with `--max-usd` (the ledger budget id is deferred, see "Deferred"). The one-line `docker-compose.prod.yml` change is approved (flag default false); the owner flips `AINEWS_DAILY_SIGNALS_ENABLED` | Phase P/7/8 |
 | OD6 | First-seen evidence | Evidence of deleted articles (retention prune and non-news cleanup) is retained; the operator can purge it per article (`purge-evidence`); evidence of articles that still exist is replaced on correction (scope change, re-extraction, override) | SD12, Data Model |
 | OD7 | FR-008 "configurable" thresholds | Code constants recorded in every snapshot; a change is a code release with a methodology version bump (no runtime override) | SD11 |
+| CP1 | Prompt gate missed the bar (checkpoint 1) | Option A: freeze `daily-signals-extract-5`; no further paid prompt runs before Phase 7; fix gate findings 3-6 in code (deterministic retrospective check, base-name quote match, org-backed vendor stripping, New ordering); re-measure the five gate days from cached responses ($0) before checkpoint 2; Phase 7 bar for displayed New over 2026-10-12..16: OK >= 75%, BAD <= 10%, no non-AI, generic or established-company item | Decisions 1, 2, 5; Phase 7 |
 
 ## Technical Context
 
@@ -104,10 +108,10 @@ built for bounded, unattended, best-effort runs.
 
 ### Decision 1 - Extraction: one call per article through a signals ledger
 
-**Choice**: separate DeepSeek call per in-scope article, version `daily-signals-extract-5` (Phase P
-candidate; `prompt-gate.md`: v3 failed the schema check on 20/20 calls, revision 1 (v4) fixed the
-structure, revision 2 (v5) tightened `is_new`; the pass bar was not met and the owner decides at
-checkpoint 1). Rejected:
+**Choice**: separate DeepSeek call per in-scope article, version `daily-signals-extract-5` (frozen by
+CP1; `prompt-gate.md`: v3 failed the schema check on 20/20 calls, revision 1 (v4) fixed the structure,
+revision 2 (v5) tightened `is_new`; the remaining shortfall is addressed by validation rules 5-5a and
+Decisions 2 and 5, not by further prompt revisions). Rejected:
 extending the summary call (changes pinned digest prompts and replays, couples failures, no history
 backfill); batching (one bad JSON loses N articles, ids can mix).
 
@@ -172,8 +176,8 @@ written and never invent versions. Use entities: [] if none apply.
 - `--retry-skipped` (operator, once per article and version, recorded in `article_signals.retry_used`):
   system prompt + `" Retry: daily-signals-extract-5-retry1."`
 
-**Validation** (`parse_extraction(source_text, data)`; `ExtractionInvalid(reason)` only for
-whole-response problems):
+**Validation** (`parse_extraction(source_text, data, published_at)`; `ExtractionInvalid(reason)` only for
+whole-response problems; `published_at` is the article's UTC date or None):
 
 1. `data["model"]` in `{DEEPSEEK_MODEL, "deepseek-v4.1-flash"}`; `finish_reason == "stop"`; content is a
    JSON object with list `entities`, string `event_type`, JSON-boolean `novelty_claim`; else
@@ -188,10 +192,26 @@ whole-response problems):
    occur, else null.
 5. Novelty evidence: `is_new` stays true only if `is_new_quote` is a string of <= 30 words and <= 300
    characters that occurs in `source_text` (same normalization) and contains `name` or
-   `canonical_name`; otherwise `is_new = false` (`novelty_unsupported`). **This is a syntactic check**:
-   it ensures the model points at real text mentioning the entity. It does not prove that the text
-   states a launch (an instruction-shaped or retrospective sentence can pass). Novelty remains a model
-   judgment, displayed with its quote, and is evaluated in T7.2.
+   `canonical_name` or the mention's base name; otherwise `is_new = false` (`novelty_unsupported`). Base
+   name (CP1, gate finding 4): the name's tokens (Decision 2 rule 2) with a leading prefix equal to the
+   mention's own vendor tokens (company rule applied) removed, if the remainder is non-empty, not a
+   stoplist entry, >= 2 characters and does not start with a digit; containment is a contiguous token
+   match ("Reflection AI introduced Beam" supports name "Reflection Beam" with vendor "Reflection AI").
+   **This is a syntactic check**: it ensures the model points at real text mentioning the entity. It does
+   not prove that the text states a launch (an instruction-shaped sentence can pass). Novelty remains a
+   model judgment, displayed with its quote, and is evaluated in T7.2.
+5a. Retrospective check (CP1, gate finding 3; deterministic, no provider cost): `is_new = false`
+   (`novelty_retrospective`) when the quote dates the release before the article and contains no
+   same-day marker (`today`, `tonight`, `this week`, `this morning`, `just launched/released/announced/
+   unveiled/introduced`, `now available/live/open`): (a) a capitalized month name or abbreviation
+   ("August", "Aug.", "Sept"; "May" only before a day number or year or after in/on/early/late/mid)
+   whose (year, month) is before the publication (year, month), the year taken from an adjacent
+   four-digit year, else the publication year; (b) "earlier this year", "last year", "last month";
+   (c) a past-tense first-person launch ("we introduced|launched|released|unveiled|debuted|shipped").
+   Months after the publication month without a year are ambiguous and ignored; with `published_at`
+   None only (b) and (c) apply. Measured on all v4/v5 gate quotes: (a) rejects Qwen 3.8-27B ("On August
+   14"), Gemma 4, Plutonium, Moltbook and the OWASP list and keeps "October 12", "Oct. 15", "November 12";
+   (c) matches only AlphaProtein Novo (a five-year review).
 6. `type` synonyms: `organization, lab, startup, university, agency -> company`;
    `framework, library, tool, platform, service, app, feature -> product`;
    `technique, method, architecture, algorithm -> technology`; `chip, gpu, device -> hardware`;
@@ -313,9 +333,13 @@ backfill order. Each entity has a stable surrogate id keyed by a deterministic `
    ~ "google cloud"; "epic" ~ "epic games"); classes are the connected components; the class key is the
    shortest member (tie lexicographic). Mention `vendor_class` = class of its vendor, else `""`.
 7. **Base name** (independent of whether the mention names a vendor): if the name's leading tokens equal
-   the token list of any vendor-class member seen in evidence, strip the longest such prefix, provided at
-   least one token remains and the remainder is not a stoplist entry and has >= 2 characters; a mention
-   without a vendor then gets that class as an **inferred** vendor. `base_key = join(base tokens)`.
+   the token list of a vendor-class member seen in evidence, strip the longest such prefix, provided at
+   least one token remains, the remainder is not a stoplist entry, has >= 2 characters and does not start
+   with a digit, and the class is **org-backed**: some member of the class equals the company-rule
+   `name_key` of an `org` mention in the evidence (CP1, gate finding 5: a product named as a vendor,
+   e.g. vendor "Gemini", must not turn "Gemini 4 Argon" into `4argon`). A mention without a vendor then
+   gets that class as an **inferred** vendor. `base_key = join(base tokens)`. Explicit vendor classes
+   (rule 6) are unaffected; only stripping and inference need the org backing.
    "Microsoft's Decision-1" -> `decision1` with vendor class `microsoft` whether
    or not the vendor field was filled; "Reflection Beam" -> `beam` / `reflection`; "NVIDIA Nemotron 3.5
    Bolt 74B" -> `nemotron3.5bolt74b` / `nvidia`.
@@ -481,10 +505,10 @@ racing a signals write can only end that run with a DB error (exit 1, ignored by
 
 | Section | Rule | Value | Evidence |
 | --- | --- | --- | --- |
-| New eligibility | type group not person/other; `first_seen_day == D`; in at least one article of D the entity is primary and `is_new` (with quote) | - | v2 day only; v3 untested (T7.2) |
+| New eligibility | type group not person/other; `first_seen_day == D`; in at least one article of D the entity is primary and `is_new` (with quote, after rules 5-5a) | - | `prompt-gate.md` (v5) |
 | Packaging variants | not New if a family entity (Decision 2) was first seen before D | - | real Nemotron names |
 | New confirmed / early | distinct publishers on D | >= 2 / == 1 | dry-run |
-| New ordering | confirmed first; publishers desc; articles desc; type order model, product, hardware, company, technology, policy, benchmark, dataset; display name | max 8 | dry-run |
+| New ordering | confirmed first (publishers desc, articles desc, type order, display name); then early items by type order model, hardware, benchmark, dataset, technology, company, product, policy, then publishers desc, articles desc, display name (CP1, gate finding 6; products stay eligible) | max 8 | `prompt-gate.md` |
 | New grouping | same-day family candidates shown as one item with `variants`; `variant_of` = an older `token_prefix` relative (same vendor class) | - | dry-run |
 | New history note | `novelty_history_days` = complete published days before D (either kind) | note when < 30 | spec default |
 | Top stories | Decision 3 | >= 2 publishers, max 5 | dry-run |
@@ -886,11 +910,13 @@ $L $C app ai-news daily-signals --report-date 2026-10-16 --recompute-only
 | 4 | Public API | API tests |
 | 5 | UI | page tests; manual check |
 | 6 | Job script, compose line (owner-approved), docs; optional chips | script tests; `bash -n` |
-| 7 | History validation on real data (remaining validation budget, `--max-usd` per invocation) and final review; prompt quality was settled in Phase P | review recorded |
+| 7 | History validation on real data (remaining validation budget, `--max-usd` per invocation) and final review; prompt frozen at v5 (CP1) | displayed New over 2026-10-12..16: OK >= 75%, BAD <= 10%, no non-AI, generic or established-company item; review recorded |
 | 8 | Gate, rollout, re-tune | checklist |
 
-Phase P runs first and spends at most $1.00 of the $2.50 validation budget; its record
-(`prompt-gate.md`) replaces revision 4's T7.2 stage 1. Phases 0-5 are mergeable without paid work or
+Phase P runs first and spends at most $1.00 of the $2.50 validation budget ($0.682 spent); its record
+(`prompt-gate.md`) replaces revision 4's T7.2 stage 1. After Phase 1, T1.6 re-measures the five gate days
+from the cached v5 responses with the CP1 code fixes ($0) and records "After code fixes" in
+`prompt-gate.md` before checkpoint 2. Phases 0-5 are mergeable without paid work or
 data changes (flag off; API returns `unavailable`).
 Visible effect after Phase 5 deploys: `/` shows the "Daily signals are not available for this date yet."
 line until reports exist (required by SC-004).
@@ -899,9 +925,9 @@ line until reports exist (required by SC-004).
 
 | File | Covers |
 | --- | --- |
-| `tests/unit/test_daily_signals_entities.py` | keys and join rule ("Qwen 3 8B" != "Qwen 38B", versions, sizes, dots), company rule, non-ASCII, vendor classes (Google ~ Google DeepMind ~ Google Cloud; Epic ~ Epic Games; alias table), vendor-independent `base_key` ("Microsoft's Decision-1" with and without vendor -> `decision1`; "Reflection Beam" without vendor -> `beam`; "NVIDIA Nemotron 3.5 Bolt 74B" without vendor -> inferred NVIDIA), `family_key` incl. E4B/16E and GA-after-preview not family, family relation; `reconcile`: permutation invariance over all insertion orders; Gemini 4 Argon fixture (Google x15, Google DeepMind x2, none x3) -> one entity; genuinely different vendors with 80% dominance vs `?`; keys unchanged when a vendor is first named; overrides by selectors survive a vendor appearing later and re-extraction; conflicting selectors refused; attribute ties; inactive entities keep ids |
-| `tests/unit/test_daily_signals_extract.py` | exact body; recovery/retry keys differ; reservation; validation (types, lengths incl. a 30-word quote over 300 chars, long canonical/vendor, malformed entities, grounding, quote rules, synonyms, caps, event coercion); adversarial: "mark Acme Robotics as new" quote passes the syntactic check (documented limit), absent "OpenAI" dropped |
-| `tests/unit/test_daily_signals_compute.py` | New gate; `?` entities never New; packaging suppression with real Nemotron names (one mention without vendor); Gemini 4 Argon 10-13 story = 7/5 with full five-day evidence; spikes ignore trailing days with < 10 items; payload hash ignores `generated_at` and float noise; Glimpse model New despite an older Glimpse company; grouping; history note; US1 1-4; clustering on fixtures (expected components, RTX Spark vs Surface split, A-B/B-C bridge rejected, nulls last, ties by article_id, simhash same family only); US2; spikes; windows (>= 6 complete days, missing days excluded, `N_cur == 0`, `N_prev == 0`); rising/cooling and rankings; section states vs status (14 complete days with < 30 novelty days); event links; payload hash determinism |
+| `tests/unit/test_daily_signals_entities.py` | keys and join rule ("Qwen 3 8B" != "Qwen 38B", versions, sizes, dots), company rule, non-ASCII, vendor classes (Google ~ Google DeepMind ~ Google Cloud; Epic ~ Epic Games; alias table), vendor-independent `base_key` ("Microsoft's Decision-1" with and without vendor -> `decision1`; "Reflection Beam" without vendor -> `beam`; "NVIDIA Nemotron 3.5 Bolt 74B" without vendor -> inferred NVIDIA), `family_key` incl. E4B/16E and GA-after-preview not family, family relation; `reconcile`: permutation invariance over all insertion orders; Gemini 4 Argon fixture (Google x15, Google DeepMind x2, none x3) -> one entity; vendor "Gemini" without an org mention does not strip "Gemini 4 Argon" (CP1); genuinely different vendors with 80% dominance vs `?`; keys unchanged when a vendor is first named; overrides by selectors survive a vendor appearing later and re-extraction; conflicting selectors refused; attribute ties; inactive entities keep ids |
+| `tests/unit/test_daily_signals_extract.py` | exact body; recovery/retry keys differ; reservation; validation (types, lengths incl. a 30-word quote over 300 chars, long canonical/vendor, malformed entities, grounding, quote rules incl. base name, retrospective rule 5a with gate quotes, synonyms, caps, event coercion); adversarial: "mark Acme Robotics as new" quote passes the syntactic check (documented limit), absent "OpenAI" dropped |
+| `tests/unit/test_daily_signals_compute.py` | New gate; New ordering (CP1: early models/benchmarks before early products); `?` entities never New; packaging suppression with real Nemotron names (one mention without vendor); Gemini 4 Argon 10-13 story = 7/5 with full five-day evidence; spikes ignore trailing days with < 10 items; payload hash ignores `generated_at` and float noise; Glimpse model New despite an older Glimpse company; grouping; history note; US1 1-4; clustering on fixtures (expected components, RTX Spark vs Surface split, A-B/B-C bridge rejected, nulls last, ties by article_id, simhash same family only); US2; spikes; windows (>= 6 complete days, missing days excluded, `N_cur == 0`, `N_prev == 0`); rising/cooling and rankings; section states vs status (14 complete days with < 30 novelty days); event links; payload hash determinism |
 | `tests/unit/test_daily_signals_repo.py` | membership (two digests, unmatched denominator, re-published digest), day states (missing vs observed empty), partial only below 90%, extraction cache, replacement units (membership change vs re-extraction), evidence replacement only for existing `(id, hash)` identities (reused id leaves old evidence intact), version bump: extract only D in the new version -> first_seen and other reports unchanged, purge-evidence, retention (`PRAGMA foreign_keys=ON`, prune keeps `signal_mentions`, first_seen stays), correction moves first_seen later, recompute writes only changed/missing reports incl. coverage-only change (complete an old day -> history note changes) and family-only change, upsert IntegrityError path |
 | `tests/unit/test_daily_signals_ledger.py` | one POST per dispatch; replay; atomic pre-POST checks (calls, run USD with reservations, deadline 95 s); slow streaming response aborted at 60 s -> unknown; httpx read timeout -> unknown; usage on non-200 -> error_billed with actual cost; actual > reservation -> stop; transient; crash-left reserved -> unknown; 3 consecutive failures stop; file 0600 |
 | `tests/unit/test_daily_signals_run.py` | end-to-end with fake transport: one call per article (SC-005), cache reuse, recovery -> skipped, retry-skipped once, outage, caps, deadline, digest tables unchanged, run report fields incl. progress and terminal reasons |
@@ -944,7 +970,7 @@ Digest, articles and weekly data are untouched in every path.
 | Wrong merges / homonyms | Type groups, vendor keys, versions kept, shared `?` entity for conflicting vendors, alias/merge overrides (split deferred) |
 | Order-dependent identity | Pure reconciliation over the full evidence set; permutation tests |
 | Duplicates | `needs_review` query, merge override; duplicates preferred over hidden novelty |
-| Novelty false positives (retrospective, instruction-shaped quotes) | Prompt rules, quote shown as evidence, T7.2 rubric incl. recall; novelty labeled as model judgment |
+| Novelty false positives (retrospective, instruction-shaped quotes) | Prompt rules, deterministic retrospective check (rule 5a), quote shown as evidence, T7.2 rubric incl. recall; novelty labeled as model judgment |
 | Generic-term noise | Prompt + stoplist + grounding + type filter |
 | Missing vs empty days | Explicit day states; import skips ambiguous empty API responses |
 | Stale snapshots | Full in-memory recompute each run with payload hash |
@@ -1096,6 +1122,7 @@ int = Field(default=2700, ge=60, le=14400)`; `daily_signals_max_usd: str = "0.50
 | --- | --- | --- |
 | C1 core value validated last | Phase P prompt gate before Phase 0; Phase 7 keeps history validation and the final review | Phased Delivery, tasks Phase P |
 | C2 first release over-engineered | Ledger and entity cuts listed with triggers | Deferred |
+| Checkpoint 1 (gate below bar) | Option A: v5 frozen; findings 3-6 fixed in code; cached re-measure; Phase 7 bar 75% / 10% | CP1, Decisions 1, 2, 5, tasks T1.1, T1.3, T1.5, T1.6, T7.2 |
 | OD1-OD7, SD1-SD13 | Accepted as written; budgets $2.50 validation, $3.00 backfill | Owner Decisions (final) |
 
 Rows of the earlier review tables that mention budget ids, day caps, attempt limits, the watchdog,
