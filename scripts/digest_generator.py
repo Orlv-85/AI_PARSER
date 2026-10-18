@@ -251,6 +251,22 @@ def read_json_response(
         raise RuntimeError(f"Network error for {url}: {exc.reason}") from exc
 
 
+def post_app_json(url: str, payload: object) -> Any:
+    """POST JSON to the app, authenticating with AINEWS_PUBLISH_API_TOKEN when set."""
+    token = os.environ.get("AINEWS_PUBLISH_API_TOKEN", "").strip()
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    try:
+        return read_json_response(url, body=json.dumps(payload).encode("utf-8"), headers=headers)
+    except RuntimeError as exc:
+        if not str(exc).startswith("HTTP 401 "):
+            raise
+        hint = "was rejected" if token else "is not set"
+        raise RuntimeError(
+            f"Unauthorized POST to {url}: AINEWS_PUBLISH_API_TOKEN {hint}; "
+            "it must match the app's AINEWS_PUBLISH_API_TOKEN"
+        ) from exc
+
+
 def _is_http_url(value: object) -> bool:
     if not isinstance(value, str):
         return False
@@ -618,9 +634,9 @@ def validate_digest(*, report_date: str, input_path: Path, out_path: Path | None
 
 def publish_digest(*, base_url: str, report_date: str, input_path: Path) -> dict[str, Any]:
     normalized = validate_digest(report_date=report_date, input_path=input_path, out_path=None)
-    response = read_json_response(
+    response = post_app_json(
         f"{base_url.rstrip('/')}/api/news/digests",
-        body=json.dumps(normalized).encode("utf-8"),
+        normalized,
     )
     if not isinstance(response, dict):
         raise RuntimeError("publish response was not a JSON object")
@@ -1004,9 +1020,9 @@ def _publish_verified_digest(
     items: list[dict[str, Any]],
     payload: dict[str, Any],
 ) -> dict[str, Any]:
-    response = read_json_response(
+    response = post_app_json(
         f"{base_url.rstrip('/')}/api/news/digests",
-        body=json.dumps(payload).encode("utf-8"),
+        payload,
     )
     if not isinstance(response, dict):
         raise RuntimeError("publish response was not a JSON object")
@@ -1354,9 +1370,9 @@ def publish_feed_weekly(
     )
     window = payload.pop("window", {})
 
-    response = read_json_response(
+    response = post_app_json(
         f"{base_url.rstrip('/')}/api/news/weekly-analytics",
-        body=json.dumps(payload).encode("utf-8"),
+        payload,
     )
     if not isinstance(response, dict):
         raise RuntimeError("publish weekly response was not a JSON object")

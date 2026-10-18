@@ -739,3 +739,109 @@ def test_chunk_feed_items_splits_large_batches() -> None:
     assert [len(chunk) for chunk in chunks] == [2, 2, 1]
 
 
+
+
+class _FakeResponse:
+    def __init__(self, body: bytes) -> None:
+        self._body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        return None
+
+    def read(self, *_args) -> bytes:
+        return self._body
+
+
+def test_post_app_json_sends_publish_bearer_token(monkeypatch) -> None:
+    bridge = _load_bridge_module()
+    captured = []
+
+    def fake_urlopen(request, **_kwargs):
+        captured.append(request)
+        return _FakeResponse(b'{"ok": true}')
+
+    monkeypatch.setattr(bridge, "urlopen", fake_urlopen)
+    monkeypatch.setenv("AINEWS_PUBLISH_API_TOKEN", "publish-token-0123456789abcdef0123")
+
+    assert bridge.post_app_json("http://app.test/api/news/digests", {"a": 1}) == {"ok": True}
+
+    assert captured[0].get_method() == "POST"
+    assert captured[0].get_header("Authorization") == (
+        "Bearer publish-token-0123456789abcdef0123"
+    )
+
+
+def test_post_app_json_omits_header_without_token(monkeypatch) -> None:
+    bridge = _load_bridge_module()
+    captured = []
+
+    def fake_urlopen(request, **_kwargs):
+        captured.append(request)
+        return _FakeResponse(b"{}")
+
+    monkeypatch.setattr(bridge, "urlopen", fake_urlopen)
+    monkeypatch.delenv("AINEWS_PUBLISH_API_TOKEN", raising=False)
+
+    bridge.post_app_json("http://app.test/api/news/digests", {})
+
+    assert captured[0].get_header("Authorization") is None
+
+
+@pytest.mark.parametrize(
+    ("token", "hint"),
+    [(None, "is not set"), ("publish-token-0123456789abcdef0123", "was rejected")],
+)
+def test_post_app_json_reports_clear_unauthorized_error(monkeypatch, token, hint) -> None:
+    bridge = _load_bridge_module()
+
+    def fake_read_json_response(url, **_kwargs):
+        raise RuntimeError(f'HTTP 401 for {url}: {{"detail":"Unauthorized"}}')
+
+    monkeypatch.setattr(bridge, "read_json_response", fake_read_json_response)
+    if token is None:
+        monkeypatch.delenv("AINEWS_PUBLISH_API_TOKEN", raising=False)
+    else:
+        monkeypatch.setenv("AINEWS_PUBLISH_API_TOKEN", token)
+
+    with pytest.raises(RuntimeError, match=f"AINEWS_PUBLISH_API_TOKEN {hint}") as excinfo:
+        bridge.post_app_json("http://app.test/api/news/digests", {})
+
+    assert "publish-token" not in str(excinfo.value)
+
+
+def test_publish_paths_post_through_authenticated_helper(monkeypatch, tmp_path) -> None:
+    bridge = _load_bridge_module()
+    posted: list[str] = []
+
+    def fake_post_app_json(url, _payload):
+        posted.append(url)
+        return {}
+
+    def fake_read_json_response(url, **kwargs):
+        assert kwargs.get("body") is None, "POSTs must go through post_app_json"
+        if "weekly-analytics" in url:
+            return {"new": [], "trending_up": [], "trending_down": []}
+        return {"groups": []}
+
+    monkeypatch.setattr(bridge, "post_app_json", fake_post_app_json)
+    monkeypatch.setattr(bridge, "read_json_response", fake_read_json_response)
+    monkeypatch.setattr(bridge, "_fetch_news_links_range", lambda **_kwargs: [])
+    monkeypatch.setattr(bridge, "validate_digest", lambda **_kwargs: {"groups": []})
+    monkeypatch.delenv("AINEWS_WEEKLY_V2_ENABLED", raising=False)
+
+    bridge.publish_digest(
+        base_url="http://app.test", report_date="2026-10-17", input_path=tmp_path / "d.json"
+    )
+    bridge.__dict__["_publish_verified_digest"](
+        base_url="http://app.test", report_date="2026-10-17", items=[], payload={}
+    )
+    bridge.publish_feed_weekly(base_url="http://app.test", report_date="2026-10-12", limit=1)
+
+    assert posted == [
+        "http://app.test/api/news/digests",
+        "http://app.test/api/news/digests",
+        "http://app.test/api/news/weekly-analytics",
+    ]

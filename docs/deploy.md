@@ -79,6 +79,9 @@ cp deploy/.env.prod.example .env
 ```
 
 Edit `.env` and set strong `POSTGRES_PASSWORD`.
+Set `AINEWS_PUBLISH_API_TOKEN` (`openssl rand -hex 32`) if any machine caller
+publishes digests or weekly reports over HTTP; the deploy workflows keep it in
+`.env` (see [Configuration](configuration.md#publish-api-token)).
 Set `CADDY_SITE_ADDRESS` to your public domain/host (for example `5kzt.l.time4vps.cloud`).
 
 ### Daily digest generation (DeepSeek)

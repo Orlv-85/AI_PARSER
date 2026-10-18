@@ -37,7 +37,7 @@ from app.storage.repos import (
     WeeklyAnalyticsReport,
     WeeklyAnalyticsReportIndexEntry,
 )
-from app.web.auth import SessionSigner, verify_password
+from app.web.auth import SessionSigner, verify_bearer_token, verify_password
 from app.web.models import (
     DigestLinkFeedItem,
     NewsArticleDetail,
@@ -86,6 +86,9 @@ _NEWS_LINKS_DATE_QUERY = Query(alias="date")
 _NEWS_DIGEST_DATE_QUERY = Query(alias="date")
 _OPTIONAL_NEWS_DIGEST_DATE_QUERY = Query(default=None, alias="date")
 _OPTIONAL_WEEKLY_ANALYTICS_DATE_QUERY = Query(default=None, alias="date")
+_PUBLIC_READ_METHODS = frozenset({"GET", "HEAD"})
+# The machine publish token only grants POST to these paths (least privilege).
+_PUBLISH_API_PATHS = frozenset({"/api/news/digests", "/api/news/weekly-analytics"})
 
 
 def _render_index() -> str:
@@ -404,7 +407,8 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
 
         path = request.url.path
         is_auth_route = path in {"/login", "/api/auth/login", "/api/auth/logout"}
-        is_public_news_api = path in {
+        # Public API paths are read-only; write methods on them require auth.
+        is_public_news_api = request.method in _PUBLIC_READ_METHODS and path in {
             "/api/news/links",
             "/api/news/digests",
             "/api/news/stats/daily",
@@ -433,6 +437,15 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
 
         session_cookie = request.cookies.get(settings.auth_cookie_name)
         if session_cookie and signer and signer.verify(session_cookie) is not None:
+            return await call_next(request)
+
+        if (
+            request.method == "POST"
+            and path in _PUBLISH_API_PATHS
+            and verify_bearer_token(
+                request.headers.get("authorization"), settings.publish_api_token
+            )
+        ):
             return await call_next(request)
 
         if session_cookie:
