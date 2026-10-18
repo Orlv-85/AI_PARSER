@@ -34,6 +34,33 @@ the Troubleshooting section of `README.md`.
       "cause": "The local .env enables auth or sets auth values, and Settings validation requires the full auth set. Exporting AINEWS_AUTH_ENABLED=false is not enough because other auth values are still read.",
       "fix": "Run the suite in a clean copy without .env (rsync the repo excluding .env, venv1 and .git, then run with PYTHONPATH=src), as CI does.",
       "verification": "tests/e2e/test_api_e2e.py passes in such a copy."
+    },
+    {
+      "id": "sqlalchemy-dict-over-result",
+      "date": "2026-10-18",
+      "area": "storage (SQLAlchemy 2.1)",
+      "symptom": "TypeError: 'ChunkedIteratorResult' object is not subscriptable from dict(session.execute(select(a, b)).tuples()); also SADeprecationWarning: The Result.tuples() method is deprecated.",
+      "cause": "A Result has a keys() method, so dict() treats it as a mapping and subscripts it instead of iterating rows. Result.tuples() is deprecated in SQLAlchemy 2.1 (rows already behave like tuples).",
+      "fix": "Materialize the rows first: dict(session.execute(stmt).all()); iterate the Result directly elsewhere; do not call .tuples().",
+      "verification": "tests/unit/test_daily_signals_repo.py passes with -W error::DeprecationWarning."
+    },
+    {
+      "id": "alembic-only-db-has-no-digest-tables",
+      "date": "2026-10-18",
+      "area": "migrations / tests",
+      "symptom": "A migration test that upgrades a fresh SQLite file with `alembic upgrade` and then writes NewsDigestReport fails with 'no such table: news_digest_reports'.",
+      "cause": "The digest tables (news_digest_reports/groups/items) have no Alembic migration; they are created by create_all() when the app or CLI starts. A database built only by Alembic lacks them.",
+      "fix": "In migration tests, use tables that migrations create (e.g. articles) for pre-feature rows, or call Base.metadata.create_all() before writing digests.",
+      "verification": "tests/unit/test_daily_signals_migration.py passes."
+    },
+    {
+      "id": "alembic-env-disables-loggers",
+      "date": "2026-10-18",
+      "area": "tests (caplog)",
+      "symptom": "Full suite: tests/unit/test_mcp_server.py and test_ingest_rss_additional.py fail with empty caplog.text, but pass when run alone.",
+      "cause": "A test that runs `alembic command.upgrade` executes src/app/storage/migrations/env.py, whose logging.config.fileConfig(alembic.ini) disables all existing loggers. Every test collected after it loses log capture. test_weekly_storage.py does the same but sorts after the affected files.",
+      "fix": "In migration tests, monkeypatch logging.config.fileConfig to a no-op before calling alembic commands.",
+      "verification": "Full ./venv1/bin/pytest passes with tests/unit/test_daily_signals_migration.py collected before test_mcp_server.py."
     }
   ]
 }
