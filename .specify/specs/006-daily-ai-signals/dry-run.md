@@ -473,3 +473,16 @@ displayed met; uncapped still holds Maka (non-AI) and Blueprints AI (established
 Moltbook and Attie not New met; Beam not New, spike and top story met; **Muse Spark Open New on 10-15
 met**; Elorian Glimpse New on 10-16 and separate met; no duplicate top story met; membership 89% strict /
 98% lenient (accepted by the coordinator).
+
+## 11. Re-measure after the verification fixes V01-V04 (2026-10-19)
+
+**Code**: `950838a`. **Spend**: $0 (`--recompute-only`, 0 calls). Dumps:
+`tmp/daily-signals-validate/out-review-v-ai_news-prodwindow.txt` and `out-review-v-ai_news.txt`.
+
+Both recomputes wrote no report: every snapshot of 2026-10-10..16 has the same payload hash as after
+section 10. V01-V04 change no item on these days (no digest text here has a parenthesised
+pre-release word, no single-token name was refused lexically, no glued vendor spelling lacked a
+spaced one, no override exists). Section 10 numbers stand: displayed New 34 / 0 / 6 (85% OK, 0% BAD),
+uncapped 42 / 2 / 15 of 59, recall 34/42 (production digest window; scratch DB as is: Code Review for
+Claude Code still refused by the local 2026-03-09 digest, uncapped 42 / 2 / 14, recall 33/42). T7.2
+checklist unchanged: all met except strict top-story membership 89% (98% lenient; accepted).

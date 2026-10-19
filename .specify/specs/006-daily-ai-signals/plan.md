@@ -391,9 +391,11 @@ jailbreak, deepfake(s), automation, workflow(s), platform`. Bare "copilot" stays
    entity. `""` is never a wildcard. Stored classes resolve through the current vendor classes (a class
    that gains a shorter member keeps matching); refusal is overlap-aware (`""` overlaps a class
    selector of the same base). Revision 7 also folds a trailing plural "s" of the last base token into
-   the singular base when that singular occurs in the evidence for the same type group (F21), and joins
-   vendor spellings whose space-free forms meet after a glued company suffix ("LiquidAI" =
-   "Liquid AI"; not "co") (F20).
+   the singular base when that singular occurs in the evidence for the same type group (F21); stored
+   selector bases resolve through that fold, also in conflict detection, so a later singular does
+   not break an override (V04). A glued vendor spelling joins a name only when the same name is
+   written with a separate company suffix in the evidence ("Liquid AI" confirms "LiquidAI"; not
+   "co"); "OpenAI" alone never joins "Open" (F20, V03).
 4. Automatic grouping of the remaining mentions by resolution key. Let `V` be the vendor classes present
    (explicit or inferred):
    - `|V| <= 1`: one entity `auto:<group>:<base_key>`; mentions without vendor join it;
@@ -531,7 +533,7 @@ racing a signals write can only end that run with a DB error (exit 1, ignored by
 
 | Section | Rule | Value | Evidence |
 | --- | --- | --- | --- |
-| New eligibility | type group not person/other; `first_seen_day == D`; in at least one article of D the entity is primary and `is_new` (with quote, after rules 5-5a); revision 7: a proper-name shape (uppercase letter or digit, or one hyphen/dot-joined token; F22) and no occurrence of the name in an earlier published digest item title/summary (F19, the gate's lexical rule; F19 decision 2026-10-19: digest text only, not article RSS summaries; a text with a not-yet-released word - preview, beta, alpha, waitlist, early access, roadmap, plans to, will release, will launch, coming soon, upcoming - is ignored; refusals stored as `new_suppressed` with day, words and snippet) | - | `prompt-gate.md` (v5), `dry-run.md` section 8 |
+| New eligibility | type group not person/other; `first_seen_day == D`; in at least one article of D the entity is primary and `is_new` (with quote, after rules 5-5a); revision 7: a proper-name shape (uppercase letter or digit, or one hyphen/dot-joined token; F22) and no occurrence of the name in an earlier published digest item title/summary (F19, the gate's lexical rule; F19 decision 2026-10-19: digest text only, not article RSS summaries; a text with a not-yet-released word - preview, beta, alpha, waitlist, early access, roadmap, plans to, will release, will launch, coming soon, upcoming - is ignored, checked on the raw text with parentheses (V01); a single common-word name suppresses only when its vendor name or alias occurs in the same item, never without a vendor (V02); refusals stored as `new_suppressed` with day, words and snippet) | - | `prompt-gate.md` (v5), `dry-run.md` section 8 |
 | Packaging variants | not New if a family entity (Decision 2) was first seen before D | - | real Nemotron names |
 | New confirmed / early | distinct publishers on D | >= 2 / == 1 | dry-run |
 | New ordering | confirmed first (publishers desc, articles desc, type order, display name); then early items by type order model, hardware, benchmark, dataset, technology, company, product, policy, then publishers desc, articles desc, display name (CP1, gate finding 6; products stay eligible) | max 8 | `prompt-gate.md` |
@@ -1050,6 +1052,7 @@ Follow-ups recorded after PR #39 review (not in this release):
 | Item | Why | Trigger |
 | --- | --- | --- |
 | Down-weight or exclude SEO/comparison pages per source | Top-story membership 89% strict / 98% lenient on 2026-10-12..16; the gap is one emergent.sh comparison cluster (coordinator: accepted for this release) | A second SEO cluster in top stories, or a source-quality pass |
+| V05: an empty newer extraction stops hiding older-version mentions after retention deletes `article_signals` (rest of F10; latent while `EXTRACTION_VERSIONS` has one entry) | The fallback for identities without an `ok` row picks the newest version that left mention rows | Before adding a second `EXTRACTION_VERSION`: persist the selected version or the empty result outside the cascaded table |
 | Price cache-hit tokens in the ledger | The ledger charges cache hits at the miss price: Phase 7 was $0.64 by the ledger, $0.26 at list prices, $0.14 billed (safe direction) | Budgets limit useful work, or the owner asks for closer estimates |
 
 ## Spec Deltas (accepted by the owner; spec file not edited)
@@ -1177,6 +1180,7 @@ int = Field(default=2700, ge=60, le=14400)`; `daily_signals_max_usd: str = "0.50
 | T1.6 finding: unbacked vendor splits an entity | Org backing also required for identity vendor classes (deviation, reported at checkpoint 2) | Decision 2 rule 6, `prompt-gate.md` "After code fixes" |
 | PR #39 review F1-F17, N1-N3 | Fixed test-first (finding -> commit/test table in the PR description): entity-level override selectors (F2-F4), (id, url hash) identity for scope and extractions (F9), newest ok version (F10), recompute through yesterday (F1), retry and backfill attempts (F11, F12), grounding and stoplist order (F7, F8), page safety and UI loading (F5, F16, N1), job `timeout` and lock marker (F17, N2), docs (F6, F14, F15), settings bounds and plan text (N3) | Decisions 1, 2, 4, Rollout and Rollback, Deferred |
 | Phase 7 findings F18-F22 | Summary input for body-less articles (F18), lexical-history and proper-name New safety nets (F19, F22, `METHODOLOGY_VERSION` daily-signals-2), glued vendor suffix (F20), plural fold (F21) | Decisions 1, 2, 5, `dry-run.md` section 8 |
+| Verification review V01-V05 (`docs/daily-ai-signals-pr39-fix-verification-gpt6-2026-10-19.md`) | V01 raw-text not-released check and snippet; V02 vendor required for single-token lexical hits; V03 glued vendor only with a spaced-suffix spelling; V04 selectors follow the plural fold; V05 deferred with its trigger | Decisions 2, 5, Deferred |
 | F19 decision (`docs/prompt-daily-ai-signals-f19-decision-2026-10-19.md`) | F19 reads published digest items only and ignores texts that frame the entity as not yet released (Muse Spark Open roadmap text, Code Review research preview); snippet recorded | Decision 5, `dry-run.md` section 10 |
 | CI: legacy cleanup refuses unknown FKs to `articles` | Guard accepts exactly `article_signals.article_id` and `daily_signal_scope.article_id` with ON DELETE CASCADE; any other FK still refuses (checkpoint 3) | Decision 4 Retention, `storage/legacy_cleanup.py` |
 | OD1-OD7, SD1-SD13 | Accepted as written; budgets $2.50 validation, $3.00 backfill | Owner Decisions (final) |

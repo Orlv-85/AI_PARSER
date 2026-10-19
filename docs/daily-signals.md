@@ -39,7 +39,9 @@ page loads never call a provider.
   earlier published digest item (title or summary) is not New, even when that article's extraction
   found nothing. A digest text that frames the name as not yet released (`preview`, `beta`, `alpha`,
   `waitlist`, `early access`, `roadmap`, `plans to`, `will release`, `will launch`, `coming soon`,
-  `upcoming`) does not count, so a GA release after a preview stays New. Refused items are kept in the
+  `upcoming`, also in parentheses) does not count, so a GA release after a preview stays New. A
+  single common-word name ("Beam") is refused this way only when its vendor's name appears in the
+  same digest item; without a known vendor it is never refused lexically. Refused items are kept in the
   stored snapshot as `new_suppressed` (reason, matching day, matched words and a text snippet; not
   part of the API response). The list
   shows 8 items: confirmed first, then early models, hardware, benchmarks, datasets, techniques,
