@@ -2,7 +2,7 @@
 
 **Feature Branch**: `007-daily-signals-brief`
 **Created**: 2026-10-19
-**Status**: Draft (open questions decided 2026-10-19; planning next)
+**Status**: Draft (open questions decided 2026-10-19; plan revision 2 deltas applied 2026-10-19)
 **Builds on**: `.specify/specs/006-daily-ai-signals/` (spec, plan, dry-run), merged in PR #39, live in
 production since 2026-10-19 (backfill 2026-08-03..10-18 done).
 **Input**: Owner review of the live block on `/?date=2026-10-16` (RU, paraphrased): "Is there no
@@ -61,13 +61,15 @@ Each New item shows one line (<= 140 chars) describing it, taken from grounded m
 summary of its primary article or the novelty quote; never invented.
 
 ### US3 - Less noise (P2)
-- `early signal` is not a per-item badge; the item shows its source count; confirmed items (>= 2
-  publishers) may be marked instead, or the list is split "Confirmed" / "Single source".
+- `early signal` is not a per-item badge (D3, plan P1): one list, confirmed items (>= 2 publishers)
+  first with "N outlets", single-source items after them, muted, with "via <publisher>".
 - `variant of X` is shown only when X is a specific earlier entity (contains a digit or more than one
   token, and is not a stoplisted/generic family word).
 - A spike that is the same event as a top story, or a company spike whose product is also a spike/New/
   top story of D, is folded into that item (e.g. "Beam - 4 sources, spike") instead of a separate line.
-- Spikes show their reason: the top linked story label.
+- Spikes show their reason: the label of D's story that holds most of the spike's articles. A company
+  spike with no D story holding at least 2 of its articles (diffuse, e.g. Hugging Face on 2026-10-16)
+  is dropped, not shown.
 - Event chips: keep only "hard" event types by default (releases, launches, funding, acquisitions,
   partnerships, regulation, legal, security, hardware, people moves); analysis/research/other folded
   into "+N more".
@@ -80,23 +82,32 @@ summary of its primary article or the novelty quote; never invented.
   article ids from the input and a short exact supporting quote; validation like
   `core/weekly_narrative.py` (ids must exist, quotes must be substrings of supplied text, length caps,
   English, no instructions followed from article text). Invalid -> one recovery attempt -> otherwise
-  no brief.
+  no brief. Sentences are chosen by what happened: releases, launches, funding, deals, incidents,
+  legal and policy actions first (multi-outlet before single-source); reviews, comparisons, roundups,
+  guides and opinion only when nothing else is left; at most one sentence per story.
 - **FR-002 Model and cost**: the brief uses the stronger (more expensive) DeepSeek model by owner
   decision (2026-10-19); extraction and every other call stay on `deepseek-flash`. The model id is a
   setting (e.g. `AINEWS_DAILY_SIGNALS_BRIEF_MODEL`); the planner confirms the exact id and prices from
   the DeepSeek API docs. Cost per day must stay under $0.05 at ledger prices. Calls go through the
   existing signals ledger and per-run caps; cached by input hash, prompt version and model.
+  `--max-usd` (or `AINEWS_DAILY_SIGNALS_MAX_USD`) stays the total for the run: briefs get what
+  extraction left, at most $0.05 per day, else they are skipped (`brief_budget_exhausted`).
 - **FR-003 Storage and versioning**: the brief is stored with the snapshot (or alongside it) with its
   prompt version and input hash; recompute without changed inputs never regenerates it; a changed
   snapshot regenerates it on the next paid run (not on page load). Backfill command can generate briefs
   for past comparable days within a budget.
-- **FR-004 One-liners**: deterministic, no new provider call: the first sentence of the digest summary
-  of the entity's primary New article (cleaned, truncated at a word boundary to 140 chars), else the
-  novelty quote. Stored in the snapshot payload; escaped on render.
+- **FR-004 One-liners**: deterministic, no new provider call (plan P3): the first digest-summary
+  sentence of the item's linked articles that names the item and says what it is or that it launched
+  (launch/release/introduce/announce/unveil/debut/open-source/formed/founded/built, or "is/are a/an/the");
+  if the novelty quote has fewer than 8 words, the first summary sentence that names the item; else the
+  novelty quote, rendered in quotation marks. Truncated at a word boundary to 140 chars. Stored in the
+  snapshot payload with its source (`summary` | `quote`); escaped on render.
 - **FR-005 Noise rules**: US3 rules implemented in compute/view; thresholds and lists as constants
   recorded in the snapshot; methodology version bump.
 - **FR-006 Quiet day state**: a day with fewer than 20 items or no multi-publisher story renders a
-  compact block (brief + New if any + counts), not empty cards.
+  compact block, not empty cards: a template opening line with the counts ("Quiet day: 14 items, no
+  story covered by more than one outlet.", generated by the app, not the model), then the brief (at
+  most 2 model sentences), New if any, and the event chips.
 - **FR-007 API/UI**: `DailySignalsResponse` gains optional fields (`brief`, per-item `one_liner`,
   spike `reason`); existing fields unchanged (backward compatible). The page renders the brief first;
   mobile layout and escaping rules as in 006.
