@@ -39,9 +39,9 @@ jobs:
       - name: Run linters in parallel
         run: make -j3 --output-sync=target lint PYTHON=python PYLINT_JOBS=0
 
-      # Warn-only for now: covered code changed without its doc (scripts/check_code_docs.py).
+      # Fails when covered code changed without its doc; opt out: commit line "Docs-Skip: <reason>".
       - name: Code docs in sync
-        run: python scripts/check_code_docs.py --diff origin/master
+        run: python scripts/check_code_docs.py --diff origin/master --strict
 
   tests:
     runs-on: ubuntu-24.04
