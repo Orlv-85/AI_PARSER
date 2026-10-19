@@ -375,7 +375,7 @@ settled in Phase P; this phase validates the full pipeline with extracted histor
     and separate from the 10-06 Glimpse company; no duplicate top story; membership precision >= 90%;
     precision, recall, spend and any prompt/stoplist change (with `EXTRACTION_VERSION` bump) recorded.
   - Depends on: T7.1
-  - Result (2026-10-19, `dry-run.md` section 8): $0.6446 spent; displayed New 31 / 3 / 6 (77.5% OK,
+  - Result (2026-10-19, `dry-run.md` section 8): $0.6446 by the ledger, $0.14 billed; displayed New 31 / 3 / 6 (77.5% OK,
     7.5% BAD), uncapped 42 / 7 / 14, recall 34/42; open: one generic item displayed ("dynamic
     workflows") and strict membership 89%. Findings 1-4 wait for checkpoint 3 step 3.
 

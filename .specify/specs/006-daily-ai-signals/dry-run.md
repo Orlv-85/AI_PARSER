@@ -244,7 +244,9 @@ Changes after the independent review of revision 1 (plan "Review Response"):
 ## 8. Phase B validation (T7.1-T7.2, 2026-10-19)
 
 **Branch code**: PR #39 head `8f30549` (no code change during the review window).
-**Spend**: $0.6446 of the remaining $1.818 (hard stop not reached); validation total $1.3266 of $2.50.
+**Spend**: ledger estimate $0.6446 of the remaining $1.818 (hard stop not reached); the owner reports
+**$0.14** actually billed by DeepSeek for this phase (finding 6). Budget accounting below uses the
+ledger estimate, which only over-counts.
 **Scripts** (not committed): `tmp/daily-signals-validate/` - `import_digests.py`, `seed_ledger.py`,
 `backfill.sh`, `report.py`; dump `out-review.txt`; run reports `run-*.json`.
 
@@ -352,6 +354,15 @@ because it is now (wrongly) New. Rising and Cooling cannot be measured yet (firs
    "on-demand capacity mode"). Candidate fix: treat an all-lowercase name made only of common words as
    not New; needs a test and a re-measure ($0, cached).
 5. **Strict membership 89%** comes from one SEO cluster on 10-15, unchanged since Phase P.
+
+6. **The ledger over-estimates cost about 4.6x.** `priced_usage` (shared with `reenrich_pilot`) prices
+   every input token at $0.30/M and output at $1.20/M and ignores DeepSeek cache hits. This phase used
+   1,462,238 input tokens (685,440 cache hits, 47%: the system prompt repeats) and 168,536 output
+   tokens over 1,610 responses: $0.6409 by the formula, $0.14 billed. Safe direction (caps stop early),
+   but run reports, the $0.0009-per-article figure in `docs/daily-signals.md` and the owner's
+   backfill cap are read against inflated numbers. Candidate fix: price cache-hit and miss tokens
+   separately with current `deepseek-flash` prices (owner to confirm the prices), or keep the
+   conservative formula and say in the guide that it is an upper bound.
 
 Fixes 2-4 are deterministic and can be re-measured on this scratch DB with `--recompute-only` ($0) after
 the review window, together with the review findings (checkpoint 3 step 3).
