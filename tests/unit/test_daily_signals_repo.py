@@ -144,13 +144,13 @@ def test_cache_by_content_hash_and_failures(session, repo):
     article = add_article(session, "https://a.com/1")
     digest(session, D, article.url)
     repo.replace_membership(D)
-    assert repo.get_cached(article.id, "h1") is None
+    assert repo.get_cached(article, "h1") is None
     repo.save_failure(article, content_hash="h1", status="failed", reason="unknown")
     assert repo.coverage()[D].failed == 1
     repo.save_extraction(article, extraction(model("Atlas")), content_hash="h1")
-    assert repo.get_cached(article.id, "h1") is not None
-    assert repo.get_cached(article.id, "h2") is None
-    row = repo.get_signal(article.id)
+    assert repo.get_cached(article, "h1") is not None
+    assert repo.get_cached(article, "h2") is None
+    row = repo.get_signal(article)
     assert (row.attempts, row.status, row.event_type) == (2, "ok", "model_release")
     assert json.loads(row.payload)["entities"][0]["name"] == "Atlas"
     assert repo.coverage()[D].extracted == 1
@@ -456,3 +456,55 @@ def test_synthetic_year_recompute_time(session, repo, capsys):
     with capsys.disabled():
         print(f"\n60 days x 20 articles x 4 mentions: first recompute {elapsed:.2f}s, "
               f"unchanged recompute {again:.2f}s")
+
+
+def test_reused_article_id_without_fk_enforcement_inherits_nothing(tmp_path):
+    # F9: the app does not enable SQLite foreign keys, so an article's scope and extraction rows
+    # survive its deletion; a new article that reuses the id must not inherit them.
+    engine = create_engine(f"sqlite:///{tmp_path / 'nofk.db'}")
+    Base.metadata.create_all(engine)
+    with Session(engine) as session:
+        repo = DailySignalRepo(session, comparable_from=COMPARABLE_FROM)
+        d1 = D - timedelta(days=2)
+        old = add_article(session, "https://a.com/old")
+        digest(session, d1, old.url)
+        repo.replace_membership(d1)
+        repo.save_extraction(old, extraction(model("Atlas")), content_hash="h1")
+        old_id = old.id
+        session.delete(old)
+        session.flush()
+        reused = Article(id=old_id, title="New", url="https://b.com/new",
+                         url_canonical="https://b.com/new",
+                         url_canonical_hash=canonical_url_hash("https://b.com/new"), content="x")
+        session.add(reused)
+        session.flush()
+        digest(session, D, reused.url)
+        repo.replace_membership(D)
+        assert (repo.coverage()[D].extracted, repo.coverage()[D].pending) == (0, 1)
+        assert repo.get_signal(reused) is None
+        assert repo.get_cached(reused, "h1") is None
+        assert not repo.scope_articles(d1)
+        evidence, rows = repo.load_evidence()
+        assert {(rows[m.mention_id].url_canonical_hash, m.scope_day) for m in evidence} == {
+            (canonical_url_hash("https://a.com/old"), d1)}
+        result = repo.recompute_reports(D, now=NOW)
+        observed = repo.observations(result.reconciliation, rows, [d1, D])
+        assert observed.get(d1, []) == [] and observed.get(D, []) == []
+        repo.save_extraction(reused, extraction(model("Bravo")), content_hash="h2")
+        assert repo.get_signal(reused).attempts == 1
+        assert {(m.scope_day, m.name_key) for m in session.scalars(select(SignalMention).where(
+            SignalMention.url_canonical_hash == reused.url_canonical_hash))} == {(D, "bravo")}
+    engine.dispose()
+
+
+def test_newer_ok_extraction_without_entities_supersedes_old_mentions(session, repo,
+                                                                     monkeypatch):
+    # F10: the newest `ok` extraction decides, even when it has no entities (no mention rows).
+    monkeypatch.setattr(module, "EXTRACTION_VERSIONS", ("v-old", "v-new"))
+    a = add_article(session, "https://a.com/1")
+    digest(session, D, a.url)
+    repo.replace_membership(D)
+    repo.save_extraction(a, extraction(model("Old Name")), content_hash="h", version="v-old")
+    repo.save_extraction(a, extraction(), content_hash="h", version="v-new")
+    evidence, _ = repo.load_evidence()
+    assert evidence == []

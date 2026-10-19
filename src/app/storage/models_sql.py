@@ -420,6 +420,8 @@ class ArticleSignal(Base):  # pylint: disable=too-many-instance-attributes
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     article_id: Mapped[int] = mapped_column(ForeignKey("articles.id", ondelete="CASCADE"),
                                             index=True)
+    # With the id, the article identity; rows of a deleted article never match a reused id.
+    url_canonical_hash: Mapped[str] = mapped_column(String(64))
     extraction_version: Mapped[str] = mapped_column(String(64))
     content_hash: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(16), index=True)
@@ -445,6 +447,7 @@ class DailySignalScope(Base):
     scope_day: Mapped[date] = mapped_column(Date)
     article_id: Mapped[int] = mapped_column(ForeignKey("articles.id", ondelete="CASCADE"),
                                             index=True)
+    url_canonical_hash: Mapped[str] = mapped_column(String(64))
     kind: Mapped[str] = mapped_column(String(16))
     publisher: Mapped[str] = mapped_column(String(255))
     item_url: Mapped[str] = mapped_column(String(2048))

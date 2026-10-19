@@ -59,10 +59,10 @@ class _Extractor:
         self.counts = counts
 
     def pending(self, article: Article, content_hash: str, retry_skipped: bool) -> bool:
-        if self.repo.get_cached(article.id, content_hash) is not None:
+        if self.repo.get_cached(article, content_hash) is not None:
             self.counts["cached"] += 1
             return False
-        row = self.repo.get_signal(article.id)
+        row = self.repo.get_signal(article)
         if row is not None and row.status == "skipped" and row.content_hash == content_hash:
             if retry_skipped and not row.retry_used and (row.reason or "").startswith(
                     "invalid_output"):
@@ -131,7 +131,7 @@ def _extract_days(session: Session, repo: DailySignalRepo, ledger: SignalsLedger
                 content_hash = fingerprint(source_text(article.title, article.content))
                 if not extractor.pending(article, content_hash, options.retry_skipped):
                     continue
-                row = repo.get_signal(article.id)
+                row = repo.get_signal(article)
                 retry = bool(options.retry_skipped and row is not None
                              and row.status == "skipped" and not row.retry_used)
                 outcome = extractor.extract(article, day, retry)

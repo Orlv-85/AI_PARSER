@@ -60,6 +60,12 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
+def _same_article(table: Any) -> Any:
+    """Join condition on the article identity (id and canonical URL hash, F9)."""
+    return (Article.id == table.article_id) & \
+        (Article.url_canonical_hash == table.url_canonical_hash)
+
+
 def _version_rank(version: str) -> int:
     return EXTRACTION_VERSIONS.index(version) if version in EXTRACTION_VERSIONS else -1
 
@@ -110,11 +116,12 @@ class DailySignalRepo:
         if urls is None:
             return False
         matched = self._match(urls)
-        wanted: dict[int, tuple[str, str]] = {}
+        wanted: dict[int, tuple[str, str, str]] = {}
         for url in urls:
             article = matched.get(url)
             if article is not None and article.id not in wanted:
-                wanted[article.id] = (publisher_group(url, self.publisher_overrides), url)
+                wanted[article.id] = (publisher_group(url, self.publisher_overrides), url,
+                                      article.url_canonical_hash)
         current = {row.article_id: row for row in self.session.scalars(
             select(DailySignalScope).where(DailySignalScope.scope_day == day))}
         removed = [aid for aid in current if aid not in wanted]
@@ -122,14 +129,17 @@ class DailySignalRepo:
             self.session.delete(current[aid])
         kind = self.kind(day)
         added = []
-        for aid, (publisher, url) in wanted.items():
+        for aid, (publisher, url, url_hash) in wanted.items():
             row = current.get(aid)
             if row is None:
-                self.session.add(DailySignalScope(scope_day=day, article_id=aid, kind=kind,
+                self.session.add(DailySignalScope(scope_day=day, article_id=aid,
+                                                  url_canonical_hash=url_hash, kind=kind,
                                                   publisher=publisher, item_url=url))
                 added.append(aid)
-            elif (row.kind, row.publisher, row.item_url) != (kind, publisher, url):
+            elif (row.kind, row.publisher, row.item_url, row.url_canonical_hash) != \
+                    (kind, publisher, url, url_hash):
                 row.kind, row.publisher, row.item_url = kind, publisher, url
+                row.url_canonical_hash = url_hash  # a stale row of a reused id is taken over
                 added.append(aid)
         self.session.flush()
         for aid in removed:
@@ -145,29 +155,40 @@ class DailySignalRepo:
 
     def scope_articles(self, day: date) -> list[Article]:
         return list(self.session.scalars(
-            select(Article).join(DailySignalScope, DailySignalScope.article_id == Article.id)
+            select(Article).join(DailySignalScope, _same_article(DailySignalScope))
             .where(DailySignalScope.scope_day == day).order_by(Article.id)))
 
     # Extractions and evidence ------------------------------------------------------------------
-    def get_signal(self, article_id: int,
-                   version: str = EXTRACTION_VERSION) -> ArticleSignal | None:
+    def _signal(self, article_id: int, version: str) -> ArticleSignal | None:
         return self.session.scalar(select(ArticleSignal).where(
             ArticleSignal.article_id == article_id, ArticleSignal.extraction_version == version))
 
-    def get_cached(self, article_id: int, content_hash: str,
+    def get_signal(self, article: Article,
+                   version: str = EXTRACTION_VERSION) -> ArticleSignal | None:
+        """The article's extraction row; a row left by a deleted article with the same id
+        (SQLite reuses ids and does not enforce the cascade here) does not count."""
+        row = self._signal(article.id, version)
+        return row if row is not None and \
+            row.url_canonical_hash == article.url_canonical_hash else None
+
+    def get_cached(self, article: Article, content_hash: str,
                    version: str = EXTRACTION_VERSION) -> ArticleSignal | None:
         """An `ok` extraction of the same content, reusable without a provider call."""
-        row = self.get_signal(article_id, version)
+        row = self.get_signal(article, version)
         return row if row is not None and row.status == "ok" and \
             row.content_hash == content_hash else None
 
-    def _signal_row(self, article_id: int, version: str, content_hash: str) -> ArticleSignal:
-        row = self.get_signal(article_id, version)
+    def _signal_row(self, article: Article, version: str, content_hash: str) -> ArticleSignal:
+        row = self._signal(article.id, version)
         if row is None:
-            row = ArticleSignal(article_id=article_id, extraction_version=version,
-                                content_hash=content_hash, status="failed", attempts=0,
-                                retry_used=False, payload="{}", provenance="{}")
+            row = ArticleSignal(article_id=article.id, extraction_version=version)
             self.session.add(row)
+        if row.url_canonical_hash != article.url_canonical_hash:
+            # New row, or the stale row of a deleted article whose id was reused: start over.
+            row.url_canonical_hash = article.url_canonical_hash
+            row.status, row.reason, row.attempts, row.retry_used = "failed", None, 0, False
+            row.event_type = row.novelty_claim = None
+            row.payload, row.provenance = "{}", "{}"
         row.content_hash = content_hash
         row.updated_at = _now()
         return row
@@ -175,7 +196,7 @@ class DailySignalRepo:
     def save_extraction(self, article: Article, extraction: Extraction, *, content_hash: str,
                         version: str = EXTRACTION_VERSION,
                         provenance: Mapping[str, Any] | None = None) -> ArticleSignal:
-        row = self._signal_row(article.id, version, content_hash)
+        row = self._signal_row(article, version, content_hash)
         row.status, row.reason = "ok", None
         row.attempts += 1
         row.event_type, row.novelty_claim = extraction.event_type, extraction.novelty_claim
@@ -188,7 +209,8 @@ class DailySignalRepo:
             SignalMention.url_canonical_hash == article.url_canonical_hash,
             SignalMention.extraction_version == version))
         days = self.session.scalars(select(DailySignalScope.scope_day).where(
-            DailySignalScope.article_id == article.id))
+            DailySignalScope.article_id == article.id,
+            DailySignalScope.url_canonical_hash == article.url_canonical_hash))
         for day in sorted(set(days)):
             self._insert_rows(article, day, version, extraction.payload())
         self.session.flush()
@@ -198,7 +220,7 @@ class DailySignalRepo:
                      version: str = EXTRACTION_VERSION, retry_used: bool = False) -> ArticleSignal:
         if status not in ("failed", "skipped"):
             raise ValueError(status)
-        row = self._signal_row(article.id, version, content_hash)
+        row = self._signal_row(article, version, content_hash)
         row.status, row.reason = status, reason[:255]
         row.attempts += 1
         row.retry_used = row.retry_used or retry_used
@@ -213,13 +235,16 @@ class DailySignalRepo:
             SignalMention.scope_day == day, SignalMention.article_id == article_id,
             SignalMention.url_canonical_hash == article.url_canonical_hash))
         for row in self.session.scalars(select(ArticleSignal).where(
-                ArticleSignal.article_id == article_id, ArticleSignal.status == "ok")):
+                ArticleSignal.article_id == article_id,
+                ArticleSignal.url_canonical_hash == article.url_canonical_hash,
+                ArticleSignal.status == "ok")):
             self._insert_rows(article, day, row.extraction_version, json.loads(row.payload))
 
     def _insert_rows(self, article: Article, day: date, version: str,
                      payload: Mapping[str, Any]) -> None:
         scope = self.session.scalar(select(DailySignalScope).where(
-            DailySignalScope.scope_day == day, DailySignalScope.article_id == article.id))
+            DailySignalScope.scope_day == day, DailySignalScope.article_id == article.id,
+            DailySignalScope.url_canonical_hash == article.url_canonical_hash))
         publisher = scope.publisher if scope is not None else \
             publisher_group(article.url, self.publisher_overrides)
         seen: set[tuple[str, str]] = set()
@@ -253,12 +278,23 @@ class DailySignalRepo:
         return int(getattr(result, "rowcount", 0) or 0)
 
     def load_evidence(self) -> tuple[list[Mention], dict[int, SignalMention]]:
-        """Evidence set: per article identity, rows of its newest stored extraction version."""
+        """Evidence set: per article identity, rows of its newest `ok` extraction version, even
+        when that extraction has no entities (F10). An identity without an `ok` extraction row
+        (deleted article) keeps the rows of its newest stored version."""
         rows = list(self.session.scalars(select(SignalMention).order_by(SignalMention.id)))
         newest: dict[tuple[int, str], int] = {}
+        for article_id, url_hash, version in self.session.execute(
+                select(ArticleSignal.article_id, ArticleSignal.url_canonical_hash,
+                       ArticleSignal.extraction_version).where(ArticleSignal.status == "ok")):
+            identity = (article_id, url_hash)
+            newest[identity] = max(newest.get(identity, -2), _version_rank(version))
+        stored: dict[tuple[int, str], int] = {}
         for row in rows:
             identity = (row.article_id, row.url_canonical_hash)
-            newest[identity] = max(newest.get(identity, -2), _version_rank(row.extraction_version))
+            if identity not in newest:
+                stored[identity] = max(stored.get(identity, -2),
+                                       _version_rank(row.extraction_version))
+        newest.update(stored)
         chosen = {row.id: row for row in rows if _version_rank(row.extraction_version)
                   == newest[(row.article_id, row.url_canonical_hash)]}
         mentions = [Mention(
@@ -370,20 +406,21 @@ class DailySignalRepo:
             .outerjoin(NewsDigestItem, NewsDigestItem.group_id == NewsDigestGroup.id)
             .group_by(NewsDigestReport.report_date)).all())
         scope = self.session.execute(
-            select(DailySignalScope.scope_day, DailySignalScope.article_id)
-            .join(Article, Article.id == DailySignalScope.article_id)).all()
-        statuses: dict[int, str] = {}
-        best: dict[int, int] = {}
-        for article_id, version, status in self.session.execute(
-                select(ArticleSignal.article_id, ArticleSignal.extraction_version,
-                       ArticleSignal.status)):
+            select(DailySignalScope.scope_day, DailySignalScope.article_id,
+                   DailySignalScope.url_canonical_hash)
+            .join(Article, _same_article(DailySignalScope))).all()
+        statuses: dict[tuple[int, str], str] = {}
+        best: dict[tuple[int, str], int] = {}
+        for article_id, url_hash, version, status in self.session.execute(
+                select(ArticleSignal.article_id, ArticleSignal.url_canonical_hash,
+                       ArticleSignal.extraction_version, ArticleSignal.status)):
             rank = 1000 if status == "ok" else _version_rank(version)
-            if rank > best.get(article_id, -2):
-                best[article_id], statuses[article_id] = rank, status
+            if rank > best.get((article_id, url_hash), -2):
+                best[(article_id, url_hash)], statuses[(article_id, url_hash)] = rank, status
         counts: dict[date, dict[str, int]] = defaultdict(lambda: defaultdict(int))
-        for day, article_id in scope:
+        for day, article_id, url_hash in scope:
             counts[day]["matched"] += 1
-            status = statuses.get(article_id)
+            status = statuses.get((article_id, url_hash))
             if status == "ok":
                 counts[day]["extracted"] += 1
             elif status in ("failed", "skipped"):
@@ -399,36 +436,39 @@ class DailySignalRepo:
         wanted = set(days)
         if not wanted:
             return {}
-        by_article_day: dict[tuple[int, date], list[EntityMention]] = defaultdict(list)
+        by_article_day: dict[tuple[int, str, date], list[EntityMention]] = defaultdict(list)
         for mention_id, row in evidence.items():
             if row.scope_day in wanted:
                 keys = result.keys[mention_id]
-                by_article_day[(row.article_id, row.scope_day)].append(EntityMention(
-                    entity_key=result.assignments[mention_id], type_group=keys.type_group,
-                    base_key=keys.base_key, role=row.role, is_new=row.is_new,
-                    novelty_quote=row.novelty_quote))
-        events: dict[int, tuple[int, str]] = {}
-        for article_id, version, event in self.session.execute(
-                select(ArticleSignal.article_id, ArticleSignal.extraction_version,
-                       ArticleSignal.event_type).where(ArticleSignal.status == "ok")):
+                by_article_day[(row.article_id, row.url_canonical_hash, row.scope_day)].append(
+                    EntityMention(
+                        entity_key=result.assignments[mention_id], type_group=keys.type_group,
+                        base_key=keys.base_key, role=row.role, is_new=row.is_new,
+                        novelty_quote=row.novelty_quote))
+        events: dict[tuple[int, str], tuple[int, str]] = {}
+        for article_id, url_hash, version, event in self.session.execute(
+                select(ArticleSignal.article_id, ArticleSignal.url_canonical_hash,
+                       ArticleSignal.extraction_version, ArticleSignal.event_type)
+                .where(ArticleSignal.status == "ok")):
             rank = _version_rank(version)
-            if rank >= events.get(article_id, (-2, ""))[0]:
-                events[article_id] = (rank, event or "other")
+            if rank >= events.get((article_id, url_hash), (-2, ""))[0]:
+                events[(article_id, url_hash)] = (rank, event or "other")
         out: dict[date, list[ArticleObs]] = defaultdict(list)
         for scope, article in self.session.execute(
                 select(DailySignalScope, Article)
-                .join(Article, Article.id == DailySignalScope.article_id)
+                .join(Article, _same_article(DailySignalScope))
                 .where(DailySignalScope.scope_day.in_(sorted(wanted)))
                 .order_by(DailySignalScope.scope_day, Article.id)):
-            if article.id not in events:
+            identity = (article.id, article.url_canonical_hash)
+            if identity not in events:
                 continue
-            mentions = sorted(by_article_day.get((article.id, scope.scope_day), []),
+            mentions = sorted(by_article_day.get((*identity, scope.scope_day), []),
                               key=lambda m: (m.entity_key, m.role))
             out[scope.scope_day].append(ArticleObs(
                 article_id=article.id, scope_day=scope.scope_day,
                 title=str(digest_title(article.title)), url=scope.item_url,
                 publisher=scope.publisher, published_at=article.published_at,
-                event_type=events[article.id][1], mentions=tuple(mentions)))
+                event_type=events[identity][1], mentions=tuple(mentions)))
         return dict(out)
 
     def get_report(self, day: date) -> DailySignalReport | None:
