@@ -80,6 +80,19 @@ the Troubleshooting section of `README.md`.
       "cause": "The PostgreSQL integration tests skip unless AINEWS_TEST_POSTGRES_URL is set; CI sets it with a postgres:18-alpine service. Separately, legacy cleanup refuses to run when any table has an unknown FK to articles, so a new table referencing articles must be declared to that guard.",
       "fix": "Run the suite against a local Postgres like CI: docker run -d --rm --name ainews-pg-test -e POSTGRES_USER=ainews_test -e POSTGRES_PASSWORD=isolated_ci_test -e POSTGRES_DB=ainews_test -p 55432:5432 postgres:18-alpine, then AINEWS_TEST_POSTGRES_URL=postgresql+psycopg://ainews_test:isolated_ci_test@127.0.0.1:55432/ainews_test in the clean-copy run. For a new FK to articles, extend legacy_cleanup.known_article_fk (derived signals tables are accepted only with ON DELETE CASCADE).",
       "verification": "Full suite with the URL set: 1082 passed, 0 skipped."
+    },
+    {
+      "id": "sqlite-reused-article-id-inherits-signals",
+      "date": "2026-10-19",
+      "area": "storage/daily_signals",
+      "symptom": "On local SQLite a newly fetched article shows as already extracted for daily signals, or appears in an older day's observations with another article's entities; on PostgreSQL the same flow is correct.",
+      "evidence": [
+        "PR #39 review (A-claude A04, A-gpt A05/A06): delete an extracted article, insert a new one that gets the same id, publish it in a digest",
+        "tests/unit/test_daily_signals_repo.py enabled PRAGMA foreign_keys=ON, unlike the app"
+      ],
+      "cause": "The app never enables SQLite foreign keys, so ON DELETE CASCADE does not remove article_signals and daily_signal_scope rows of a deleted article, and SQLite reuses the highest rowid. Rows keyed by article_id alone were inherited by the new article.",
+      "fix": "Key scope, extraction rows, coverage, observations and evidence writes by (article_id, url_canonical_hash); both tables store url_canonical_hash and a stale row is ignored or taken over and reset. The global SQLite pragma stays unchanged. Commit a1a91bd (F9).",
+      "verification": "test_reused_article_id_without_fk_enforcement_inherits_nothing (no FK pragma) fails on 8f30549 and passes after the fix; full suite with PostgreSQL green."
     }
   ]
 }

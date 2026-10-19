@@ -371,3 +371,70 @@ because it is now (wrongly) New. Rising and Cooling cannot be measured yet (firs
 
 Fixes 2-4 are deterministic and can be re-measured on this scratch DB with `--recompute-only` ($0) after
 the review window, together with the review findings (checkpoint 3 step 3).
+
+## 9. Re-measure after the PR #39 review fixes (2026-10-19)
+
+**Code**: `55ebe21` (F1-F22, N1-N3). **Spend**: ledger estimate $0.4265 of the approved $1.10 for the
+F18 re-extraction (1,170 paid calls; at list prices well below that, see finding 6); validation total by
+the ledger $1.7531 of $2.50. No other paid calls.
+
+Method: the schema changed (F9), so the scratch DB was rebuilt from a fresh copy of `data/ai_news.db`
+and the saved digests (offline, same 2,072 items, 2,010 matched). The same ledger replayed every
+unchanged request ($0): 840 articles. The 1,170 articles with under 300 characters of content and a
+usable RSS summary got a new request text ("Title + Summary", F18) and were extracted again
+(`fix-01..03.json`: 700 + 470 calls, then progress 0). Input kinds recorded in the provenance: 811
+`full` (content >= 300 characters, history and target days), 1,170 `title_summary`, 29 `title_only`.
+Same rubric, same reviewer; items judged before keep their verdict. Dump: `tmp/daily-signals-validate/out-review-fixes.txt`.
+
+### New, 2026-10-12..16 (before = section 8)
+
+| Day | Displayed OK / BAD / uncertain | Uncapped OK / BAD / uncertain | Changes |
+| --- | --- | --- | --- |
+| 10-12 | 7 / 0 / 1 (was 7 / 0 / 1) | 9 / 1 / 2 of 12 (was 9 / 2 / 2) | Gemini agent gone (F21) |
+| 10-13 | 5 / 0 / 3 (was 4 / 1 / 3) | 8 / 0 / 6 of 14 (was 8 / 1 / 5) | LFM2.5-24B-A2B gone (F20); Apple HomeView shown; Joule Assistants new, hidden (uncertain: "new and expanded") |
+| 10-14 | 7 / 0 / 1 (was 6 / 1 / 1) | 10 / 0 / 2 of 12 (was 10 / 1 / 2) | "dynamic workflows" gone (F22); Deep Review shown |
+| 10-15 | 7 / 0 / 1 (was 8 / 0 / 0) | 7 / 1 / 3 of 11 (was 8 / 2 / 3) | **Muse Spark Open suppressed (F19, false)**; "on-demand capacity mode" gone (F22); Trust in Depth shown |
+| 10-16 | 7 / 0 / 1 (was 6 / 1 / 1) | 7 / 0 / 1 of 8 (was 7 / 1 / 2) | Surface Laptop Ultra gone (F18: the 10-07 history article now yields it); Code Review for Claude Code suppressed (F19) |
+| **Total** | **33 / 0 / 7 = 82.5% OK, 0% BAD** (was 77.5% / 7.5%) | **41 / 2 / 14 of 57 = 72% OK, 3.5% BAD** (was 67% / 11%) | |
+
+Recall (42 launch entities): **32/42** (was 34/42). The two new misses are both F19 suppressions:
+Muse Spark Open (10-15) and Code Review for Claude Code (10-16, GA after a March research preview,
+which OD1 counts as New; uncertain in the rubric).
+
+### F19 side effects and variants (offline, $0)
+
+F19 fired twice on these days, both times against the plan:
+
+- Muse Spark Open, matched on 2026-09-03 in an RSS summary: "its roadmap includes the Muse Spark open
+  weights release" (a plan, not a release). T7.2 requires Muse Spark Open to be New on 10-15.
+- Code Review for Claude Code, matched on 2026-03-09 in a digest title (research preview rollout).
+
+Surface Laptop Ultra, the case that motivated F19, is now removed by F18 alone (evidence from the
+10-07 article's summary). Variants of the F19 text source on the same data
+(`tmp/daily-signals-validate/f19_variants.py`):
+
+| F19 texts | Suppressed on 10-12..16 |
+| --- | --- |
+| As implemented: in-scope article title + RSS summary, digest item title + summary, all days | Muse Spark Open, Code Review for Claude Code |
+| Digest item title + summary only (the data the gate's rule used), all days | Code Review for Claude Code |
+| Digest items only, from 2026-08-03 | none |
+| As implemented, from 2026-08-03 | Muse Spark Open |
+
+The code keeps F19 as specified; the choice of text source is a coordinator decision (see the reply).
+
+### Named checks (T7.2 done-when)
+
+| Check | Before (section 8) | After |
+| --- | --- | --- |
+| Displayed OK >= 75%, BAD <= 10% | 77.5% / 7.5% | **82.5% / 0%** |
+| No generic, non-AI or established-company item displayed | missed ("dynamic workflows") | **met** |
+| Same, uncapped | missed (4) | missed: Maka (non-AI), Blueprints AI (established), both hidden |
+| Moltbook, Attie not New | met | met |
+| Beam not New, spike and top story | met | met |
+| Muse Spark Open New on 10-15 | met | **missed (F19)**; still the top story and now a spike |
+| Elorian Glimpse New on 10-16, separate from the Glimpse company | met | met |
+| No duplicate top story | met | met |
+| Membership precision >= 90% | 89% strict / 98% lenient | unchanged (top stories identical); accepted by the coordinator |
+
+Spikes: 10-15 Muse Spark Open (9 vs 0) joins and Apple drops below the cap; 10-16 Surface Laptop Ultra
+is a spike again (3 vs 0) instead of a false New. Top stories identical on all five days.

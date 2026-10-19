@@ -378,6 +378,10 @@ settled in Phase P; this phase validates the full pipeline with extracted histor
   - Result (2026-10-19, `dry-run.md` section 8): $0.6446 by the ledger, $0.14 billed; displayed New 31 / 3 / 6 (77.5% OK,
     7.5% BAD), uncapped 42 / 7 / 14, recall 34/42; open: one generic item displayed ("dynamic
     workflows") and strict membership 89%. Findings 1-4 wait for checkpoint 3 step 3.
+  - Re-measure after review fixes (2026-10-19, `dry-run.md` section 9, `55ebe21`): ledger $0.4265 for
+    the F18 re-extraction; displayed New 33 / 0 / 7 (82.5% OK, 0% BAD), uncapped 41 / 2 / 14,
+    recall 32/42; open: Muse Spark Open is suppressed by F19 on 10-15 (text-source decision for the
+    coordinator); membership 89% strict accepted.
 
 ## Phase 8: Gate and rollout
 
