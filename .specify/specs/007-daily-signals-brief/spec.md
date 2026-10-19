@@ -13,7 +13,7 @@ names and counters without saying what they are or why they matter.
 
 What the live block shows today (2026-10-16 example):
 
-- **New** items as `name · type · vendor · N source(s)` with an `early signal` badge on almost every
+- **New** items as `name | type | vendor | N source(s)` with an `early signal` badge on almost every
   item; to learn what "MAI-Base-2" is, the reader must open "sources" and leave the page. The digest
   already has grounded English summaries for the same articles; they are not used in the block.
 - `variant of GPT` appears for GPT-Live-1.1: the token-prefix parent is a generic family word, not a
