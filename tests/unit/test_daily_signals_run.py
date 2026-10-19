@@ -257,3 +257,22 @@ def test_article_on_several_backfill_days_is_attempted_once(session, tmp_path):
     report = run(session, tmp_path, fake, backfill_days=2)
     assert len(fake.requests) == 1
     assert report["articles"].get("attempted_before") == 1
+
+
+def test_history_article_without_body_uses_summary_and_records_input_kind(session, tmp_path):
+    # F18: the request and grounding use "Title + Summary"; the input kind is recorded.
+    seed(session, n=2)
+    articles = session.scalars(select(Article).order_by(Article.id)).all()
+    articles[0].content = None
+    articles[0].summary = "Today Acme launched Atlas 0, its fastest model."
+    session.commit()
+    fake = Fake()
+    report = run(session, tmp_path, fake)
+    assert report["articles"]["ok"] == 2
+    sources = [json.loads(r["messages"][1]["content"])["source"] for r in fake.requests]
+    assert sources[0] == ("Title: Acme launches Atlas 0\n"
+                          "Summary: Today Acme launched Atlas 0, its fastest model.")
+    assert sources[1].startswith("Title: Acme launches Atlas 1\nContent: Today Acme")
+    kinds = [json.loads(r.provenance)["input"]
+             for r in session.scalars(select(ArticleSignal).order_by(ArticleSignal.article_id))]
+    assert kinds == ["title_summary", "title_only"]  # seed bodies are under 300 chars

@@ -2,15 +2,18 @@
 
 Pure: no I/O and no provider calls. The ledger dispatches the bodies built here.
 """
+import html
 import json
 import math
 import re
+import unicodedata
 from dataclasses import asdict, dataclass, field
 from datetime import date
 from typing import Any
 
 from app.core.daily_enrichment import digest_title
 from app.core.daily_signals_entities import (
+    QUOTES,
     is_stopped,
     join,
     name_tokens,
@@ -28,6 +31,12 @@ EXTRACTION_VERSIONS = (EXTRACTION_VERSION,)
 ACCEPTED_MODELS = frozenset({DEEPSEEK_MODEL, "deepseek-v4.1-flash"})
 MAX_OUTPUT_TOKENS = 1200
 MAX_INPUT_BYTES = 32000
+FULL_CONTENT_MIN = 300  # shorter content falls back to the RSS summary (F18)
+SUMMARY_MAX = 1500
+# Grounding compares model output (often ASCII) with article text (often typographic) (F7).
+GROUNDING = str.maketrans({"\u201c": '"', "\u201d": '"', "\u201e": '"', "\u2010": "-",
+                           "\u2011": "-", "\u2012": "-", "\u2013": "-", "\u2014": "-",
+                           "\u2015": "-", "\u2212": "-"})
 MAX_ENTITIES = 8
 MAX_PRIMARIES = 2
 
@@ -129,8 +138,26 @@ class Extraction:
                 "entities": [asdict(e) for e in self.entities], "rejects": dict(self.rejects)}
 
 
-def source_text(title: str, content: str | None) -> str:
-    return "Title: " + str(digest_title(title))[:512] + "\nContent: " + (content or "")[:6000]
+def _summary(title: str, summary: str | None) -> str | None:
+    """The RSS summary as plain text, or None when it adds nothing to the title."""
+    text = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", summary or ""))).strip()
+    return text[:SUMMARY_MAX] if text and text.casefold() != title.strip().casefold() else None
+
+
+def input_kind(content: str | None, summary: str | None, title: str = "") -> str:
+    """`full` (content >= 300 chars), `title_summary` (fallback) or `title_only`."""
+    if len((content or "").strip()) >= FULL_CONTENT_MIN:
+        return "full"
+    return "title_summary" if _summary(str(digest_title(title)), summary) else "title_only"
+
+
+def source_text(title: str, content: str | None, summary: str | None = None) -> str:
+    """Provider input and grounding text. Full and title-only articles keep the original
+    text (same content hash, no re-extraction); short content with a summary uses the summary."""
+    head = "Title: " + str(digest_title(title))[:512]
+    if input_kind(content, summary, title) == "title_summary":
+        return head + "\nSummary: " + str(_summary(str(digest_title(title)), summary))
+    return head + "\nContent: " + (content or "")[:6000]
 
 
 def request_body(text: str, *, recovery: bool = False, retry: bool = False) -> dict[str, Any]:
@@ -155,6 +182,7 @@ def reservation_micro(body: dict[str, Any]) -> int:
 
 
 def ws(value: str) -> str:
+    value = unicodedata.normalize("NFKC", value).translate(QUOTES).translate(GROUNDING)
     return str(re.sub(r"\s+", " ", value).strip().casefold())
 
 
@@ -239,8 +267,16 @@ def parse_extraction(text: str, data: Any, published_at: date | None) -> Extract
     if event not in EVENT_TYPES:
         reject("event_coerced")
         event = "other"
-    entities = [e for raw in content["entities"]
-                if (e := _entity(raw, haystack, published_at, reject)) is not None]
+    entities = []
+    for raw in content["entities"]:
+        entity = _entity(raw, haystack, published_at, reject)
+        if entity is None:
+            continue
+        # Rule 8's stoplist runs before the caps so a generic entry uses no slot (F8).
+        if is_stopped(name_tokens(entity.canonical_name, entity.entity_type)):
+            reject("stoplisted")
+            continue
+        entities.append(entity)
     primaries = 0
     for index, entity in enumerate(entities):
         if entity.role == "primary":

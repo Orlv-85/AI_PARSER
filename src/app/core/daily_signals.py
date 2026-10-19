@@ -20,6 +20,7 @@ from app.core.daily_signals_extract import (
     MAX_INPUT_BYTES,
     ExtractionInvalid,
     byte_bound,
+    input_kind,
     parse_extraction,
     request_body,
     reservation_micro,
@@ -83,7 +84,7 @@ class _Extractor:
         return result.data
 
     def extract(self, article: Article, scope_day: date, retry: bool) -> str:
-        text = source_text(article.title, article.content)
+        text = source_text(article.title, article.content, article.summary)
         content_hash = fingerprint(text)
         published = article.published_at.date() if article.published_at else None
         base = request_body(text, retry=retry)
@@ -109,7 +110,10 @@ class _Extractor:
                 continue
             self.repo.save_extraction(article, extraction, content_hash=content_hash,
                                       provenance={"model": data.get("model"),
-                                                  "recovered": bool(reasons), "retry": retry})
+                                                  "recovered": bool(reasons), "retry": retry,
+                                                  "input": input_kind(article.content,
+                                                                      article.summary,
+                                                                      article.title)})
             return "ok"
         self.repo.save_failure(article, content_hash=content_hash, status="skipped",
                                reason="invalid_output:" + ",".join(reasons), retry_used=retry)
@@ -132,7 +136,8 @@ def _extract_days(session: Session, repo: DailySignalRepo, ledger: SignalsLedger
     try:
         for day in run_days(options):
             for article in repo.scope_articles(day):
-                content_hash = fingerprint(source_text(article.title, article.content))
+                content_hash = fingerprint(source_text(article.title, article.content,
+                                                       article.summary))
                 if not extractor.pending(article, content_hash, options.retry_skipped):
                     continue
                 # An article on several backfill days is attempted once per invocation (F12).

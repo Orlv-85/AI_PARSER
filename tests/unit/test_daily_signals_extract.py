@@ -9,6 +9,7 @@ from app.core.daily_signals_extract import (
     SYSTEM_PROMPT,
     ExtractionInvalid,
     byte_bound,
+    input_kind,
     is_retrospective,
     parse_extraction,
     request_body,
@@ -199,10 +200,10 @@ def test_caps_and_duplicates():
                    entity("alpha", is_new=True, is_new_quote="Alpha launched today"),
                    entity("Alpha", type="company"))
     assert [(e.name, e.entity_type, e.role, e.is_new) for e in merged.entities] == [
-        ("Alpha", "model", "primary", True), ("Alpha", "company", "mentioned", False)]
+        ("Alpha", "model", "primary", True), ("Alpha", "company", "primary", False)]
     assert merged.entities[0].novelty_quote == "Alpha launched today"
-    # Caps (rule 7) run before the duplicate merge (rule 8).
-    assert merged.rejects == {"primary_capped": 1, "stoplisted": 1, "duplicate_merged": 1}
+    # The stoplist runs before the caps (F8), the caps before the duplicate merge.
+    assert merged.rejects == {"stoplisted": 1, "duplicate_merged": 1}
 
 
 def test_adversarial_instruction_quote_passes_syntactic_check():
@@ -261,3 +262,42 @@ def test_payload_round_trip_is_json():
     payload = result.payload()
     assert json.loads(json.dumps(payload)) == payload
     assert payload["entities"][0]["canonical_name"] == "Atlas"
+
+
+def test_grounding_normalizes_typographic_quotes_and_dashes():
+    # F7: the article has a curly apostrophe and an en dash; the model answers in ASCII.
+    source = "Title: Acme\u2019s launch\nContent: Acme\u2019s new model Atlas \u2013 Pro launched today."
+    result = parse(source, entity("Atlas - Pro", is_new=True,
+                                  is_new_quote="Acme's new model Atlas - Pro launched today"))
+    assert [(e.name, e.is_new) for e in result.entities] == [("Atlas - Pro", True)]
+    assert not result.rejects
+
+
+def test_stoplisted_entities_do_not_use_primary_or_entity_slots():
+    # F8: "AI" is dropped before the primary cap (2) and the entity cap (8) are applied.
+    source = "Title: x\nContent: AI news: Acme ships Atlas. " + " ".join(
+        f"Name{i}" for i in range(6))
+    result = parse(source, entity("AI", type="technology"), entity("Acme", type="company"),
+                   entity("Atlas"), *[entity(f"Name{i}", role="mentioned") for i in range(6)])
+    assert [(e.name, e.role) for e in result.entities[:2]] == [("Acme", "primary"),
+                                                                ("Atlas", "primary")]
+    assert len(result.entities) == 8 and "Name5" in {e.name for e in result.entities}
+    assert result.rejects == {"stoplisted": 1}
+
+
+def test_short_content_falls_back_to_title_and_summary():
+    # F18: a history article without body text uses its stored RSS summary (cleaned, capped).
+    summary = "<p>Microsoft &amp; Nvidia show the Surface Laptop Ultra.</p>  " + "x" * 3000
+    text = source_text("RTX Spark laptops (3 minute read)", None, summary)
+    assert text.startswith("Title: RTX Spark laptops\nSummary: Microsoft & Nvidia show the "
+                           "Surface Laptop Ultra. x")
+    assert len(text) == len("Title: RTX Spark laptops\nSummary: ") + 1500
+    assert input_kind(None, summary) == "title_summary"
+    assert input_kind("c" * 300, summary) == "full"
+    assert input_kind("short", None) == input_kind("short", "  <b></b> ") == "title_only"
+    # Full articles and title-only articles keep their exact old text (no re-extraction).
+    assert source_text("T", "c" * 300, summary) == "Title: T\nContent: " + "c" * 300
+    assert source_text("T", "short", None) == "Title: T\nContent: short"
+    assert source_text("T", "short", "T") == "Title: T\nContent: short"
+    result = parse(text, entity("Surface Laptop Ultra", type="hardware"))
+    assert [e.name for e in result.entities] == ["Surface Laptop Ultra"]
