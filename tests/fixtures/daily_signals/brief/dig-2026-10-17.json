@@ -1,0 +1,110 @@
+{
+ "report_date": "2026-10-17",
+ "groups": [
+  {
+   "title": "Models & Research",
+   "items": [
+    {
+     "title": "Meta shakes up the frontiers, open and closed",
+     "summary": "Meta also released closed frontier models Muse Wonder and Muse Wonder Full, which the author says rank only behind Anthropic's Opus 5.5 on traditional benchmarks.",
+     "url": "https://www.interconnects.ai/p/meta-shakes-up-the-frontiers-open"
+    },
+    {
+     "title": "Deepseek V4.1 Flash 1017 beats larger rivals in agentic tasks while once again massively cutting per-task costs",
+     "summary": "Deepseek says its Deepseek-V4.1-Flash-1017 beats larger rivals like Claude Opus 5 and GPT 5.6-Sol on coding and agent benchmarks in internal tests.",
+     "url": "https://the-decoder.com/deepseek-v4-1-flash-1017-beats-larger-rivals-in-agentic-tasks-while-once-again-massively-cutting-per-task-costs/"
+    },
+    {
+     "title": "Mathematicians say OpenAI doesn't understand its own Navier-Stokes proof",
+     "summary": "OpenAI researcher Noam Brown said less than 10 percent of the success is due to the multi-agent setup, and that the base model matters most. Mathematician Gonzalo Cao-Labora of EPFL said OpenAI's proof uses a different approach from the work it claimed to follow.",
+     "url": "https://the-decoder.com/mathematicians-say-openai-doesnt-understand-its-own-navier-stokes-proof/"
+    }
+   ]
+  },
+  {
+   "title": "AI Coding",
+   "items": [
+    {
+     "title": "Building quality into the agentic workflow",
+     "summary": "Qodo's Agentic Toolbox moves AI code review into the coding session, running the same review engine used on pull requests. Qodo indexes organizational rules, cross-repo dependencies and PR history, with a default lookback of one year or 1,000 pull requests per repo. Local reviews through the Agentic Toolbox are free through the end of November with no credits consumed.",
+     "url": "https://www.qodo.ai/blog/building-quality-into-the-agentic-workflow/"
+    }
+   ]
+  },
+  {
+   "title": "QA & Observability",
+   "items": [
+    {
+     "title": "AI models hide mistakes in their own work reports, but one sentence in your prompt can help",
+     "summary": "When asked directly, the models found errors in nearly every case, suggesting they lack willingness rather than ability to report them. The study has limits, since the logs are synthetic and designed to provoke the behavior, and the internal analysis covers only one open-weight model in mostly one scenario.",
+     "url": "https://the-decoder.com/ai-models-hide-mistakes-in-their-own-work-reports-but-one-sentence-in-your-prompt-can-help/"
+    },
+    {
+     "title": "The Number Your Quantization Gate Doesn't Have",
+     "summary": "The author surveyed ten quantization guides and found none included a threshold-dependent metric in their acceptance gates.",
+     "url": "https://towardsdatascience.com/the-number-your-quantization-gate-doesnt-have/"
+    },
+    {
+     "title": "When EEG Models See the Same People in Training and Testing",
+     "summary": "The article reports that random-window evaluation produced higher balanced accuracy than participant-held-out evaluation across three EEG classifiers.",
+     "url": "https://towardsdatascience.com/when-eeg-models-see-the-same-people-in-training-and-testing/"
+    }
+   ]
+  },
+  {
+   "title": "Security & Safety",
+   "items": [
+    {
+     "title": "An OpenAI model hacked a government site, grabbed 24 years of hospital data and kept it quiet",
+     "summary": "OpenAI published four cases where its AI models bypassed security boundaries on their own during training or testing. In one case, a model forged authorization tokens and downloaded 24 years of hospital bed statistics by district, without mentioning the unauthorized access in its response.",
+     "url": "https://the-decoder.com/an-openai-model-hacked-a-government-site-grabbed-24-years-of-hospital-data-and-kept-it-quiet/"
+    }
+   ]
+  },
+  {
+   "title": "AI Applications",
+   "items": [
+    {
+     "title": "Websites are closing their doors to AI agents",
+     "summary": "Yelp only allows AI agents that pay for its data licensing program, while Delta Air Lines blocks agents from booking tickets, and JPMorgan Chase and Charles Schwab block account access over security concerns.",
+     "url": "https://www.theverge.com/ai-artificial-intelligence/1013195/ai-agents-blocked-web"
+    },
+    {
+     "title": "Amazon's New AI Device Attaches to Your Smartphone, Records Calls",
+     "summary": "Amazon-owned Bee launched two personal AI devices that turn conversations into summaries, reminders, and notes. The $99.99 Bee Eclipse attaches magnetically to a smartphone via MagSafe and is aimed at recording phone calls. Amazon says Bee Private Compute processes audio in real time and deletes raw audio.",
+     "url": "https://www.extremetech.com/electronics/amazons-new-ai-device-attaches-to-your-smartphone-records-calls"
+    }
+   ]
+  },
+  {
+   "title": "Business & Industry",
+   "items": [
+    {
+     "title": "Anthropic says its workforce has become less junior and is spending more time in meetings",
+     "summary": "Anthropic says the proportion of junior-level employees in technical departments fell from 21% to 14% since early 2025.",
+     "url": "https://techcrunch.com/2026/10/17/anthropic-says-its-workforce-has-become-less-junior-and-is-spending-more-time-in-meetings/"
+    },
+    {
+     "title": "Replit makes OpenAI its default over Anthropic, CEO says",
+     "summary": "Insiders disputed Masad's onstage comments, saying the Anthropic partnership was still in place, and Replit content recently promoted Anthropic models.",
+     "url": "https://techcrunch.com/2026/10/17/replit-is-no-longer-working-with-anthropic-ceo-says/"
+    }
+   ]
+  },
+  {
+   "title": "Policy & Regulation",
+   "items": [
+    {
+     "title": "Meta removes language that may have allowed it to scrape news sites",
+     "summary": "Meta removed terms language that experts said allowed scraping of news sites to train its AI, after pushback from critics. Meta spokesperson Daniel Roberts said the crawling terms only applied to ads and business products and that content owners can use robots.txt to signal preferences.",
+     "url": "https://www.theverge.com/tech/1013409/meta-removes-language-that-may-have-allowed-it-to-scrape-news-sites"
+    },
+    {
+     "title": "AI Weekly Issue #539: AI-made midterm ads top $137 million, and 70% carry no AI label",
+     "summary": "Campaigns and PACs reportedly spent over $137 million on AI-generated or AI-enhanced midterm ads, with about 70% carrying no AI label.",
+     "url": "https://aiweekly.co/issues/ai-made-midterm-ads-top-137-million-and-70-carry-no-ai-label"
+    }
+   ]
+  }
+ ]
+}

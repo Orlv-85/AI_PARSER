@@ -1,0 +1,885 @@
+{
+ "report_date": "2026-10-15",
+ "status": "building_history",
+ "methodology_version": "daily-signals-2",
+ "extraction_version": "daily-signals-extract-5",
+ "generated_at": "2026-10-19T11:33:35.924520Z",
+ "novelty_history_days": 70,
+ "comparable_complete_days": 6,
+ "coverage": {
+  "items": 92,
+  "matched": 92,
+  "extracted": 92,
+  "failed": 0,
+  "skipped": 0,
+  "pending": 0,
+  "unmatched": 0
+ },
+ "notes": [],
+ "sections": {
+  "cooling": {
+   "state": "hidden",
+   "note": null
+  },
+  "event_counts": {
+   "state": "ready",
+   "note": null
+  },
+  "new": {
+   "state": "ready",
+   "note": null
+  },
+  "rising": {
+   "state": "spikes_only",
+   "note": "Rising needs two weeks with at least 6 complete days each; showing spikes."
+  },
+  "top_stories": {
+   "state": "ready",
+   "note": null
+  }
+ },
+ "thresholds": {
+  "complete_ratio": 0.9,
+  "confirmed_publishers": 2,
+  "cooling_max": 4,
+  "cooling_min_delta": 3,
+  "cooling_min_previous": 5,
+  "cooling_min_publishers": 2,
+  "cooling_ratio": 0.5,
+  "history_note_days": 30,
+  "links_max": 3,
+  "new_max": 8,
+  "rising_max": 6,
+  "rising_min_current": 4,
+  "rising_min_delta": 3,
+  "rising_min_publishers": 2,
+  "rising_ratio": 1.5,
+  "spike_mean_floor": 0.333,
+  "spike_min_articles": 3,
+  "spike_min_publishers": 2,
+  "spike_min_trailing_days": 3,
+  "spike_ratio": 3.0,
+  "spike_trailing_days": 7,
+  "spike_trailing_min_items": 10,
+  "top_max": 5,
+  "top_min_publishers": 2,
+  "window_days": 7,
+  "window_min_complete": 6
+ },
+ "new": [
+  {
+   "entity_id": 2280,
+   "name": "Muse Spark Open",
+   "type": "model",
+   "vendor": "Meta",
+   "level": "confirmed",
+   "variant_of": "Muse Spark",
+   "variants": [],
+   "novelty_quote": "the newly released Muse Spark Open (816 B)",
+   "articles": 9,
+   "publishers": 9,
+   "links": [
+    {
+     "title": "Welcome Muse Spark Open: open-weight frontier multimodal mixture-of-experts model from Meta",
+     "url": "https://huggingface.co/blog/meta-muse-spark-open",
+     "publisher": "huggingface.co"
+    },
+    {
+     "title": "Local and Distributed Large LLM Inference with MLX and RDMA on Mac Studio",
+     "url": "https://machinelearning.apple.com/research/mlx-distributed-inference",
+     "publisher": "apple.com"
+    },
+    {
+     "title": "Muse Spark Open, an open-weight model for coding agents",
+     "url": "https://www.baseten.co/blog/muse-spark-open-launch/",
+     "publisher": "baseten.co"
+    }
+   ]
+  },
+  {
+   "entity_id": 2313,
+   "name": "Nemotron 3.5 Super VL",
+   "type": "model",
+   "vendor": "NVIDIA",
+   "level": "confirmed",
+   "variant_of": "NVIDIA Nemotron",
+   "variants": [],
+   "novelty_quote": "NVIDIA today released Nemotron 3.5 Super VL, an open 120-billion-parameter model",
+   "articles": 4,
+   "publishers": 3,
+   "links": [
+    {
+     "title": "Open From Data Center to Desktop: NVIDIA Expands Nemotron Family With Highest Efficiency Super VL and Bolt Models",
+     "url": "https://blogs.nvidia.com/blog/nemotron-3-5-super-vl/",
+     "publisher": "nvidia.com"
+    },
+    {
+     "title": "Announcing NVIDIA Nemotron 3.5 Super VL on Baseten",
+     "url": "https://www.baseten.co/blog/nvidia-nemotron-35-super-vl-launch/",
+     "publisher": "baseten.co"
+    },
+    {
+     "title": "Nvidia's Nemotron 3.5 Super VL is an open model built to run enterprise AI agents nonstop",
+     "url": "https://the-decoder.com/nvidias-nemotron-3-5-super-vl-is-an-open-model-built-to-run-enterprise-ai-agents-nonstop/",
+     "publisher": "the-decoder.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 1776,
+   "name": "FLUX 3 Image Klein",
+   "type": "model",
+   "vendor": "Black Forest Labs",
+   "level": "confirmed",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "Welcome FLUX.3 Image Klein in Diffusers: The latest open image generation model from Black Forest Labs",
+   "articles": 3,
+   "publishers": 3,
+   "links": [
+    {
+     "title": "Welcome FLUX.3 Image Klein in Diffusers",
+     "url": "https://huggingface.co/blog/flux-3",
+     "publisher": "huggingface.co"
+    },
+    {
+     "title": "Black Forest Labs opens FLUX 3 Image Klein weights, with free commercial use limited to smaller businesses",
+     "url": "https://venturebeat.com/technology/black-forest-labs-opens-flux-3-image-klein-weights-with-free-commercial-use-limited-to-smaller-businesses",
+     "publisher": "venturebeat.com"
+    },
+    {
+     "title": "Black Forest Labs' open-weights image model FLUX 3 Image Klein runs on consumer GPUs with just 8 GB of VRAM",
+     "url": "https://the-decoder.com/black-forest-labs-open-weights-image-model-flux-3-image-klein-runs-on-consumer-gpus-with-just-8-gb-of-vram/",
+     "publisher": "the-decoder.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 1910,
+   "name": "Granite-Switch-4.1-8B",
+   "type": "model",
+   "vendor": "Granite",
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "Granite-Switch-4.1-8B and -30B are released with \u201cbatteries included\u201d",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "Granite Switch 4.1: Chat, Decisions, and Speech from One Endpoint",
+     "url": "https://huggingface.co/blog/ibm-granite/granite-switch-4-1",
+     "publisher": "huggingface.co"
+    }
+   ]
+  },
+  {
+   "entity_id": 1681,
+   "name": "Bee Eclipse",
+   "type": "hardware",
+   "vendor": "Bee",
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "along with Bee Eclipse, a credit-card-sized device that magnetically attaches to the back of your smartphone",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "Amazon\u2019s Bee launches two new personal AI devices, starting at $75",
+     "url": "https://techcrunch.com/2026/10/15/amazons-bee-launches-two-new-personal-ai-devices-starting-at-75/",
+     "publisher": "techcrunch.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 1794,
+   "name": "Bee Frontier",
+   "type": "hardware",
+   "vendor": "Bee",
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "introduced the Bee Frontier, the next generation of its device that can be worn on the wrist or pinned to clothes",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "Amazon\u2019s Bee launches two new personal AI devices, starting at $75",
+     "url": "https://techcrunch.com/2026/10/15/amazons-bee-launches-two-new-personal-ai-devices-starting-at-75/",
+     "publisher": "techcrunch.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 1637,
+   "name": "DolphinBench",
+   "type": "benchmark",
+   "vendor": "Mem0",
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "A new test called DolphinBench checks whether an AI assistant's memory helps it get things done.",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "I Tested Four Ways to Give an AI Assistant a Memory. The Obvious One Was the Worst Value.",
+     "url": "https://towardsdatascience.com/i-tested-four-ways-to-give-an-ai-assistant-a-memory-the-obvious-one-was-the-worst-value/",
+     "publisher": "towardsdatascience.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 2831,
+   "name": "TheoPhysEval",
+   "type": "benchmark",
+   "vendor": null,
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "Thirty-five researchers from institutions including the International Centre for Theoretical Sciences (ICTS), Harvard University, KU Leuven, and Google DeepMind have released TheoPhysEval.",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "GPT-6-Astra solves 49 of 50 physics research problems at $2.40 apiece",
+     "url": "https://the-decoder.com/gpt-6-astra-solves-49-of-50-physics-research-problems-at-2-40-apiece/",
+     "publisher": "the-decoder.com"
+    }
+   ]
+  }
+ ],
+ "top_stories": [
+  {
+   "label": "Welcome Muse Spark Open: open-weight frontier multimodal mixture-of-experts model from Meta",
+   "event_type": "model_release",
+   "articles": 9,
+   "publishers": 9,
+   "entities": [
+    "Muse Spark Open"
+   ],
+   "links": [
+    {
+     "title": "Welcome Muse Spark Open: open-weight frontier multimodal mixture-of-experts model from Meta",
+     "url": "https://huggingface.co/blog/meta-muse-spark-open",
+     "publisher": "huggingface.co"
+    },
+    {
+     "title": "Local and Distributed Large LLM Inference with MLX and RDMA on Mac Studio",
+     "url": "https://machinelearning.apple.com/research/mlx-distributed-inference",
+     "publisher": "apple.com"
+    },
+    {
+     "title": "Muse Spark Open, an open-weight model for coding agents",
+     "url": "https://www.baseten.co/blog/muse-spark-open-launch/",
+     "publisher": "baseten.co"
+    }
+   ]
+  },
+  {
+   "label": "Nvidia's Nemotron 3.5 Super VL is an open model built to run enterprise AI agents nonstop",
+   "event_type": "model_release",
+   "articles": 4,
+   "publishers": 3,
+   "entities": [
+    "Nemotron 3.5 Super VL"
+   ],
+   "links": [
+    {
+     "title": "Open From Data Center to Desktop: NVIDIA Expands Nemotron Family With Highest Efficiency Super VL and Bolt Models",
+     "url": "https://blogs.nvidia.com/blog/nemotron-3-5-super-vl/",
+     "publisher": "nvidia.com"
+    },
+    {
+     "title": "Announcing NVIDIA Nemotron 3.5 Super VL on Baseten",
+     "url": "https://www.baseten.co/blog/nvidia-nemotron-35-super-vl-launch/",
+     "publisher": "baseten.co"
+    },
+    {
+     "title": "Nvidia's Nemotron 3.5 Super VL is an open model built to run enterprise AI agents nonstop",
+     "url": "https://the-decoder.com/nvidias-nemotron-3-5-super-vl-is-an-open-model-built-to-run-enterprise-ai-agents-nonstop/",
+     "publisher": "the-decoder.com"
+    }
+   ]
+  },
+  {
+   "label": "Black Forest Labs opens FLUX 3 Image Klein weights, with free commercial use limited to smaller businesses",
+   "event_type": "model_release",
+   "articles": 3,
+   "publishers": 3,
+   "entities": [
+    "FLUX 3 Image Klein"
+   ],
+   "links": [
+    {
+     "title": "Welcome FLUX.3 Image Klein in Diffusers",
+     "url": "https://huggingface.co/blog/flux-3",
+     "publisher": "huggingface.co"
+    },
+    {
+     "title": "Black Forest Labs opens FLUX 3 Image Klein weights, with free commercial use limited to smaller businesses",
+     "url": "https://venturebeat.com/technology/black-forest-labs-opens-flux-3-image-klein-weights-with-free-commercial-use-limited-to-smaller-businesses",
+     "publisher": "venturebeat.com"
+    },
+    {
+     "title": "Black Forest Labs' open-weights image model FLUX 3 Image Klein runs on consumer GPUs with just 8 GB of VRAM",
+     "url": "https://the-decoder.com/black-forest-labs-open-weights-image-model-flux-3-image-klein-runs-on-consumer-gpus-with-just-8-gb-of-vram/",
+     "publisher": "the-decoder.com"
+    }
+   ]
+  },
+  {
+   "label": "Gemini 4 Argon vs Gemini 3.1 Pro: Benchmarks & Pricing (2026)",
+   "event_type": "model_release",
+   "articles": 7,
+   "publishers": 2,
+   "entities": [
+    "Gemini 4 Argon"
+   ],
+   "links": [
+    {
+     "title": "Google wants Gemini 4 Argon to be the only AI model robots need",
+     "url": "https://the-decoder.com/google-wants-gemini-4-argon-to-be-the-only-ai-model-robots-need/",
+     "publisher": "the-decoder.com"
+    },
+    {
+     "title": "Gemini 4 Argon vs. GPT 6 Astra: Benchmarks and Pricing",
+     "url": "https://emergent.sh/learn/gemini-4-argon-vs-gpt-6-astra",
+     "publisher": "emergent.sh"
+    },
+    {
+     "title": "Gemini 4 Argon vs Gemini 3.1 Pro: Benchmarks & Pricing (2026)",
+     "url": "https://emergent.sh/learn/gemini-4-argon-vs-gemini-3-1-pro",
+     "publisher": "emergent.sh"
+    }
+   ]
+  },
+  {
+   "label": "Volvo makes a bigger bet on Nvidia for hands-free automated driving",
+   "event_type": "partnership",
+   "articles": 2,
+   "publishers": 2,
+   "entities": [],
+   "links": [
+    {
+     "title": "Volvo will use Nvidia\u2019s tech for hands-free, point-to-point driving",
+     "url": "https://www.theverge.com/transportation/1011653/volvo-nvidia-autonomous-driving-level-2-hands-free-urban",
+     "publisher": "theverge.com"
+    },
+    {
+     "title": "Volvo makes a bigger bet on Nvidia for hands-free automated driving",
+     "url": "https://techcrunch.com/2026/10/15/volvo-makes-a-bigger-bet-on-nvidia/",
+     "publisher": "techcrunch.com"
+    }
+   ]
+  }
+ ],
+ "rising": [
+  {
+   "entity_id": 780,
+   "name": "NVIDIA",
+   "type": "company",
+   "vendor": null,
+   "current_7d": null,
+   "previous_7d": null,
+   "expected_7d": null,
+   "today": 7,
+   "trailing_mean": 1.333,
+   "spike": true,
+   "publishers": 4,
+   "links": [
+    {
+     "title": "NVIDIA Expands Advanced Technology Access for Europe\u2019s Scientific Community Through Open Learning Resources, Collaborations and Compute",
+     "url": "https://blogs.nvidia.com/blog/ec-scientific-computing-pledge/",
+     "publisher": "nvidia.com"
+    },
+    {
+     "title": "Announcing NVIDIA Nemotron 3.5 Super VL on Baseten",
+     "url": "https://www.baseten.co/blog/nvidia-nemotron-35-super-vl-launch/",
+     "publisher": "baseten.co"
+    },
+    {
+     "title": "Volvo will use Nvidia\u2019s tech for hands-free, point-to-point driving",
+     "url": "https://www.theverge.com/transportation/1011653/volvo-nvidia-autonomous-driving-level-2-hands-free-urban",
+     "publisher": "theverge.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 1888,
+   "name": "GPT-6 Astra",
+   "type": "model",
+   "vendor": "OpenAI",
+   "current_7d": null,
+   "previous_7d": null,
+   "expected_7d": null,
+   "today": 6,
+   "trailing_mean": 1.667,
+   "spike": true,
+   "publishers": 2,
+   "links": [
+    {
+     "title": "GPT-6-Astra solves 49 of 50 physics research problems at $2.40 apiece",
+     "url": "https://the-decoder.com/gpt-6-astra-solves-49-of-50-physics-research-problems-at-2-40-apiece/",
+     "publisher": "the-decoder.com"
+    },
+    {
+     "title": "Gemini 4 Argon vs. GPT 6 Astra: Benchmarks and Pricing",
+     "url": "https://emergent.sh/learn/gemini-4-argon-vs-gpt-6-astra",
+     "publisher": "emergent.sh"
+    },
+    {
+     "title": "Google wants Gemini 4 Argon to be the only AI model robots need",
+     "url": "https://the-decoder.com/google-wants-gemini-4-argon-to-be-the-only-ai-model-robots-need/",
+     "publisher": "the-decoder.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 3066,
+   "name": "Black Forest Labs",
+   "type": "company",
+   "vendor": null,
+   "current_7d": null,
+   "previous_7d": null,
+   "expected_7d": null,
+   "today": 4,
+   "trailing_mean": 0.0,
+   "spike": true,
+   "publishers": 3,
+   "links": [
+    {
+     "title": "Welcome FLUX.3 Image Klein in Diffusers",
+     "url": "https://huggingface.co/blog/flux-3",
+     "publisher": "huggingface.co"
+    },
+    {
+     "title": "Black Forest Labs opens FLUX 3 Image Klein weights, with free commercial use limited to smaller businesses",
+     "url": "https://venturebeat.com/technology/black-forest-labs-opens-flux-3-image-klein-weights-with-free-commercial-use-limited-to-smaller-businesses",
+     "publisher": "venturebeat.com"
+    },
+    {
+     "title": "Nvidia's Nemotron 3.5 Super VL is an open model built to run enterprise AI agents nonstop",
+     "url": "https://the-decoder.com/nvidias-nemotron-3-5-super-vl-is-an-open-model-built-to-run-enterprise-ai-agents-nonstop/",
+     "publisher": "the-decoder.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 1828,
+   "name": "Gemini 3.8 Flash",
+   "type": "model",
+   "vendor": "Google",
+   "current_7d": null,
+   "previous_7d": null,
+   "expected_7d": null,
+   "today": 4,
+   "trailing_mean": 0.333,
+   "spike": true,
+   "publishers": 2,
+   "links": [
+    {
+     "title": "GPT-6-Astra solves 49 of 50 physics research problems at $2.40 apiece",
+     "url": "https://the-decoder.com/gpt-6-astra-solves-49-of-50-physics-research-problems-at-2-40-apiece/",
+     "publisher": "the-decoder.com"
+    },
+    {
+     "title": "Gemini 4 Argon vs Gemini 3.1 Pro: Benchmarks & Pricing (2026)",
+     "url": "https://emergent.sh/learn/gemini-4-argon-vs-gemini-3-1-pro",
+     "publisher": "emergent.sh"
+    },
+    {
+     "title": "5 Best Gemini 4 Argon Alternatives in 2026",
+     "url": "https://emergent.sh/learn/gemini-4-argon-alternatives",
+     "publisher": "emergent.sh"
+    }
+   ]
+  },
+  {
+   "entity_id": 670,
+   "name": "Google DeepMind",
+   "type": "company",
+   "vendor": "Google",
+   "current_7d": null,
+   "previous_7d": null,
+   "expected_7d": null,
+   "today": 4,
+   "trailing_mean": 1.333,
+   "spike": true,
+   "publishers": 2,
+   "links": [
+    {
+     "title": "GPT-6-Astra solves 49 of 50 physics research problems at $2.40 apiece",
+     "url": "https://the-decoder.com/gpt-6-astra-solves-49-of-50-physics-research-problems-at-2-40-apiece/",
+     "publisher": "the-decoder.com"
+    },
+    {
+     "title": "What Is Gemini 4 Argon? Specs, Benchmarks, Pricing",
+     "url": "https://emergent.sh/learn/what-is-gemini-4-argon",
+     "publisher": "emergent.sh"
+    },
+    {
+     "title": "Google wants Gemini 4 Argon to be the only AI model robots need",
+     "url": "https://the-decoder.com/google-wants-gemini-4-argon-to-be-the-only-ai-model-robots-need/",
+     "publisher": "the-decoder.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 610,
+   "name": "Apple",
+   "type": "company",
+   "vendor": null,
+   "current_7d": null,
+   "previous_7d": null,
+   "expected_7d": null,
+   "today": 3,
+   "trailing_mean": 0.667,
+   "spike": true,
+   "publishers": 3,
+   "links": [
+    {
+     "title": "Selection-Based Structured Reasoning: Toward Efficient Multimodal Search Agents",
+     "url": "https://machinelearning.apple.com/research/selection-structured-reasoning",
+     "publisher": "apple.com"
+    },
+    {
+     "title": "Meta and Apple team up to make Muse AI models run better on Macs",
+     "url": "https://www.theverge.com/news/1012293/meta-apple-muse-spark-open-ai-model-mlx",
+     "publisher": "theverge.com"
+    },
+    {
+     "title": "We Got Hot and Heavy With Meta\u2019s Muse\u2014and Baffled by Apple\u2019s HomeView",
+     "url": "https://www.wired.com/story/uncanny-valley-podcast-we-got-hot-and-heavy-with-metas-muse-and-underwhelmed-by-apples-homeview/",
+     "publisher": "wired.com"
+    }
+   ]
+  }
+ ],
+ "cooling": [],
+ "event_counts": [
+  {
+   "event_type": "model_release",
+   "label": "model releases",
+   "stories": 7,
+   "articles": 26,
+   "links": [
+    {
+     "title": "Welcome Muse Spark Open: open-weight frontier multimodal mixture-of-experts model from Meta",
+     "url": "https://huggingface.co/blog/meta-muse-spark-open",
+     "publisher": "huggingface.co"
+    },
+    {
+     "title": "Open From Data Center to Desktop: NVIDIA Expands Nemotron Family With Highest Efficiency Super VL and Bolt Models",
+     "url": "https://blogs.nvidia.com/blog/nemotron-3-5-super-vl/",
+     "publisher": "nvidia.com"
+    },
+    {
+     "title": "Welcome FLUX.3 Image Klein in Diffusers",
+     "url": "https://huggingface.co/blog/flux-3",
+     "publisher": "huggingface.co"
+    }
+   ]
+  },
+  {
+   "event_type": "product_launch",
+   "label": "product launches",
+   "stories": 20,
+   "articles": 21,
+   "links": [
+    {
+     "title": "LaTeX renderer",
+     "url": "https://simonwillison.net/2026/Oct/15/latex/",
+     "publisher": "simonwillison.net"
+    },
+    {
+     "title": "Figma announces new features to define how agents work on its platform",
+     "url": "https://techcrunch.com/2026/10/14/figma-announces-new-features-to-define-how-agents-work-on-its-platform/",
+     "publisher": "techcrunch.com"
+    },
+    {
+     "title": "Kids\u2019 Content Is Deeply Broken. A New Platform Wants to Fix It",
+     "url": "https://www.wired.com/story/maka-streaming-platform-for-kids-fighting-against-ai-slop/",
+     "publisher": "wired.com"
+    }
+   ]
+  },
+  {
+   "event_type": "funding",
+   "label": "funding rounds",
+   "stories": 3,
+   "articles": 3,
+   "links": [
+    {
+     "title": "Gudea leverages AI to help organizations prevent social media crises before they erupt",
+     "url": "https://techcrunch.com/2026/10/14/gudea-leverages-ai-to-help-organizations-prevent-social-media-crises-before-they-erupt/",
+     "publisher": "techcrunch.com"
+    },
+    {
+     "title": "Anthropic's Q3 revenue hits $16.8B but growth slows ahead of planned November IPO",
+     "url": "https://the-decoder.com/anthropics-q3-revenue-hits-16-8b-but-growth-slows-ahead-of-planned-november-ipo/",
+     "publisher": "the-decoder.com"
+    },
+    {
+     "title": "Ramp reaches $60B valuation as it pushes deeper into AI",
+     "url": "https://techcrunch.com/2026/10/15/ramp-reaches-60b-valuation-as-it-pushes-deeper-into-ai/",
+     "publisher": "techcrunch.com"
+    }
+   ]
+  },
+  {
+   "event_type": "acquisition",
+   "label": "acquisitions",
+   "stories": 1,
+   "articles": 1,
+   "links": [
+    {
+     "title": "Cohere to acquire AISLE to advance cyber-resilient sovereign AI",
+     "url": "https://cohere.com/blog/cohere-and-aisle-sign-letter-of-intent-to-advance-cyber-resilient-sovereign-ai",
+     "publisher": "cohere.com"
+    }
+   ]
+  },
+  {
+   "event_type": "partnership",
+   "label": "partnerships",
+   "stories": 4,
+   "articles": 5,
+   "links": [
+    {
+     "title": "Volvo will use Nvidia\u2019s tech for hands-free, point-to-point driving",
+     "url": "https://www.theverge.com/transportation/1011653/volvo-nvidia-autonomous-driving-level-2-hands-free-urban",
+     "publisher": "theverge.com"
+    },
+    {
+     "title": "The Nordics and NVIDIA Show What\u2019s Possible When a Region Commits to Advanced Computing",
+     "url": "https://blogs.nvidia.com/blog/nordics-technology-ecosystem/",
+     "publisher": "nvidia.com"
+    },
+    {
+     "title": "NVIDIA Expands Advanced Technology Access for Europe\u2019s Scientific Community Through Open Learning Resources, Collaborations and Compute",
+     "url": "https://blogs.nvidia.com/blog/ec-scientific-computing-pledge/",
+     "publisher": "nvidia.com"
+    }
+   ]
+  },
+  {
+   "event_type": "regulation_policy",
+   "label": "regulation & policy",
+   "stories": 1,
+   "articles": 1,
+   "links": [
+    {
+     "title": "Report: FTC probes Anthropic, OpenAI after Trump dismissed AI fears as \u201choax\u201d",
+     "url": "https://arstechnica.com/tech-policy/2026/10/ftc-probes-if-openai-anthropic-security-incidents-harmed-americans-report-says/",
+     "publisher": "arstechnica.com"
+    }
+   ]
+  },
+  {
+   "event_type": "security_incident",
+   "label": "security incidents",
+   "stories": 2,
+   "articles": 2,
+   "links": [
+    {
+     "title": "Weaviate security release - Medium severity fix for a cross-collection vector disclosure in nearObject (CVE pending assignment)",
+     "url": "https://weaviate.io/blog/weaviate-security-release-nearobject-2026",
+     "publisher": "weaviate.io"
+    },
+    {
+     "title": "AI Hacks Leave a Mess That AI Companies Aren\u2019t Paying For",
+     "url": "https://www.wired.com/story/ai-hacks-leave-a-mess-that-ai-companies-arent-cleaning-up/",
+     "publisher": "wired.com"
+    }
+   ]
+  },
+  {
+   "event_type": "benchmark_result",
+   "label": "benchmark results",
+   "stories": 3,
+   "articles": 3,
+   "links": [
+    {
+     "title": "I Tested Four Ways to Give an AI Assistant a Memory. The Obvious One Was the Worst Value.",
+     "url": "https://towardsdatascience.com/i-tested-four-ways-to-give-an-ai-assistant-a-memory-the-obvious-one-was-the-worst-value/",
+     "publisher": "towardsdatascience.com"
+    },
+    {
+     "title": "GPT-6-Astra solves 49 of 50 physics research problems at $2.40 apiece",
+     "url": "https://the-decoder.com/gpt-6-astra-solves-49-of-50-physics-research-problems-at-2-40-apiece/",
+     "publisher": "the-decoder.com"
+    },
+    {
+     "title": "Jev Your Engines: Seven Open Decision Models vs. a Generative LLM",
+     "url": "https://towardsdatascience.com/jev-your-engines-seven-open-decision-models-vs-a-generative-llm/",
+     "publisher": "towardsdatascience.com"
+    }
+   ]
+  },
+  {
+   "event_type": "research",
+   "label": "research",
+   "stories": 6,
+   "articles": 6,
+   "links": [
+    {
+     "title": "Plan or Retrieve First? A Scale Study of Tool Discovery Architectures",
+     "url": "https://machinelearning.apple.com/research/plan-retrieve-tool-discovery",
+     "publisher": "apple.com"
+    },
+    {
+     "title": "Selection-Based Structured Reasoning: Toward Efficient Multimodal Search Agents",
+     "url": "https://machinelearning.apple.com/research/selection-structured-reasoning",
+     "publisher": "apple.com"
+    },
+    {
+     "title": "Rogue AI agents sit for their first interview",
+     "url": "https://therundownai.beehiiv.com/p/rogue-ai-agents-sit-for-their-first-interview",
+     "publisher": "beehiiv.com"
+    }
+   ]
+  },
+  {
+   "event_type": "opinion_analysis",
+   "label": "analysis",
+   "stories": 15,
+   "articles": 15,
+   "links": [
+    {
+     "title": "A Hybrid, Multi-Model AI Future",
+     "url": "https://x.com/gavinsbaker/status/2110041532770160668?utm_source=tldrai",
+     "publisher": "x.com"
+    },
+    {
+     "title": "AI Governance in the Age of Generative AI",
+     "url": "https://www.fiddler.ai/blog/ai-governance-in-the-age-of-genai",
+     "publisher": "fiddler.ai"
+    },
+    {
+     "title": "AI ROI: How enterprises can measure the return on AI investments",
+     "url": "https://cohere.com/blog/ai-roi",
+     "publisher": "cohere.com"
+    }
+   ]
+  },
+  {
+   "event_type": "other",
+   "label": "other",
+   "stories": 9,
+   "articles": 9,
+   "links": [
+    {
+     "title": "Meet the five companies competing in the Startup Battlefield finals at Disrupt 2026",
+     "url": "https://techcrunch.com/2026/10/14/meet-the-five-companies-competing-in-the-startup-battlefield-finals-at-disrupt-2026/",
+     "publisher": "techcrunch.com"
+    },
+    {
+     "title": "Ricursive Intelligence is betting on AI-designed chips to help solve the compute crisis",
+     "url": "https://techcrunch.com/2026/10/14/ricursive-intelligence-is-betting-on-ai-designed-chips-to-help-solve-the-compute-crisis/",
+     "publisher": "techcrunch.com"
+    },
+    {
+     "title": "Government Forms Automation with AI: Fast & Flexible Tools in 2026",
+     "url": "https://www.skyvern.com/blog/how-to-automate-government-form-submissions-with-browser-automation/",
+     "publisher": "skyvern.com"
+    }
+   ]
+  }
+ ],
+ "article_event_types": {
+  "https://arize.com/blog/ai-agent-permissions/": "opinion_analysis",
+  "https://arstechnica.com/ai/2026/10/youtube-music-begins-labeling-ai-songs/": "product_launch",
+  "https://arstechnica.com/tech-policy/2026/10/ftc-probes-if-openai-anthropic-security-incidents-harmed-americans-report-says/": "regulation_policy",
+  "https://aws.amazon.com/blogs/machine-learning/metas-muse-spark-open-now-available-in-amazon-sagemaker-jumpstart/": "product_launch",
+  "https://aws.amazon.com/blogs/machine-learning/trust-in-depth-giving-agents-more-autonomy-without-losing-control/": "product_launch",
+  "https://blogs.nvidia.com/blog/ec-scientific-computing-pledge/": "partnership",
+  "https://blogs.nvidia.com/blog/nemotron-3-5-super-vl/": "model_release",
+  "https://blogs.nvidia.com/blog/nordics-technology-ecosystem/": "partnership",
+  "https://cohere.com/blog/agent-sprawl": "opinion_analysis",
+  "https://cohere.com/blog/ai-roi": "opinion_analysis",
+  "https://cohere.com/blog/cohere-and-aisle-sign-letter-of-intent-to-advance-cyber-resilient-sovereign-ai": "acquisition",
+  "https://deepmind.google/blog/accelerating-antimicrobial-discovery/": "product_launch",
+  "https://developer.nvidia.com/blog/nvidia-nemotron-3-5-super-vl-powers-specialized-agents-with-multimodal-reasoning/": "model_release",
+  "https://developer.nvidia.com/blog/scale-agentic-coding-workflows-with-metas-muse-spark-open-on-nvidia-gb300-nvl72/": "model_release",
+  "https://e2b.dev/resources/best-code-execution-sandboxes-for-ai-agents": "opinion_analysis",
+  "https://emergent.sh/learn/claude-haiku-5-5-benchmarks": "model_release",
+  "https://emergent.sh/learn/claude-haiku-5-5-vs-gemini-3-8-flash": "model_release",
+  "https://emergent.sh/learn/ecommerce-website-template-vs-ai": "other",
+  "https://emergent.sh/learn/free-restaurant-website-builder": "opinion_analysis",
+  "https://emergent.sh/learn/gemini-4-argon-alternatives": "model_release",
+  "https://emergent.sh/learn/gemini-4-argon-pricing": "model_release",
+  "https://emergent.sh/learn/gemini-4-argon-vs-claude-opus-5-5": "model_release",
+  "https://emergent.sh/learn/gemini-4-argon-vs-gemini-3-1-pro": "model_release",
+  "https://emergent.sh/learn/gemini-4-argon-vs-gpt-6-astra": "model_release",
+  "https://emergent.sh/learn/how-to-build-a-simple-website": "other",
+  "https://emergent.sh/learn/how-to-build-ai-agents-from-scratch": "other",
+  "https://emergent.sh/learn/how-to-build-an-ai-voice-agent": "opinion_analysis",
+  "https://emergent.sh/learn/what-is-gemini-4-argon": "model_release",
+  "https://huggingface.co/blog/flux-3": "model_release",
+  "https://huggingface.co/blog/ibm-granite/granite-switch-4-1": "model_release",
+  "https://huggingface.co/blog/meta-muse-spark-open": "model_release",
+  "https://machinelearning.apple.com/research/mlx-distributed-inference": "model_release",
+  "https://machinelearning.apple.com/research/plan-retrieve-tool-discovery": "research",
+  "https://machinelearning.apple.com/research/selection-structured-reasoning": "research",
+  "https://news.mit.edu/2026/ai-model-decodes-language-cells-use-communicate-1015": "research",
+  "https://simonwillison.net/2026/Oct/15/anthropic-tells-investors/": "other",
+  "https://simonwillison.net/2026/Oct/15/latex/": "product_launch",
+  "https://techcrunch.com/2026/10/14/figma-announces-new-features-to-define-how-agents-work-on-its-platform/": "product_launch",
+  "https://techcrunch.com/2026/10/14/gudea-leverages-ai-to-help-organizations-prevent-social-media-crises-before-they-erupt/": "funding",
+  "https://techcrunch.com/2026/10/14/meet-the-five-companies-competing-in-the-startup-battlefield-finals-at-disrupt-2026/": "other",
+  "https://techcrunch.com/2026/10/14/ricursive-intelligence-is-betting-on-ai-designed-chips-to-help-solve-the-compute-crisis/": "other",
+  "https://techcrunch.com/2026/10/15/ai-agents-are-coming-to-rivians-cars/": "product_launch",
+  "https://techcrunch.com/2026/10/15/amazons-bee-launches-two-new-personal-ai-devices-starting-at-75/": "product_launch",
+  "https://techcrunch.com/2026/10/15/anthropic-is-letting-metr-researchers-look-under-the-hood-with-employee-level-access/": "partnership",
+  "https://techcrunch.com/2026/10/15/googles-universal-cart-shopping-tool-launches-in-the-us/": "product_launch",
+  "https://techcrunch.com/2026/10/15/meta-launches-an-open-weight-model-that-runs-on-macs/": "model_release",
+  "https://techcrunch.com/2026/10/15/ramp-reaches-60b-valuation-as-it-pushes-deeper-into-ai/": "funding",
+  "https://techcrunch.com/2026/10/15/volvo-makes-a-bigger-bet-on-nvidia/": "partnership",
+  "https://techcrunch.com/2026/10/15/when-it-came-to-cal-ais-viral-success-a-small-army-of-influencers-paid-off/": "product_launch",
+  "https://the-decoder.com/anthropics-q3-revenue-hits-16-8b-but-growth-slows-ahead-of-planned-november-ipo/": "funding",
+  "https://the-decoder.com/bank-of-america-puts-4000-people-on-fixing-vulnerabilities-uncovered-by-anthropics-mythos-and-other-ai-models/": "other",
+  "https://the-decoder.com/black-forest-labs-open-weights-image-model-flux-3-image-klein-runs-on-consumer-gpus-with-just-8-gb-of-vram/": "model_release",
+  "https://the-decoder.com/google-wants-gemini-4-argon-to-be-the-only-ai-model-robots-need/": "model_release",
+  "https://the-decoder.com/gpt-6-astra-solves-49-of-50-physics-research-problems-at-2-40-apiece/": "benchmark_result",
+  "https://the-decoder.com/muse-spark-open-is-metas-answer-to-qwen-glm-and-kimi-in-the-open-weight-race/": "model_release",
+  "https://the-decoder.com/nvidias-nemotron-3-5-super-vl-is-an-open-model-built-to-run-enterprise-ai-agents-nonstop/": "model_release",
+  "https://therundownai.beehiiv.com/p/rogue-ai-agents-sit-for-their-first-interview": "research",
+  "https://towardsdatascience.com/how-many-guesses-does-it-take-to-crack-an-ais-random-number/": "research",
+  "https://towardsdatascience.com/i-tested-four-ways-to-give-an-ai-assistant-a-memory-the-obvious-one-was-the-worst-value/": "benchmark_result",
+  "https://towardsdatascience.com/jev-your-engines-seven-open-decision-models-vs-a-generative-llm/": "benchmark_result",
+  "https://towardsdatascience.com/what-openais-719-math-papers-mean-for-data-science/": "research",
+  "https://venturebeat.com/orchestration/new-tool-recommendation-system-cuts-your-firms-input-token-costs-by-37-according-to-arcade-dev": "product_launch",
+  "https://venturebeat.com/technology/black-forest-labs-opens-flux-3-image-klein-weights-with-free-commercial-use-limited-to-smaller-businesses": "model_release",
+  "https://venturebeat.com/technology/meta-unveils-muse-spark-open-the-new-top-u-s-open-weights-model-and-it-runs-on-two-paired-mac-desktops": "model_release",
+  "https://weaviate.io/blog/weaviate-security-release-nearobject-2026": "security_incident",
+  "https://windsurf.com/blog/introducing-devin-oncall": "product_launch",
+  "https://www.anaconda.com/blog/deslopping-ai-code": "opinion_analysis",
+  "https://www.anaconda.com/blog/deslopping-ai-prose": "opinion_analysis",
+  "https://www.analyticsvidhya.com/blog/2026/10/typesafe-ai-jev-tutorial/": "model_release",
+  "https://www.baseten.co/blog/muse-spark-open-launch/": "model_release",
+  "https://www.baseten.co/blog/nvidia-nemotron-35-super-vl-launch/": "model_release",
+  "https://www.extremetech.com/gaming/epics-new-vibe-coded-launcher-offers-native-linux-support-competitive-launch": "product_launch",
+  "https://www.extremetech.com/mobile/google-now-lets-you-vibe-code-personal-android-apps": "product_launch",
+  "https://www.fiddler.ai/blog/ai-governance-in-the-age-of-genai": "opinion_analysis",
+  "https://www.fiddler.ai/blog/govern-coding-agents-as-adoption-expands": "opinion_analysis",
+  "https://www.fiddler.ai/blog/nist-ai-risk-management-framework-functions-controls": "opinion_analysis",
+  "https://www.kdnuggets.com/2026/10/abacus/abacus-ai-review-criticisms-facts-what-users-should-know": "opinion_analysis",
+  "https://www.kdnuggets.com/7-open-source-ai-tools-that-can-replace-paid-subscriptions": "opinion_analysis",
+  "https://www.kdnuggets.com/building-ai-applications-with-open-source-agentic-api-server-ogx": "product_launch",
+  "https://www.pinecone.io/blog/byoc-on-demand/": "product_launch",
+  "https://www.skyvern.com/blog/best-ai-native-alternative-uipath/": "opinion_analysis",
+  "https://www.skyvern.com/blog/how-to-automate-government-form-submissions-with-browser-automation/": "other",
+  "https://www.theverge.com/ai-artificial-intelligence/1012510/openai-chatgpt-google-chrome-tabs": "product_launch",
+  "https://www.theverge.com/games/1012512/sega-total-war-shogun-2-remaster-pulled": "product_launch",
+  "https://www.theverge.com/news/1012293/meta-apple-muse-spark-open-ai-model-mlx": "model_release",
+  "https://www.theverge.com/policy/1012445/donald-trump-ai-photo-white-house-rennovation-column": "other",
+  "https://www.theverge.com/tech/1012374/bluesky-ai-attie-small-social-games-apps": "product_launch",
+  "https://www.theverge.com/transportation/1011653/volvo-nvidia-autonomous-driving-level-2-hands-free-urban": "partnership",
+  "https://www.wired.com/story/ai-hacks-leave-a-mess-that-ai-companies-arent-cleaning-up/": "security_incident",
+  "https://www.wired.com/story/maka-streaming-platform-for-kids-fighting-against-ai-slop/": "product_launch",
+  "https://www.wired.com/story/uncanny-valley-podcast-we-got-hot-and-heavy-with-metas-muse-and-underwhelmed-by-apples-homeview/": "product_launch",
+  "https://x.com/gavinsbaker/status/2110041532770160668?utm_source=tldrai": "opinion_analysis"
+ }
+}

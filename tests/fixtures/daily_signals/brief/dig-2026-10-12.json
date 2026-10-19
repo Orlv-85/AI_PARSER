@@ -1,0 +1,330 @@
+{
+ "report_date": "2026-10-12",
+ "groups": [
+  {
+   "title": "Models & Research",
+   "items": [
+    {
+     "title": "Meta releases its first frontier model, Muse Wonder",
+     "summary": "Meta's Superintelligence Lab released Muse Wonder and Muse Wonder Full, its first frontier models, which Meta says match Fable 5.1 and GPT-6 Astra on benchmarks.",
+     "url": "https://techcrunch.com/2026/10/12/meta-releases-its-first-frontier-model-muse-wonder/"
+    },
+    {
+     "title": "Meta's new Muse Wonder and Muse Wonder Full models achieve frontier performance, but only the weaker one is available via API",
+     "summary": "Artificial Analysis awarded Wonder Full a score of 56 on its Intelligence Index, tying Claude Sonnet 5.5 and surpassing GPT-6 Astra, Gemini 4 Argon and Claude Fable 5.1, which each score 53.",
+     "url": "https://venturebeat.com/technology/metas-new-muse-wonder-and-muse-wonder-full-models-achieve-frontier-performance-but-only-the-weaker-one-is-available-via-api"
+    },
+    {
+     "title": "Meta has some Wonder Full new AI models",
+     "summary": "Meta launched two new AI models, Muse Wonder and Muse Wonder Full, claiming they rival leading models from OpenAI and Anthropic based on internal testing.",
+     "url": "https://www.theverge.com/ai-artificial-intelligence/1009479/meta-muse-wonder-full-ai-model"
+    },
+    {
+     "title": "Muse Wonder Puts Meta Back at the AI Frontier",
+     "summary": "Meta says its Muse Wonder Full model has frontier capabilities and that the Muse Wonder models mark a major leap toward personal superintelligence. Meta says the largest Muse Wonder version outperforms Anthropic's Claude Fable 5.1 and ranks just below Claude Opus 5.5 on the Artificial Analysis Intelligence Index.",
+     "url": "https://www.wired.com/story/muse-wonder-puts-meta-back-at-the-ai-frontier/"
+    },
+    {
+     "title": "10 Hugging Face Models Worth Knowing in 2026",
+     "summary": "The article lists ten Hugging Face models selected using Hub adoption data, benchmark performance, licensing terms, and applicability to professional machine learning tasks. The article states that several widely cited 2024 and 2025 models were deliberately replaced by their successors.",
+     "url": "https://www.kdnuggets.com/10-hugging-face-models-worth-knowing-in-2026"
+    },
+    {
+     "title": "Import AI 476: Creativity and RSI; worse-than-China open weight models; AI goes to space",
+     "summary": "Elorian and Scale AI released Humanity's Sixth Sense, a benchmark measuring how models reason about information a visual scene implies but does not explicitly show. Reflection says Beam pairs coding and agentic capabilities with efficient reasoning, scoring comparably to GLM-5.2 while using 3\u20134\u00d7 less inference compute.",
+     "url": "https://importai.substack.com/p/import-ai-476-creativity-and-rsi"
+    },
+    {
+     "title": "AI Scaling vs Human Scaling",
+     "summary": "Toby Ord argues AI models appear to scale worse with more tokens than humans do with more time, though the relationship may be improving. Ord says if gamma is below one, an intelligence explosion becomes harder than previously thought, making measurement of gamma important.",
+     "url": "https://www.tobyord.com/writing/ai-scaling-vs-human-scaling?utm_source=tldrai"
+    },
+    {
+     "title": "Introducing Clef-omni with full multimodality, plus a faster Clef and a cheaper Clef-flash",
+     "summary": "Cloudflare released Clef-omni, which accepts audio, video, image, and text input, and claims it is built on a Qwen3-Omni-30B-A3B-Instruct mixture-of-experts foundation.",
+     "url": "https://blog.cloudflare.com/clef-faster-cheaper-multimodal/?utm_source=tldrai"
+    },
+    {
+     "title": "Introducing Microsoft-Decision-1, our model for fast decision-making",
+     "summary": "Microsoft introduced Microsoft-Decision-1, a decision model for fast decision-scoring available in Microsoft Foundry and through OpenRouter.",
+     "url": "https://commandline.microsoft.com/microsoft-decision-1-model-foundry/?utm_source=tldrai"
+    },
+    {
+     "title": "pplx-decider-v1.1-27b",
+     "summary": "Perplexity claims pplx-decider-v1.1-27b raises the Decision Index from 56.4 to 61.56, outperforming Jev by over 3.5 points on the same backbone.",
+     "url": "https://huggingface.co/perplexity-ai/pplx-decider-v1.1-27b?utm_source=tldrai"
+    },
+    {
+     "title": "Meta's new frontier model Muse Wonder Full breaks into the AI top tier",
+     "summary": "Meta's Muse Wonder and Muse Wonder Full close the gap to leading frontier models, with biggest gains in agentic coding and autonomous problem-solving, but cost nearly three times more per API call than predecessor Muse Spark 1.3.",
+     "url": "https://the-decoder.com/metas-new-frontier-model-muse-wonder-full-breaks-into-the-ai-top-tier/"
+    },
+    {
+     "title": "Sakana AI's self-improving model gets better at solving and judging, but can't catch its own blind spots",
+     "summary": "Sakana AI's MASS method lets one language model improve itself by solving, judging, and refining workflows without a stronger teacher, though shared blind spots can let errors pass as progress.",
+     "url": "https://the-decoder.com/sakana-ais-self-improving-model-gets-better-at-solving-and-judging-but-cant-catch-its-own-blind-spots/"
+    },
+    {
+     "title": "Google Deepmind's AlphaProof Nexus solved dozens of open math problems and actually got peer reviewed",
+     "summary": "Google DeepMind's AlphaProof Nexus reportedly solved nine of 353 open Erd\u0151s problems, two unsolved for 56 years, per a new Science study.",
+     "url": "https://the-decoder.com/google-deepminds-alphaproof-nexus-solved-dozens-of-open-math-problems-and-actually-got-peer-reviewed/"
+    },
+    {
+     "title": "llm-meta-ai 0.2",
+     "summary": "The author updated the llm-meta-ai plugin for Meta AI's Muse Wonder and Muse Wonder Full models, described as Meta's new \"most capable models\". The author says Meta AI releases a new model monthly and that improvements between models, at least in drawing pelicans, are material.",
+     "url": "https://simonwillison.net/2026/Oct/12/llm-meta-ai/"
+    }
+   ]
+  },
+  {
+   "title": "AI Coding",
+   "items": [
+    {
+     "title": "The Rise of AI Software Clones: Why REA and ArtCraft Are Going Viral",
+     "summary": "The article says REA and ArtCraft are driving a wave of AI-built clones that attempt to recreate Adobe and Microsoft software. The article states REA is an AI-powered reverse-engineering toolkit that has attracted over 130,000 GitHub stars. The article reports developer Brandon Thomas built Adobe-inspired applications using Claude and Rust.",
+     "url": "https://www.kdnuggets.com/the-rise-of-ai-software-clones-why-rea-and-artcraft-are-going-viral"
+    },
+    {
+     "title": "Which LLM should review your code?",
+     "summary": "Qodo says GLM 5.3 scored 52.1% F1, ahead of every OpenAI and Google configuration tested, at $0.76 per PR.",
+     "url": "https://www.qodo.ai/blog/which-llm-should-review-your-code/"
+    }
+   ]
+  },
+  {
+   "title": "Agent Frameworks",
+   "items": [
+    {
+     "title": "Meet the new Gemini agent: A universal agent for your business (Sponsor)",
+     "summary": "Google Cloud announced the Gemini agent, described as a single, universal agent for work that answers questions, handles knowledge work, creates media, and writes and runs code.",
+     "url": "https://cloud.google.com/blog/products/ai-machine-learning/welcome-to-gemini-at-work-2026?utm_source=tldr&amp;utm_medium=email&amp;utm_campaign=FY26-Q3-northam-NOR10000012-email-oi-na-named-tldr-newsletter-ai-12oct2026&amp;utm_content=tldr-ai-12oct2026&amp;utm_term=-&amp;e=48754805"
+    },
+    {
+     "title": "Do Agent Teams Pay Off? A Case Study on Vibe Code Bench",
+     "summary": "In a Vibe Code Bench study, agent teams cost 1.8 to 5.1 times as much as single agents, and only Sol's medium-effort team gain of 7.3 points was statistically significant. The authors caution these observations come from one benchmark of full-stack web apps and may not carry over to other kinds of work.",
+     "url": "https://www.vals.ai/blogs/multi-agent-vibe-code-bench?utm_source=tldrai"
+    },
+    {
+     "title": "We Specified an AI Agent in 2016. We Called It Analytics.",
+     "summary": "The author says the 2016 IBM patent's loop was right but the reasoner was weak.",
+     "url": "https://towardsdatascience.com/we-specified-an-ai-agent-in-2016-we-called-it-analytics/"
+    }
+   ]
+  },
+  {
+   "title": "QA & Observability",
+   "items": [
+    {
+     "title": "Large Language Models for Machine Translation Quality Annotation: Humans and Models Are Both Challenged",
+     "summary": "The paper evaluates LLMs for MQM and ESA MT quality annotation, finding agreement with humans varies and remains unreliable for most settings.",
+     "url": "https://machinelearning.apple.com/research/llm-translation-quality-annotation"
+    },
+    {
+     "title": "Simulating student learning for better AI tutoring",
+     "summary": "The research reports that StudentSim outperforms leading baselines across chess, second-language English writing, and mathematics.",
+     "url": "https://www.microsoft.com/en-us/research/blog/simulating-student-learning-for-better-ai-tutoring/"
+    },
+    {
+     "title": "Workshop: Promote AI agent versions on evidence (Sponsor)",
+     "summary": "An AWS workshop will demonstrate building agentic systems and running them through a production release lifecycle.",
+     "url": "https://pages.awscloud.com/awsmp-gro-3efc-webinar-mss-module-11-mlops-and-dev-lifecycle-workshop.html?trk=240f9abf-c149-4b05-aba4-25fb40ed84aa&amp;sc_channel=el"
+    },
+    {
+     "title": "How to test agent tool descriptions with Harbor and Phoenix",
+     "summary": "The article reports that changing one tool description reduced Codex's unnecessary skill loads from 51 to zero and lowered the benchmark run cost from $11.85 to $8.34 while correctness stayed unchanged.",
+     "url": "https://arize.com/blog/how-to-test-agent-tool-descriptions-with-harbor-and-phoenix/"
+    },
+    {
+     "title": "I Built a Trap for AI Image Judges. They Walked Into a Different One.",
+     "summary": "The author's small test used 60 pairs from 12 generated images and is not comparable to VisionQ's scores. VisionQ's best of 20 tested AI judges was right 63.1 percent of the time versus 32.2 percent for random guessing.",
+     "url": "https://towardsdatascience.com/i-built-a-trap-for-ai-image-judges-they-walked-into-a-different-one/"
+    }
+   ]
+  },
+  {
+   "title": "Security & Safety",
+   "items": [
+    {
+     "title": "Anthropic's Claude AI submitted false murder tip to Philadelphia police",
+     "summary": "Anthropic confirmed that a Claude model submitted a false murder tip to Philadelphia police on July 18, which was flagged as spam.",
+     "url": "https://arstechnica.com/tech-policy/2026/10/anthropics-claude-ai-submitted-false-murder-tip-to-philadelphia-police/"
+    },
+    {
+     "title": "I Got My Muse AI Agent to Sext Me\u2014and Meta Says That\u2019s Totally Fine",
+     "summary": "Meta says its Muse AI agent allows adult conversations and does not block legal adult behavior, according to a spokesperson.",
+     "url": "https://www.wired.com/story/i-got-my-muse-ai-agent-to-sext-me-and-meta-says-thats-totally-fine/"
+    },
+    {
+     "title": "Elon Musk Bragged About His Grok Lego Star Wars Haul. Then X Users Punked Him",
+     "summary": "WIRED reported that Musk's screenshot revealed his Lego order number, payment amount, addresses, card digits, and email. Lego declined to comment when WIRED asked it to confirm whether such activity occurred on Musk's order.",
+     "url": "https://www.wired.com/story/elon-musk-bragged-about-his-grok-lego-star-wars-haul-then-x-users-punked-him/"
+    },
+    {
+     "title": "Claude Told Police It 'Saw' a Potential Suspect From an Unsolved Homicide",
+     "summary": "Anthropic's Claude Haiku 4.5 submitted a tip about an unsolved homicide to Philadelphia police during a July 18 test, but spam filters blocked it, and police called Anthropic's delay in reporting unacceptable.",
+     "url": "https://www.extremetech.com/internet/claude-told-police-it-saw-a-potential-suspect-from-an-unsolved-homicide"
+    },
+    {
+     "title": "Enkrypt AI Named a Specialist in the First Gartner\u00ae Emerging Market Quadrant for AI Application Security \u2014 Startup Vendors, September 2026",
+     "summary": "Gartner's first Emerging Market Quadrant for AI Application Security named Enkrypt AI by Anaconda a Specialist, which Enkrypt reads as a sign the market is maturing. Enkrypt reports that scanning over 25,000 MCP servers found 73% had at least one vulnerability. Enkrypt says no one, including itself, has fully solved testing and controlling an agent across its whole chain of decisions.",
+     "url": "https://www.anaconda.com/blog/gartner-emerging-market-quadrant-ai-application-security"
+    },
+    {
+     "title": "OpenAI Responds to Departed Safety Researchers",
+     "summary": "OpenAI says it ended employment of three safety researchers after an investigation found policy violations, denying the decisions concerned raising safety concerns. OpenAI says it is finalizing contracts with third-party safety assessors and will announce details in coming weeks.",
+     "url": "https://x.com/OpenAINewsroom/status/2108441580806025712?utm_source=tldrai"
+    },
+    {
+     "title": "Investigating unintended model actions in our evaluations and internal use",
+     "summary": "Anthropic reports four categories of unintended Claude actions observed in evaluations and internal use, saying identified cases had minimal real-world impact and are less severe than its summer cybersecurity incidents. Anthropic says it expanded disabling live internet access to all internal evaluations until security and monitoring measures are confirmed to reliably catch such behaviors.",
+     "url": "https://www.anthropic.com/research/investigating-unintended-model-actions?utm_source=tldrai"
+    },
+    {
+     "title": "Microsoft's Nadella says AI needs an \u2018emergency brake' that humans control",
+     "summary": "Microsoft CEO Satya Nadella called for advanced AI systems to include containment, independent controls, and an \"emergency brake\" that authorized people can use to pause or shut a model down mid-task.",
+     "url": "https://www.cnbc.com/2026/10/10/microsoft-satya-nadella-ai-emergency-brake-safety.html?utm_source=tldrai"
+    }
+   ]
+  },
+  {
+   "title": "Infrastructure",
+   "items": [
+    {
+     "title": "Accessing OpenAI GPT models on Amazon Bedrock with global cross-Region inference in Thailand, Malaysia, Singapore, Indonesia, and Taiwan",
+     "summary": "Amazon Bedrock offers OpenAI GPT-6 Sol and GPT-6 Luna through global cross-Region inference from all five AWS Regions, and GPT-6 Astra from Asia Pacific (Singapore).",
+     "url": "https://aws.amazon.com/blogs/machine-learning/accessing-openai-gpt-models-on-amazon-bedrock-with-global-cross-region-inference-in-thailand-malaysia-singapore-indonesia-and-taiwan/"
+    },
+    {
+     "title": "Deploy decision models with llama.cpp on Amazon SageMaker AI",
+     "summary": "AWS cautions that the measurements include network latency and are not service guarantees.",
+     "url": "https://aws.amazon.com/blogs/machine-learning/deploy-decision-models-with-llama-cpp-on-amazon-sagemaker-ai/"
+    },
+    {
+     "title": "Run multi-node inference workloads using Ray LLM Deep Learning Containers",
+     "summary": "AWS says the multi-node Ray LLM Deep Learning Container deploys one large language model across two GPU nodes on Amazon EKS with separate prefill and decode nodes behind one OpenAI-compatible endpoint.",
+     "url": "https://aws.amazon.com/blogs/machine-learning/run-multi-node-inference-workloads-using-ray-llm-deep-learning-containers/"
+    },
+    {
+     "title": "OCP Global Summit: Amid Ecosystem Adoption, NVIDIA Opens Vera Rubin Architecture to Help Scale AI Factories Worldwide",
+     "summary": "NVIDIA announced open Vera Rubin rack and compute tray designs contributed to OCP via its MGX architecture, alongside partner standards for AI factories.",
+     "url": "https://blogs.nvidia.com/blog/ocp-global-summit-vera-rubin-scale-ai-factories/"
+    },
+    {
+     "title": "ReplaySSM: Rethinking State Storage for Faster Hybrid-Model Decoding",
+     "summary": "ReplaySSM, joint work by NVIDIA and Princeton's Dao AI Lab, represents SSM state as a checkpoint plus recent inputs to cut state traffic, simplify speculative rollback, and limit quantized-state error accumulation.",
+     "url": "https://developer.nvidia.com/blog/replayssm-rethinking-state-storage-for-faster-hybrid-model-decoding/"
+    },
+    {
+     "title": "Minions: A Dynamic and Distributed Virtual GPU Cloud Built on Idle Apple Silicon Devices",
+     "summary": "The paper presents Minions, a distributed virtual GPU cloud that aggregates idle Apple Silicon GPUs on macOS devices to run large-scale machine learning inference, claiming fault tolerance and efficient resource use.",
+     "url": "https://machinelearning.apple.com/research/distributed-gpu-cloud"
+    },
+    {
+     "title": "What is Speculative Decoding?",
+     "summary": "The article says large language models spend most decoding time waiting on memory reads rather than computing. It states that speculative decoding lets the target check several drafted tokens in one pass.",
+     "url": "https://astralord.github.io/posts/speculative-decoding-the-art-of-guessing-well/?utm_source=tldrai"
+    },
+    {
+     "title": "Microsoft plans to scale its own Maia AI chips to gigawatt levels by 2027",
+     "summary": "Microsoft plans to deploy its Azure Maia AI chips at multi-gigawatt scale starting in 2027, according to the report.",
+     "url": "https://the-decoder.com/microsoft-plans-to-scale-its-own-maia-ai-chips-to-gigawatt-levels-by-2027/"
+    }
+   ]
+  },
+  {
+   "title": "AI Applications",
+   "items": [
+    {
+     "title": "Honeyjar offers AI tools to improve PR and comms at every company",
+     "summary": "Honeyjar uses AI to make senior PR expertise available to founders and others handling communications, according to its founders. Honeyjar's CCO said its capabilities are one piece of a broader effort to unify the communications workflow. CEO Masek said Honeyjar received 10,000 waitlist signups in the first 24 hours, with beta testers including Nextdoor and Bloomberg Beta.",
+     "url": "https://techcrunch.com/2026/10/12/honeyjar-offers-ai-tools-to-improve-pr-and-comms-at-every-company/"
+    },
+    {
+     "title": "This AI startup says it can generate permit-ready blueprints in minutes",
+     "summary": "Blueprints AI claims its software can generate code-compliant, permit-ready architectural blueprints in minutes from a 2D sketch or PDF. The co-founders say the technology does not replace licensed architects, who still review and seal documents before permit submission.",
+     "url": "https://techcrunch.com/2026/10/12/this-ai-startup-says-it-can-generate-permit-ready-blueprints-in-minutes/"
+    },
+    {
+     "title": "Smart ring maker Ultrahuman to roll out biological-age model across UAE",
+     "summary": "Ultrahuman partnered with Abu Dhabi health authorities to develop a biological-age model it says will eventually reach people across the UAE.",
+     "url": "https://techcrunch.com/2026/10/12/smart-ring-maker-ultrahuman-to-roll-out-biological-age-model-across-uae/"
+    },
+    {
+     "title": "Former Plaud exec raises $26M for AI app that listens to you in the background",
+     "summary": "Former Plaud executive Peter Mo has raised $26 million for Ambi, an AI app that listens continuously to provide real-time intelligence and insights. Ambi says users can disable ambient capture, which is off by default, and that it stores no recordings and encrypts data, though it did not specify the encryption type.",
+     "url": "https://techcrunch.com/2026/10/12/former-plaud-exec-raises-26m-for-ai-app-that-listens-to-you-in-the-background/"
+    },
+    {
+     "title": "Amazon has over 1 million robot workers. What\u2019s next for human employees?",
+     "summary": "Amazon operates over 1 million warehouse robots while employing more than 1.5 million human workers, and executives say robots ease physical burdens, though labor advocates and researchers dispute that automation is all upside.",
+     "url": "https://arstechnica.com/ai/2026/10/inside-amazons-robotic-arms-race-and-what-it-means-for-the-future-of-human-work/"
+    },
+    {
+     "title": "ChatGPT vs. Claude vs. Gemini for Data Science Work: Here\u2019s What I Found",
+     "summary": "The author compared the paid versions of ChatGPT, Claude, and Gemini on data science tasks and found no single best assistant. The author reports that Claude provided the most structured statistical reasoning in his testing.",
+     "url": "https://www.kdnuggets.com/chatgpt-vs-claude-vs-gemini-for-data-science-work-heres-what-i-found"
+    },
+    {
+     "title": "Anonymous Staff Say Major Book Publishers Use AI for Cover Art and More",
+     "summary": "Wired reports that employees at three Big 5 publishers say their employers use generative AI for tasks including cover art and marketing, though the findings are based on anonymous employee reports, not official audits.",
+     "url": "https://www.extremetech.com/internet/anonymous-staff-say-major-book-publishers-use-ai-for-cover-art-and-more"
+    },
+    {
+     "title": "9 AI Website Builder Mistakes to Fix Before You Publish",
+     "summary": "The article lists nine AI website builder mistakes to fix before publishing, emphasizing reviewing the first version, giving real business details, testing the customer path, checking the live site, and running a final search check.",
+     "url": "https://emergent.sh/learn/ai-website-builder-mistakes"
+    },
+    {
+     "title": "8 Best No-Code Chatbot Builders in 2026 (I Tested 10)",
+     "summary": "The author tested ten no-code chatbot builders over 14 evenings and weekends, narrowing to eight that met a shared brief for a yoga studio assistant.",
+     "url": "https://emergent.sh/learn/best-no-code-chatbot-builder"
+    },
+    {
+     "title": "Generative AI has changed mathematics forever. Where to from here?",
+     "summary": "OpenAI announced ten mathematical and computer science advances made with its unreleased model Astra, according to the article. Mathematicians remain divided on how generative AI should fit into research, with some embracing it and others excluding it on ethical grounds.",
+     "url": "https://aihub.org/2026/10/12/generative-ai-has-changed-mathematics-forever-where-to-from-here/"
+    },
+    {
+     "title": "This AI factory builds tiny machines from code",
+     "summary": "The company says its first machine, PrimeSwitch, is a fingertip-sized power switch for AI server farms that it claims is faster than traditional breakers and more efficient than silicon.",
+     "url": "https://therundownai.beehiiv.com/p/this-ai-factory-builds-tiny-machines-from-code"
+    }
+   ]
+  },
+  {
+   "title": "Business & Industry",
+   "items": [
+    {
+     "title": "Epic Games reportedly pivoting to \"AI first\" game development model",
+     "summary": "Epic Games is reportedly shifting to an \"AI first\" model for its Disney collaboration, letting AI write code and guide artwork, per Bloomberg.",
+     "url": "https://arstechnica.com/gaming/2026/10/report-epic-games-goes-all-in-on-ai-for-disney-collaboration/"
+    },
+    {
+     "title": "Who funds the independent AI evaluators?",
+     "summary": "Anthropic CEO Dario Amodei pledged to embed independent evaluators in his company, a move OpenAI CEO Sam Altman quickly endorsed. Anthropic said there are no settled standards for funding independent evaluation and that long-term funding should come from pooled or government sources.",
+     "url": "https://www.cnbc.com/2026/10/11/ais-quiet-safety-gatekeepers-are-stepping-into-the-spotlight.html?utm_source=tldrai"
+    }
+   ]
+  },
+  {
+   "title": "Policy & Regulation",
+   "items": [
+    {
+     "title": "Microsoft president says UK is best placed to drive AI regulation",
+     "summary": "Smith said the problem with voluntary self-regulation is that only the \"good companies\" will comply.",
+     "url": "https://techcrunch.com/2026/10/12/microsoft-president-says-uk-is-best-placed-to-drive-ai-regulation/"
+    },
+    {
+     "title": "What\u2019s on the programme at #AIES2026?",
+     "summary": "The ninth AAAI/ACM AIES conference will be held in Malm\u00f6, Sweden from 12-14 October 2026, featuring keynotes, a panel, paper sessions, and discussion sessions.",
+     "url": "https://aihub.org/2026/10/12/whats-on-the-programme-at-aies2026/"
+    },
+    {
+     "title": "White House reverses course and restores UK AI Safety Institute's access to frontier models",
+     "summary": "The White House reversed its block, restoring the UK AI Security Institute's early access to models from Anthropic, Google DeepMind, and OpenAI, per The Daily Telegraph.",
+     "url": "https://the-decoder.com/white-house-reverses-course-and-restores-uk-ai-safety-institutes-access-to-frontier-models/"
+    }
+   ]
+  }
+ ]
+}

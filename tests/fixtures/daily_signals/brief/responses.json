@@ -1,0 +1,1335 @@
+{
+ "30e21f2a2a0174e9ef32d77fb254f2b0ef4cdc24144c5aa98dd57074d694f107": {
+  "model": "deepseek-v4-pro",
+  "data": {
+   "id": "57f9768a-8892-4ae0-b384-168e9214533a",
+   "object": "chat.completion",
+   "created": 1792413522,
+   "model": "deepseek-v4-pro",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\n  \"sentences\": [\n    {\n      \"text\": \"Meta launched two new AI models, Muse Wonder and Muse Wonder Full, claiming they rival leading models from OpenAI and Anthropic based on internal testing.\",\n      \"ids\": [\"a1\", \"a2\", \"a3\"],\n      \"quote\": {\n        \"id\": \"a1\",\n        \"span\": \"Meta launched two new AI models, Muse Wonder and Muse Wonder Full, claiming they rival leading models from OpenAI and Anthropic based on internal testing.\"\n      }\n    },\n    {\n      \"text\": \"Meta says its Muse Wonder Full model has frontier capabilities and that the Muse Wonder models mark a major leap toward personal superintelligence.\",\n      \"ids\": [\"a2\"],\n      \"quote\": {\n        \"id\": \"a2\",\n        \"span\": \"Meta says its Muse Wonder Full model has frontier capabilities and that the Muse Wonder models mark a major leap toward personal superintelligence.\"\n      }\n    },\n    {\n      \"text\": \"Cloudflare released Clef-omni, which accepts audio, video, image, and text input, and claims it is built on a Qwen3-Omni-30B-A3B-Instruct mixture-of-experts foundation.\",\n      \"ids\": [\"a4\"],\n      \"quote\": {\n        \"id\": \"a4\",\n        \"span\": \"Cloudflare released Clef-omni, which accepts audio, video, image, and text input, and claims it is built on a Qwen3-Omni-30B-A3B-Instruct mixture-of-experts foundation.\"\n      }\n    },\n    {\n      \"text\": \"Gartner's first Emerging Market Quadrant for AI Application Security named Enkrypt AI by Anaconda a Specialist, which Enkrypt reads as a sign the market is maturing.\",\n      \"ids\": [\"a6\"],\n      \"quote\": {\n        \"id\": \"a6\",\n        \"span\": \"Gartner's first Emerging Market Quadrant for AI Application Security named Enkrypt AI by Anaconda a Specialist, which Enkrypt reads as a sign the market is maturing.\"\n      }\n    },\n    {\n      \"text\": \"Sakana AI's MASS method lets one language model improve itself by solving, judging, and refining workflows without a stronger teacher, though shared blind spots can let errors pass as progress.\",\n      \"ids\": [\"a9\"],\n      \"quote\": {\n        \"id\": \"a9\",\n        \"span\": \"Sakana AI's MASS method lets one language model improve itself by solving, judging, and refining workflows without a stronger teacher, though shared blind spots can let errors pass as progress.\"\n      }\n    }\n  ]\n}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 1770,
+    "completion_tokens": 561,
+    "total_tokens": 2331,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    },
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 1770
+   },
+   "system_fingerprint": "a307abda487cd1b463329ccb945ce396"
+  }
+ },
+ "c1e2a78516a9d116eaef20b1a48a763e938cff8f8fdf2c7f31ea26f3f12a6a50": {
+  "model": "deepseek-v4-pro",
+  "data": {
+   "id": "dc0838e9-f00a-452f-9b29-6ff4b2b487b7",
+   "object": "chat.completion",
+   "created": 1792413527,
+   "model": "deepseek-v4-pro",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\n  \"sentences\": [\n    {\n      \"text\": \"Meta launched two new AI models, Muse Wonder and Muse Wonder Full, claiming they rival leading models from OpenAI and Anthropic based on internal testing, covered by 6 outlets.\",\n      \"ids\": [\"a1\", \"a2\", \"a3\"],\n      \"quote\": {\n        \"id\": \"a1\",\n        \"span\": \"Meta launched two new AI models, Muse Wonder and Muse Wonder Full, claiming they rival leading models from OpenAI and Anthropic based on internal testing.\"\n      }\n    },\n    {\n      \"text\": \"Cloudflare released Clef-omni, which accepts audio, video, image, and text input, and claims it is built on a Qwen3-Omni-30B-A3B-Instruct mixture-of-experts foundation.\",\n      \"ids\": [\"a4\"],\n      \"quote\": {\n        \"id\": \"a4\",\n        \"span\": \"Cloudflare released Clef-omni, which accepts audio, video, image, and text input, and claims it is built on a Qwen3-Omni-30B-A3B-Instruct mixture-of-experts foundation.\"\n      }\n    },\n    {\n      \"text\": \"Gartner's first Emerging Market Quadrant for AI Application Security named Enkrypt AI by Anaconda a Specialist, which Enkrypt reads as a sign the market is maturing.\",\n      \"ids\": [\"a6\"],\n      \"quote\": {\n        \"id\": \"a6\",\n        \"span\": \"Gartner's first Emerging Market Quadrant for AI Application Security named Enkrypt AI by Anaconda a Specialist, which Enkrypt reads as a sign the market is maturing.\"\n      }\n    },\n    {\n      \"text\": \"Sakana AI's MASS method lets one language model improve itself by solving, judging, and refining workflows without a stronger teacher, though shared blind spots can let errors pass as progress.\",\n      \"ids\": [\"a9\"],\n      \"quote\": {\n        \"id\": \"a9\",\n        \"span\": \"Sakana AI's MASS method lets one language model improve itself by solving, judging, and refining workflows without a stronger teacher, though shared blind spots can let errors pass as progress.\"\n      }\n    }\n  ]\n}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 1782,
+    "completion_tokens": 478,
+    "total_tokens": 2260,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    },
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 1782
+   },
+   "system_fingerprint": "a307abda487cd1b463329ccb945ce396"
+  }
+ },
+ "e98613e6876e8cdbf586c670e274b3133cb220fa4371f969daad63ecf5ac5b10": {
+  "model": "deepseek-flash",
+  "data": {
+   "id": "8c409c63-a269-44b7-ada9-489cff828c7e",
+   "object": "chat.completion",
+   "created": 1792413532,
+   "model": "deepseek-flash",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\"sentences\":[{\"text\":\"Meta launched two AI models, Muse Wonder and Muse Wonder Full, which it says rival leading models from OpenAI and Anthropic, covered by 6 outlets.\",\"ids\":[\"a1\",\"a2\",\"a3\"],\"quote\":{\"id\":\"a1\",\"span\":\"Meta launched two new AI models, Muse Wonder and Muse Wonder Full\"}},{\"text\":\"Meta says the largest Muse Wonder version outperforms Anthropic's Claude Fable 5.1 and ranks just below Claude Opus 5.5 on the Artificial Analysis Intelligence Index.\",\"ids\":[\"a2\"],\"quote\":{\"id\":\"a2\",\"span\":\"outperforms Anthropic's Claude Fable 5.1 and ranks just below Claude Opus 5.5\"}},{\"text\":\"Cloudflare released Clef-omni, which accepts audio, video, image, and text input, and says it is built on a Qwen3-Omni-30B-A3B-Instruct mixture-of-experts foundation.\",\"ids\":[\"a4\"],\"quote\":{\"id\":\"a4\",\"span\":\"Cloudflare released Clef-omni, which accepts audio, video, image, and text input\"}},{\"text\":\"Sakana AI's MASS method lets one language model improve itself by solving, judging, and refining workflows without a stronger teacher, though shared blind spots can let errors pass as progress.\",\"ids\":[\"a9\"],\"quote\":{\"id\":\"a9\",\"span\":\"lets one language model improve itself by solving, judging, and refining workflows without a stronger teacher\"}}]}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 1773,
+    "completion_tokens": 328,
+    "total_tokens": 2101,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    },
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 1773
+   },
+   "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+  }
+ },
+ "fedf3685b513f8ccdbf42982b68a35344a876f229bb02174542233218b2f3050": {
+  "model": "deepseek-v4-pro",
+  "data": {
+   "id": "e5c1dbaf-d569-4150-abea-a5a85acb3301",
+   "object": "chat.completion",
+   "created": 1792413533,
+   "model": "deepseek-v4-pro",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\n  \"sentences\": [\n    {\n      \"text\": \"Google began a wide rollout of Gemini 4 Argon to paying users, with the model available globally and priced at $2 per million input tokens and $10 per million output tokens.\",\n      \"ids\": [\"a1\", \"a2\", \"a3\"],\n      \"quote\": {\n        \"id\": \"a2\",\n        \"span\": \"Gemini 4 Argon is now globally available and claims it outperforms other frontier models on benchmarks, ranking #1 on the Vals Index.\"\n      }\n    },\n    {\n      \"text\": \"Meta introduced the Muse Wonder series, comprising Muse Wonder and Muse Wonder Full, as its most capable models for personal and professional agentic tasks.\",\n      \"ids\": [\"a5\", \"a6\"],\n      \"quote\": {\n        \"id\": \"a5\",\n        \"span\": \"Meta introduced the Muse Wonder series, comprising Muse Wonder and Muse Wonder Full, as its most capable models for personal and professional agentic tasks.\"\n      }\n    },\n    {\n      \"text\": \"An OpenAI engineer was arrested after the company said it discovered a sophisticated recording device hidden in one of its offices.\",\n      \"ids\": [\"a7\", \"a8\", \"a9\"],\n      \"quote\": {\n        \"id\": \"a7\",\n        \"span\": \"An OpenAI engineer was arrested after the company said it discovered a sophisticated recording device hidden in one of its offices.\"\n      }\n    },\n    {\n      \"text\": \"Rivian partner Mind Robotics hired Doug Field as president to lead its robotics effort, according to the startup.\",\n      \"ids\": [\"a10\", \"a11\"],\n      \"quote\": {\n        \"id\": \"a10\",\n        \"span\": \"Rivian partner Mind Robotics hired Doug Field as president to lead its robotics effort, according to the startup.\"\n      }\n    },\n    {\n      \"text\": \"Google announced that users can now run private, vibe-coded apps on Android via Google Play without publishing them publicly.\",\n      \"ids\": [\"a12\", \"a13\"],\n      \"quote\": {\n        \"id\": \"a12\",\n        \"span\": \"Google announced that users can now run private, vibe-coded apps on Android via Google Play without publishing them publicly.\"\n      }\n    }\n  ]\n}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 2732,
+    "completion_tokens": 478,
+    "total_tokens": 3210,
+    "prompt_tokens_details": {
+     "cached_tokens": 256
+    },
+    "prompt_cache_hit_tokens": 256,
+    "prompt_cache_miss_tokens": 2476
+   },
+   "system_fingerprint": "a307abda487cd1b463329ccb945ce396"
+  }
+ },
+ "0880cb0a2d646d5fb2450d87bf224e7b857eb955d36e40ad6b4266562ff5890a": {
+  "model": "deepseek-flash",
+  "data": {
+   "id": "b8055d46-6a15-4bbd-b9ec-b1fb5d2b6da9",
+   "object": "chat.completion",
+   "created": 1792413538,
+   "model": "deepseek-flash",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\"sentences\":[{\"text\":\"Google released Gemini 4 Argon worldwide, with the company claiming it ranks first on the Vals Index and pricing it at $2 per million input tokens and $10 per million output tokens.\",\"ids\":[\"a1\",\"a2\",\"a3\"],\"quote\":{\"id\":\"a2\",\"span\":\"Gemini 4 Argon is now globally available\"}},{\"text\":\"Meta introduced the Muse Wonder series, and the full version ranks second behind Anthropic's Opus 5.5 in Artificial Analysis intelligence rankings, according to a newsletter summary.\",\"ids\":[\"a5\",\"a6\"],\"quote\":{\"id\":\"a6\",\"span\":\"the full version ranking second behind Anthropic's Opus 5.5 in Artificial Analysis intelligence rankings\"}},{\"text\":\"An OpenAI engineer was arrested after the company said it found a hidden recording device in a conference room, and prosecutors said it was inserted into a TV's USB port.\",\"ids\":[\"a7\",\"a8\",\"a9\"],\"quote\":{\"id\":\"a8\",\"span\":\"OpenAI caught the device after it was inserted into a USB port on the back of a television\"}},{\"text\":\"Rivian's industrial AI and robotics venture Mind Robotics hired former Ford EV chief Doug Field as president, according to TechCrunch.\",\"ids\":[\"a10\",\"a11\"],\"quote\":{\"id\":\"a11\",\"span\":\"Rivian hired former Ford EV chief Doug Field as president of its industrial AI and robotics venture Mind Robotics\"}},{\"text\":\"Google said users can now run private, vibe-coded apps on Android through Google Play without publishing them publicly.\",\"ids\":[\"a12\",\"a13\"],\"quote\":{\"id\":\"a12\",\"span\":\"users can now run private, vibe-coded apps on Android via Google Play without publishing them publicly\"}}]}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 2735,
+    "completion_tokens": 379,
+    "total_tokens": 3114,
+    "prompt_tokens_details": {
+     "cached_tokens": 128
+    },
+    "prompt_cache_hit_tokens": 128,
+    "prompt_cache_miss_tokens": 2607
+   },
+   "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+  }
+ },
+ "1b96edf3c1574e3d85000264e5805f6d3c562bf2acc5640b6d246b5f1ec8b140": {
+  "model": "deepseek-flash",
+  "data": {
+   "id": "7999e21b-4507-4a50-9305-6c3b0b9acc8e",
+   "object": "chat.completion",
+   "created": 1792413540,
+   "model": "deepseek-flash",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\"sentences\":[{\"text\":\"Google released Gemini 4 Argon worldwide, with an introductory price of $2 per million input tokens and $10 per million output tokens, covered by 6 outlets.\",\"ids\":[\"a2\",\"a1\",\"a3\"],\"quote\":{\"id\":\"a2\",\"span\":\"introductory price of $2 per million input tokens and $10 per million output tokens\"}},{\"text\":\"Meta introduced the Muse Wonder series, with Muse Wonder Full ranking second behind Anthropic's Opus 5.5 in Artificial Analysis intelligence rankings, covered by 3 outlets.\",\"ids\":[\"a5\",\"a6\"],\"quote\":{\"id\":\"a6\",\"span\":\"ranking second behind Anthropic's Opus 5.5 in Artificial Analysis intelligence rankings\"}},{\"text\":\"An OpenAI engineer was arrested after the company said it found a hidden recording device in a conference room, covered by 3 outlets.\",\"ids\":[\"a7\",\"a8\",\"a9\"],\"quote\":{\"id\":\"a7\",\"span\":\"discovered a sophisticated recording device hidden in one of its offices\"}},{\"text\":\"Rivian partner Mind Robotics hired Doug Field as president, according to the startup, covered by 2 outlets.\",\"ids\":[\"a10\",\"a11\"],\"quote\":{\"id\":\"a10\",\"span\":\"hired Doug Field as president to lead its robotics effort\"}},{\"text\":\"Google Play now lets users run private, vibe-coded apps on Android without publishing them publicly, covered by 2 outlets.\",\"ids\":[\"a12\",\"a13\"],\"quote\":{\"id\":\"a12\",\"span\":\"run private, vibe-coded apps on Android via Google Play without publishing them publicly\"}}]}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 2749,
+    "completion_tokens": 351,
+    "total_tokens": 3100,
+    "prompt_tokens_details": {
+     "cached_tokens": 128
+    },
+    "prompt_cache_hit_tokens": 128,
+    "prompt_cache_miss_tokens": 2621
+   },
+   "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+  }
+ },
+ "bdc4ff7a841742685ab663cd43915c59e8b365c2ea5dc66b1f0e99836fefa073": {
+  "model": "deepseek-v4-pro",
+  "data": {
+   "id": "266dc6b1-9e8a-4480-b2e2-58d82a5be17b",
+   "object": "chat.completion",
+   "created": 1792413542,
+   "model": "deepseek-v4-pro",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\n  \"sentences\": [\n    {\n      \"text\": \"Google Cloud announced its new frontier model Gemini 4 Argon, available at an introductory rate of $2 per million input tokens and $10 per million output tokens through November 30, 2026, covered by 3 outlets.\",\n      \"ids\": [\"a1\", \"a2\", \"a3\"],\n      \"quote\": {\n        \"id\": \"a1\",\n        \"span\": \"Gemini 4 Argon Lands on Google Cloud\"\n      }\n    },\n    {\n      \"text\": \"OpenAI says it found a hidden recording device in one of its offices and used its models to identify the employee who planted it days earlier, covered by 2 outlets.\",\n      \"ids\": [\"a4\", \"a5\"],\n      \"quote\": {\n        \"id\": \"a4\",\n        \"span\": \"OpenAI Employee Arrested Over Hidden Recording Device\"\n      }\n    },\n    {\n      \"text\": \"x.ai claims Grok Voice 3.0 ranks first on Artificial Analysis's Speech-to-Speech Index with a score of 86.9.\",\n      \"ids\": [\"a6\"],\n      \"quote\": {\n        \"id\": \"a6\",\n        \"span\": \"Introducing Grok Voice 3.0\"\n      }\n    },\n    {\n      \"text\": \"According to the vendor, HiRO-ACEv2 can generate global 3 km climate data at about 1/300th the cost of X-SHiELD.\",\n      \"ids\": [\"a7\"],\n      \"quote\": {\n        \"id\": \"a7\",\n        \"span\": \"HiRO-ACEv2: Simulating extreme weather at 3 km resolution for a fraction of the cost\"\n      }\n    },\n    {\n      \"text\": \"Artemis Security launched Orion-1, an AI model it says autonomously investigates and responds to corporate network attacks.\",\n      \"ids\": [\"a8\"],\n      \"quote\": {\n        \"id\": \"a8\",\n        \"span\": \"Artemis Security launched Orion-1, an AI model it says autonomously investigates and responds to corporate network attacks\"\n      }\n    }\n  ]\n}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 2051,
+    "completion_tokens": 453,
+    "total_tokens": 2504,
+    "prompt_tokens_details": {
+     "cached_tokens": 256
+    },
+    "prompt_cache_hit_tokens": 256,
+    "prompt_cache_miss_tokens": 1795
+   },
+   "system_fingerprint": "a307abda487cd1b463329ccb945ce396"
+  }
+ },
+ "9885694dbe0b1152caa836190a392fd3fb8690e87c07bfa5f336c5decedd76dc": {
+  "model": "deepseek-flash",
+  "data": {
+   "id": "71bf28d4-2771-41f6-9339-86b20b769726",
+   "object": "chat.completion",
+   "created": 1792413547,
+   "model": "deepseek-flash",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\"sentences\":[{\"text\":\"Google Cloud announced that its new frontier model, Gemini 4 Argon, is available on Google Cloud for complex, multi-step business work, covered by 3 outlets.\",\"ids\":[\"a1\",\"a2\",\"a3\"],\"quote\":{\"id\":\"a1\",\"span\":\"Gemini 4 Argon, is available on Google Cloud for complex, multi-step business work\"}},{\"text\":\"Google says Argon launches at an introductory rate of $2 per million input tokens and $10 per million output tokens through November 30, 2026.\",\"ids\":[\"a1\"],\"quote\":{\"id\":\"a1\",\"span\":\"introductory rate of $2 per million input tokens and $10 per million output tokens\"}},{\"text\":\"The FBI alleged that OpenAI engineer Abdulrahman Alfozan hid a recording device in a restricted executive conference room to spy on the company, covered by 2 outlets.\",\"ids\":[\"a4\",\"a5\"],\"quote\":{\"id\":\"a5\",\"span\":\"hid a recording device in a restricted executive conference room to spy on the company\"}},{\"text\":\"Grok Voice 3.0 is claimed to rank first on Artificial Analysis's Speech-to-Speech Index with a score of 86.9, according to x.ai.\",\"ids\":[\"a6\"],\"quote\":{\"id\":\"a6\",\"span\":\"rank first on Artificial Analysis's Speech-to-Speech Index with a score of 86.9\"}},{\"text\":\"Artemis Security launched Orion-1, an AI model it says autonomously investigates and responds to corporate network attacks, outperforming Claude Opus 5.5 and GPT-6 Sol on its own benchmark.\",\"ids\":[\"a8\"],\"quote\":{\"id\":\"a8\",\"span\":\"autonomously investigates and responds to corporate network attacks\"}}]}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 2054,
+    "completion_tokens": 381,
+    "total_tokens": 2435,
+    "prompt_tokens_details": {
+     "cached_tokens": 128
+    },
+    "prompt_cache_hit_tokens": 128,
+    "prompt_cache_miss_tokens": 1926
+   },
+   "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+  }
+ },
+ "7f0349d9715062bfa6e6bab6793e72392788f499441946ea76ebbada4d569fe9": {
+  "model": "deepseek-v4-pro",
+  "data": {
+   "id": "d2e68665-f2b0-45a4-ab42-bb863a2e1f4e",
+   "object": "chat.completion",
+   "created": 1792413549,
+   "model": "deepseek-v4-pro",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\n  \"sentences\": [\n    {\n      \"text\": \"Meta released Muse Spark Open, an open-weight frontier multimodal mixture-of-experts model for agentic coding, covered by 9 outlets.\",\n      \"ids\": [\"a1\", \"a2\", \"a3\"],\n      \"quote\": {\n        \"id\": \"a1\",\n        \"span\": \"open-weight frontier multimodal mixture-of-experts model from Meta\"\n      }\n    },\n    {\n      \"text\": \"NVIDIA released Nemotron 3.5 Super VL, an open 120-billion-parameter model for enterprise agents, covered by 3 outlets.\",\n      \"ids\": [\"a4\", \"a5\", \"a6\"],\n      \"quote\": {\n        \"id\": \"a6\",\n        \"span\": \"open 120-billion-parameter multimodal model for enterprise agents\"\n      }\n    },\n    {\n      \"text\": \"Black Forest Labs released FLUX 3 Image Klein, a 5.6-billion-parameter open-weights model for text-to-image generation, covered by 3 outlets.\",\n      \"ids\": [\"a7\", \"a8\", \"a9\"],\n      \"quote\": {\n        \"id\": \"a9\",\n        \"span\": \"5.6-billion-parameter open-weights model for text-to-image generation\"\n      }\n    },\n    {\n      \"text\": \"Volvo will use Nvidia's technology for hands-free, point-to-point driving by 2030, covered by 2 outlets.\",\n      \"ids\": [\"a13\", \"a14\"],\n      \"quote\": {\n        \"id\": \"a13\",\n        \"span\": \"hands-free, point-to-point driving by 2030 using Nvidia's AI technology\"\n      }\n    },\n    {\n      \"text\": \"Google's Gemini 4 Argon reportedly leads GPT 6 Astra on several legal, financial, and business benchmarks, covered by 2 outlets.\",\n      \"ids\": [\"a10\", \"a11\", \"a12\"],\n      \"quote\": {\n        \"id\": \"a11\",\n        \"span\": \"Gemini 4 Argon reportedly leads GPT 6 Astra on several legal, financial, and business benchmarks\"\n      }\n    }\n  ]\n}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 3085,
+    "completion_tokens": 463,
+    "total_tokens": 3548,
+    "prompt_tokens_details": {
+     "cached_tokens": 256
+    },
+    "prompt_cache_hit_tokens": 256,
+    "prompt_cache_miss_tokens": 2829
+   },
+   "system_fingerprint": "a307abda487cd1b463329ccb945ce396"
+  }
+ },
+ "e37d958615d2b6e95a5faa5382af61508c5434087a730f5ddc84e8bf25ecbf60": {
+  "model": "deepseek-flash",
+  "data": {
+   "id": "86ea0817-e591-4f8f-ac59-17454a38930c",
+   "object": "chat.completion",
+   "created": 1792413553,
+   "model": "deepseek-flash",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\"sentences\":[{\"text\":\"Meta released Muse Spark Open, an open-weight frontier multimodal mixture-of-experts model for agentic coding, covered by 9 outlets.\",\"ids\":[\"a1\",\"a3\"],\"quote\":{\"id\":\"a1\",\"span\":\"Welcome Muse Spark Open: open-weight frontier multimodal mixture-of-experts model from Meta\"}},{\"text\":\"NVIDIA released Nemotron 3.5 Super VL, an open 120-billion-parameter multimodal model for enterprise agents, plus two smaller Bolt variants for local hardware.\",\"ids\":[\"a4\",\"a6\"],\"quote\":{\"id\":\"a6\",\"span\":\"Nvidia released Nemotron 3.5 Super VL, an open 120-billion-parameter multimodal model for enterprise AI agents\"}},{\"text\":\"Black Forest Labs released FLUX 3 Image Klein, a 5.6-billion-parameter open-weights image model that runs on consumer GPUs with 8 GB of VRAM.\",\"ids\":[\"a9\",\"a7\"],\"quote\":{\"id\":\"a9\",\"span\":\"Black Forest Labs released FLUX 3 Image Klein, a 5.6-billion-parameter open-weights model\"}},{\"text\":\"Volvo will use three pieces of Nvidia hardware and software in future vehicles for hands-free automated driving, according to the companies.\",\"ids\":[\"a14\",\"a13\"],\"quote\":{\"id\":\"a14\",\"span\":\"Volvo will use three pieces of Nvidia hardware and software in future vehicles for hands-free automated driving\"}}]}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 3088,
+    "completion_tokens": 318,
+    "total_tokens": 3406,
+    "prompt_tokens_details": {
+     "cached_tokens": 128
+    },
+    "prompt_cache_hit_tokens": 128,
+    "prompt_cache_miss_tokens": 2960
+   },
+   "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+  }
+ },
+ "b605172c38e01d6772bd90de80f9d313e4d690cfe9cd883a63f85d66a3f6f3e8": {
+  "model": "deepseek-flash",
+  "data": {
+   "id": "94c95bf3-1178-48ca-9b46-066138a16dc2",
+   "object": "chat.completion",
+   "created": 1792413555,
+   "model": "deepseek-flash",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\"sentences\":[{\"text\":\"Meta released Muse Spark Open, an open-weight frontier multimodal mixture-of-experts model for agentic coding that accepts images, audio, and video alongside text, covered by 9 outlets.\",\"ids\":[\"a1\"],\"quote\":{\"id\":\"a1\",\"span\":\"open-weight frontier multimodal mixture-of-experts model from Meta\"}},{\"text\":\"NVIDIA released Nemotron 3.5 Super VL, an open 120-billion-parameter multimodal model for enterprise agents, plus two smaller Bolt variants for local hardware, covered by 3 outlets.\",\"ids\":[\"a4\",\"a6\"],\"quote\":{\"id\":\"a6\",\"span\":\"an open 120-billion-parameter multimodal model for enterprise AI agents\"}},{\"text\":\"Black Forest Labs released FLUX 3 Image Klein, a 5.6-billion-parameter open-weights model for text-to-image generation and image editing, covered by 3 outlets.\",\"ids\":[\"a9\"],\"quote\":{\"id\":\"a9\",\"span\":\"a 5.6-billion-parameter open-weights model for text-to-image generation, image editing\"}},{\"text\":\"Volvo plans to use three pieces of Nvidia hardware and software in future vehicles for hands-free automated driving, with the first vehicle debuting within the decade, according to TechCrunch.\",\"ids\":[\"a14\"],\"quote\":{\"id\":\"a14\",\"span\":\"Volvo will use three pieces of Nvidia hardware and software in future vehicles for hands-free automated driving\"}}]}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 3101,
+    "completion_tokens": 317,
+    "total_tokens": 3418,
+    "prompt_tokens_details": {
+     "cached_tokens": 128
+    },
+    "prompt_cache_hit_tokens": 128,
+    "prompt_cache_miss_tokens": 2973
+   },
+   "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+  }
+ },
+ "621f2fed2b14d8a7e0ccf49d952b39e6e43aa94d495c3d7de16195314aac96a4": {
+  "model": "deepseek-v4-pro",
+  "data": {
+   "id": "fa058991-ba1d-4ecf-a182-d2cfca26af48",
+   "object": "chat.completion",
+   "created": 1792413557,
+   "model": "deepseek-v4-pro",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\n  \"sentences\": [\n    {\n      \"text\": \"Reflection AI released Beam, a 501-billion-parameter open model with day-0 support in transformers, SGLang, and vLLM, covered by 4 outlets.\",\n      \"ids\": [\"a1\", \"a2\", \"a3\"],\n      \"quote\": {\n        \"id\": \"a1\",\n        \"span\": \"Beam ships with day-0 support in transformers, SGLang and vLLM\"\n      }\n    },\n    {\n      \"text\": \"Meta released Muse Spark Open, an open-weight 816B-parameter multimodal model with a 1M-token context window, covered by 2 outlets.\",\n      \"ids\": [\"a4\", \"a5\"],\n      \"quote\": {\n        \"id\": \"a4\",\n        \"span\": \"Muse Spark Open is a natively multimodal open-weight model with 816B total parameters and a 1M-token context window\"\n      }\n    },\n    {\n      \"text\": \"Microsoft's Surface Laptop Ultra is reviewed as a MacBook Pro competitor with a 7/10 rating from WIRED, covered by 2 outlets.\",\n      \"ids\": [\"a6\", \"a7\"],\n      \"quote\": {\n        \"id\": \"a7\",\n        \"span\": \"WIRED rates the Surface Laptop Ultra 7/10, calling it a true MacBook Pro competitor for Windows hampered by battery life\"\n      }\n    },\n    {\n      \"text\": \"NVIDIA's RTX Spark laptops show mixed performance, with reviewers noting weak gaming but fast local AI, covered by 2 outlets.\",\n      \"ids\": [\"a8\", \"a9\"],\n      \"quote\": {\n        \"id\": \"a8\",\n        \"span\": \"Tom's Hardware found the N1X fast for local AI but unimpressive for gaming\"\n      }\n    },\n    {\n      \"text\": \"OpenAI says GPT-Live-1.1 adds new voices and better accents to Voice in ChatGPT, Codex, and dots, rolling out today.\",\n      \"ids\": [\"a10\"],\n      \"quote\": {\n        \"id\": \"a10\",\n        \"span\": \"GPT-Live-1.1 adds new voices and better accents to Voice in ChatGPT, Codex, and dots\"\n      }\n    }\n  ]\n}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 2438,
+    "completion_tokens": 492,
+    "total_tokens": 2930,
+    "prompt_tokens_details": {
+     "cached_tokens": 256
+    },
+    "prompt_cache_hit_tokens": 256,
+    "prompt_cache_miss_tokens": 2182
+   },
+   "system_fingerprint": "a307abda487cd1b463329ccb945ce396"
+  }
+ },
+ "6f31939757fd92db66879c936bb462a6a70ab6aec20c20edc0cebd9852c79f9a": {
+  "model": "deepseek-flash",
+  "data": {
+   "id": "9c7bb543-9145-49de-b2d7-ffe0388099ae",
+   "object": "chat.completion",
+   "created": 1792413561,
+   "model": "deepseek-flash",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\"sentences\":[{\"text\":\"Reflection released Beam, a 501-billion-parameter open model it says finishes tasks in fewer tokens to lower cost per task, covered by 4 outlets.\",\"ids\":[\"a1\",\"a2\",\"a3\"],\"quote\":{\"id\":\"a2\",\"span\":\"Reflection AI released Beam, a 501-billion-parameter open model it says finishes tasks in fewer tokens to lower cost per task.\"}},{\"text\":\"Meta released Muse Spark Open, an open-weight 816B-parameter multimodal model, and worked with Apple so it could run locally on Mac Studios, Meta says.\",\"ids\":[\"a4\",\"a5\"],\"quote\":{\"id\":\"a5\",\"span\":\"Meta released Muse Spark Open, an open-weight 816B-parameter multimodal model, and worked with Apple so it could run locally on Mac Studios, Meta says.\"}},{\"text\":\"WIRED rates the Surface Laptop Ultra 7/10, calling it a true MacBook Pro competitor for Windows hampered by battery life.\",\"ids\":[\"a6\",\"a7\"],\"quote\":{\"id\":\"a7\",\"span\":\"WIRED rates the Surface Laptop Ultra 7/10, calling it a true MacBook Pro competitor for Windows hampered by battery life.\"}},{\"text\":\"Tom's Hardware found the N1X fast for local AI but unimpressive for gaming, citing 300GB/s shared memory bandwidth.\",\"ids\":[\"a8\",\"a9\"],\"quote\":{\"id\":\"a8\",\"span\":\"Tom's Hardware found the N1X fast for local AI but unimpressive for gaming, citing 300GB/s shared memory bandwidth.\"}},{\"text\":\"OpenAI says GPT-Live-1.1 adds new voices and better accents to Voice in ChatGPT, Codex, and dots, rolling out today to all users and coming soon to the API.\",\"ids\":[\"a10\"],\"quote\":{\"id\":\"a10\",\"span\":\"OpenAI says GPT-Live-1.1 adds new voices and better accents to Voice in ChatGPT, Codex, and dots, rolling out today to all users and coming soon to the API.\"}}]}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 2441,
+    "completion_tokens": 444,
+    "total_tokens": 2885,
+    "prompt_tokens_details": {
+     "cached_tokens": 128
+    },
+    "prompt_cache_hit_tokens": 128,
+    "prompt_cache_miss_tokens": 2313
+   },
+   "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+  }
+ },
+ "1f4640277dcdad1da784a1ab2c2218f9144e280f80c62df835632f2dcca24417": {
+  "model": "deepseek-flash",
+  "data": {
+   "id": "c44e1422-949c-41c2-b629-eb109f4b9371",
+   "object": "chat.completion",
+   "created": 1792413564,
+   "model": "deepseek-flash",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\"sentences\":[{\"text\":\"Reflection released Beam, a 501-billion-parameter open-weight model it says finishes tasks in fewer tokens to lower cost per task, covered by 4 outlets.\",\"ids\":[\"a1\",\"a2\",\"a3\"],\"quote\":{\"id\":\"a2\",\"span\":\"Reflection AI released Beam, a 501-billion-parameter open model it says finishes tasks in fewer tokens to lower cost per task.\"}},{\"text\":\"Meta released Muse Spark Open, an open-weight 816B-parameter multimodal model with a 1M-token context window, and worked with Apple so it could run locally on Mac Studios, Meta says.\",\"ids\":[\"a4\",\"a5\"],\"quote\":{\"id\":\"a5\",\"span\":\"Meta released Muse Spark Open, an open-weight 816B-parameter multimodal model, and worked with Apple so it could run locally on Mac Studios, Meta says.\"}},{\"text\":\"WIRED rates the Microsoft Surface Laptop Ultra 7/10, calling it a true MacBook Pro competitor for Windows hampered by battery life.\",\"ids\":[\"a6\",\"a7\"],\"quote\":{\"id\":\"a7\",\"span\":\"WIRED rates the Surface Laptop Ultra 7/10, calling it a true MacBook Pro competitor for Windows hampered by battery life.\"}},{\"text\":\"OpenAI says GPT-Live-1.1 adds new voices and better accents to Voice in ChatGPT, Codex, and dots, rolling out today to all users and coming soon to the API.\",\"ids\":[\"a10\"],\"quote\":{\"id\":\"a10\",\"span\":\"OpenAI says GPT-Live-1.1 adds new voices and better accents to Voice in ChatGPT, Codex, and dots, rolling out today to all users and coming soon to the API.\"}},{\"text\":\"Microsoft says MAI-Base-2 is an MoE foundation model with 80 billion active and 2.8 trillion total parameters, claiming it is 4-12x more pre-training FLOPs-efficient than DeepSeek-V4-Pro-Base.\",\"ids\":[\"a12\"],\"quote\":{\"id\":\"a12\",\"span\":\"Microsoft says MAI-Base-2 is an MoE foundation model with 80 billion active and 2.8 trillion total parameters.\"}}]}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 2453,
+    "completion_tokens": 477,
+    "total_tokens": 2930,
+    "prompt_tokens_details": {
+     "cached_tokens": 128
+    },
+    "prompt_cache_hit_tokens": 128,
+    "prompt_cache_miss_tokens": 2325
+   },
+   "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+  }
+ },
+ "2973c7f1960571ac50a53acd42b746204656d3095e3d52512ca5040696f85479": {
+  "model": "deepseek-v4-pro",
+  "data": {
+   "id": "5f5e41a9-811e-4236-a810-7277f64ce1c8",
+   "object": "chat.completion",
+   "created": 1792413566,
+   "model": "deepseek-v4-pro",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\n  \"sentences\": [\n    {\n      \"text\": \"Deepseek released Deepseek-V4.1-Flash-1017, which it says beats larger rivals like Claude Opus 5 and GPT 5.6-Sol on coding and agent benchmarks in internal tests.\",\n      \"ids\": [\"a1\"],\n      \"quote\": {\n        \"id\": \"a1\",\n        \"span\": \"beats larger rivals like Claude Opus 5 and GPT 5.6-Sol on coding and agent benchmarks in internal tests\"\n      }\n    }\n  ]\n}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 1498,
+    "completion_tokens": 118,
+    "total_tokens": 1616,
+    "prompt_tokens_details": {
+     "cached_tokens": 256
+    },
+    "prompt_cache_hit_tokens": 256,
+    "prompt_cache_miss_tokens": 1242
+   },
+   "system_fingerprint": "a307abda487cd1b463329ccb945ce396"
+  }
+ },
+ "1b6e2d682d3f3e573549fb5826d6bc4577aaaaef7e7dded57300272d074fc9e2": {
+  "model": "deepseek-flash",
+  "data": {
+   "id": "636f075b-7784-4381-bfd0-fc1b505a097b",
+   "object": "chat.completion",
+   "created": 1792413568,
+   "model": "deepseek-flash",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\"sentences\":[{\"text\":\"Deepseek says its Deepseek-V4.1-Flash-1017 beats larger rivals like Claude Opus 5 and GPT 5.6-Sol on coding and agent benchmarks in internal tests.\",\"ids\":[\"a1\"],\"quote\":{\"id\":\"a1\",\"span\":\"beats larger rivals like Claude Opus 5 and GPT 5.6-Sol on coding and agent benchmarks in internal tests\"}}]}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 1501,
+    "completion_tokens": 94,
+    "total_tokens": 1595,
+    "prompt_tokens_details": {
+     "cached_tokens": 128
+    },
+    "prompt_cache_hit_tokens": 128,
+    "prompt_cache_miss_tokens": 1373
+   },
+   "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+  }
+ },
+ "ababcb9efe18b0ed1e72b76c2de1c45b0febc171fbc386bc1a95fdbce838dd11": {
+  "model": "deepseek-v4-pro",
+  "data": {
+   "id": "a45225d1-98b2-495e-ae79-67c1b9f05130",
+   "object": "chat.completion",
+   "created": 1792413569,
+   "model": "deepseek-v4-pro",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\n  \"sentences\": [\n    {\n      \"text\": \"Anthropic reports its AI agents logged six times as many work hours as human employees by August 2026, and it cites growing agent capability as the reason for fewer junior technical hires.\",\n      \"ids\": [\"a11\"],\n      \"quote\": {\n        \"id\": \"a11\",\n        \"span\": \"AI agents now work six times as many hours\"\n      }\n    },\n    {\n      \"text\": \"Disney agreed to make employment offers to at least 60 Character.AI employees, the majority of the workforce, with estimated $60 million in annual compensation, per a legal filing.\",\n      \"ids\": [\"a9\"],\n      \"quote\": {\n        \"id\": \"a9\",\n        \"span\": \"Disney agrees to hire the majority of Character.AI's workforce\"\n      }\n    }\n  ]\n}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 1407,
+    "completion_tokens": 183,
+    "total_tokens": 1590,
+    "prompt_tokens_details": {
+     "cached_tokens": 256
+    },
+    "prompt_cache_hit_tokens": 256,
+    "prompt_cache_miss_tokens": 1151
+   },
+   "system_fingerprint": "a307abda487cd1b463329ccb945ce396"
+  }
+ },
+ "0244f044d4ba72237bc9b11d5eefa6c759ebcf836821dab988a1b30dbff04708": {
+  "model": "deepseek-flash",
+  "data": {
+   "id": "ef55f6d1-ad5e-4bf8-af88-9b494414b62e",
+   "object": "chat.completion",
+   "created": 1792413572,
+   "model": "deepseek-flash",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\"sentences\":[{\"text\":\"Anthropic says its AI agents logged six times as many work hours as human employees by August 2026, and it cites growing agent capability as the reason for fewer junior technical hires.\",\"ids\":[\"a11\"],\"quote\":{\"id\":\"a11\",\"span\":\"Anthropic reports its AI agents logged six times as many work hours as human employees by August 2026\"}},{\"text\":\"Anthropic announced a public benefit fund committing 5% of its shares, with an option to add 2% for every 50% value increase.\",\"ids\":[\"a8\"],\"quote\":{\"id\":\"a8\",\"span\":\"committing 5% of its shares\"}}]}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 1410,
+    "completion_tokens": 149,
+    "total_tokens": 1559,
+    "prompt_tokens_details": {
+     "cached_tokens": 128
+    },
+    "prompt_cache_hit_tokens": 128,
+    "prompt_cache_miss_tokens": 1282
+   },
+   "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+  }
+ },
+ "413aea3311f503cd0bd6631856ca7e9662e28d3e0f9ce81d8fc439249894dc6f": {
+  "model": "deepseek-v4-pro",
+  "data": {
+   "id": "af96d68e-a529-4b73-8457-a1f21d62b15d",
+   "object": "chat.completion",
+   "created": 1792413606,
+   "model": "deepseek-v4-pro",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\n  \"sentences\": [\n    {\n      \"text\": \"Meta launched two new AI models, Muse Wonder and Muse Wonder Full, claiming they rival leading models from OpenAI and Anthropic based on internal testing.\",\n      \"ids\": [\"a1\", \"a2\", \"a3\"],\n      \"quote\": {\n        \"id\": \"a1\",\n        \"span\": \"Meta launched two new AI models, Muse Wonder and Muse Wonder Full, claiming they rival leading models from OpenAI and Anthropic based on internal testing.\"\n      }\n    },\n    {\n      \"text\": \"Meta says its Muse Wonder Full model has frontier capabilities and that the Muse Wonder models mark a major leap toward personal superintelligence.\",\n      \"ids\": [\"a2\"],\n      \"quote\": {\n        \"id\": \"a2\",\n        \"span\": \"Meta says its Muse Wonder Full model has frontier capabilities and that the Muse Wonder models mark a major leap toward personal superintelligence.\"\n      }\n    },\n    {\n      \"text\": \"Cloudflare released Clef-omni, which accepts audio, video, image, and text input, and claims it is built on a Qwen3-Omni-30B-A3B-Instruct mixture-of-experts foundation.\",\n      \"ids\": [\"a4\"],\n      \"quote\": {\n        \"id\": \"a4\",\n        \"span\": \"Cloudflare released Clef-omni, which accepts audio, video, image, and text input, and claims it is built on a Qwen3-Omni-30B-A3B-Instruct mixture-of-experts foundation.\"\n      }\n    },\n    {\n      \"text\": \"Gartner's first Emerging Market Quadrant for AI Application Security named Enkrypt AI by Anaconda a Specialist, which Enkrypt reads as a sign the market is maturing.\",\n      \"ids\": [\"a6\"],\n      \"quote\": {\n        \"id\": \"a6\",\n        \"span\": \"Gartner's first Emerging Market Quadrant for AI Application Security named Enkrypt AI by Anaconda a Specialist, which Enkrypt reads as a sign the market is maturing.\"\n      }\n    },\n    {\n      \"text\": \"Sakana AI's MASS method lets one language model improve itself by solving, judging, and refining workflows without a stronger teacher, though shared blind spots can let errors pass as progress.\",\n      \"ids\": [\"a9\"],\n      \"quote\": {\n        \"id\": \"a9\",\n        \"span\": \"Sakana AI's MASS method lets one language model improve itself by solving, judging, and refining workflows without a stronger teacher, though shared blind spots can let errors pass as progress.\"\n      }\n    }\n  ]\n}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 1770,
+    "completion_tokens": 561,
+    "total_tokens": 2331,
+    "prompt_tokens_details": {
+     "cached_tokens": 256
+    },
+    "prompt_cache_hit_tokens": 256,
+    "prompt_cache_miss_tokens": 1514
+   },
+   "system_fingerprint": "a307abda487cd1b463329ccb945ce396"
+  }
+ },
+ "2746ee00060d18c93ee17681ad9de391154a186a77a531d1a7351cbb2efe04ee": {
+  "model": "deepseek-flash",
+  "data": {
+   "id": "de01d890-8a0c-4be4-aa6e-446bc12b3b83",
+   "object": "chat.completion",
+   "created": 1792413611,
+   "model": "deepseek-flash",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\"sentences\":[{\"text\":\"Meta launched two AI models, Muse Wonder and Muse Wonder Full, which Meta says match leading models from OpenAI and Anthropic on benchmarks, covered by 6 outlets.\",\"ids\":[\"a1\",\"a2\",\"a3\"],\"quote\":{\"id\":\"a3\",\"span\":\"Meta's Superintelligence Lab released Muse Wonder and Muse Wonder Full, its first frontier models\"}},{\"text\":\"Meta says the largest Muse Wonder version outperforms Anthropic's Claude Fable 5.1 and ranks just below Claude Opus 5.5 on the Artificial Analysis Intelligence Index.\",\"ids\":[\"a2\"],\"quote\":{\"id\":\"a2\",\"span\":\"the largest Muse Wonder version outperforms Anthropic's Claude Fable 5.1 and ranks just below Claude Opus 5.5 on the Artificial Analysis Intelligence Index\"}},{\"text\":\"Cloudflare released Clef-omni, which accepts audio, video, image, and text input, and says it is built on a Qwen3-Omni-30B-A3B-Instruct mixture-of-experts foundation.\",\"ids\":[\"a4\"],\"quote\":{\"id\":\"a4\",\"span\":\"Cloudflare released Clef-omni, which accepts audio, video, image, and text input\"}},{\"text\":\"Sakana AI's MASS method lets one language model improve itself by solving, judging, and refining workflows without a stronger teacher, though shared blind spots can let errors pass as progress.\",\"ids\":[\"a9\"],\"quote\":{\"id\":\"a9\",\"span\":\"Sakana AI's MASS method lets one language model improve itself by solving, judging, and refining workflows without a stronger teacher\"}}]}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 1773,
+    "completion_tokens": 353,
+    "total_tokens": 2126,
+    "prompt_tokens_details": {
+     "cached_tokens": 128
+    },
+    "prompt_cache_hit_tokens": 128,
+    "prompt_cache_miss_tokens": 1645
+   },
+   "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+  }
+ },
+ "10558018f80aadf2c9c84838b0d1b5e3dadb703220061a54bf0146c07de0011e": {
+  "model": "deepseek-v4-pro",
+  "data": {
+   "id": "74916005-1891-4c72-a5c9-99da8b2f0433",
+   "object": "chat.completion",
+   "created": 1792413613,
+   "model": "deepseek-v4-pro",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\n  \"sentences\": [\n    {\n      \"text\": \"Google began a wide rollout of Gemini 4 Argon to paying users, with lower-tier plans lacking full access, covered by 6 outlets.\",\n      \"ids\": [\"a1\", \"a2\", \"a3\"],\n      \"quote\": {\n        \"id\": \"a1\",\n        \"span\": \"Gemini 4 Argon begins rolling out in Gemini app and Antigravity, but only if you pay\"\n      }\n    },\n    {\n      \"text\": \"Meta introduced the Muse Wonder series, comprising Muse Wonder and Muse Wonder Full, as its most capable models for personal and professional agentic tasks.\",\n      \"ids\": [\"a5\", \"a6\"],\n      \"quote\": {\n        \"id\": \"a5\",\n        \"span\": \"Meta introduced the Muse Wonder series, comprising Muse Wonder and Muse Wonder Full, as its most capable models for personal and professional agentic tasks.\"\n      }\n    },\n    {\n      \"text\": \"An OpenAI engineer was arrested after the company said it discovered a sophisticated recording device hidden in one of its offices.\",\n      \"ids\": [\"a7\", \"a8\", \"a9\"],\n      \"quote\": {\n        \"id\": \"a7\",\n        \"span\": \"OpenAI employee arrested for allegedly planting a bug in a conference room\"\n      }\n    },\n    {\n      \"text\": \"Rivian partner Mind Robotics hired Doug Field as president to lead its robotics effort, according to the startup.\",\n      \"ids\": [\"a10\", \"a11\"],\n      \"quote\": {\n        \"id\": \"a10\",\n        \"span\": \"Rivian partner Mind Robotics hires Doug Field as president\"\n      }\n    },\n    {\n      \"text\": \"Google announced that users can now run private, vibe-coded apps on Android via Google Play without publishing them publicly.\",\n      \"ids\": [\"a12\", \"a13\"],\n      \"quote\": {\n        \"id\": \"a12\",\n        \"span\": \"Google Play now lets anyone build private, vibe-coded apps that run on Android\"\n      }\n    }\n  ]\n}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 2732,
+    "completion_tokens": 439,
+    "total_tokens": 3171,
+    "prompt_tokens_details": {
+     "cached_tokens": 256
+    },
+    "prompt_cache_hit_tokens": 256,
+    "prompt_cache_miss_tokens": 2476
+   },
+   "system_fingerprint": "a307abda487cd1b463329ccb945ce396"
+  }
+ },
+ "c12c48e6c97538771d7a0ab2fab983c808c23ed09a34a7c029e033a58ffcebc4": {
+  "model": "deepseek-flash",
+  "data": {
+   "id": "e5a2a271-475b-49b7-8e16-90db9f47b562",
+   "object": "chat.completion",
+   "created": 1792413617,
+   "model": "deepseek-flash",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\"sentences\":[{\"text\":\"Google says Gemini 4 Argon is now globally available, claiming it outperforms other frontier models on benchmarks and ranks first on the Vals Index, covered by 6 outlets.\",\"ids\":[\"a2\",\"a1\",\"a3\"],\"quote\":{\"id\":\"a2\",\"span\":\"Google says Gemini 4 Argon is now globally available and claims it outperforms other frontier models on benchmarks, ranking #1 on the Vals Index\"}},{\"text\":\"Google says the model launches at an introductory price of $2 per million input tokens and $10 per million output tokens, with cached input tokens at 95% off.\",\"ids\":[\"a2\",\"a3\"],\"quote\":{\"id\":\"a2\",\"span\":\"The model launches at an introductory price of $2 per million input tokens and $10 per million output tokens, with cached input tokens at 95% off\"}},{\"text\":\"Meta introduced the Muse Wonder series, with Muse Wonder available through the Meta Model API and Muse Code and Muse Wonder Full available for Muse Code subscribers, covered by 3 outlets.\",\"ids\":[\"a5\",\"a6\"],\"quote\":{\"id\":\"a5\",\"span\":\"Meta introduced the Muse Wonder series, comprising Muse Wonder and Muse Wonder Full, as its most capable models for personal and professional agentic tasks\"}},{\"text\":\"An OpenAI engineer was arrested after the company said it found a recording device hidden in one of its offices, covered by 3 outlets.\",\"ids\":[\"a7\",\"a8\",\"a9\"],\"quote\":{\"id\":\"a7\",\"span\":\"An OpenAI engineer was arrested after the company said it discovered a sophisticated recording device hidden in one of its offices\"}},{\"text\":\"Rivian hired former Ford EV chief Doug Field as president of its industrial AI and robotics venture Mind Robotics, which has over $1 billion in backing, according to TechCrunch.\",\"ids\":[\"a11\",\"a10\"],\"quote\":{\"id\":\"a11\",\"span\":\"Rivian hired former Ford EV chief Doug Field as president of its industrial AI and robotics venture Mind Robotics, which has over $1 billion in backing\"}}]}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 2735,
+    "completion_tokens": 442,
+    "total_tokens": 3177,
+    "prompt_tokens_details": {
+     "cached_tokens": 128
+    },
+    "prompt_cache_hit_tokens": 128,
+    "prompt_cache_miss_tokens": 2607
+   },
+   "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+  }
+ },
+ "1ffafe31f06045d7174dba7958f3d4e89bd94eca243ae06f590c85f985947a07": {
+  "model": "deepseek-flash",
+  "data": {
+   "id": "4aab9916-708f-4f8a-8b87-9da28bab091f",
+   "object": "chat.completion",
+   "created": 1792413619,
+   "model": "deepseek-flash",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\"sentences\":[{\"text\":\"Google says Gemini 4 Argon is now globally available and claims it outperforms other frontier models on benchmarks, ranking #1 on the Vals Index, covered by 6 outlets.\",\"ids\":[\"a2\",\"a1\",\"a3\"],\"quote\":{\"id\":\"a2\",\"span\":\"Google says Gemini 4 Argon is now globally available and claims it outperforms other frontier models on benchmarks, ranking #1 on the Vals Index\"}},{\"text\":\"Meta introduced the Muse Wonder series, with Muse Wonder available today through the Meta Model API and Muse Wonder Full available today for Muse Code subscribers, covered by 3 outlets.\",\"ids\":[\"a5\",\"a6\"],\"quote\":{\"id\":\"a5\",\"span\":\"Meta introduced the Muse Wonder series, comprising Muse Wonder and Muse Wonder Full, as its most capable models for personal and professional agentic tasks\"}},{\"text\":\"An OpenAI engineer was arrested after the company said it discovered a sophisticated recording device hidden in one of its offices, covered by 3 outlets.\",\"ids\":[\"a7\",\"a8\",\"a9\"],\"quote\":{\"id\":\"a7\",\"span\":\"An OpenAI engineer was arrested after the company said it discovered a sophisticated recording device hidden in one of its offices\"}},{\"text\":\"Rivian hired former Ford EV chief Doug Field as president of its industrial AI and robotics venture Mind Robotics, which has over $1 billion in backing, covered by 2 outlets.\",\"ids\":[\"a11\",\"a10\"],\"quote\":{\"id\":\"a11\",\"span\":\"Rivian hired former Ford EV chief Doug Field as president of its industrial AI and robotics venture Mind Robotics, which has over $1 billion in backing\"}},{\"text\":\"Google announced that users can now run private, vibe-coded apps on Android via Google Play without publishing them publicly, according to TechCrunch.\",\"ids\":[\"a12\",\"a13\"],\"quote\":{\"id\":\"a12\",\"span\":\"users can now run private, vibe-coded apps on Android via Google Play without publishing them publicly\"}}]}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 2756,
+    "completion_tokens": 426,
+    "total_tokens": 3182,
+    "prompt_tokens_details": {
+     "cached_tokens": 128
+    },
+    "prompt_cache_hit_tokens": 128,
+    "prompt_cache_miss_tokens": 2628
+   },
+   "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+  }
+ },
+ "bb461510f7d5ec0840452733cda8693451c62b8f93f9ea489afec30850494085": {
+  "model": "deepseek-v4-pro",
+  "data": {
+   "id": "fda8717e-eb25-4d27-972c-3088135e7411",
+   "object": "chat.completion",
+   "created": 1792413621,
+   "model": "deepseek-v4-pro",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\n  \"sentences\": [\n    {\n      \"text\": \"Google Cloud announced that its new frontier model, Gemini 4 Argon, is available on Google Cloud for complex, multi-step business work, covered by 3 outlets.\",\n      \"ids\": [\"a1\", \"a2\", \"a3\"],\n      \"quote\": {\n        \"id\": \"a1\",\n        \"span\": \"Gemini 4 Argon Lands on Google Cloud\"\n      }\n    },\n    {\n      \"text\": \"OpenAI says it found a hidden recording device in one of its offices and used its models to identify the employee who planted it days earlier, covered by 2 outlets.\",\n      \"ids\": [\"a4\", \"a5\"],\n      \"quote\": {\n        \"id\": \"a4\",\n        \"span\": \"OpenAI Employee Arrested Over Hidden Recording Device\"\n      }\n    },\n    {\n      \"text\": \"x.ai claims Grok Voice 3.0 ranks first on Artificial Analysis's Speech-to-Speech Index with a score of 86.9.\",\n      \"ids\": [\"a6\"],\n      \"quote\": {\n        \"id\": \"a6\",\n        \"span\": \"Introducing Grok Voice 3.0\"\n      }\n    },\n    {\n      \"text\": \"According to the vendor, HiRO-ACEv2 can generate global 3 km climate data at about 1/300th the cost of X-SHiELD.\",\n      \"ids\": [\"a7\"],\n      \"quote\": {\n        \"id\": \"a7\",\n        \"span\": \"Simulating extreme weather at 3 km resolution for a fraction of the cost\"\n      }\n    },\n    {\n      \"text\": \"Artemis Security launched Orion-1, an AI model it says autonomously investigates and responds to corporate network attacks.\",\n      \"ids\": [\"a8\"],\n      \"quote\": {\n        \"id\": \"a8\",\n        \"span\": \"Artemis Security launched Orion-1, an AI model it says autonomously investigates and responds to corporate network attacks\"\n      }\n    },\n    {\n      \"text\": \"Google Research scientists say Deep Review is launching publicly after pilots across 16,000+ submissions at STOC, ICML, NeurIPS, and ICLR.\",\n      \"ids\": [\"a10\", \"a11\"],\n      \"quote\": {\n        \"id\": \"a10\",\n        \"span\": \"Deep Review is launching publicly after pilots across 16,000+ submissions at STOC, ICML, NeurIPS, and ICLR\"\n      }\n    },\n    {\n      \"text\": \"CedarDB announced limited availability of CedarDB Cloud on Wednesday at TechCrunch Disrupt, after beta testing with waitlist users.\",\n      \"ids\": [\"a12\"],\n      \"quote\": {\n        \"id\": \"a12\",\n        \"span\": \"CedarDB announced limited availability of CedarDB Cloud on Wednesday at TechCrunch Disrupt\"\n      }\n    },\n    {\n      \"text\": \"Epic claims its new vibe-coded Epic Games Launcher is faster and more responsive than the current one.\",\n      \"ids\": [\"a13\"],\n      \"quote\": {\n        \"id\": \"a13\",\n        \"span\": \"Epic says its new vibe-coded Epic Games Launcher is faster than Steam\"\n      }\n    }\n  ]\n}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 2051,
+    "completion_tokens": 695,
+    "total_tokens": 2746,
+    "prompt_tokens_details": {
+     "cached_tokens": 256
+    },
+    "prompt_cache_hit_tokens": 256,
+    "prompt_cache_miss_tokens": 1795
+   },
+   "system_fingerprint": "a307abda487cd1b463329ccb945ce396"
+  }
+ },
+ "1b2116f9c2c468e972ff164900dafc060903754178f0dac77dff65254d344534": {
+  "model": "deepseek-v4-pro",
+  "data": {
+   "id": "d97b3dd5-45a6-4a95-923c-52b2a67d9c5d",
+   "object": "chat.completion",
+   "created": 1792413627,
+   "model": "deepseek-v4-pro",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\n  \"sentences\": [\n    {\n      \"text\": \"Google Cloud announced that its new frontier model, Gemini 4 Argon, is available on Google Cloud for complex, multi-step business work, covered by 3 outlets.\",\n      \"ids\": [\"a1\", \"a2\", \"a3\"],\n      \"quote\": {\n        \"id\": \"a1\",\n        \"span\": \"Gemini 4 Argon Lands on Google Cloud\"\n      }\n    },\n    {\n      \"text\": \"OpenAI says it found a hidden recording device in one of its offices and used its models to identify the employee who planted it days earlier, covered by 2 outlets.\",\n      \"ids\": [\"a4\", \"a5\"],\n      \"quote\": {\n        \"id\": \"a4\",\n        \"span\": \"OpenAI Employee Arrested Over Hidden Recording Device\"\n      }\n    },\n    {\n      \"text\": \"x.ai announced Grok Voice 3.0, claiming it ranks first on Artificial Analysis's Speech-to-Speech Index with a score of 86.9.\",\n      \"ids\": [\"a6\"],\n      \"quote\": {\n        \"id\": \"a6\",\n        \"span\": \"Grok Voice 3.0 is claimed to rank first on Artificial Analysis's Speech-to-Speech Index with a score of 86.9\"\n      }\n    },\n    {\n      \"text\": \"Ai2 introduced HiRO-ACEv2, which can generate global 3 km climate data at about 1/300th the cost of X-SHiELD, according to the vendor.\",\n      \"ids\": [\"a7\"],\n      \"quote\": {\n        \"id\": \"a7\",\n        \"span\": \"HiRO-ACEv2 can generate global 3 km climate data at about 1/300th the cost of X-SHiELD\"\n      }\n    },\n    {\n      \"text\": \"Artemis Security launched Orion-1, an AI model it says autonomously investigates and responds to corporate network attacks, outperforming Claude Opus 5.5 and GPT-6 Sol on its own benchmark.\",\n      \"ids\": [\"a8\"],\n      \"quote\": {\n        \"id\": \"a8\",\n        \"span\": \"Artemis Security launched Orion-1, an AI model it says autonomously investigates and responds to corporate network attacks\"\n      }\n    }\n  ]\n}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 2062,
+    "completion_tokens": 494,
+    "total_tokens": 2556,
+    "prompt_tokens_details": {
+     "cached_tokens": 256
+    },
+    "prompt_cache_hit_tokens": 256,
+    "prompt_cache_miss_tokens": 1806
+   },
+   "system_fingerprint": "a307abda487cd1b463329ccb945ce396"
+  }
+ },
+ "00834fb0a8e1c42bd4544db8c7691d64e537e5da6d251ba459368a057e190ffa": {
+  "model": "deepseek-flash",
+  "data": {
+   "id": "b0adda8d-6658-4b20-9407-897918534ab6",
+   "object": "chat.completion",
+   "created": 1792413632,
+   "model": "deepseek-flash",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\"sentences\":[{\"text\":\"Google Cloud announced that its new frontier model, Gemini 4 Argon, is available on Google Cloud for complex, multi-step business work, covered by 3 outlets.\",\"ids\":[\"a1\",\"a2\",\"a3\"],\"quote\":{\"id\":\"a1\",\"span\":\"Gemini 4 Argon, is available on Google Cloud for complex, multi-step business work\"}},{\"text\":\"Google says Argon launches at an introductory rate of $2 per million input tokens and $10 per million output tokens through November 30, 2026.\",\"ids\":[\"a1\"],\"quote\":{\"id\":\"a1\",\"span\":\"Argon launches at an introductory rate of $2 per million input tokens and $10 per million output tokens\"}},{\"text\":\"The FBI alleged that OpenAI engineer Abdulrahman Alfozan hid a recording device in a restricted executive conference room to spy on the company, covered by 2 outlets.\",\"ids\":[\"a4\",\"a5\"],\"quote\":{\"id\":\"a5\",\"span\":\"hid a recording device in a restricted executive conference room to spy on the company\"}},{\"text\":\"Grok Voice 3.0 is claimed to rank first on Artificial Analysis's Speech-to-Speech Index with a score of 86.9, according to x.ai.\",\"ids\":[\"a6\"],\"quote\":{\"id\":\"a6\",\"span\":\"Grok Voice 3.0 is claimed to rank first on Artificial Analysis's Speech-to-Speech Index with a score of 86.9\"}},{\"text\":\"Artemis Security launched Orion-1, an AI model it says autonomously investigates and responds to corporate network attacks, outperforming Claude Opus 5.5 and GPT-6 Sol on its own benchmark.\",\"ids\":[\"a8\"],\"quote\":{\"id\":\"a8\",\"span\":\"Artemis Security launched Orion-1, an AI model it says autonomously investigates and responds to corporate network attacks\"}}]}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 2054,
+    "completion_tokens": 407,
+    "total_tokens": 2461,
+    "prompt_tokens_details": {
+     "cached_tokens": 128
+    },
+    "prompt_cache_hit_tokens": 128,
+    "prompt_cache_miss_tokens": 1926
+   },
+   "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+  }
+ },
+ "4693ed7ee017f1430070a2569146f117240cab486980729cd5b667dde65554d2": {
+  "model": "deepseek-v4-pro",
+  "data": {
+   "id": "ec6cf957-dd48-40b6-90e1-fbbbc390e78d",
+   "object": "chat.completion",
+   "created": 1792413634,
+   "model": "deepseek-v4-pro",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\n  \"sentences\": [\n    {\n      \"text\": \"Meta released Muse Spark Open, an open-weight frontier multimodal mixture-of-experts model for agentic coding, covered by 9 outlets.\",\n      \"ids\": [\"a1\", \"a2\", \"a3\"],\n      \"quote\": {\n        \"id\": \"a1\",\n        \"span\": \"open-weight frontier multimodal mixture-of-experts model from Meta\"\n      }\n    },\n    {\n      \"text\": \"NVIDIA released Nemotron 3.5 Super VL, an open 120-billion-parameter model for enterprise agents, plus two edge Bolt models, covered by 3 outlets.\",\n      \"ids\": [\"a4\", \"a5\", \"a6\"],\n      \"quote\": {\n        \"id\": \"a4\",\n        \"span\": \"open 120-billion-parameter model, plus two edge Bolt models\"\n      }\n    },\n    {\n      \"text\": \"Black Forest Labs released FLUX 3 Image Klein, a 5.6-billion-parameter open-weights model for text-to-image generation, image editing, and generation with up to ten reference images, covered by 3 outlets.\",\n      \"ids\": [\"a7\", \"a8\", \"a9\"],\n      \"quote\": {\n        \"id\": \"a9\",\n        \"span\": \"5.6-billion-parameter open-weights model for text-to-image generation, image editing, and generation with up to ten reference images\"\n      }\n    },\n    {\n      \"text\": \"Google's Gemini 4 Argon reportedly leads GPT 6 Astra on several legal, financial, and business benchmarks, though Astra leads selected software engineering and computer-use evaluations, covered by 2 outlets.\",\n      \"ids\": [\"a10\", \"a11\", \"a12\"],\n      \"quote\": {\n        \"id\": \"a11\",\n        \"span\": \"Gemini 4 Argon reportedly leads GPT 6 Astra on several legal, financial, and business benchmarks\"\n      }\n    },\n    {\n      \"text\": \"Volvo plans to launch hands-free, point-to-point driving by 2030 using Nvidia's AI technology, covered by 2 outlets.\",\n      \"ids\": [\"a13\", \"a14\"],\n      \"quote\": {\n        \"id\": \"a14\",\n        \"span\": \"hands-free automated driving\"\n      }\n    }\n  ]\n}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 3085,
+    "completion_tokens": 495,
+    "total_tokens": 3580,
+    "prompt_tokens_details": {
+     "cached_tokens": 256
+    },
+    "prompt_cache_hit_tokens": 256,
+    "prompt_cache_miss_tokens": 2829
+   },
+   "system_fingerprint": "a307abda487cd1b463329ccb945ce396"
+  }
+ },
+ "bf2d075ec1a69428ad9594bad12f2d365f5ea6901f307e2003b2217654bae2be": {
+  "model": "deepseek-v4-pro",
+  "data": {
+   "id": "50f8c81b-0932-45fd-a419-e41bbde25850",
+   "object": "chat.completion",
+   "created": 1792413639,
+   "model": "deepseek-v4-pro",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\n  \"sentences\": [\n    {\n      \"text\": \"Meta released Muse Spark Open, an open-weight frontier multimodal mixture-of-experts model for agentic coding that accepts images, audio, and video alongside text, covered by 9 outlets.\",\n      \"ids\": [\"a1\", \"a2\", \"a3\"],\n      \"quote\": {\n        \"id\": \"a1\",\n        \"span\": \"open-weight frontier multimodal mixture-of-experts model from Meta\"\n      }\n    },\n    {\n      \"text\": \"NVIDIA released Nemotron 3.5 Super VL, an open 120-billion-parameter multimodal model for enterprise agents, plus two edge Bolt models, covered by 3 outlets.\",\n      \"ids\": [\"a4\", \"a5\", \"a6\"],\n      \"quote\": {\n        \"id\": \"a6\",\n        \"span\": \"open 120-billion-parameter multimodal model for enterprise agents\"\n      }\n    },\n    {\n      \"text\": \"Black Forest Labs released FLUX 3 Image Klein, a 5.6-billion-parameter open-weights model for text-to-image generation, image editing, and generation with up to ten reference images, covered by 3 outlets.\",\n      \"ids\": [\"a7\", \"a8\", \"a9\"],\n      \"quote\": {\n        \"id\": \"a9\",\n        \"span\": \"5.6-billion-parameter open-weights model for text-to-image generation, image editing, and generation with up to ten reference images\"\n      }\n    },\n    {\n      \"text\": \"Google's Gemini 4 Argon reportedly leads GPT 6 Astra on several legal, financial, and business benchmarks, though Astra leads selected software engineering and computer-use evaluations, covered by 2 outlets.\",\n      \"ids\": [\"a10\", \"a11\", \"a12\"],\n      \"quote\": {\n        \"id\": \"a11\",\n        \"span\": \"Gemini 4 Argon reportedly leads GPT 6 Astra on several legal, financial, and business benchmarks\"\n      }\n    },\n    {\n      \"text\": \"Volvo plans to launch hands-free, point-to-point driving by 2030 using Nvidia's AI technology, covered by 2 outlets.\",\n      \"ids\": [\"a13\", \"a14\"],\n      \"quote\": {\n        \"id\": \"a13\",\n        \"span\": \"Volvo plans to launch hands-free, point-to-point driving by 2030 using Nvidia's AI technology\"\n      }\n    }\n  ]\n}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 3102,
+    "completion_tokens": 522,
+    "total_tokens": 3624,
+    "prompt_tokens_details": {
+     "cached_tokens": 256
+    },
+    "prompt_cache_hit_tokens": 256,
+    "prompt_cache_miss_tokens": 2846
+   },
+   "system_fingerprint": "a307abda487cd1b463329ccb945ce396"
+  }
+ },
+ "cdba2b9153d172214261c6a1965c736c3a80a93ae670aca3955578fdc227fbaf": {
+  "model": "deepseek-flash",
+  "data": {
+   "id": "5342b297-b799-4144-9285-2d4bfc5bbafb",
+   "object": "chat.completion",
+   "created": 1792413644,
+   "model": "deepseek-flash",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\"sentences\":[{\"text\":\"Meta released Muse Spark Open, an open-weight frontier multimodal mixture-of-experts model for agentic coding that also accepts images, audio, and video, covered by 9 outlets.\",\"ids\":[\"a1\"],\"quote\":{\"id\":\"a1\",\"span\":\"open-weight frontier multimodal mixture-of-experts model from Meta\"}},{\"text\":\"NVIDIA released Nemotron 3.5 Super VL, an open 120-billion-parameter multimodal model for enterprise agents, plus two smaller Bolt variants for local hardware, covered by 3 outlets.\",\"ids\":[\"a4\",\"a6\"],\"quote\":{\"id\":\"a6\",\"span\":\"an open 120-billion-parameter multimodal model for enterprise AI agents\"}},{\"text\":\"Black Forest Labs released FLUX 3 Image Klein, a 5.6-billion-parameter open-weights image model that runs on consumer GPUs with 8 GB of VRAM, covered by 3 outlets.\",\"ids\":[\"a9\"],\"quote\":{\"id\":\"a9\",\"span\":\"a 5.6-billion-parameter open-weights model for text-to-image generation\"}},{\"text\":\"Volvo will use three pieces of Nvidia hardware and software in future vehicles for hands-free automated driving, according to the companies, covered by 2 outlets.\",\"ids\":[\"a13\",\"a14\"],\"quote\":{\"id\":\"a14\",\"span\":\"Volvo will use three pieces of Nvidia hardware and software in future vehicles for hands-free automated driving\"}}]}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 3088,
+    "completion_tokens": 316,
+    "total_tokens": 3404,
+    "prompt_tokens_details": {
+     "cached_tokens": 128
+    },
+    "prompt_cache_hit_tokens": 128,
+    "prompt_cache_miss_tokens": 2960
+   },
+   "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+  }
+ },
+ "4ff3104795849787c2c2f436041db032ee49aa10af149e5bcc5acdbe1a2bd1e3": {
+  "model": "deepseek-flash",
+  "data": {
+   "id": "343a4021-4fc3-450f-bd22-2d3db9979488",
+   "object": "chat.completion",
+   "created": 1792413646,
+   "model": "deepseek-flash",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\"sentences\":[{\"text\":\"Meta released Muse Spark Open, an open-weight frontier multimodal mixture-of-experts model for agentic coding that accepts images, audio, and video alongside text, covered by 9 outlets.\",\"ids\":[\"a1\"],\"quote\":{\"id\":\"a1\",\"span\":\"open-weight frontier multimodal mixture-of-experts model from Meta\"}},{\"text\":\"NVIDIA released Nemotron 3.5 Super VL, an open 120-billion-parameter multimodal model for enterprise agents, plus two smaller Bolt variants for local hardware, covered by 3 outlets.\",\"ids\":[\"a4\",\"a6\"],\"quote\":{\"id\":\"a6\",\"span\":\"an open 120-billion-parameter multimodal model for enterprise agents\"}},{\"text\":\"Black Forest Labs released FLUX 3 Image Klein, a 5.6-billion-parameter open-weights image model that runs on consumer GPUs with 8 GB of VRAM, covered by 3 outlets.\",\"ids\":[\"a9\"],\"quote\":{\"id\":\"a9\",\"span\":\"a 5.6-billion-parameter open-weights model for text-to-image generation\"}},{\"text\":\"Volvo will use three pieces of Nvidia hardware and software in future vehicles for hands-free automated driving, according to the companies, covered by 2 outlets.\",\"ids\":[\"a14\"],\"quote\":{\"id\":\"a14\",\"span\":\"Volvo will use three pieces of Nvidia hardware and software in future vehicles for hands-free automated driving\"}}]}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 3106,
+    "completion_tokens": 313,
+    "total_tokens": 3419,
+    "prompt_tokens_details": {
+     "cached_tokens": 128
+    },
+    "prompt_cache_hit_tokens": 128,
+    "prompt_cache_miss_tokens": 2978
+   },
+   "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+  }
+ },
+ "062c6cde5a17dae0f7ecd2255a11f3cc4ae25c5200b6ed3e51ed35aa6575781f": {
+  "model": "deepseek-v4-pro",
+  "data": {
+   "id": "d8d1f887-3b9e-43a6-ad06-d83a54bc2626",
+   "object": "chat.completion",
+   "created": 1792413648,
+   "model": "deepseek-v4-pro",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\n  \"sentences\": [\n    {\n      \"text\": \"Reflection AI released Beam, a 501-billion-parameter open model with day-0 support in transformers, SGLang, and vLLM, covered by 4 outlets.\",\n      \"ids\": [\"a1\", \"a2\", \"a3\"],\n      \"quote\": {\n        \"id\": \"a1\",\n        \"span\": \"Beam ships with day-0 support in transformers, SGLang and vLLM\"\n      }\n    },\n    {\n      \"text\": \"Meta released Muse Spark Open, an open-weight 816B-parameter multimodal model that can run locally on Mac Studios, covered by 2 outlets.\",\n      \"ids\": [\"a4\", \"a5\"],\n      \"quote\": {\n        \"id\": \"a5\",\n        \"span\": \"Meta released Muse Spark Open, an open-weight 816B-parameter multimodal model, and worked with Apple so it could run locally on Mac Studios\"\n      }\n    },\n    {\n      \"text\": \"Microsoft's Surface Laptop Ultra is reviewed as a true MacBook Pro competitor for Windows, though battery life falls short, covered by 2 outlets.\",\n      \"ids\": [\"a6\", \"a7\"],\n      \"quote\": {\n        \"id\": \"a7\",\n        \"span\": \"a true MacBook Pro competitor for Windows hampered by battery life\"\n      }\n    },\n    {\n      \"text\": \"NVIDIA's RTX Spark laptops show mixed performance, with fast local AI but unimpressive gaming due to weak single-threaded performance, covered by 2 outlets.\",\n      \"ids\": [\"a8\", \"a9\"],\n      \"quote\": {\n        \"id\": \"a8\",\n        \"span\": \"fast for local AI but unimpressive for gaming\"\n      }\n    },\n    {\n      \"text\": \"OpenAI says GPT-Live-1.1 adds new voices and better accents to Voice in ChatGPT, Codex, and dots, rolling out today to all users.\",\n      \"ids\": [\"a10\"],\n      \"quote\": {\n        \"id\": \"a10\",\n        \"span\": \"GPT-Live-1.1 adds new voices and better accents to Voice in ChatGPT, Codex, and dots\"\n      }\n    }\n  ]\n}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 2438,
+    "completion_tokens": 479,
+    "total_tokens": 2917,
+    "prompt_tokens_details": {
+     "cached_tokens": 256
+    },
+    "prompt_cache_hit_tokens": 256,
+    "prompt_cache_miss_tokens": 2182
+   },
+   "system_fingerprint": "a307abda487cd1b463329ccb945ce396"
+  }
+ },
+ "1b2c5d5c24bc73069fbbbd8ff8fe87c59063a47573b070d05eee34bcce6797a7": {
+  "model": "deepseek-flash",
+  "data": {
+   "id": "0896bc6e-0ac7-4499-9284-472d03b726ba",
+   "object": "chat.completion",
+   "created": 1792413652,
+   "model": "deepseek-flash",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\"sentences\":[{\"text\":\"Reflection released Beam, a 501-billion-parameter open model it says finishes tasks in fewer tokens to lower cost per task, covered by 4 outlets.\",\"ids\":[\"a1\",\"a2\",\"a3\"],\"quote\":{\"id\":\"a2\",\"span\":\"Reflection AI released Beam, a 501-billion-parameter open model it says finishes tasks in fewer tokens to lower cost per task\"}},{\"text\":\"Meta released Muse Spark Open, an open-weight 816B-parameter multimodal model, and worked with Apple so it could run locally on Mac Studios, Meta says.\",\"ids\":[\"a4\",\"a5\"],\"quote\":{\"id\":\"a5\",\"span\":\"Meta released Muse Spark Open, an open-weight 816B-parameter multimodal model, and worked with Apple so it could run locally on Mac Studios, Meta says.\"}},{\"text\":\"WIRED rates the Microsoft Surface Laptop Ultra 7/10, calling it a true MacBook Pro competitor for Windows hampered by battery life.\",\"ids\":[\"a6\",\"a7\"],\"quote\":{\"id\":\"a7\",\"span\":\"WIRED rates the Surface Laptop Ultra 7/10, calling it a true MacBook Pro competitor for Windows hampered by battery life.\"}},{\"text\":\"Microsoft says MAI-Base-2 is an MoE foundation model with 80 billion active and 2.8 trillion total parameters.\",\"ids\":[\"a12\"],\"quote\":{\"id\":\"a12\",\"span\":\"Microsoft says MAI-Base-2 is an MoE foundation model with 80 billion active and 2.8 trillion total parameters.\"}},{\"text\":\"Elorian released its first model, Glimpse, as a research preview with API access and a waitlist-only chat interface.\",\"ids\":[\"a11\"],\"quote\":{\"id\":\"a11\",\"span\":\"Elorian released its first model, Glimpse, as a research preview with API access and a waitlist-only chat interface.\"}}]}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 2441,
+    "completion_tokens": 414,
+    "total_tokens": 2855,
+    "prompt_tokens_details": {
+     "cached_tokens": 128
+    },
+    "prompt_cache_hit_tokens": 128,
+    "prompt_cache_miss_tokens": 2313
+   },
+   "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+  }
+ },
+ "ef3ed3751db8918bf48ca212e09831261019e60290e2271830c0979e64bd4504": {
+  "model": "deepseek-v4-pro",
+  "data": {
+   "id": "f8bd788c-9139-44cf-b4d0-ce90c33236bd",
+   "object": "chat.completion",
+   "created": 1792413654,
+   "model": "deepseek-v4-pro",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\n  \"sentences\": [\n    {\n      \"text\": \"Deepseek has released Deepseek-V4.1-Flash-1017 on its platforms and as an open-weight model on Hugging Face and ModelScope.\",\n      \"ids\": [\"a1\"],\n      \"quote\": {\n        \"id\": \"a1\",\n        \"span\": \"Deepseek V4.1 Flash 1017 beats larger rivals in agentic tasks while once again massively cutting per-task costs\"\n      }\n    }\n  ]\n}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 1498,
+    "completion_tokens": 105,
+    "total_tokens": 1603,
+    "prompt_tokens_details": {
+     "cached_tokens": 256
+    },
+    "prompt_cache_hit_tokens": 256,
+    "prompt_cache_miss_tokens": 1242
+   },
+   "system_fingerprint": "a307abda487cd1b463329ccb945ce396"
+  }
+ },
+ "f92fe2dfb8e16a5b5951756feb1a2db1dad9dd9b41d1d076eefc8fa61cedeb2c": {
+  "model": "deepseek-v4-pro",
+  "data": {
+   "id": "b53357b2-14e1-4daa-887b-97cd93ff2a8b",
+   "object": "chat.completion",
+   "created": 1792413656,
+   "model": "deepseek-v4-pro",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\n  \"sentences\": [\n    {\n      \"text\": \"Deepseek released Deepseek-V4.1-Flash-1017 as an open-weight model on Hugging Face and ModelScope, and the company says it beats larger rivals like Claude Opus 5 and GPT 5.6-Sol on coding and agent benchmarks in internal tests.\",\n      \"ids\": [\"a1\"],\n      \"quote\": {\n        \"id\": \"a1\",\n        \"span\": \"Deepseek says its Deepseek-V4.1-Flash-1017 beats larger rivals like Claude Opus 5 and GPT 5.6-Sol on coding and agent benchmarks in internal tests.\"\n      }\n    }\n  ]\n}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 1518,
+    "completion_tokens": 146,
+    "total_tokens": 1664,
+    "prompt_tokens_details": {
+     "cached_tokens": 256
+    },
+    "prompt_cache_hit_tokens": 256,
+    "prompt_cache_miss_tokens": 1262
+   },
+   "system_fingerprint": "a307abda487cd1b463329ccb945ce396"
+  }
+ },
+ "29745499287cb5f79e10f309a28c465f9a93ed111bc0ae67e3201da41d0d115d": {
+  "model": "deepseek-flash",
+  "data": {
+   "id": "8c3d1f47-df3e-4645-860e-4e8aff1df82e",
+   "object": "chat.completion",
+   "created": 1792413658,
+   "model": "deepseek-flash",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\"sentences\":[{\"text\":\"Deepseek says its Deepseek-V4.1-Flash-1017 beats larger rivals like Claude Opus 5 and GPT 5.6-Sol on coding and agent benchmarks in internal tests.\",\"ids\":[\"a1\"],\"quote\":{\"id\":\"a1\",\"span\":\"beats larger rivals like Claude Opus 5 and GPT 5.6-Sol on coding and agent benchmarks in internal tests\"}},{\"text\":\"Meta also released closed frontier models Muse Wonder and Muse Wonder Full, which the author says rank only behind Anthropic's Opus 5.5 on traditional benchmarks.\",\"ids\":[\"a2\"],\"quote\":{\"id\":\"a2\",\"span\":\"Meta also released closed frontier models Muse Wonder and Muse Wonder Full\"}}]}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 1501,
+    "completion_tokens": 161,
+    "total_tokens": 1662,
+    "prompt_tokens_details": {
+     "cached_tokens": 128
+    },
+    "prompt_cache_hit_tokens": 128,
+    "prompt_cache_miss_tokens": 1373
+   },
+   "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+  }
+ },
+ "8701447a72ea139515e858837bb54a8001f7e14bd1974edfb3dfee4ff7867925": {
+  "model": "deepseek-v4-pro",
+  "data": {
+   "id": "85206723-dfe0-4ca8-b453-8d7a93393427",
+   "object": "chat.completion",
+   "created": 1792413660,
+   "model": "deepseek-v4-pro",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\n  \"sentences\": [\n    {\n      \"text\": \"Anthropic has granted external evaluators employee-like access to assess its models' risks, with METR embedding a team in its office.\",\n      \"ids\": [\"a2\"],\n      \"quote\": {\n        \"id\": \"a2\",\n        \"span\": \"Anthropic gives outside AI watchdog \\\"employee-like\\\" access\"\n      }\n    },\n    {\n      \"text\": \"Anthropic announced a public benefit fund committing 5% of its shares, with an option to add 2% for every 50% value increase.\",\n      \"ids\": [\"a8\"],\n      \"quote\": {\n        \"id\": \"a8\",\n        \"span\": \"Anthropic says it's committing 5% of its shares to a 'public benefit fund'\"\n      }\n    }\n  ]\n}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 1407,
+    "completion_tokens": 178,
+    "total_tokens": 1585,
+    "prompt_tokens_details": {
+     "cached_tokens": 256
+    },
+    "prompt_cache_hit_tokens": 256,
+    "prompt_cache_miss_tokens": 1151
+   },
+   "system_fingerprint": "a307abda487cd1b463329ccb945ce396"
+  }
+ },
+ "b8c3fb34d7becd745d82acb6df48a85450d77d613ee567b90f7eb72b7b754e3a": {
+  "model": "deepseek-flash",
+  "data": {
+   "id": "8fb60234-8f99-413a-a42b-f0f2e9de1b68",
+   "object": "chat.completion",
+   "created": 1792413662,
+   "model": "deepseek-flash",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\"sentences\":[{\"text\":\"Anthropic says its AI agents logged six times as many work hours as human employees by August 2026, and it cites growing agent capability as the reason for fewer junior technical hires.\",\"ids\":[\"a11\"],\"quote\":{\"id\":\"a11\",\"span\":\"Anthropic reports its AI agents logged six times as many work hours as human employees by August 2026\"}},{\"text\":\"Anthropic announced a public benefit fund committing 5% of its shares, with an option to add 2% for every 50% value increase.\",\"ids\":[\"a8\"],\"quote\":{\"id\":\"a8\",\"span\":\"Anthropic announced a public benefit fund committing 5% of its shares\"}}]}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 1410,
+    "completion_tokens": 156,
+    "total_tokens": 1566,
+    "prompt_tokens_details": {
+     "cached_tokens": 128
+    },
+    "prompt_cache_hit_tokens": 128,
+    "prompt_cache_miss_tokens": 1282
+   },
+   "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+  }
+ },
+ "869ebd24b17ff01dd408d42e7a9c8cb728c5365f56e15adc4508e6ca3c08d64f": {
+  "model": "deepseek-v4-pro",
+  "data": {
+   "id": "38bb15b1-fc7f-41c2-9c23-72d4c9779f79",
+   "object": "chat.completion",
+   "created": 1792415321,
+   "model": "deepseek-v4-pro",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\n  \"sentences\": [\n    {\n      \"text\": \"Google began a wide rollout of Gemini 4 Argon to paying users, with lower-tier plans lacking full access.\",\n      \"ids\": [\"a1\"],\n      \"quote\": {\n        \"id\": \"a1\",\n        \"span\": \"Google is beginning a wide rollout of Gemini 4 Argon only to paying users, with lower-tier plans lacking full access.\"\n      }\n    },\n    {\n      \"text\": \"Google says Gemini 4 Argon is now globally available and claims it outperforms other frontier models on benchmarks, ranking #1 on the Vals Index.\",\n      \"ids\": [\"a2\"],\n      \"quote\": {\n        \"id\": \"a2\",\n        \"span\": \"Google says Gemini 4 Argon is now globally available and claims it outperforms other frontier models on benchmarks, ranking #1 on the Vals Index.\"\n      }\n    },\n    {\n      \"text\": \"Meta introduced the Muse Wonder series, comprising Muse Wonder and Muse Wonder Full, as its most capable models for personal and professional agentic tasks.\",\n      \"ids\": [\"a5\"],\n      \"quote\": {\n        \"id\": \"a5\",\n        \"span\": \"Meta introduced the Muse Wonder series, comprising Muse Wonder and Muse Wonder Full, as its most capable models for personal and professional agentic tasks.\"\n      }\n    },\n    {\n      \"text\": \"An OpenAI engineer was arrested after the company said it discovered a sophisticated recording device hidden in one of its offices.\",\n      \"ids\": [\"a7\"],\n      \"quote\": {\n        \"id\": \"a7\",\n        \"span\": \"An OpenAI engineer was arrested after the company said it discovered a sophisticated recording device hidden in one of its offices.\"\n      }\n    },\n    {\n      \"text\": \"Rivian partner Mind Robotics hired Doug Field as president to lead its robotics effort, according to the startup.\",\n      \"ids\": [\"a10\"],\n      \"quote\": {\n        \"id\": \"a10\",\n        \"span\": \"Rivian partner Mind Robotics hired Doug Field as president to lead its robotics effort, according to the startup.\"\n      }\n    }\n  ]\n}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 2775,
+    "completion_tokens": 447,
+    "total_tokens": 3222,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    },
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 2775
+   },
+   "system_fingerprint": "a307abda487cd1b463329ccb945ce396"
+  }
+ },
+ "0272745d3d919901ff01ca87f7e2e8fd0ef265035fe962ea14fdad4bb0ebb1ba": {
+  "model": "deepseek-v4-pro",
+  "data": {
+   "id": "32bbccb5-13d9-47e6-b164-0ec1d73f839f",
+   "object": "chat.completion",
+   "created": 1792415325,
+   "model": "deepseek-v4-pro",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\n  \"sentences\": [\n    {\n      \"text\": \"Meta released Muse Spark Open, an open-weight frontier multimodal mixture-of-experts model for agentic coding, covered by 9 outlets.\",\n      \"ids\": [\"a1\", \"a2\", \"a3\"],\n      \"quote\": {\n        \"id\": \"a1\",\n        \"span\": \"open-weight frontier multimodal mixture-of-experts model from Meta\"\n      }\n    },\n    {\n      \"text\": \"NVIDIA released Nemotron 3.5 Super VL, an open 120-billion-parameter model for enterprise agents, plus two edge Bolt models, covered by 3 outlets.\",\n      \"ids\": [\"a4\", \"a5\", \"a6\"],\n      \"quote\": {\n        \"id\": \"a6\",\n        \"span\": \"open 120-billion-parameter multimodal model for enterprise agents\"\n      }\n    },\n    {\n      \"text\": \"Black Forest Labs released FLUX 3 Image Klein, a 5.6-billion-parameter open-weights image model that runs on consumer GPUs with 8 GB of VRAM, covered by 3 outlets.\",\n      \"ids\": [\"a7\", \"a8\", \"a9\"],\n      \"quote\": {\n        \"id\": \"a9\",\n        \"span\": \"5.6-billion-parameter open-weights model for text-to-image generation\"\n      }\n    },\n    {\n      \"text\": \"Volvo will use Nvidia's AI technology for hands-free, point-to-point driving by 2030, covered by 2 outlets.\",\n      \"ids\": [\"a13\", \"a14\"],\n      \"quote\": {\n        \"id\": \"a13\",\n        \"span\": \"hands-free, point-to-point driving by 2030 using Nvidia's AI technology\"\n      }\n    },\n    {\n      \"text\": \"IBM released Granite Switch 4.1, which combines chat, decision, and speech adapters into one model, according to Hugging Face.\",\n      \"ids\": [\"a15\"],\n      \"quote\": {\n        \"id\": \"a15\",\n        \"span\": \"combines chat, decision and speech adapters into one model\"\n      }\n    }\n  ]\n}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 3128,
+    "completion_tokens": 463,
+    "total_tokens": 3591,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    },
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 3128
+   },
+   "system_fingerprint": "a307abda487cd1b463329ccb945ce396"
+  }
+ },
+ "8e508c192e6ed5a13e06dfabfcdbbb32774bfb8af4cfd06978ab9f087613ba2c": {
+  "model": "deepseek-v4-pro",
+  "data": {
+   "id": "c02cff9d-7b55-4e4b-abf9-cbf21ddfb243",
+   "object": "chat.completion",
+   "created": 1792415331,
+   "model": "deepseek-v4-pro",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\n  \"sentences\": [\n    {\n      \"text\": \"Reflection AI released Beam, a 501-billion-parameter open model it says finishes tasks in fewer tokens to lower cost per task, covered by 4 outlets.\",\n      \"ids\": [\"a1\", \"a2\", \"a3\"],\n      \"quote\": {\n        \"id\": \"a2\",\n        \"span\": \"Reflection AI released Beam, a 501-billion-parameter open model it says finishes tasks in fewer tokens to lower cost per task\"\n      }\n    },\n    {\n      \"text\": \"Meta released Muse Spark Open, an open-weight 816B-parameter multimodal model, and worked with Apple so it could run locally on Mac Studios, Meta says.\",\n      \"ids\": [\"a4\", \"a5\"],\n      \"quote\": {\n        \"id\": \"a5\",\n        \"span\": \"Meta released Muse Spark Open, an open-weight 816B-parameter multimodal model, and worked with Apple so it could run locally on Mac Studios\"\n      }\n    },\n    {\n      \"text\": \"Microsoft positions the Surface Laptop Ultra against the MacBook Pro for a high performance audience, covered by 2 outlets.\",\n      \"ids\": [\"a6\", \"a7\"],\n      \"quote\": {\n        \"id\": \"a6\",\n        \"span\": \"Microsoft positions the Surface Laptop Ultra against the MacBook Pro for a high performance audience\"\n      }\n    },\n    {\n      \"text\": \"NVIDIA RTX Spark pairs Grace CPU cores with a Blackwell RTX GPU, and some configurations include up to 128 GB of unified memory, covered by 2 outlets.\",\n      \"ids\": [\"a8\", \"a9\"],\n      \"quote\": {\n        \"id\": \"a9\",\n        \"span\": \"RTX Spark pairs NVIDIA Grace CPU cores with a Blackwell RTX GPU, and some configurations include up to 128 GB of unified memory\"\n      }\n    },\n    {\n      \"text\": \"OpenAI says GPT-Live-1.1 adds new voices and better accents to Voice in ChatGPT, Codex, and dots, rolling out today to all users and coming soon to the API.\",\n      \"ids\": [\"a10\"],\n      \"quote\": {\n        \"id\": \"a10\",\n        \"span\": \"OpenAI says GPT-Live-1.1 adds new voices and better accents to Voice in ChatGPT, Codex, and dots, rolling out today to all users and coming soon to the API\"\n      }\n    }\n  ]\n}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 2481,
+    "completion_tokens": 525,
+    "total_tokens": 3006,
+    "prompt_tokens_details": {
+     "cached_tokens": 384
+    },
+    "prompt_cache_hit_tokens": 384,
+    "prompt_cache_miss_tokens": 2097
+   },
+   "system_fingerprint": "a307abda487cd1b463329ccb945ce396"
+  }
+ },
+ "8ccc0df682d955cea64a156137cdd1821400a80f84dc3102c651b8152dfb4cd6": {
+  "model": "deepseek-v4-pro",
+  "data": {
+   "id": "1f82c4a5-90c6-4e0a-a6b3-711b87be516d",
+   "object": "chat.completion",
+   "created": 1792415363,
+   "model": "deepseek-v4-pro",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\n  \"sentences\": [\n    {\n      \"text\": \"Google began a wide rollout of Gemini 4 Argon to paying users, with lower-tier plans lacking full access, covered by 6 outlets.\",\n      \"ids\": [\"a1\", \"a2\", \"a3\"],\n      \"quote\": {\n        \"id\": \"a1\",\n        \"span\": \"Google is beginning a wide rollout of Gemini 4 Argon only to paying users, with lower-tier plans lacking full access.\"\n      }\n    },\n    {\n      \"text\": \"Meta introduced the Muse Wonder series, comprising Muse Wonder and Muse Wonder Full, as its most capable models for personal and professional agentic tasks.\",\n      \"ids\": [\"a5\", \"a6\"],\n      \"quote\": {\n        \"id\": \"a5\",\n        \"span\": \"Meta introduced the Muse Wonder series, comprising Muse Wonder and Muse Wonder Full, as its most capable models for personal and professional agentic tasks.\"\n      }\n    },\n    {\n      \"text\": \"An OpenAI engineer was arrested after the company said it discovered a sophisticated recording device hidden in one of its offices.\",\n      \"ids\": [\"a7\", \"a8\", \"a9\"],\n      \"quote\": {\n        \"id\": \"a7\",\n        \"span\": \"An OpenAI engineer was arrested after the company said it discovered a sophisticated recording device hidden in one of its offices.\"\n      }\n    },\n    {\n      \"text\": \"Rivian partner Mind Robotics hired Doug Field as president to lead its robotics effort, according to the startup.\",\n      \"ids\": [\"a10\", \"a11\"],\n      \"quote\": {\n        \"id\": \"a10\",\n        \"span\": \"Rivian partner Mind Robotics hired Doug Field as president to lead its robotics effort, according to the startup.\"\n      }\n    }\n  ]\n}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 2784,
+    "completion_tokens": 378,
+    "total_tokens": 3162,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    },
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 2784
+   },
+   "system_fingerprint": "a307abda487cd1b463329ccb945ce396"
+  }
+ },
+ "931d27c6d8bc239b9cbbf06933722190a5d58369e6869cdcb96b8ae532ebd3d8": {
+  "model": "deepseek-v4-pro",
+  "data": {
+   "id": "3ed3f6c3-dcd4-4841-aaea-0d8bb0d92bb8",
+   "object": "chat.completion",
+   "created": 1792415367,
+   "model": "deepseek-v4-pro",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\n  \"sentences\": [\n    {\n      \"text\": \"Meta released Muse Spark Open, an open-weight frontier multimodal mixture-of-experts model for agentic coding, covered by 9 outlets.\",\n      \"ids\": [\"a1\", \"a2\", \"a3\"],\n      \"quote\": {\n        \"id\": \"a1\",\n        \"span\": \"open-weight frontier multimodal mixture-of-experts model from Meta\"\n      }\n    },\n    {\n      \"text\": \"NVIDIA released Nemotron 3.5 Super VL, an open 120-billion-parameter model, plus two edge Bolt models, with Bolt E4B due Oct. 23.\",\n      \"ids\": [\"a4\", \"a5\", \"a6\"],\n      \"quote\": {\n        \"id\": \"a4\",\n        \"span\": \"Open From Data Center to Desktop: NVIDIA Expands Nemotron Family With Highest Efficiency Super VL and Bolt Models\"\n      }\n    },\n    {\n      \"text\": \"Black Forest Labs released FLUX 3 Image Klein, a 5.6-billion-parameter open-weights model for text-to-image generation, image editing, and generation with up to ten reference images.\",\n      \"ids\": [\"a7\", \"a8\", \"a9\"],\n      \"quote\": {\n        \"id\": \"a9\",\n        \"span\": \"Black Forest Labs' open-weights image model FLUX 3 Image Klein runs on consumer GPUs with just 8 GB of VRAM\"\n      }\n    },\n    {\n      \"text\": \"Volvo will use Nvidia's tech for hands-free, point-to-point driving, according to the source.\",\n      \"ids\": [\"a13\", \"a14\"],\n      \"quote\": {\n        \"id\": \"a13\",\n        \"span\": \"Volvo will use Nvidia's tech for hands-free, point-to-point driving\"\n      }\n    },\n    {\n      \"text\": \"Google pitches Gemini 4 Argon as a single model for robot control, simulation building, and training-data evaluation, though demos still need heavy human prompting.\",\n      \"ids\": [\"a10\", \"a11\", \"a12\"],\n      \"quote\": {\n        \"id\": \"a10\",\n        \"span\": \"Google wants Gemini 4 Argon to be the only AI model robots need\"\n      }\n    }\n  ]\n}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 3137,
+    "completion_tokens": 489,
+    "total_tokens": 3626,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    },
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 3137
+   },
+   "system_fingerprint": "a307abda487cd1b463329ccb945ce396"
+  }
+ },
+ "6fbeb19862f8ee15bf38ee35d58504b9485abfd551f4af8840953f6b0c688bd5": {
+  "model": "deepseek-v4-pro",
+  "data": {
+   "id": "a9f16860-cbb3-45e3-9efc-80a25ecc7f6c",
+   "object": "chat.completion",
+   "created": 1792415372,
+   "model": "deepseek-v4-pro",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\n  \"sentences\": [\n    {\n      \"text\": \"Reflection AI released Beam, a 501-billion-parameter open model with day-0 support in transformers, SGLang, and vLLM, covered by 4 outlets.\",\n      \"ids\": [\"a1\", \"a2\", \"a3\"],\n      \"quote\": {\n        \"id\": \"a1\",\n        \"span\": \"Beam ships with day-0 support in transformers, SGLang and vLLM\"\n      }\n    },\n    {\n      \"text\": \"Meta released Muse Spark Open, an open-weight 816B-parameter multimodal model with a 1M-token context window, covered by 2 outlets.\",\n      \"ids\": [\"a4\", \"a5\"],\n      \"quote\": {\n        \"id\": \"a4\",\n        \"span\": \"Muse Spark Open is a natively multimodal open-weight model with 816B total parameters and a 1M-token context window\"\n      }\n    },\n    {\n      \"text\": \"Microsoft launched the Surface Laptop Ultra, which WIRED rates 7/10 and calls a true MacBook Pro competitor for Windows hampered by battery life.\",\n      \"ids\": [\"a6\", \"a7\"],\n      \"quote\": {\n        \"id\": \"a7\",\n        \"span\": \"a true MacBook Pro competitor for Windows hampered by battery life\"\n      }\n    },\n    {\n      \"text\": \"NVIDIA's RTX Spark laptops are off to a good start, but reviewers say CPU-limited games perform poorly due to weak single-threaded performance and Windows translation overhead.\",\n      \"ids\": [\"a8\", \"a9\"],\n      \"quote\": {\n        \"id\": \"a8\",\n        \"span\": \"CPU-limited games perform poorly due to weak single-threaded performance and Windows translation overhead\"\n      }\n    },\n    {\n      \"text\": \"OpenAI says GPT-Live-1.1 adds new voices and better accents to Voice in ChatGPT, Codex, and dots, rolling out today to all users.\",\n      \"ids\": [\"a10\"],\n      \"quote\": {\n        \"id\": \"a10\",\n        \"span\": \"GPT-Live-1.1 adds new voices and better accents to Voice in ChatGPT, Codex, and dots\"\n      }\n    }\n  ]\n}"
+     },
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 2490,
+    "completion_tokens": 487,
+    "total_tokens": 2977,
+    "prompt_tokens_details": {
+     "cached_tokens": 384
+    },
+    "prompt_cache_hit_tokens": 384,
+    "prompt_cache_miss_tokens": 2106
+   },
+   "system_fingerprint": "a307abda487cd1b463329ccb945ce396"
+  }
+ }
+}

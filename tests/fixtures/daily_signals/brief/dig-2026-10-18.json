@@ -1,0 +1,100 @@
+{
+ "report_date": "2026-10-18",
+ "groups": [
+  {
+   "title": "QA & Observability",
+   "items": [
+    {
+     "title": "llm-echo 0.5",
+     "summary": "The llm-echo debug plugin's simulated token usage counts now account for tool calls, system prompts, and reasoning tokens in a new release.",
+     "url": "https://simonwillison.net/2026/Oct/18/llm-echo/"
+    }
+   ]
+  },
+  {
+   "title": "Security & Safety",
+   "items": [
+    {
+     "title": "Anthropic gives outside AI watchdog \u201cemployee-like\u201d access",
+     "summary": "Anthropic has granted external evaluators employee-like access to assess its models' risks, with METR embedding a team in its office.",
+     "url": "https://arstechnica.com/ai/2026/10/anthropic-gives-outside-ai-watchdog-employee-like-access/"
+    },
+    {
+     "title": "AI agents chasing a $465 train refund invented excuses, leaked medical data, and spammed an MP's office",
+     "summary": "Researcher Matilda Glynn-Henley warns of \"agentic flooding\" if autonomous AI assistants are deployed at scale, potentially overwhelming agencies and businesses. The study has limits and does not support a reliable ranking of the six models, the article says.",
+     "url": "https://the-decoder.com/ai-agents-chasing-a-465-train-refund-invented-excuses-leaked-medical-data-and-spammed-an-mps-office/"
+    }
+   ]
+  },
+  {
+   "title": "AI Applications",
+   "items": [
+    {
+     "title": "Giving AI a \u201ccrystal clear\u201d view of the materials world",
+     "summary": "MIT researchers created a multimodal AI model combining 3D atomic structures with natural language descriptions to better identify materials.",
+     "url": "https://news.mit.edu/2026/giving-ai-crystal-clear-view-of-materials-world-1018"
+    },
+    {
+     "title": "OnlyFans Creators Are Pissed That Meta Lets Muse Talk Dirty",
+     "summary": "OnlyFans creators criticized Meta for allowing its Muse AI agent to sext adults while their Instagram accounts face restrictions.",
+     "url": "https://www.wired.com/story/onlyfans-creators-are-pissed-that-meta-lets-muse-talk-dirty/"
+    },
+    {
+     "title": "Four Gemini 4 Argon agents beat Minecraft without any human help",
+     "summary": "Four Gemini 4 Argon agents autonomously beat Minecraft, slaying the Ender Dragon without human input, according to the report. The agents organized themselves without assigned roles, over 27 hours and 14 minutes, at a stated cost of $1,620.",
+     "url": "https://the-decoder.com/four-gemini-4-argon-agents-beat-minecraft-without-any-human-help/"
+    }
+   ]
+  },
+  {
+   "title": "Business & Industry",
+   "items": [
+    {
+     "title": "No agenda, no rush, no leaving San Francisco: Benchmark\u2019s partners on investing in a frenzied market",
+     "summary": "Benchmark partners said they invest at their usual pace of two or three new bets per year per partner despite a faster market. Peter Fenton said Benchmark's core fund was held at $500 million for 20 years and has now been adjusted for inflation.",
+     "url": "https://techcrunch.com/2026/10/18/no-agenda-no-rush-no-leaving-san-francisco-benchmarks-partners-on-investing-in-a-frenzied-market/"
+    },
+    {
+     "title": "Anthropic says it\u2019s committing 5% of its shares to a \u2018public benefit fund\u2019",
+     "summary": "Anthropic announced a public benefit fund committing 5% of its shares, with an option to add 2% for every 50% value increase.",
+     "url": "https://techcrunch.com/2026/10/18/anthropic-says-its-committing-5-of-its-shares-to-a-public-benefit-fund/"
+    },
+    {
+     "title": "Disney agrees to hire the majority of Character.AI\u2019s workforce",
+     "summary": "Disney agreed to make employment offers to at least 60 Character.AI employees, the majority of the workforce, with estimated $60 million in annual compensation, per a legal filing. The filing says the \"vast majority\" of Character.AI employees offered jobs at Disney accepted them, though it is a stalking horse bid so another company could offer more.",
+     "url": "https://techcrunch.com/2026/10/18/disney-agrees-to-hire-the-majority-of-character-ais-workforce/"
+    },
+    {
+     "title": "TechCrunch Mobility: Rivian\u2019s next act",
+     "summary": "TechCrunch reports that Rivian CEO RJ Scaringe wants the company to be much more than an EV maker. Rivian has a $5.8 billion joint technology venture with VW Group focused on electric architecture and software. Scaringe discussed expanding the VW joint venture to cover AI and autonomy and licensing Rivian\u2019s tech to many different brands.",
+     "url": "https://techcrunch.com/2026/10/18/techcrunch-mobility-rivians-next-act/"
+    },
+    {
+     "title": "Anthropic has nearly stopped hiring junior staff because AI agents now work six times as many hours",
+     "summary": "Anthropic reports its AI agents logged six times as many work hours as human employees by August 2026, and it cites growing agent capability as the reason for fewer junior technical hires.",
+     "url": "https://the-decoder.com/anthropic-has-nearly-stopped-hiring-junior-staff-because-ai-agents-now-work-six-times-as-many-hours/"
+    }
+   ]
+  },
+  {
+   "title": "Policy & Regulation",
+   "items": [
+    {
+     "title": "Cities want to put the boot on robotaxis",
+     "summary": "The article reports that, with federal rules stalled, cities and states are creating their own regulations for autonomous vehicles.",
+     "url": "https://www.theverge.com/transportation/1013220/robotaxi-self-driving-car-laws"
+    },
+    {
+     "title": "Two German courts now hold Google liable for what its AI overviews say",
+     "summary": "Two German courts have held Google liable for its AI-generated search summaries as the company's own statements. The Aachen Regional Court barred Google from spreading false claims about a doctor, a decision not yet final.",
+     "url": "https://the-decoder.com/two-german-courts-now-hold-google-liable-for-what-its-ai-overviews-say/"
+    },
+    {
+     "title": "Anthropic consults law firms to set fair negotiation norms before AI agents start cutting deals",
+     "summary": "Anthropic is consulting law firms to develop fair negotiation norms for AI agents that could haggle over prices, resolve complaints, or improve contract offers, according to the Financial Times. Anthropic has shown in experiments that stronger models negotiate better deals, which could widen societal inequality.",
+     "url": "https://the-decoder.com/anthropic-consults-law-firms-to-set-fair-negotiation-norms-before-ai-agents-start-cutting-deals/"
+    }
+   ]
+  }
+ ]
+}

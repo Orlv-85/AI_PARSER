@@ -1,0 +1,233 @@
+{
+ "report_date": "2026-10-18",
+ "status": "building_history",
+ "methodology_version": "daily-signals-2",
+ "extraction_version": "daily-signals-extract-5",
+ "generated_at": "2026-10-19T11:33:35.924520Z",
+ "novelty_history_days": 73,
+ "comparable_complete_days": 9,
+ "coverage": {
+  "items": 14,
+  "matched": 14,
+  "extracted": 14,
+  "failed": 0,
+  "skipped": 0,
+  "pending": 0,
+  "unmatched": 0
+ },
+ "notes": [],
+ "sections": {
+  "cooling": {
+   "state": "hidden",
+   "note": null
+  },
+  "event_counts": {
+   "state": "ready",
+   "note": null
+  },
+  "new": {
+   "state": "ready",
+   "note": null
+  },
+  "rising": {
+   "state": "spikes_only",
+   "note": "Rising needs two weeks with at least 6 complete days each; showing spikes."
+  },
+  "top_stories": {
+   "state": "empty",
+   "note": "No story was covered by more than one publisher."
+  }
+ },
+ "thresholds": {
+  "complete_ratio": 0.9,
+  "confirmed_publishers": 2,
+  "cooling_max": 4,
+  "cooling_min_delta": 3,
+  "cooling_min_previous": 5,
+  "cooling_min_publishers": 2,
+  "cooling_ratio": 0.5,
+  "history_note_days": 30,
+  "links_max": 3,
+  "new_max": 8,
+  "rising_max": 6,
+  "rising_min_current": 4,
+  "rising_min_delta": 3,
+  "rising_min_publishers": 2,
+  "rising_ratio": 1.5,
+  "spike_mean_floor": 0.333,
+  "spike_min_articles": 3,
+  "spike_min_publishers": 2,
+  "spike_min_trailing_days": 3,
+  "spike_ratio": 3.0,
+  "spike_trailing_days": 7,
+  "spike_trailing_min_items": 10,
+  "top_max": 5,
+  "top_min_publishers": 2,
+  "window_days": 7,
+  "window_min_complete": 6
+ },
+ "new": [],
+ "top_stories": [],
+ "rising": [],
+ "cooling": [],
+ "event_counts": [
+  {
+   "event_type": "product_launch",
+   "label": "product launches",
+   "stories": 1,
+   "articles": 1,
+   "links": [
+    {
+     "title": "llm-echo 0.5",
+     "url": "https://simonwillison.net/2026/Oct/18/llm-echo/",
+     "publisher": "simonwillison.net"
+    }
+   ]
+  },
+  {
+   "event_type": "acquisition",
+   "label": "acquisitions",
+   "stories": 1,
+   "articles": 1,
+   "links": [
+    {
+     "title": "Disney agrees to hire the majority of Character.AI\u2019s workforce",
+     "url": "https://techcrunch.com/2026/10/18/disney-agrees-to-hire-the-majority-of-character-ais-workforce/",
+     "publisher": "techcrunch.com"
+    }
+   ]
+  },
+  {
+   "event_type": "partnership",
+   "label": "partnerships",
+   "stories": 2,
+   "articles": 2,
+   "links": [
+    {
+     "title": "Anthropic consults law firms to set fair negotiation norms before AI agents start cutting deals",
+     "url": "https://the-decoder.com/anthropic-consults-law-firms-to-set-fair-negotiation-norms-before-ai-agents-start-cutting-deals/",
+     "publisher": "the-decoder.com"
+    },
+    {
+     "title": "Anthropic gives outside AI watchdog \u201cemployee-like\u201d access",
+     "url": "https://arstechnica.com/ai/2026/10/anthropic-gives-outside-ai-watchdog-employee-like-access/",
+     "publisher": "arstechnica.com"
+    }
+   ]
+  },
+  {
+   "event_type": "regulation_policy",
+   "label": "regulation & policy",
+   "stories": 1,
+   "articles": 1,
+   "links": [
+    {
+     "title": "Cities want to put the boot on robotaxis",
+     "url": "https://www.theverge.com/transportation/1013220/robotaxi-self-driving-car-laws",
+     "publisher": "theverge.com"
+    }
+   ]
+  },
+  {
+   "event_type": "legal",
+   "label": "legal",
+   "stories": 1,
+   "articles": 1,
+   "links": [
+    {
+     "title": "Two German courts now hold Google liable for what its AI overviews say",
+     "url": "https://the-decoder.com/two-german-courts-now-hold-google-liable-for-what-its-ai-overviews-say/",
+     "publisher": "the-decoder.com"
+    }
+   ]
+  },
+  {
+   "event_type": "benchmark_result",
+   "label": "benchmark results",
+   "stories": 1,
+   "articles": 1,
+   "links": [
+    {
+     "title": "Four Gemini 4 Argon agents beat Minecraft without any human help",
+     "url": "https://the-decoder.com/four-gemini-4-argon-agents-beat-minecraft-without-any-human-help/",
+     "publisher": "the-decoder.com"
+    }
+   ]
+  },
+  {
+   "event_type": "research",
+   "label": "research",
+   "stories": 3,
+   "articles": 3,
+   "links": [
+    {
+     "title": "Giving AI a \u201ccrystal clear\u201d view of the materials world",
+     "url": "https://news.mit.edu/2026/giving-ai-crystal-clear-view-of-materials-world-1018",
+     "publisher": "mit.edu"
+    },
+    {
+     "title": "AI agents chasing a $465 train refund invented excuses, leaked medical data, and spammed an MP's office",
+     "url": "https://the-decoder.com/ai-agents-chasing-a-465-train-refund-invented-excuses-leaked-medical-data-and-spammed-an-mps-office/",
+     "publisher": "the-decoder.com"
+    },
+    {
+     "title": "Anthropic has nearly stopped hiring junior staff because AI agents now work six times as many hours",
+     "url": "https://the-decoder.com/anthropic-has-nearly-stopped-hiring-junior-staff-because-ai-agents-now-work-six-times-as-many-hours/",
+     "publisher": "the-decoder.com"
+    }
+   ]
+  },
+  {
+   "event_type": "opinion_analysis",
+   "label": "analysis",
+   "stories": 1,
+   "articles": 1,
+   "links": [
+    {
+     "title": "OnlyFans Creators Are Pissed That Meta Lets Muse Talk Dirty",
+     "url": "https://www.wired.com/story/onlyfans-creators-are-pissed-that-meta-lets-muse-talk-dirty/",
+     "publisher": "wired.com"
+    }
+   ]
+  },
+  {
+   "event_type": "other",
+   "label": "other",
+   "stories": 3,
+   "articles": 3,
+   "links": [
+    {
+     "title": "TechCrunch Mobility: Rivian\u2019s next act",
+     "url": "https://techcrunch.com/2026/10/18/techcrunch-mobility-rivians-next-act/",
+     "publisher": "techcrunch.com"
+    },
+    {
+     "title": "Anthropic says it\u2019s committing 5% of its shares to a \u2018public benefit fund\u2019",
+     "url": "https://techcrunch.com/2026/10/18/anthropic-says-its-committing-5-of-its-shares-to-a-public-benefit-fund/",
+     "publisher": "techcrunch.com"
+    },
+    {
+     "title": "No agenda, no rush, no leaving San Francisco: Benchmark\u2019s partners on investing in a frenzied market",
+     "url": "https://techcrunch.com/2026/10/18/no-agenda-no-rush-no-leaving-san-francisco-benchmarks-partners-on-investing-in-a-frenzied-market/",
+     "publisher": "techcrunch.com"
+    }
+   ]
+  }
+ ],
+ "article_event_types": {
+  "https://arstechnica.com/ai/2026/10/anthropic-gives-outside-ai-watchdog-employee-like-access/": "partnership",
+  "https://news.mit.edu/2026/giving-ai-crystal-clear-view-of-materials-world-1018": "research",
+  "https://simonwillison.net/2026/Oct/18/llm-echo/": "product_launch",
+  "https://techcrunch.com/2026/10/18/anthropic-says-its-committing-5-of-its-shares-to-a-public-benefit-fund/": "other",
+  "https://techcrunch.com/2026/10/18/disney-agrees-to-hire-the-majority-of-character-ais-workforce/": "acquisition",
+  "https://techcrunch.com/2026/10/18/no-agenda-no-rush-no-leaving-san-francisco-benchmarks-partners-on-investing-in-a-frenzied-market/": "other",
+  "https://techcrunch.com/2026/10/18/techcrunch-mobility-rivians-next-act/": "other",
+  "https://the-decoder.com/ai-agents-chasing-a-465-train-refund-invented-excuses-leaked-medical-data-and-spammed-an-mps-office/": "research",
+  "https://the-decoder.com/anthropic-consults-law-firms-to-set-fair-negotiation-norms-before-ai-agents-start-cutting-deals/": "partnership",
+  "https://the-decoder.com/anthropic-has-nearly-stopped-hiring-junior-staff-because-ai-agents-now-work-six-times-as-many-hours/": "research",
+  "https://the-decoder.com/four-gemini-4-argon-agents-beat-minecraft-without-any-human-help/": "benchmark_result",
+  "https://the-decoder.com/two-german-courts-now-hold-google-liable-for-what-its-ai-overviews-say/": "legal",
+  "https://www.theverge.com/transportation/1013220/robotaxi-self-driving-car-laws": "regulation_policy",
+  "https://www.wired.com/story/onlyfans-creators-are-pissed-that-meta-lets-muse-talk-dirty/": "opinion_analysis"
+ }
+}

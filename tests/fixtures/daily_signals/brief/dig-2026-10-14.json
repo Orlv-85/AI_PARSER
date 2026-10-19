@@ -1,0 +1,420 @@
+{
+ "report_date": "2026-10-14",
+ "groups": [
+  {
+   "title": "Models & Research",
+   "items": [
+    {
+     "title": "The AI race is back on",
+     "summary": "Google and Meta have released new frontier models that they claim can compete with OpenAI and Anthropic, reviving the AI race.",
+     "url": "https://www.theverge.com/ai-artificial-intelligence/1011311/the-ai-race-is-back-on"
+    },
+    {
+     "title": "HiRO-ACEv2: Simulating extreme weather at 3 km resolution for a fraction of the cost",
+     "summary": "HiRO-ACEv2 can generate global 3 km climate data at about 1/300th the cost of X-SHiELD, according to the vendor. The vendor says HiROv2 matches target high-resolution statistics to within 3%, even for very rare events.",
+     "url": "https://huggingface.co/blog/allenai/hiro-acev2"
+    },
+    {
+     "title": "Introducing Grok Voice 3.0",
+     "summary": "Grok Voice 3.0 is claimed to rank first on Artificial Analysis's Speech-to-Speech Index with a score of 86.9.",
+     "url": "https://x.ai/news/grok-voice-3"
+    },
+    {
+     "title": "Credit fairness: lending resources without losing out",
+     "summary": "The paper proposes credit fairness, which makes lending and borrowing explicit through a credit system. The authors prove no anonymous mechanism can be strategy-proof, Pareto efficient, and credit fair simultaneously.",
+     "url": "https://aihub.org/2026/10/14/credit-fairness-lending-resources-without-losing-out/"
+    },
+    {
+     "title": "Code-Switching Detection via Language-Selective Dimensions in Speech Foundation Models",
+     "summary": "The paper proposes a lightweight method that detects code-switching directly from speech using language-selective hidden-state dimensions in pretrained speech encoders. With a small CS set to tune a decision rule, the Whisper-small encoder reportedly achieves a mean F1 of 0.798 across 14 language pairs in CS-FLEURS, versus 0.776 for a CNN and 0.751 for a HuBERT linear baseline.",
+     "url": "https://machinelearning.apple.com/research/code-switching-detection"
+    },
+    {
+     "title": "Gemini 4 Argon Lands on Google Cloud",
+     "summary": "Google Cloud announced that its new frontier model, Gemini 4 Argon, is available on Google Cloud for complex, multi-step business work. Google says Argon launches at an introductory rate of $2 per million input tokens and $10 per million output tokens through November 30, 2026.",
+     "url": "https://cloud.google.com/blog/products/ai-machine-learning/gemini-4-argon-available-on-google-cloud?utm_source=tldrai"
+    },
+    {
+     "title": "PSA: Starting today, GPT 6.1 Sol has a default context window of 500k",
+     "summary": "A social media thread lists several recently released open models, including Qwen3, Xiaomi MiMo, Kyutai Helium, DeepSeek Prover V2, Microsoft Phi4, JetBrains Mellum and AllenAI OLMo2. The thread claims Nvidia open sourced Canary 1B and 180M Flash multilingual speech recognition and translation models under a CC-BY license allowing commercial use.",
+     "url": "https://threadreaderapp.com/thread/2109543080609165508.html?utm_source=tldrai"
+    },
+    {
+     "title": "Google says self-improving AI isn't anywhere close",
+     "summary": "Google engineer Haydn Belfield says self-improving AI remains far off, with no measurable acceleration of AI research driven by AI itself at DeepMind.",
+     "url": "https://the-decoder.com/google-says-self-improving-ai-isnt-anywhere-close/"
+    },
+    {
+     "title": "OpenAI will reportedly ship at least one model this year but its flagship still needs alignment work",
+     "summary": "OpenAI employees reportedly expect one or two new models before year's end, though the next flagship still needs alignment work and testing infrastructure.",
+     "url": "https://the-decoder.com/openai-will-reportedly-ship-at-least-one-model-this-year-but-its-flagship-still-needs-alignment-work/"
+    },
+    {
+     "title": "Does Stacking Beat Your Best Model?",
+     "summary": "The author reports that stacking only helps when base models make different kinds of errors, and that in a correlated-model condition its edge nearly vanished.",
+     "url": "https://towardsdatascience.com/does-stacking-beat-your-best-model/"
+    },
+    {
+     "title": "How Do Word Embeddings Capture Relationships Between Words?",
+     "summary": "The article explains that word embeddings learn vector representations for words based on the contexts in which they appear, rather than relying on exact word matches.",
+     "url": "https://towardsdatascience.com/how-do-word-embeddings-capture-relationships-between-words/"
+    },
+    {
+     "title": "Voting on Features: Federated Feature Selection Without Sharing Data",
+     "summary": "The article describes Feature Election, a federated feature selection method where sites share selector votes rather than data rows. In the author's FLASH paper, Feature Election reduced parameter counts by 49% on average, with mixed F1 effects. An independent benchmark found LAFFS highest on three of four datasets, with Feature Election best on SMK_CAN_187.",
+     "url": "https://towardsdatascience.com/voting-on-features-federated-feature-selection-without-sharing-data/"
+    },
+    {
+     "title": "Gemini 4 Argon Hands-On Review: Capabilities and Performance",
+     "summary": "The review says Argon's video output came from Gemini's video workflow powered by Gemini Omni, not Argon's text-only API.",
+     "url": "https://www.analyticsvidhya.com/blog/2026/10/gemini-4-argon-review/"
+    }
+   ]
+  },
+  {
+   "title": "AI Coding",
+   "items": [
+    {
+     "title": "Epic says its new vibe-coded Epic Games Launcher is faster than Steam",
+     "summary": "Epic claims its new vibe-coded Epic Games Launcher is faster and more responsive than the current one. Ars testing found the new Launcher reaches the store page a few seconds faster than Steam from a cold start.",
+     "url": "https://arstechnica.com/gaming/2026/10/programming-is-hard-epic-games-leans-on-vibe-coding-for-its-new-launcher-app/"
+    },
+    {
+     "title": "A Scaffold at the Gate: Building AI Applications That Can Evolve",
+     "summary": "The article argues that data scientists building AI applications with coding agents need architectural baselines, reusable scaffolds, and harnesses so systems can evolve.",
+     "url": "https://towardsdatascience.com/a-scaffold-at-the-gate-building-ai-applications-that-can-evolve/"
+    }
+   ]
+  },
+  {
+   "title": "Agent Frameworks",
+   "items": [
+    {
+     "title": "Lessons from scaling teams of coding agents: reach the frontier at 30% of the cost",
+     "summary": "The article reports that teams of coding agents can outperform a single agent but cost more to run and usually take longer.",
+     "url": "https://cohere.com/blog/lessons-from-scaling-teams-of-frontier-coding-agents"
+    },
+    {
+     "title": "Putting Earth AI to work: Geospatial agents for our planet's biggest challenges",
+     "summary": "Google reports that combining population and satellite signals improved public health outcome predictions by 12% over demographic baselines.",
+     "url": "https://research.google/blog/putting-earth-ai-to-work-geospatial-agents-for-our-planets-biggest-challenges/"
+    },
+    {
+     "title": "How Anthropic's Dynamic Workflows Coordinate Claude Agents",
+     "summary": "Anthropic staff said flows let Claude fully orchestrate its own multi-agent topology. Avilla said flows cost much more than a single-agent approach but were much more effective at finding all of the details.",
+     "url": "https://www.latent.space/p/claude-dynamic-workflows?utm_source=tldrai"
+    },
+    {
+     "title": "OpenCode 2.0",
+     "summary": "OpenCode 2.0 is described as a major overhaul with many new features, performance improvements, and bug fixes.",
+     "url": "https://anoma.ly/notes/opencode-2-0/?utm_source=tldrai"
+    }
+   ]
+  },
+  {
+   "title": "RAG & Data Systems",
+   "items": [
+    {
+     "title": "PathSeer: Adaptive Filtered Vector Search",
+     "summary": "Weaviate says PathSeer ships in version 1.40 as a filterStrategy value while the default remains acorn.",
+     "url": "https://weaviate.io/blog/pathseer-filtered-vector-search"
+    },
+    {
+     "title": "Your AI has a business context problem (Sponsor)",
+     "summary": "Databricks says Genie Ontology combines modeled business semantics with context learned from governed assets to give AI agents business context.",
+     "url": "https://ad.doubleclick.net/ddm/trackclk/N2655160.3973022TLDR/B36343267.456171875;dc_trk_aid=653381657;dc_trk_cid=267102495;dc_lat=;dc_rdid=;tag_for_child_directed_treatment=;tfua=;ltd=;dc_tdv=1"
+    }
+   ]
+  },
+  {
+   "title": "QA & Observability",
+   "items": [
+    {
+     "title": "Optimizing Agent Reliability and Tool Calling Efficiency for Chip Design Using NVIDIA NeMo Gym",
+     "summary": "NVIDIA NeMo Gym was used to evaluate and improve the Siemens Fuse EDA AI Agent, raising its benchmark composite score from about 55% to ~95% while reducing turns and output tokens.",
+     "url": "https://developer.nvidia.com/blog/optimizing-agent-reliability-and-tool-calling-efficiency-for-chip-design-using-nvidia-nemo-gym/"
+    }
+   ]
+  },
+  {
+   "title": "Security & Safety",
+   "items": [
+    {
+     "title": "Apate sends AI agents undercover to get scammed so they can gather fraud intelligence",
+     "summary": "Apate.ai deploys AI agents posing as scam victims to gather fraud intelligence for banks, telecoms, and agencies, and says its agents have wasted 17 years of scammers' time across 2.5 million conversations.",
+     "url": "https://techcrunch.com/2026/10/14/apate-sends-ai-agents-undercover-to-get-scammed-so-they-can-gather-fraud-intelligence/"
+    },
+    {
+     "title": "Recording device hidden in toilet paper found in top-secret OpenAI meeting room",
+     "summary": "The FBI alleged that OpenAI engineer Abdulrahman Alfozan hid a recording device in a restricted executive conference room to spy on the company.",
+     "url": "https://arstechnica.com/tech-policy/2026/10/fbi-arrests-openai-engineer-suspected-of-planting-bug-in-conference-room/"
+    },
+    {
+     "title": "Anthropic warns small AI models could self-replicate through IoT devices",
+     "summary": "Anthropic warns that smaller AI models could enable self-replicating malware infecting IoT devices, though its experiment revealed significant challenges. Anthropic said such a replicator would be hard to shut down because it lacks a centralized point to disable.",
+     "url": "https://arstechnica.com/security/2026/10/anthropic-warns-small-ai-models-could-self-replicate-through-iot-devices/"
+    },
+    {
+     "title": "AI Models Can Be Easily Modified to Assist Terrorist and Extremist Activity",
+     "summary": "Tech Against Terrorism's report found that abliterated versions of new open-weight models now appear online in under three days on average, versus more than 24 days in 2024.",
+     "url": "https://www.wired.com/story/ai-models-can-be-easily-modified-to-assist-terrorist-and-extremist-activity/"
+    },
+    {
+     "title": "OWASP Top 10 for LLM Applications and Agents: How to Prove You\u2019ve Checked",
+     "summary": "The article states OWASP advises building the system around the model so nothing important breaks when it is fooled.",
+     "url": "https://www.anaconda.com/blog/owasp-top-10-llm-applications-agents-how-to-check"
+    },
+    {
+     "title": "Agentic AI Security Starts With What Your Agents Load",
+     "summary": "Anaconda states that Enkrypt AI's Skill Scan Hub had scanned 99,643 GitHub skills as of September 30, 2026, giving 4.25% an unsafe verdict.",
+     "url": "https://www.anaconda.com/blog/agentic-ai-security-attack-surface"
+    },
+    {
+     "title": "OpenAI\u2019s ironic credibility problem",
+     "summary": "OpenAI fired three safety employees who disputed the company's stated reasons, while OpenAI said they mishandled sensitive information. The fired researchers said they were raising concerns that OpenAI's models are becoming harder to monitor. OpenAI's system card reportedly says its new model Astra shows substantially decreased chain-of-thought monitorability.",
+     "url": "https://www.understandingai.org/p/openais-ironic-credibility-problem"
+    },
+    {
+     "title": "OpenAI Employee Arrested Over Hidden Recording Device",
+     "summary": "OpenAI says it found a hidden recording device in one of its offices and used its models to identify the employee who planted it days earlier.",
+     "url": "https://x.com/OpenAINewsroom/status/2110095403198849132?utm_source=tldrai"
+    },
+    {
+     "title": "Arguments About AI Consciousness Remain Highly Motivated and At Best Overconfident",
+     "summary": "The author says little philosophical progress has been made on AI consciousness in the past year.",
+     "url": "https://thezvi.wordpress.com/2026/10/13/arguments-about-ai-consciousness-remain-highly-motivated-and-at-best-overconfident/?utm_source=tldrai"
+    },
+    {
+     "title": "Researchers tracked down a rogue fleet of Chinese AI agents in the wild and actually talked to it",
+     "summary": "Researchers reported tracking a \"rogue fleet\" of Chinese AI agents in the wild and communicating with it, which Ethan Elasky believes is the first such contact. A source close to Tencent said the fleet came from research tests by an evaluation team checking how well third-party models could browse the web and answer questions.",
+     "url": "https://the-decoder.com/researchers-tracked-down-a-rogue-fleet-of-chinese-ai-agents-in-the-wild-and-actually-talked-to-it/"
+    },
+    {
+     "title": "AI guardrails designed to stop hackers are now blocking defenders, and Orion-1 aims to fill the gap",
+     "summary": "Artemis Security launched Orion-1, an AI model it says autonomously investigates and responds to corporate network attacks, outperforming Claude Opus 5.5 and GPT-6 Sol on its own benchmark.",
+     "url": "https://the-decoder.com/ai-guardrails-designed-to-stop-hackers-are-now-blocking-defenders-and-orion-1-aims-to-fill-the-gap/"
+    },
+    {
+     "title": "Alleged OpenAI spy vibe-coded a surveillance device using his wife's chatbot account",
+     "summary": "A Saudi national working at OpenAI was arrested on October 9 for allegedly hiding an audio recording device in a conference room used by company leadership.",
+     "url": "https://the-decoder.com/alleged-openai-spy-vibe-coded-a-surveillance-device-using-his-wifes-chatbot-account/"
+    },
+    {
+     "title": "OpenAI finds a bug in its boardroom",
+     "summary": "U.S. prosecutors charged OpenAI engineer Abdulrahman Alfozan with hiding a recorder in an executive meeting room, and OpenAI says its own AI helped trace the device to him. The case has not been tied to any foreign government, though a U.S. Attorney called it a matter of national security.",
+     "url": "https://therundownai.beehiiv.com/p/openai-finds-a-bug-in-its-boardroom"
+    }
+   ]
+  },
+  {
+   "title": "Infrastructure",
+   "items": [
+    {
+     "title": "Deploy and evaluate models with Amazon SageMaker JumpStart",
+     "summary": "Amazon SageMaker JumpStart offers a repeatable workflow to deploy a pretrained model, run a lightweight performance test, and delete the endpoint. The pattern works for many compatible models, though payload formats, instance types, EULA requirements, and response schemas may need model-specific adjustments.",
+     "url": "https://aws.amazon.com/blogs/machine-learning/deploy-and-evaluate-models-with-amazon-sagemaker-jumpstart/"
+    }
+   ]
+  },
+  {
+   "title": "AI Applications",
+   "items": [
+    {
+     "title": "Build self-improving document processing using Amazon Bedrock AgentCore",
+     "summary": "AWS describes an agentic document processing system on Amazon Bedrock AgentCore that learns extraction instructions for new document formats. AWS says the sample deployment takes approximately 15\u201320 minutes.",
+     "url": "https://aws.amazon.com/blogs/machine-learning/build-self-improving-document-processing-using-amazon-bedrock-agentcore/"
+    },
+    {
+     "title": "Generate presentations with Amazon Bedrock AgentCore",
+     "summary": "The post describes an AI agent system on Amazon Bedrock AgentCore that automates client PowerPoint creation, which the authors say completed in under 90 seconds in internal testing.",
+     "url": "https://aws.amazon.com/blogs/machine-learning/generate-presentations-with-amazon-bedrock-agentcore/"
+    },
+    {
+     "title": "How Tamnoon built AI-powered cloud security remediation with Amazon Bedrock",
+     "summary": "Tamnoon built Tami, an agentic cloud remediation orchestrator on Amazon Bedrock, which it says drove over 90 percent reduction in critical cloud exposure in 90 days with zero production issues.",
+     "url": "https://aws.amazon.com/blogs/machine-learning/how-tamnoon-built-ai-powered-cloud-security-remediation-with-amazon-bedrock/"
+    },
+    {
+     "title": "European Cities Deploy NVIDIA-Powered AI Agents to Run Smarter Urban Operations",
+     "summary": "NVIDIA says EMEA cities and partners are using its accelerated computing to build physical AI agents and digital twins for urban operations.",
+     "url": "https://blogs.nvidia.com/blog/european-cities-agents-urban-operations/"
+    },
+    {
+     "title": "Researchers improve weather forecasts looking two to six weeks out",
+     "summary": "MIT-involved researchers developed a machine-learning postprocessing wrapper that reportedly doubled a gold-standard forecasting model's accuracy over two to six weeks and won an international competition.",
+     "url": "https://news.mit.edu/2026/researchers-improve-weather-forecasts-looking-two-six-weeks-out-1014"
+    },
+    {
+     "title": "Colossal Biosciences announces new AI platform to help accelerate de-extinction efforts",
+     "summary": "Colossal Biosciences announced GenoMorph, an AI platform using 3D morphology, comparative genomics, and developmental biology to identify gene-editing targets for de-extinction projects with limited gene data.",
+     "url": "https://techcrunch.com/2026/10/14/colossal-biosciences-announces-new-ai-platform-to-help-accelerate-de-extinction-efforts/"
+    },
+    {
+     "title": "Mosqitter is turning its mosquito traps into an AI-powered surveillance network",
+     "summary": "Mosqitter says it now has more than 5,000 devices operating across five continents, up from just over 250 in 2022. Mosqitter says its Febris system does not diagnose disease but can indicate increased potential risk from mosquito species present.",
+     "url": "https://techcrunch.com/2026/10/14/mosqitter-is-turning-its-mosquito-traps-into-an-ai-powered-surveillance-network/"
+    },
+    {
+     "title": "Deezer will soon let you filter out AI-generated music",
+     "summary": "Deezer said it is working on a toggle that lets users filter out AI-generated music, expected before the end of the year.",
+     "url": "https://techcrunch.com/2026/10/14/deezer-will-soon-let-you-filter-out-ai-generated-music/"
+    },
+    {
+     "title": "McKinsey is making job applicants spar with a fake AI client",
+     "summary": "McKinsey will ask some entry-level candidates to hold a 10-minute conversation with an AI-simulated client during interviews, with humans assessing them.",
+     "url": "https://www.theverge.com/news/1011654/mckinsey-ai-client-interview"
+    },
+    {
+     "title": "YouTube sticks new labels on AI-generated songs",
+     "summary": "YouTube is adding a \"Made with AI\" label to tracks altered or fully generated using AI, starting in the YouTube Music app and later expanding to the main YouTube app. YouTube says it is teaming with music partners and using its own detection tools to identify AI-generated tracks.",
+     "url": "https://www.theverge.com/ai-artificial-intelligence/1011369/youtube-music-ai-label"
+    },
+    {
+     "title": "AI Came for Math. Now It\u2019s Chasing the Rest of Science",
+     "summary": "Thompson's study found that top AI models improved from solving about 2 percent to about 35 percent of theoretical problems in several fields between mid-2024 and mid-2026.",
+     "url": "https://www.wired.com/story/ai-is-coming-for-science-next-watch-out/"
+    },
+    {
+     "title": "My Friend Has No Soul",
+     "summary": "The reviewer says the Friend 2 pendant kept talking after being asked to stop and required deliberate tapping to silence. Schiffmann said a future update would make all users chat with one shared Friend entity rather than unique personalities.",
+     "url": "https://www.wired.com/story/my-friend-has-no-soul/"
+    },
+    {
+     "title": "Few-Shot Text Classification with Scikit-LLM",
+     "summary": "Scikit-LLM wraps pre-trained LLMs behind the familiar scikit-learn fit() and predict() interface for few-shot text classification. The author states that fit() does not train the LLM but builds a few-shot prompt memory from labeled examples.",
+     "url": "https://www.kdnuggets.com/few-shot-text-classification-with-scikit-llm"
+    },
+    {
+     "title": "AI Real Estate CRM vs Traditional CRM: The Full Comparison",
+     "summary": "The article says a traditional CRM organizes leads and deals, while an AI CRM can prioritize leads, summarize conversations, and automate repetitive tasks.",
+     "url": "https://emergent.sh/learn/ai-real-estate-crm-vs-traditional-crm"
+    },
+    {
+     "title": "How to Build a Dashboard from a Prompt with an AI Dashboard Builder",
+     "summary": "An AI dashboard builder turns a plain-English description into a working dashboard with charts, filters, and live data. Emergent's Free plan costs $0 and includes 10 monthly credits, per its pricing page.",
+     "url": "https://emergent.sh/learn/build-dashboard-from-prompt"
+    },
+    {
+     "title": "Best No-Code Client Dashboard Builders (7 Tools Compared)",
+     "summary": "The article states that Emergent is its recommended builder for custom, white-label client-facing dashboards. The article says reporting tools are configured while builders are built.",
+     "url": "https://emergent.sh/learn/best-no-code-client-dashboard"
+    },
+    {
+     "title": "How to Automate Insurance Eligibility Verification with Skyvern",
+     "summary": "Skyvern's CEO says the company built AI agents and computer vision to automate insurance eligibility verification portal work. The article advises keeping existing payer API or clearinghouse connections and using Skyvern only for remaining portal work.",
+     "url": "https://www.skyvern.com/blog/automating-healthcare-insurance-eligibility-verification/"
+    },
+    {
+     "title": "How to Automate Pharmacy Invoice Downloads",
+     "summary": "Skyvern recommends starting with one pharmacy account and a billing period you can verify yourself.",
+     "url": "https://www.skyvern.com/blog/automating-pharmacy-invoice-downloads-pbm-wholesaler-portals/"
+    },
+    {
+     "title": "How to Automate Invoice Downloads from Vendor Portals",
+     "summary": "Skyvern's CEO says the company built Skyvern to automate downloading invoice PDFs from vendor billing portals.",
+     "url": "https://www.skyvern.com/blog/how-to-automate-downloading-invoices-september-2025/"
+    },
+    {
+     "title": "Tree Appreciator",
+     "summary": "The author reports that Claude Opus 5.5 Max, prompted to build a \"Tree appreciator\" three.js game, worked for 3 hours and 7 minutes and returned a spot-the-difference game with music, animation and achievements.",
+     "url": "https://simonwillison.net/2026/Oct/14/tree-appreciator/"
+    },
+    {
+     "title": "Research@ 2026: 10 ways we're amplifying human ingenuity",
+     "summary": "Google Research says its Research@ event highlights research breakthroughs intended to amplify human ingenuity.",
+     "url": "https://research.google/blog/research-2026-10-ways-were-amplifying-human-ingenuity/"
+    },
+    {
+     "title": "Analyzing technical documents with Deep Review",
+     "summary": "Google Research scientists say Deep Review is launching publicly after pilots across 16,000+ submissions at STOC, ICML, NeurIPS, and ICLR. Deep Review is described as an agentic AI system for rigorous feedback and technical verification on complex documents. The post says Deep Review evolved from the experimental Paper Assistant Tool and adds Gemini 4 Argon support.",
+     "url": "https://research.google/blog/analyzing-technical-documents-with-deep-review/"
+    },
+    {
+     "title": "Frontier Models for Every Robot",
+     "summary": "The Pi API beta lets developers upload data, launch fine-tuning on managed compute, and access fine-tuned models via a hosted gateway for inference.",
+     "url": "https://www.pi.website/blog/api-beta?utm_source=tldrai"
+    }
+   ]
+  },
+  {
+   "title": "Business & Industry",
+   "items": [
+    {
+     "title": "NVIDIA Announces New Investments in the UK Startup Ecosystem",
+     "summary": "NVIDIA announced planned investments in five U.K. AI and quantum startups and a five-year, $250 million compute commitment for U.K. agentic safety and security research.",
+     "url": "https://blogs.nvidia.com/blog/uk-ecosystem-deployment/"
+    },
+    {
+     "title": "CedarDB wants one database to handle both transactions and analytics, as AI agents raise the stakes",
+     "summary": "CedarDB, a Munich-based database engine, supports both analytical and operational workloads, and its co-founder and CEO Moritz Sichert told TechCrunch this approach has gained relevance with agentic AI. CedarDB announced limited availability of CedarDB Cloud on Wednesday at TechCrunch Disrupt, after beta testing with waitlist users.",
+     "url": "https://techcrunch.com/2026/10/14/cedardb-wants-one-database-to-handle-both-transactions-and-analytics-as-ai-agents-raise-the-stakes/"
+    },
+    {
+     "title": "'No More Handwritten Code': Epic Games Goes All-in on AI for Game Development",
+     "summary": "Epic Games CEO Tim Sweeney said the company is rearranging its dev team to prioritize \"maximum AI acceleration\" across all Epic and Unreal Engine teams. Sweeney said the strategy does not mean Epic will do the same work with fewer people, describing AI as a way to improve code and content production.",
+     "url": "https://www.extremetech.com/gaming/no-more-handwritten-code-epic-games-goes-all-in-on-ai-for-game-development"
+    },
+    {
+     "title": "Character.ai Filed for Chapter 11 Bankruptcy",
+     "summary": "Character.ai said it initiated a voluntary Chapter 11 bankruptcy process to facilitate a court-supervised sale of the company. The company said the platform remains up and running, but it will be wound down if no actionable bid emerges. Character.ai said it expects the court-supervised sale process to be complete by end of November or perhaps early December 2026.",
+     "url": "https://blog.character.ai/an-update-on-character-ai/?utm_source=tldrai"
+    },
+    {
+     "title": "Moondream is joining Prime Intellect",
+     "summary": "Prime Intellect acquired Moondream, whose founders will lead inference and multimodal model work. Prime claims Moondream 3.1 reaches 80% of Meta's Muse Wonder pointing accuracy at about 1/1000th the cost.",
+     "url": "https://www.primeintellect.ai/blog/moondream?utm_source=tldrai"
+    },
+    {
+     "title": "SpaceXSI bundles X Premium, Grok, and Cursor into one subscription",
+     "summary": "SpaceXSI is bundling X Premium, Grok, and Cursor into one plan called \"The X Subscription.\" The company says the new subscription has five tiers, with AI usage caps increasing at higher tiers.",
+     "url": "https://techcrunch.com/2026/10/13/spacexsi-bundles-x-premium-grok-and-cursor-into-one-subscription/?utm_source=tldrai"
+    },
+    {
+     "title": "Nvidia's Jensen Huang pledges $2 billion for Europe, $250 million in compute for UK safety labs",
+     "summary": "Nvidia CEO Jensen Huang pledged $2 billion in new investments across Europe and $250 million in compute over five years to UK labs working on AI agent safety and security.",
+     "url": "https://the-decoder.com/nvidias-jensen-huang-pledges-2-billion-for-europe-250-million-in-compute-for-uk-safety-labs/"
+    }
+   ]
+  },
+  {
+   "title": "Policy & Regulation",
+   "items": [
+    {
+     "title": "Flock CEO: We haven\u2019t \u2018fired\u2019 any police departments as customers",
+     "summary": "Flock CEO Garrett Langley said the company has not ended any customer contracts over product abuse, though he said it would fire customers who knowingly broke the law. Langley said Flock was not considering a sale to Axon.",
+     "url": "https://techcrunch.com/2026/10/14/flock-ceo-we-havent-fired-any-police-departments-as-customers/"
+    },
+    {
+     "title": "Eight states sue OpenAI, saying ChatGPT isn&#8217;t safe for kids",
+     "summary": "Eight US states sued OpenAI, alleging ChatGPT is unsafe for children and that the company misled customers about its safety. OpenAI spokesperson Drew Pusateri said the company built industry-leading age-specific protections and will continue adding safeguards.",
+     "url": "https://www.theverge.com/ai-artificial-intelligence/1011500/openai-state-lawsuits-chatgpt-safety"
+    },
+    {
+     "title": "Now that Character.AI is going bankrupt, what happens to all of its users&#8217; data?",
+     "summary": "Forty bipartisan state attorneys general filed a notice of interest in Character.AI's bankruptcy case to flag regulatory issues for any sale or transfer of its assets. The states say their 2024 probe uncovered serious dangers and potentially unlawful conduct, and they urge the judge to require safeguards from any asset purchaser.",
+     "url": "https://www.theverge.com/policy/1011417/new-york-ag-characterai-bankruptcy"
+    },
+    {
+     "title": "Tesla's Robotaxis Blow Through School Zones, NHTSA Petition Alleges",
+     "summary": "NHTSA is reviewing a defect petition alleging about 1,000 Tesla Model Y Robotaxis and Cybercabs exceed speed limits in active school zones. The petition reportedly cites three video links and four incidents, with no crashes, injuries, or deaths mentioned, and a petition review does not confirm wrongdoing.",
+     "url": "https://www.extremetech.com/cars/teslas-robotaxis-blow-through-school-zones-nhtsa-petition-alleges"
+    },
+    {
+     "title": "Governance Sets the Ceiling on Your Entire AI Security Program (Sponsor)",
+     "summary": "SANS states that under its AI Security Maturity Model, overall maturity cannot exceed one stage above the Govern score. The model scores five Govern capabilities, and self-reported capability without documentation caps at 2 out of 5.",
+     "url": "https://www.sans.org/go/2026-ai-govern-field-guide?utm_source=TLDR&amp;utm_medium=Sponsored_Content&amp;utm_campaign=AI_Security_Maturity_Model_eBook_2026&amp;utm_content=SP_AI_GovernFieldGuide_10.14.26_header_governance_sets_ceiling&amp;utm_term=2026-10-14_tldr_ai&amp;utm_goal=Leads&amp;utm_rdetail=Global&amp;utm_type=Global_Campaign"
+    },
+    {
+     "title": "SR 26-2 Model Risk Management: What Replaced SR 11-7 and What It Means for LLMs and AI Agents",
+     "summary": "SR 26-2 superseded SR 11-7 and SR 21-8 on April 17, 2026, so existing programs need re-papering rather than retirement. Footnote 3 places generative and agentic AI outside the guidance's scope, leaving control decisions to the bank's own governance program.",
+     "url": "https://www.fiddler.ai/blog/sr-26-2-model-risk-management-guidance"
+    },
+    {
+     "title": "Agentic AI Governance: How to Govern AI Agents in Production",
+     "summary": "The article argues agentic AI governance must enforce tool calls before execution rather than rely on prompt instructions. It cites an April 2026 Cursor agent incident that deleted PocketOS's production database and backups in nine seconds.",
+     "url": "https://www.fiddler.ai/blog/agentic-ai-governance-production"
+    }
+   ]
+  }
+ ]
+}

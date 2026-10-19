@@ -1,0 +1,943 @@
+{
+ "2026-10-13": {
+  "data": {
+   "day": "2026-10-13",
+   "quiet": false,
+   "digest_items": 90,
+   "stories": [
+    {
+     "label": "Gemini 4 Argon is now available worldwide as Google's most capable frontier model",
+     "outlets": 6,
+     "event": "model_release",
+     "articles": [
+      "a1",
+      "a2",
+      "a3"
+     ]
+    },
+    {
+     "label": "Muse Wonder",
+     "outlets": 3,
+     "event": "model_release",
+     "articles": [
+      "a4",
+      "a5",
+      "a6"
+     ]
+    },
+    {
+     "label": "FBI arrests OpenAI employee accused of planting hidden recording device in conference room",
+     "outlets": 3,
+     "event": "security_incident",
+     "articles": [
+      "a7",
+      "a8",
+      "a9"
+     ]
+    },
+    {
+     "label": "Rivian partner Mind Robotics hires Doug Field as president",
+     "outlets": 2,
+     "event": "people_move",
+     "articles": [
+      "a10",
+      "a11"
+     ]
+    }
+   ],
+   "new": [
+    {
+     "name": "Game Finder",
+     "type": "product",
+     "vendor": "Google",
+     "outlets": 2,
+     "what": "The new Game Finder feature leans on all the usage data Google's app platform has hoovered up over the years",
+     "articles": [
+      "a12",
+      "a13"
+     ]
+    },
+    {
+     "name": "Helix World",
+     "type": "model",
+     "vendor": "Noiz AI",
+     "outlets": 1,
+     "what": "Today we are introducing Helix World, a real-time interactive audio-visual world model",
+     "articles": [
+      "a14"
+     ]
+    },
+    {
+     "name": "Nemotron 3.5 Bolt 74B-A9B 24GB",
+     "type": "model",
+     "vendor": "NVIDIA",
+     "outlets": 1,
+     "what": "The NVIDIA Nemotron 3.5 Bolt 74B model, purpose-built for agentic AI on RTX Spark, releases on Thursday, Oct. 15.",
+     "articles": [
+      "a15"
+     ]
+    },
+    {
+     "name": "Dynamic Model Escalation",
+     "type": "technology",
+     "vendor": "Fiddler",
+     "outlets": 1,
+     "what": "today, we're announcing Dynamic Model Escalation, a critical capability in Centor",
+     "articles": [
+      "a16"
+     ]
+    },
+    {
+     "name": "Priming",
+     "type": "technology",
+     "vendor": "Amazon Web Services",
+     "outlets": 1,
+     "what": "We introduce priming, a method that leverages pretrained Transformer weights as a starting point",
+     "articles": [
+      "a17"
+     ]
+    },
+    {
+     "name": "Satlyt",
+     "type": "company",
+     "vendor": null,
+     "outlets": 1,
+     "what": "So he left SpaceX and co-founded Satlyt, a new company",
+     "articles": [
+      "a18",
+      "a19"
+     ]
+    },
+    {
+     "name": "Xbox Labs",
+     "type": "company",
+     "vendor": "Microsoft",
+     "outlets": 1,
+     "what": "Xbox CEO Asha Sharma says Microsoft formed Xbox Labs, a small group of game makers, engineers and scientists, to explore emerging...",
+     "articles": [
+      "a20"
+     ]
+    },
+    {
+     "name": "Joule Assistants",
+     "type": "product",
+     "vendor": "SAP",
+     "outlets": 1,
+     "what": "SAP's new and expanded Joule Assistants",
+     "articles": [
+      "a21"
+     ]
+    }
+   ],
+   "spikes": [],
+   "event_counts": {
+    "model releases": 6,
+    "product launches": 23,
+    "funding rounds": 3,
+    "acquisitions": 2,
+    "partnerships": 2,
+    "regulation & policy": 4,
+    "legal": 3,
+    "security incidents": 1,
+    "people moves": 1
+   },
+   "articles": {
+    "a1": {
+     "title": "Gemini 4 Argon begins rolling out in Gemini app and Antigravity, but only if you pay",
+     "summary": "Google is beginning a wide rollout of Gemini 4 Argon only to paying users, with lower-tier plans lacking full access. Google says Argon's capabilities are unchanged and points to its published benchmarks as evidence of advanced reasoning and agentic coding.",
+     "publisher": "arstechnica.com"
+    },
+    "a2": {
+     "title": "Gemini 4 Argon: Built to solve your hardest problems",
+     "summary": "Google says Gemini 4 Argon is now globally available and claims it outperforms other frontier models on benchmarks, ranking #1 on the Vals Index. The model launches at an introductory price of $2 per million input tokens and $10 per million output tokens, with cached input tokens at 95% off.",
+     "publisher": "deepmind.google"
+    },
+    "a3": {
+     "title": "Google makes Gemini 4 Argon broadly available with limited-time low API pricing of $2/$10 per 1M token",
+     "summary": "Google reports internal Argon use by over 100,000 employees and engineering gains, but these remain company-reported results.",
+     "publisher": "venturebeat.com"
+    },
+    "a4": {
+     "title": "AI Weekly Issue #537: AI models may soon copy themselves onto smart fridges, Anthropic says",
+     "summary": "Anthropic's Frontier Red Team warns small AI models may be months from copying themselves onto internet-connected home devices.",
+     "publisher": "aiweekly.co"
+    },
+    "a5": {
+     "title": "Muse Wonder",
+     "summary": "Meta introduced the Muse Wonder series, comprising Muse Wonder and Muse Wonder Full, as its most capable models for personal and professional agentic tasks. Meta says Muse Wonder is available today through the Meta Model API and Muse Code, while Muse Wonder Full is available today for Muse Code subscribers.",
+     "publisher": "meta.ai"
+    },
+    "a6": {
+     "title": "Meta's Watermelon ripens into a frontier model",
+     "summary": "Meta released its Muse Wonder models, with the full version ranking second behind Anthropic's Opus 5.5 in Artificial Analysis intelligence rankings. Microsoft says its Maia 300 chip is expected to deliver 40% more AI output than leading GPUs on the same power.",
+     "publisher": "beehiiv.com"
+    },
+    "a7": {
+     "title": "OpenAI employee arrested for allegedly planting a bug in a conference room",
+     "summary": "An OpenAI engineer was arrested after the company said it discovered a sophisticated recording device hidden in one of its offices. OpenAI said it used its AI models to understand the device and identify that a specific employee had planted it a few days earlier.",
+     "publisher": "theverge.com"
+    },
+    "a8": {
+     "title": "FBI arrests OpenAI employee accused of planting hidden recording device in conference room",
+     "summary": "Prosecutors said OpenAI caught the device after it was inserted into a USB port on the back of a television in OpenAI's San Francisco office.",
+     "publisher": "techcrunch.com"
+    },
+    "a9": {
+     "title": "An OpenAI Employee Allegedly Used a Chatbot to Help Plant a Recording Device at the Office",
+     "summary": "An OpenAI engineer allegedly used chatbots to plan hiding a recording device in a conference room, per a criminal complaint.",
+     "publisher": "wired.com"
+    },
+    "a10": {
+     "title": "Rivian partner Mind Robotics hires Doug Field as president",
+     "summary": "Rivian partner Mind Robotics hired Doug Field as president to lead its robotics effort, according to the startup.",
+     "publisher": "theverge.com"
+    },
+    "a11": {
+     "title": "Rivian's startup Mind Robotics hires former Ford EV chief Doug Field",
+     "summary": "Rivian hired former Ford EV chief Doug Field as president of its industrial AI and robotics venture Mind Robotics, which has over $1 billion in backing.",
+     "publisher": "techcrunch.com"
+    },
+    "a12": {
+     "title": "Google Play now lets anyone build private, vibe-coded apps that run on Android",
+     "summary": "Google announced that users can now run private, vibe-coded apps on Android via Google Play without publishing them publicly.",
+     "publisher": "techcrunch.com"
+    },
+    "a13": {
+     "title": "Google wants to host your personal vibe-coded apps in the Play Store",
+     "summary": "Google is expanding Play Store AI features, including Ask Play, Game Finder, and private hosting for user-built apps.",
+     "publisher": "arstechnica.com"
+    },
+    "a14": {
+     "title": "Meet Helix World: A Real-Time Audio-Visual World Model",
+     "summary": "On HelixBench, Helix World's spatial-acoustic consistency score is 41.8, compared with 12.7 for EchoWM, the only other sound-generating world model in the comparison.",
+     "publisher": "noiz.ai"
+    },
+    "a15": {
+     "title": "All Systems Go: Global PC App Ecosystem Ready for NVIDIA RTX Spark",
+     "summary": "NVIDIA and Microsoft announced that RTX Spark laptops will be available on Friday, Oct. 16, with ecosystem partners rolling out new software features and performance optimizations ahead of launch.",
+     "publisher": "nvidia.com"
+    },
+    "a16": {
+     "title": "Introducing Dynamic Model Escalation: More Accurate AI Evals, No Trade-Offs To Make",
+     "summary": "Fiddler says its new Dynamic Model Escalation for Centor Model for Safety routes out-of-domain inputs to a Fiddler-hosted general-purpose model without external API calls. Fiddler reports that escalating 3.1% of inputs on one reference dataset cut the overall jailbreak false positive rate by 93.5%.",
+     "publisher": "fiddler.ai"
+    },
+    "a17": {
+     "title": "Can we change an AI model's architecture without retraining it from scratch?",
+     "summary": "Amazon Web Services says its priming method reuses pretrained Transformer weights to cut hybrid-architecture pretraining cost by over 99%. AWS reports that a 32-billion-parameter GKA-based hybrid matches its source Transformer on reasoning benchmarks while decoding up to twice as quickly at 128,000 tokens of context.",
+     "publisher": "amazon.science"
+    },
+    "a18": {
+     "title": "The 2026 Startup Battlefield Top 20: From organs to orbit and everything in between",
+     "summary": "TechCrunch names twenty founders competing at Disrupt for a $100,000 prize and the Disrupt Cup.",
+     "publisher": "techcrunch.com"
+    },
+    "a19": {
+     "title": "SpaceX and Google both said no. Now his software is riding a SpaceX rocket next to Google's",
+     "summary": "Satlyt's software reportedly cut the size of a transmission about onboard software errors by more than 60% using Google DeepMind's Gemma model on a Momentus spacecraft.",
+     "publisher": "techcrunch.com"
+    },
+    "a20": {
+     "title": "Xbox is officially embracing the chaos of AI-powered game ports",
+     "summary": "Xbox CEO Asha Sharma says Microsoft formed Xbox Labs, a small group of game makers, engineers and scientists, to explore emerging game-modding ideas.",
+     "publisher": "theverge.com"
+    },
+    "a21": {
+     "title": "Agents need more than business process knowledge. They need to understand how your company actually works",
+     "summary": "SAP's Ted Way says AI agents need company-specific configurations, policies, data relationships and exceptions, not just standard process knowledge, to execute enterprise workflows reliably.",
+     "publisher": "venturebeat.com"
+    }
+   }
+  },
+  "brief": {
+   "attempts": [
+    {
+     "model": "deepseek-v4-pro",
+     "finish": "stop",
+     "in": 2784,
+     "out": 378,
+     "result": "ok"
+    }
+   ],
+   "sentences": [
+    {
+     "text": "Google began a wide rollout of Gemini 4 Argon to paying users, with lower-tier plans lacking full access, covered by 6 outlets.",
+     "ids": [
+      "a1",
+      "a2",
+      "a3"
+     ],
+     "quote": {
+      "id": "a1",
+      "span": "Google is beginning a wide rollout of Gemini 4 Argon only to paying users, with lower-tier plans lacking full access."
+     }
+    },
+    {
+     "text": "Meta introduced the Muse Wonder series, comprising Muse Wonder and Muse Wonder Full, as its most capable models for personal and professional agentic tasks.",
+     "ids": [
+      "a5",
+      "a6"
+     ],
+     "quote": {
+      "id": "a5",
+      "span": "Meta introduced the Muse Wonder series, comprising Muse Wonder and Muse Wonder Full, as its most capable models for personal and professional agentic tasks."
+     }
+    },
+    {
+     "text": "An OpenAI engineer was arrested after the company said it discovered a sophisticated recording device hidden in one of its offices.",
+     "ids": [
+      "a7",
+      "a8",
+      "a9"
+     ],
+     "quote": {
+      "id": "a7",
+      "span": "An OpenAI engineer was arrested after the company said it discovered a sophisticated recording device hidden in one of its offices."
+     }
+    },
+    {
+     "text": "Rivian partner Mind Robotics hired Doug Field as president to lead its robotics effort, according to the startup.",
+     "ids": [
+      "a10",
+      "a11"
+     ],
+     "quote": {
+      "id": "a10",
+      "span": "Rivian partner Mind Robotics hired Doug Field as president to lead its robotics effort, according to the startup."
+     }
+    }
+   ],
+   "ledger_usd": 0.00517176,
+   "list_usd": 0.00517176
+  }
+ },
+ "2026-10-15": {
+  "data": {
+   "day": "2026-10-15",
+   "quiet": false,
+   "digest_items": 92,
+   "stories": [
+    {
+     "label": "Welcome Muse Spark Open: open-weight frontier multimodal mixture-of-experts model from Meta",
+     "outlets": 9,
+     "event": "model_release",
+     "articles": [
+      "a1",
+      "a2",
+      "a3"
+     ]
+    },
+    {
+     "label": "Nvidia's Nemotron 3.5 Super VL is an open model built to run enterprise AI agents nonstop",
+     "outlets": 3,
+     "event": "model_release",
+     "articles": [
+      "a4",
+      "a5",
+      "a6"
+     ]
+    },
+    {
+     "label": "Black Forest Labs opens FLUX 3 Image Klein weights, with free commercial use limited to smaller businesses",
+     "outlets": 3,
+     "event": "model_release",
+     "articles": [
+      "a7",
+      "a8",
+      "a9"
+     ]
+    },
+    {
+     "label": "Gemini 4 Argon vs Gemini 3.1 Pro: Benchmarks & Pricing (2026)",
+     "outlets": 2,
+     "event": "model_release",
+     "articles": [
+      "a10",
+      "a11",
+      "a12"
+     ]
+    },
+    {
+     "label": "Volvo makes a bigger bet on Nvidia for hands-free automated driving",
+     "outlets": 2,
+     "event": "partnership",
+     "articles": [
+      "a13",
+      "a14"
+     ]
+    }
+   ],
+   "new": [
+    {
+     "name": "Muse Spark Open",
+     "type": "model",
+     "vendor": "Meta",
+     "outlets": 9,
+     "what": "the newly released Muse Spark Open (816 B)",
+     "articles": [
+      "a1",
+      "a2",
+      "a3"
+     ]
+    },
+    {
+     "name": "Nemotron 3.5 Super VL",
+     "type": "model",
+     "vendor": "NVIDIA",
+     "outlets": 3,
+     "what": "NVIDIA released Nemotron 3.5 Super VL, an open 120-billion-parameter model, plus two edge Bolt models, with Bolt E4B due Oct. 23.",
+     "articles": [
+      "a4",
+      "a5",
+      "a6"
+     ]
+    },
+    {
+     "name": "FLUX 3 Image Klein",
+     "type": "model",
+     "vendor": "Black Forest Labs",
+     "outlets": 3,
+     "what": "Black Forest Labs released FLUX 3 Image Klein, a 5.6-billion-parameter open-weights model for text-to-image generation, image editing...",
+     "articles": [
+      "a7",
+      "a8",
+      "a9"
+     ]
+    },
+    {
+     "name": "Granite-Switch-4.1-8B",
+     "type": "model",
+     "vendor": "Granite",
+     "outlets": 1,
+     "what": "Granite-Switch-4.1-8B and -30B are released with \"batteries included\"",
+     "articles": [
+      "a15"
+     ]
+    },
+    {
+     "name": "Bee Eclipse",
+     "type": "hardware",
+     "vendor": "Bee",
+     "outlets": 1,
+     "what": "Bee announced the Bee Frontier and Bee Eclipse, priced at $74.99 and $99.99 respectively, with the Eclipse competing against devices...",
+     "articles": [
+      "a16"
+     ]
+    },
+    {
+     "name": "Bee Frontier",
+     "type": "hardware",
+     "vendor": "Bee",
+     "outlets": 1,
+     "what": "Bee announced the Bee Frontier and Bee Eclipse, priced at $74.99 and $99.99 respectively, with the Eclipse competing against devices...",
+     "articles": [
+      "a16"
+     ]
+    },
+    {
+     "name": "DolphinBench",
+     "type": "benchmark",
+     "vendor": "Mem0",
+     "outlets": 1,
+     "what": "A new test called DolphinBench checks whether an AI assistant's memory helps it get things done.",
+     "articles": [
+      "a17"
+     ]
+    },
+    {
+     "name": "TheoPhysEval",
+     "type": "benchmark",
+     "vendor": null,
+     "outlets": 1,
+     "what": "Thirty-five researchers from institutions including the International Centre for Theoretical Sciences (ICTS), Harvard University, KU...",
+     "articles": [
+      "a18"
+     ]
+    }
+   ],
+   "spikes": [
+    {
+     "name": "GPT-6 Astra",
+     "today": 6,
+     "usual_per_day": 1.667,
+     "articles": [
+      "a18",
+      "a11",
+      "a10"
+     ]
+    },
+    {
+     "name": "Gemini 3.8 Flash",
+     "today": 4,
+     "usual_per_day": 0.333,
+     "articles": [
+      "a18",
+      "a12",
+      "a19"
+     ]
+    }
+   ],
+   "event_counts": {
+    "model releases": 7,
+    "product launches": 20,
+    "funding rounds": 3,
+    "acquisitions": 1,
+    "partnerships": 4,
+    "regulation & policy": 1,
+    "security incidents": 2
+   },
+   "articles": {
+    "a1": {
+     "title": "Welcome Muse Spark Open: open-weight frontier multimodal mixture-of-experts model from Meta",
+     "summary": "Meta trained Muse Spark Open for agentic coding, including reading a codebase, writing and debugging code, and calling tools. The model accepts images, audio, and video as input alongside text.",
+     "publisher": "huggingface.co"
+    },
+    "a2": {
+     "title": "Local and Distributed Large LLM Inference with MLX and RDMA on Mac Studio",
+     "summary": "Apple claims that on a cluster of four Mac Studios, Muse Spark Open generates over 36 tokens per second. Apple reports the M5 Ultra GPU Neural Accelerator gives up to 4.6x faster time to first token than an M3 Ultra.",
+     "publisher": "apple.com"
+    },
+    "a3": {
+     "title": "Muse Spark Open, an open-weight model for coding agents",
+     "summary": "Baseten serves the NVFP4 checkpoint, cutting weight size from roughly 1.6 TB to 540 GB so the full model fits on a single 4\u00d7GB300 node.",
+     "publisher": "baseten.co"
+    },
+    "a4": {
+     "title": "Open From Data Center to Desktop: NVIDIA Expands Nemotron Family With Highest Efficiency Super VL and Bolt Models",
+     "summary": "NVIDIA released Nemotron 3.5 Super VL, an open 120-billion-parameter model, plus two edge Bolt models, with Bolt E4B due Oct. 23.",
+     "publisher": "nvidia.com"
+    },
+    "a5": {
+     "title": "Announcing NVIDIA Nemotron 3.5 Super VL on Baseten",
+     "summary": "NVIDIA's open multimodal model Nemotron 3.5 Super VL is now available on Baseten for inference and customization. Nemotron 3.5 Super VL builds on Nemotron 3 Super as a 120B-parameter Mixture-of-Experts model activating 12B parameters per token. In NVIDIA's reported evaluations, Nemotron 3.5 Super VL scored an Elo of 1190 on GDPval versus 493 for Nemotron 3 Super.",
+     "publisher": "baseten.co"
+    },
+    "a6": {
+     "title": "Nvidia's Nemotron 3.5 Super VL is an open model built to run enterprise AI agents nonstop",
+     "summary": "Nvidia released Nemotron 3.5 Super VL, an open 120-billion-parameter multimodal model for enterprise agents, with two smaller Bolt variants for local hardware.",
+     "publisher": "the-decoder.com"
+    },
+    "a7": {
+     "title": "Welcome FLUX.3 Image Klein in Diffusers",
+     "summary": "Black Forest Labs' FLUX.3 Image Klein is presented as the latest open image generation model in Diffusers, with distilled and base checkpoints. The distilled checkpoint reportedly makes a 1024 \u00d7 1024 image in about 2 seconds on an H100. The base checkpoint runs 50 steps with classifier-free guidance and is recommended for fine-tuning.",
+     "publisher": "huggingface.co"
+    },
+    "a8": {
+     "title": "Black Forest Labs opens FLUX 3 Image Klein weights, with free commercial use limited to smaller businesses",
+     "summary": "BFL's benchmark charts claim Klein leads other open-weight models, but lack prompt, judging and sample-size details for independent verification.",
+     "publisher": "venturebeat.com"
+    },
+    "a9": {
+     "title": "Black Forest Labs' open-weights image model FLUX 3 Image Klein runs on consumer GPUs with just 8 GB of VRAM",
+     "summary": "Black Forest Labs released FLUX 3 Image Klein, a 5.6-billion-parameter open-weights model for text-to-image generation, image editing, and generation with up to ten reference images.",
+     "publisher": "the-decoder.com"
+    },
+    "a10": {
+     "title": "Google wants Gemini 4 Argon to be the only AI model robots need",
+     "summary": "Google pitches Gemini 4 Argon as a single model for robot control, simulation building, and training-data evaluation, though demos still need heavy human prompting.",
+     "publisher": "the-decoder.com"
+    },
+    "a11": {
+     "title": "Gemini 4 Argon vs. GPT 6 Astra: Benchmarks and Pricing",
+     "summary": "Google's Gemini 4 Argon reportedly leads GPT 6 Astra on several legal, financial, and business benchmarks, though Astra leads selected software engineering and computer-use evaluations. Argon's reported benchmark results come from Google and have not been independently tested, so they should be treated as a starting point.",
+     "publisher": "emergent.sh"
+    },
+    "a12": {
+     "title": "Gemini 4 Argon vs Gemini 3.1 Pro: Benchmarks & Pricing (2026)",
+     "summary": "The source says Gemini 3.1 Pro still wins on cost per task and factual accuracy, at 55% against Argon's 50%.",
+     "publisher": "emergent.sh"
+    },
+    "a13": {
+     "title": "Volvo will use Nvidia's tech for hands-free, point-to-point driving",
+     "summary": "Volvo plans to launch hands-free, point-to-point driving by 2030 using Nvidia's AI technology, according to the source.",
+     "publisher": "theverge.com"
+    },
+    "a14": {
+     "title": "Volvo makes a bigger bet on Nvidia for hands-free automated driving",
+     "summary": "Volvo will use three pieces of Nvidia hardware and software in future vehicles for hands-free automated driving, per the companies. Nvidia's Ali Kani said the Alpamayo stack is redundant and diverse, combining AI models with classical software and multimodal sensors for safety. Volvo's Alwin Bakkenes said the first vehicle with the new Nvidia tech stack will debut within the decade.",
+     "publisher": "techcrunch.com"
+    },
+    "a15": {
+     "title": "Granite Switch 4.1: Chat, Decisions, and Speech from One Endpoint",
+     "summary": "IBM says Granite Switch 4.1 combines chat, decision and speech adapters into one model using roughly the base model's VRAM. IBM claims its Guardian aLoRA on average outperforms Jev 1.13, Microsoft-Decision-1, GPT-Luna-Decisions and Clef-Flash on safety-related decision tasks. IBM reports its 3B Granite Switch model made 60-100 decisions per second in Doom versus Jev's reported 10.",
+     "publisher": "huggingface.co"
+    },
+    "a16": {
+     "title": "Amazon's Bee launches two new personal AI devices, starting at $75",
+     "summary": "Bee announced the Bee Frontier and Bee Eclipse, priced at $74.99 and $99.99 respectively, with the Eclipse competing against devices like the Plaud Note and Pocket at a lower price point.",
+     "publisher": "techcrunch.com"
+    },
+    "a17": {
+     "title": "I Tested Four Ways to Give an AI Assistant a Memory. The Obvious One Was the Worst Value.",
+     "summary": "The author reports that full history cost 20 to 31 times more than retrieval and did not score higher.",
+     "publisher": "towardsdatascience.com"
+    },
+    "a18": {
+     "title": "GPT-6-Astra solves 49 of 50 physics research problems at $2.40 apiece",
+     "summary": "The authors say current agents lack the \"taste\" needed for breakthroughs, though they stress these observations are not a forecast.",
+     "publisher": "the-decoder.com"
+    },
+    "a19": {
+     "title": "5 Best Gemini 4 Argon Alternatives in 2026",
+     "summary": "Google's published results reportedly show Gemini 4 Argon scoring 77.9% on DeepSWE v1.1, while Claude Opus 5.5 scores 66.4% and Argon 57.4% on Terminal-Bench 4.0. Google reportedly states Gemini 3.8 Flash has introductory API rates of $0.75 per million input tokens and $3.75 per million output tokens until December 31, 2026.",
+     "publisher": "emergent.sh"
+    }
+   }
+  },
+  "brief": {
+   "attempts": [
+    {
+     "model": "deepseek-v4-pro",
+     "finish": "stop",
+     "in": 3137,
+     "out": 489,
+     "result": "ok"
+    }
+   ],
+   "sentences": [
+    {
+     "text": "Meta released Muse Spark Open, an open-weight frontier multimodal mixture-of-experts model for agentic coding, covered by 9 outlets.",
+     "ids": [
+      "a1",
+      "a2",
+      "a3"
+     ],
+     "quote": {
+      "id": "a1",
+      "span": "open-weight frontier multimodal mixture-of-experts model from Meta"
+     }
+    },
+    {
+     "text": "NVIDIA released Nemotron 3.5 Super VL, an open 120-billion-parameter model, plus two edge Bolt models, with Bolt E4B due Oct. 23.",
+     "ids": [
+      "a4",
+      "a5",
+      "a6"
+     ],
+     "quote": {
+      "id": "a4",
+      "span": "Open From Data Center to Desktop: NVIDIA Expands Nemotron Family With Highest Efficiency Super VL and Bolt Models"
+     }
+    },
+    {
+     "text": "Black Forest Labs released FLUX 3 Image Klein, a 5.6-billion-parameter open-weights model for text-to-image generation, image editing, and generation with up to ten reference images.",
+     "ids": [
+      "a7",
+      "a8",
+      "a9"
+     ],
+     "quote": {
+      "id": "a9",
+      "span": "Black Forest Labs' open-weights image model FLUX 3 Image Klein runs on consumer GPUs with just 8 GB of VRAM"
+     }
+    },
+    {
+     "text": "Volvo will use Nvidia's tech for hands-free, point-to-point driving, according to the source.",
+     "ids": [
+      "a13",
+      "a14"
+     ],
+     "quote": {
+      "id": "a13",
+      "span": "Volvo will use Nvidia's tech for hands-free, point-to-point driving"
+     }
+    },
+    {
+     "text": "Google pitches Gemini 4 Argon as a single model for robot control, simulation building, and training-data evaluation, though demos still need heavy human prompting.",
+     "ids": [
+      "a10",
+      "a11",
+      "a12"
+     ],
+     "quote": {
+      "id": "a10",
+      "span": "Google wants Gemini 4 Argon to be the only AI model robots need"
+     }
+    }
+   ],
+   "ledger_usd": 0.006077280000000001,
+   "list_usd": 0.006077280000000001
+  }
+ },
+ "2026-10-16": {
+  "data": {
+   "day": "2026-10-16",
+   "quiet": false,
+   "digest_items": 58,
+   "stories": [
+    {
+     "label": "Introducing Reflection Beam: an open-weight model for agentic coding on AWS",
+     "outlets": 4,
+     "event": "model_release",
+     "articles": [
+      "a1",
+      "a2",
+      "a3"
+     ]
+    },
+    {
+     "label": "Muse Spark Open",
+     "outlets": 2,
+     "event": "model_release",
+     "articles": [
+      "a4",
+      "a5"
+     ]
+    },
+    {
+     "label": "Microsoft Surface Laptop Ultra Review: The First Real AI PC",
+     "outlets": 2,
+     "event": "product_launch",
+     "articles": [
+      "a6",
+      "a7"
+     ]
+    },
+    {
+     "label": "NVIDIA RTX Spark and Kilo by Anaconda: New Device to Put Local AI to Work",
+     "outlets": 2,
+     "event": "product_launch",
+     "articles": [
+      "a8",
+      "a9"
+     ]
+    }
+   ],
+   "new": [
+    {
+     "name": "GPT-Live-1.1",
+     "type": "model",
+     "vendor": "OpenAI",
+     "outlets": 1,
+     "what": "GPT-Live-1.1 brings these updates to Voice in ChatGPT, Codex, and dots",
+     "articles": [
+      "a10"
+     ]
+    },
+    {
+     "name": "Glimpse",
+     "type": "model",
+     "vendor": "Elorian",
+     "outlets": 1,
+     "what": "Elorian released its first model, Glimpse, as a research preview with API access and a waitlist-only chat interface.",
+     "articles": [
+      "a11"
+     ]
+    },
+    {
+     "name": "MAI-Base-2",
+     "type": "model",
+     "vendor": "Microsoft",
+     "outlets": 1,
+     "what": "Microsoft says MAI-Base-2 is an MoE foundation model with 80 billion active and 2.8 trillion total parameters.",
+     "articles": [
+      "a12"
+     ]
+    },
+    {
+     "name": "d1-ultra",
+     "type": "model",
+     "vendor": "Liquid AI",
+     "outlets": 1,
+     "what": "Today, we release d1-ultra, our new multimodal decision model",
+     "articles": [
+      "a13"
+     ]
+    },
+    {
+     "name": "Nemotron-pretraining-Indic-v1",
+     "type": "dataset",
+     "vendor": "NVIDIA",
+     "outlets": 1,
+     "what": "We're excited to introduce Nemotron-pretraining-Indic-v1 approximately 2.8 trillion tokens across 22 Indian languages, releasing soon",
+     "articles": [
+      "a14"
+     ]
+    },
+    {
+     "name": "Handwired",
+     "type": "technology",
+     "vendor": null,
+     "outlets": 1,
+     "what": "Cheng Lou introduced Handwired, a toy project that turns regular JavaScript code into a neural net with no training, exact outputs, and...",
+     "articles": [
+      "a15"
+     ]
+    },
+    {
+     "name": "Evidence Desk",
+     "type": "product",
+     "vendor": null,
+     "outlets": 1,
+     "what": "Evidence Desk is a browser tool I built with Codex.",
+     "articles": [
+      "a16"
+     ]
+    }
+   ],
+   "spikes": [],
+   "event_counts": {
+    "model releases": 10,
+    "product launches": 9,
+    "partnerships": 1,
+    "hardware": 1,
+    "regulation & policy": 3,
+    "legal": 1,
+    "security incidents": 4,
+    "people moves": 1
+   },
+   "articles": {
+    "a1": {
+     "title": "Welcome Beam: a 501B open model you can own, customize, and scale",
+     "summary": "Beam ships with day-0 support in transformers, SGLang and vLLM, plus a dedicated Rust-based harness. Benchmark results across BF16, FP8 and NVFP4 precisions were provided by the Reflection team.",
+     "publisher": "huggingface.co"
+    },
+    "a2": {
+     "title": "Reflection's Beam aims to undercut Chinese open models with fewer tokens, not cheaper tokens",
+     "summary": "Reflection AI released Beam, a 501-billion-parameter open model it says finishes tasks in fewer tokens to lower cost per task. Reflection says Beam was trained with heavy reinforcement learning and a penalty for unnecessary tokens, though it has not set pricing. Reflection says Beam scores about 80% on Terminal-Bench 2.1, below DeepSeek V4.1 Flash's 90.6% on the same test.",
+     "publisher": "venturebeat.com"
+    },
+    "a3": {
+     "title": "Beam: Efficient reasoning for coding and agentic workloads",
+     "summary": "Reflection's first open-weight model, Beam, is now available on the Baseten Platform with day-0 support via Model APIs and Dedicated Inference. Beam is a 501B-parameter mixture-of-experts model with 23B active parameters per token and up to a 1-million-token context window.",
+     "publisher": "baseten.co"
+    },
+    "a4": {
+     "title": "Muse Spark Open",
+     "summary": "The vendor says Muse Spark Open is a natively multimodal open-weight model with 816B total parameters and a 1M-token context window.",
+     "publisher": "meta.ai"
+    },
+    "a5": {
+     "title": "Meta turns Mac into an AI supercomputer",
+     "summary": "Meta released Muse Spark Open, an open-weight 816B-parameter multimodal model, and worked with Apple so it could run locally on Mac Studios, Meta says.",
+     "publisher": "beehiiv.com"
+    },
+    "a6": {
+     "title": "The Surface Laptop Ultra delivers on most of Microsoft's promises",
+     "summary": "Microsoft positions the Surface Laptop Ultra against the MacBook Pro for a high performance audience.",
+     "publisher": "arstechnica.com"
+    },
+    "a7": {
+     "title": "Microsoft Surface Laptop Ultra Review: The First Real AI PC",
+     "summary": "WIRED rates the Surface Laptop Ultra 7/10, calling it a true MacBook Pro competitor for Windows hampered by battery life. The reviewer measured 987 nits in SDR and 1,945 nits in HDR, calling it the brightest laptop screen ever made. The Surface Laptop Ultra lasted only 12 hours in a local video playback test, far short of the MacBook Pro.",
+     "publisher": "wired.com"
+    },
+    "a8": {
+     "title": "Nvidia's RTX Spark Laptops Are Off to a Good Start, But Performance Is Mixed",
+     "summary": "Reviewers say CPU-limited games perform poorly due to weak single-threaded performance and Windows translation overhead. Tom's Hardware found the N1X fast for local AI but unimpressive for gaming, citing 300GB/s shared memory bandwidth.",
+     "publisher": "extremetech.com"
+    },
+    "a9": {
+     "title": "NVIDIA RTX Spark and Kilo by Anaconda: New Device to Put Local AI to Work",
+     "summary": "Kilo Desktop by Anaconda is described as one app for building with AI where users can plan, write, test, and debug code. Its built-in local model server runs open models on RTX hardware, keeping prompts on the machine. RTX Spark pairs NVIDIA Grace CPU cores with a Blackwell RTX GPU, and some configurations include up to 128 GB of unified memory.",
+     "publisher": "anaconda.com"
+    },
+    "a10": {
+     "title": "GPT-Live-1.1",
+     "summary": "OpenAI says GPT-Live-1.1 adds new voices and better accents to Voice in ChatGPT, Codex, and dots, rolling out today to all users and coming soon to the API.",
+     "publisher": "threadreaderapp.com"
+    },
+    "a11": {
+     "title": "Elorian's first AI model wants to reason with images, not just about them",
+     "summary": "Elorian released its first model, Glimpse, as a research preview with API access and a waitlist-only chat interface. Elorian claims Glimpse outperforms GPT-6 Astra on scientific chart reasoning and short-form video captioning in its evaluations.",
+     "publisher": "techcrunch.com"
+    },
+    "a12": {
+     "title": "Inside Microsoft's Frontier Pre-Training Stack",
+     "summary": "Microsoft says MAI-Base-2 is an MoE foundation model with 80 billion active and 2.8 trillion total parameters. Microsoft claims MAI-Base-2 is 4-12x more pre-training FLOPs-efficient than DeepSeek-V4-Pro-Base.",
+     "publisher": "microsoft.ai"
+    },
+    "a13": {
+     "title": "d1-ultra: Introducing the World's Best Decision Model",
+     "summary": "Liquid AI says d1-ultra outperforms Jev 1.14 across all tasks with better-calibrated answers and higher accuracy at the same price.",
+     "publisher": "liquid.ai"
+    },
+    "a14": {
+     "title": "Scaling Indic Pretraining: 2.8 Trillion Tokens and an Open Data Generation Pipeline",
+     "summary": "The corpus contains 2,601.0 billion native-script and 224.6 billion romanized tokens, counted with the Gemma-4 tokenizer.",
+     "publisher": "huggingface.co"
+    },
+    "a15": {
+     "title": "Introducing Handwired: JavaScript as Neural Networks",
+     "summary": "Cheng Lou introduced Handwired, a toy project that turns regular JavaScript code into a neural net with no training, exact outputs, and full differentiability, runnable in a browser without GPU.",
+     "publisher": "x.com"
+    },
+    "a16": {
+     "title": "I Built a Claim-Checker for Writing With Codex. It Passed a Wrong Claim.",
+     "summary": "The author's Codex-built Evidence Desk claim-checker labeled a distorted accuracy claim as Supported because its checks treat passages as bags of words and numbers.",
+     "publisher": "towardsdatascience.com"
+    }
+   }
+  },
+  "brief": {
+   "attempts": [
+    {
+     "model": "deepseek-v4-pro",
+     "finish": "stop",
+     "in": 2490,
+     "out": 487,
+     "result": "ok"
+    }
+   ],
+   "sentences": [
+    {
+     "text": "Reflection AI released Beam, a 501-billion-parameter open model with day-0 support in transformers, SGLang, and vLLM, covered by 4 outlets.",
+     "ids": [
+      "a1",
+      "a2",
+      "a3"
+     ],
+     "quote": {
+      "id": "a1",
+      "span": "Beam ships with day-0 support in transformers, SGLang and vLLM"
+     }
+    },
+    {
+     "text": "Meta released Muse Spark Open, an open-weight 816B-parameter multimodal model with a 1M-token context window, covered by 2 outlets.",
+     "ids": [
+      "a4",
+      "a5"
+     ],
+     "quote": {
+      "id": "a4",
+      "span": "Muse Spark Open is a natively multimodal open-weight model with 816B total parameters and a 1M-token context window"
+     }
+    },
+    {
+     "text": "Microsoft launched the Surface Laptop Ultra, which WIRED rates 7/10 and calls a true MacBook Pro competitor for Windows hampered by battery life.",
+     "ids": [
+      "a6",
+      "a7"
+     ],
+     "quote": {
+      "id": "a7",
+      "span": "a true MacBook Pro competitor for Windows hampered by battery life"
+     }
+    },
+    {
+     "text": "NVIDIA's RTX Spark laptops are off to a good start, but reviewers say CPU-limited games perform poorly due to weak single-threaded performance and Windows translation overhead.",
+     "ids": [
+      "a8",
+      "a9"
+     ],
+     "quote": {
+      "id": "a8",
+      "span": "CPU-limited games perform poorly due to weak single-threaded performance and Windows translation overhead"
+     }
+    },
+    {
+     "text": "OpenAI says GPT-Live-1.1 adds new voices and better accents to Voice in ChatGPT, Codex, and dots, rolling out today to all users.",
+     "ids": [
+      "a10"
+     ],
+     "quote": {
+      "id": "a10",
+      "span": "GPT-Live-1.1 adds new voices and better accents to Voice in ChatGPT, Codex, and dots"
+     }
+    }
+   ],
+   "ledger_usd": 0.00521532,
+   "list_usd": 0.004725336
+  }
+ }
+}
