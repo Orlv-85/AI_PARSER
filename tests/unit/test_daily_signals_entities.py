@@ -380,3 +380,14 @@ def test_trailing_plural_joins_singular_only_when_singular_exists():
     # Other type groups do not fold into each other.
     mixed = reconcile([mention(1, "Bots", "company"), mention(2, "Bot", "product")])
     assert len(set(mixed.assignments.values())) == 2
+
+
+def test_glued_spelling_joins_only_with_a_spaced_suffix_spelling():
+    # V03: "OpenAI" must not join an unrelated vendor "Open"; "LiquidAI" joins because the spaced
+    # spelling "Liquid AI" (separate company suffix) is in the evidence.
+    classes = VendorClasses(["OpenAI", "Open"], [("openai",), ("open",)])
+    assert (classes.of("OpenAI"), classes.of("Open")) == ("openai", "open")
+    glued_only = VendorClasses(["LiquidAI", "Liquid"], [("liquidai",), ("liquid",)])
+    assert glued_only.of("LiquidAI") == "liquidai"
+    spaced = VendorClasses(["LiquidAI"], [("liquid",)], spellings=["Liquid AI"])
+    assert spaced.of("LiquidAI") == "liquid"

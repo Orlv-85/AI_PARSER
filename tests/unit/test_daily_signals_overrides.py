@@ -154,3 +154,28 @@ def test_merge_survives_vendor_class_growth(repo):
     recompute(repo)
     assert entity(repo, "auto:artifact:geminiroboticser").active is False
     assert {key for _, key in owners(repo, "Gemini Robotics ER")} == {"manual:1"}
+
+
+def test_merge_survives_later_singular_evidence(repo):
+    # V04: a stored selector keeps matching after the plural fold changes the base keys.
+    publish(repo, D - timedelta(days=2),
+            ("a", [("Gemini Agents", "product", None, "primary", False)]),
+            ("b", [("Gemini Studio", "product", None, "primary", False)]),
+            ("c", [("Orion Tools", "product", None, "primary", False)]),
+            ("d", [("Helix", "product", None, "primary", False)]))
+    recompute(repo)
+    merge_entities(repo, entity_id(repo, "auto:artifact:geminiagents"),
+                   entity_id(repo, "auto:artifact:geministudio"))
+    merge_entities(repo, entity_id(repo, "auto:artifact:helix"),
+                   entity_id(repo, "auto:artifact:oriontools"))
+    recompute(repo)
+    publish(repo, D, ("e", [("Gemini agent", "product", None, "primary", False)]),
+            ("f", [("Orion Tool", "product", None, "primary", False)]))
+    recompute(repo)
+    assert {key for _, key in owners(repo, "Gemini Agents") + owners(repo, "Gemini agent")
+            + owners(repo, "Gemini Studio")} == {"manual:1"}
+    assert {key for _, key in owners(repo, "Orion Tools") + owners(repo, "Orion Tool")
+            + owners(repo, "Helix")} == {"manual:2"}
+    with pytest.raises(OverrideConflict):
+        repo.add_override(kind="merge", type_group_="artifact", match_key="geminiagent",
+                          target_base_key="helix")

@@ -369,8 +369,9 @@ class DailySignalRepo:
                              target_entity_key=target_entity_key or "manual:new")
         if (match_key, vendor_class) == (target_base_key, target_vendor_class) and kind == "merge":
             raise OverrideConflict("source and target are the same selector")
-        classes = evidence_classes(self.load_evidence()[0])
-        conflict = selectors_conflict(existing, candidate, classes.resolve)
+        evidence = self.load_evidence()[0]
+        conflict = selectors_conflict(existing, candidate, evidence_classes(evidence).resolve,
+                                      reconcile(evidence).resolve_base)
         if conflict is not None:
             raise OverrideConflict(f"selector owned by override {conflict.override_id}")
         row = AIEntityOverride(kind=kind, type_group=type_group_, match_key=match_key,

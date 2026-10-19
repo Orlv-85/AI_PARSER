@@ -29,7 +29,8 @@ STOPLIST = frozenset({
 })
 COMPANY_SUFFIX = frozenset({"inc", "incorporated", "corp", "corporation", "ltd", "llc", "plc",
                             "gmbh", "co", "ai"})
-# Suffixes also stripped when glued to the name ("LiquidAI"); not "co" (Cisco, Costco).
+# Company suffixes that, written separately ("Liquid AI"), confirm a glued spelling ("LiquidAI");
+# not "co" (Cisco, Costco).
 GLUED_SUFFIX = tuple(sorted(COMPANY_SUFFIX - {"co"}, key=lambda s: (-len(s), s)))
 # Endings that are not English plurals ("Atlas", "Genesis", "Nexus", "Kairos", "Glass").
 NOT_PLURAL = ("ss", "us", "is", "os", "as")
@@ -76,16 +77,16 @@ def company_tokens(parts: Sequence[str]) -> Tokens:
     return tuple(rest)
 
 
-def glued_forms(parts: Sequence[str]) -> set[str]:
-    """Space-free spellings of a vendor: the joined tokens and, for a glued company suffix with a
-    remainder of at least 3 characters, the remainder ("liquidai" -> "liquid")."""
-    joined = "".join(parts)
-    forms = {joined}
-    for suffix in GLUED_SUFFIX:
-        if joined.endswith(suffix) and len(joined) - len(suffix) >= 3:
-            forms.add(joined[:-len(suffix)])
-            break
-    return forms
+def spaced_suffix_forms(spellings: Iterable[str | None]) -> dict[str, Tokens]:
+    """Glued spelling -> name tokens, for spellings written with a separate company suffix
+    ("Liquid AI" confirms that "LiquidAI" is Liquid + suffix; V03: "OpenAI" alone confirms
+    nothing, so it never joins an unrelated "Open")."""
+    out: dict[str, Tokens] = {}
+    for spelling in spellings:
+        parts = tokens(spelling or "")
+        if len(parts) > 1 and parts[-1] in GLUED_SUFFIX and len("".join(parts[:-1])) >= 3:
+            out["".join(parts)] = company_tokens(parts)
+    return out
 
 
 def is_stopped(parts: Sequence[str]) -> bool:
@@ -188,9 +189,15 @@ class Reconciliation:
     keys: dict[int, MentionKeys] = field(default_factory=dict)
     assignments: dict[int, str] = field(default_factory=dict)
     entities: dict[str, Entity] = field(default_factory=dict)
+    # (type_group, plural base) -> singular base folded in this evidence set (F21, V04)
+    folded: dict[tuple[str, str], str] = field(default_factory=dict)
+
+    def resolve_base(self, group: str, base_key: str) -> str:
+        """A stored selector base resolved through the current plural fold."""
+        return self.folded.get((group, base_key), base_key)
 
 
-def _vendor_keys(members: set[Tokens]) -> dict[Tokens, str]:
+def _vendor_keys(members: set[Tokens], glued: Mapping[str, Tokens]) -> dict[Tokens, str]:
     """Union vendor spellings into classes; each member maps to its class's shortest key."""
     parent = {m: m for m in members}
 
@@ -208,15 +215,11 @@ def _vendor_keys(members: set[Tokens]) -> dict[Tokens, str]:
         for b in ordered:
             if len(a) < len(b) and b[:len(a)] == a:
                 parent[find(b)] = find(a)
-    # Members whose space-free forms meet are one vendor ("LiquidAI" = "Liquid AI"); a form
-    # that only one member has changes nothing ("OpenAI" stays "openai").
-    by_form: dict[str, Tokens] = {}
-    for a in sorted(members, key=lambda m: (len("".join(m)), m)):
-        for form in sorted(glued_forms(a)):
-            if form in by_form:
-                parent[find(a)] = find(by_form[form])
-            else:
-                by_form[form] = a
+    # A glued spelling joins the name it was confirmed for ("LiquidAI" = "Liquid AI").
+    for a in ordered:
+        target = glued.get("".join(a))
+        if target is not None and target != a and target in parent:
+            parent[find(a)] = find(target)
     components: dict[Tokens, list[Tokens]] = defaultdict(list)
     for m in members:
         components[find(m)].append(m)
@@ -231,14 +234,18 @@ def _vendor_keys(members: set[Tokens]) -> dict[Tokens, str]:
 class VendorClasses:
     """Vendor equivalence classes over the whole evidence set (plan Decision 2 rule 6)."""
 
-    def __init__(self, vendors: Iterable[str | None], org_names: Iterable[Tokens] = ()):
+    def __init__(self, vendors: Iterable[str | None], org_names: Iterable[Tokens] = (),
+                 spellings: Iterable[str | None] | None = None):
+        vendors = list(vendors)
+        glued = spaced_suffix_forms(vendors if spellings is None else [*vendors, *spellings])
         members: set[Tokens] = set()
         for vendor in vendors:
             raw = company_tokens(tokens(vendor or ""))
             if raw:
                 members.add(raw)
                 members.add(vendor_tokens(vendor))
-        self.key = _vendor_keys(members)
+        members |= {glued["".join(m)] for m in list(members) if "".join(m) in glued}
+        self.key = _vendor_keys(members, glued)
         # Stored override selectors keep the class key they saw; map every member spelling to
         # the current key so a class that gains a shorter member still matches (F4).
         self.current = {join(m): self.key[m] for m in members}
@@ -282,7 +289,8 @@ def evidence_classes(mentions: Iterable[Mention]) -> VendorClasses:
     rows = list(mentions)
     orgs = [name_tokens(m.canonical_name, m.entity_type) for m in rows
             if type_group(m.entity_type) == "org"]
-    return VendorClasses([m.vendor for m in rows], orgs)
+    spellings = [m.canonical_name for m in rows if type_group(m.entity_type) == "org"]
+    return VendorClasses([m.vendor for m in rows], orgs, spellings)
 
 
 def _ranked(counter: Counter, tie=lambda value: value):
@@ -321,25 +329,27 @@ def selectors_overlap(a: str, b: str) -> bool:
 
 
 def _override_target(keys: MentionKeys, auto: AutoEntity, overrides: Sequence[Override],
-                     classes: VendorClasses) -> str | None:
+                     classes: VendorClasses, result: Reconciliation) -> str | None:
     group = [o for o in overrides if o.type_group == keys.type_group]
     for kind in ("alias", "merge"):
         for o in group:
             if o.kind != kind or not selector_matches(classes.resolve(o.vendor_class), auto):
                 continue
-            if o.match_key == keys.base_key or (kind == "alias" and o.match_key == keys.name_key):
+            if result.resolve_base(o.type_group, o.match_key) == keys.base_key or \
+                    (kind == "alias" and o.match_key == keys.name_key):
                 return o.target_entity_key
     for o in group:
-        if o.target_base_key == keys.base_key and \
+        if result.resolve_base(o.type_group, o.target_base_key) == keys.base_key and \
                 selector_matches(classes.resolve(o.target_vendor_class), auto):
             return o.target_entity_key
     return None
 
 
-def _fold_plurals(keys: dict[int, MentionKeys]) -> None:
+def _fold_plurals(keys: dict[int, MentionKeys]) -> dict[tuple[str, str], str]:
     """F21: a trailing plural "s" on the last base token joins the singular base when that
     singular occurs in the evidence for the same type group ("Gemini Agents" = "Gemini agent")."""
     present = {(k.type_group, k.base_key) for k in keys.values()}
+    folded: dict[tuple[str, str], str] = {}
     for mention_id, k in sorted(keys.items()):
         last = k.base_tokens[-1] if k.base_tokens else ""
         if len(last) < 4 or not last.endswith("s") or last.endswith(NOT_PLURAL) or \
@@ -347,10 +357,12 @@ def _fold_plurals(keys: dict[int, MentionKeys]) -> None:
             continue
         base = (*k.base_tokens[:-1], last[:-1])
         if (k.type_group, join(base)) in present:
+            folded[(k.type_group, k.base_key)] = join(base)
             keys[mention_id] = MentionKeys(
                 type_group=k.type_group, name_key=k.name_key, base_key=join(base),
                 base_tokens=base, family_key=join(family_tokens(base)),
                 vendor_key=k.vendor_key, vendor_inferred=k.vendor_inferred)
+    return folded
 
 
 def _auto_assignments(rows: Sequence[Mention], keys: Mapping[int, MentionKeys]) -> dict[int, str]:
@@ -405,12 +417,12 @@ def reconcile(mentions: Iterable[Mention], overrides: Iterable[Override] = ()) -
     result = Reconciliation()
     for m in rows:
         result.keys[m.mention_id] = mention_keys(m, classes)
-    _fold_plurals(result.keys)
+    result.folded = _fold_plurals(result.keys)
     auto = _auto_assignments(rows, result.keys)
     auto_entities = _auto_entities(auto, result.keys)
     for m in rows:
         target = _override_target(result.keys[m.mention_id], auto_entities[auto[m.mention_id]],
-                                  ordered_overrides, classes)
+                                  ordered_overrides, classes, result)
         result.assignments[m.mention_id] = target or auto[m.mention_id]
     grouped: dict[str, list[Mention]] = defaultdict(list)
     for m in rows:
@@ -464,12 +476,15 @@ def token_prefix(older: Entity, newer: Entity) -> bool:
 
 
 def selectors_conflict(existing: Iterable[Override], new: Override,
-                       resolve=lambda selector_class: selector_class) -> Override | None:
+                       resolve=lambda selector_class: selector_class,
+                       resolve_base=lambda group, base_key: base_key) -> Override | None:
     """An override owning a selector that overlaps one of `new`'s (no cycles, no silent
-    conflicts); `resolve` maps stored classes to current class keys."""
+    conflicts); `resolve` maps stored classes to current class keys, `resolve_base` stored bases
+    through the current plural fold."""
     def selectors(o: Override) -> list[tuple[str, str, str]]:
-        return [(o.type_group, o.match_key, resolve(o.vendor_class)),
-                (o.type_group, o.target_base_key, resolve(o.target_vendor_class))]
+        g = o.type_group
+        return [(g, resolve_base(g, o.match_key), resolve(o.vendor_class)),
+                (g, resolve_base(g, o.target_base_key), resolve(o.target_vendor_class))]
 
     wanted = selectors(new)
     for o in sorted(existing, key=lambda o: o.override_id):
