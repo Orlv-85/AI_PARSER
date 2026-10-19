@@ -1,3 +1,11 @@
+<!-- code-doc
+module: src/app/core/daily_signals.py
+covers:
+  - src/app/core/daily_signals*.py
+  - src/app/storage/daily_signals*.py
+  - src/app/storage/migrations/versions/*daily_signal*.py
+  - src/app/web/signals_view.py
+-->
 # Daily AI Signals - code map
 
 Technical reference for 006 (signals) and 007 (brief). Operator commands, cost, rollback:

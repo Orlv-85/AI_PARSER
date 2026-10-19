@@ -57,6 +57,13 @@ When working in this repo, optimize for small, testable changes that preserve ex
 - The main module's docstring names the doc (`... : <main_module>.md next to this file.`).
 - A change to the feature's behavior, structure or names updates that doc in the same change.
 - New features add the doc and the docstring line as part of the implementation.
+- Start the doc with a header so `scripts/check_code_docs.py` can check it:
+  `<!-- code-doc` / `module: <main module path>` / `covers:` / `  - <glob of the feature files>` / `-->`.
+- Sync is checked: pytest (`tests/unit/test_code_docs.py`) fails when a backticked file, constant,
+  class, function, flag or `AINEWS_*` setting in a doc no longer exists; CI warns when covered files
+  change without the doc. A change that needs no doc update (pure rename, formatting) says so with a
+  commit message line `Docs-Skip: <reason>`.
+- System overview: `src/app/README.md` (packages, entry points, code docs list).
 - Register a new code doc in `docs/README.md` ("Code docs") and in the `README.md`
   "Documentation" section. `docs/` keeps general docs, operator guides and dated records only.
 

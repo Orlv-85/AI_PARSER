@@ -3,10 +3,12 @@
 ## Code docs (live next to the code)
 
 Technical maps owned by the code: flow, modules, tables, versions, invariants, where to change what.
-Updated in the same change as the code (AGENTS.md, "Feature Docs Next To Code").
+Updated in the same change as the code (AGENTS.md, "Feature Docs Next To Code"); checked by
+`scripts/check_code_docs.py` (pytest + CI).
 
 | Feature | Doc | Main module |
 | --- | --- | --- |
+| System overview | [src/app/README.md](../src/app/README.md) | - |
 | Daily AI Signals (006, 007) | [src/app/core/daily_signals.md](../src/app/core/daily_signals.md) | `src/app/core/daily_signals.py` |
 
 ## General

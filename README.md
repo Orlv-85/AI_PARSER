@@ -41,6 +41,7 @@ For an existing database, run `./venv1/bin/alembic upgrade head` first.
 
 Index of all docs: [docs/README.md](docs/README.md). Code docs live next to the code:
 
+- [System overview](src/app/README.md) - packages, entry points, list of code docs.
 - [Daily AI Signals code map](src/app/core/daily_signals.md) - flow, modules, tables, versions, where to change what.
 
 General:
