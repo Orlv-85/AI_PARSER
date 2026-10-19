@@ -57,6 +57,8 @@ When working in this repo, optimize for small, testable changes that preserve ex
 - The main module's docstring names the doc (`... : <main_module>.md next to this file.`).
 - A change to the feature's behavior, structure or names updates that doc in the same change.
 - New features add the doc and the docstring line as part of the implementation.
+- Register a new code doc in `docs/README.md` ("Code docs") and in the `README.md`
+  "Documentation" section. `docs/` keeps general docs, operator guides and dated records only.
 
 ## Validation
 
