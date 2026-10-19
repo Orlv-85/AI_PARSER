@@ -296,3 +296,66 @@ kept: specific earlier entity).
 2. SEO comparison pages (emergent.sh) can reach the brief as a "2 outlets" story (006 follow-up).
 3. Quiet-day input includes newsletter recaps; flash used one as news. Pro did not; watch it.
 4. Folding/diffuse figures above are approximations from at most 3 links per item.
+
+## 5. Revision 2 re-measure: prompt `daily-signals-brief-2` (2026-10-19)
+
+**Scope**: `deepseek-v4-pro` only, 2026-10-13, 10-15, 10-16, same packets as section 2. **Spend**: 6
+calls, ledger $0.0332 of the $0.05 cap (run A $0.0167, run B $0.0165). Script
+`tmp/007-brief-dryrun/rev2.py`; answers `report-rev2a.json` (A), `report-rev2.json` (B).
+
+- Run A: ordering by event type as in the coordinator's R1. 10-15 dropped the SEO sentence; 10-13 split
+  Gemini 4 Argon into two sentences (rollout, then availability) and dropped the Google Play story.
+- Run B (plan text): run A plus "At most one sentence per story or item." and validation rule 9
+  (`same_story`). All three passed on the first attempt. Reported below.
+
+### 2026-10-13 (ledger $0.0052; 2,784 / 378 tokens)
+
+```text
+1. Google began a wide rollout of Gemini 4 Argon to paying users, with lower-tier plans lacking full access, covered by 6 outlets. [a1,a2,a3]
+2. Meta introduced the Muse Wonder series, comprising Muse Wonder and Muse Wonder Full, as its most capable models for personal and professional agentic tasks. [a5,a6]
+3. An OpenAI engineer was arrested after the company said it discovered a sophisticated recording device hidden in one of its offices. [a7,a8,a9]
+4. Rivian partner Mind Robotics hired Doug Field as president to lead its robotics effort, according to the startup. [a10,a11]
+```
+Grounding: 1-4: S. Diff against revision 1: sentences 1-4 identical in substance; revision 1's sentence 5
+(Google Play private vibe-coded apps, 2 outlets, product launch) is gone; the brief has 4 sentences.
+
+### 2026-10-15 (ledger $0.0061; 3,137 / 489 tokens)
+
+```text
+1. Meta released Muse Spark Open, an open-weight frontier multimodal mixture-of-experts model for agentic coding, covered by 9 outlets. [a1,a2,a3]
+2. NVIDIA released Nemotron 3.5 Super VL, an open 120-billion-parameter model, plus two edge Bolt models, with Bolt E4B due Oct. 23. [a4,a5,a6]
+3. Black Forest Labs released FLUX 3 Image Klein, a 5.6-billion-parameter open-weights model for text-to-image generation, image editing, and generation with up to ten reference images. [a7,a8,a9]
+4. Volvo will use Nvidia's tech for hands-free, point-to-point driving, according to the source. [a13,a14]
+5. Google pitches Gemini 4 Argon as a single model for robot control, simulation building, and training-data evaluation, though demos still need heavy human prompting. [a10,a11,a12]
+```
+Grounding: 1-5: S; 4 copies the digest's vague "according to the source". Diff: revision 1's sentence 4
+(Argon vs GPT 6 Astra benchmarks, from the emergent.sh comparison page) is replaced by sentence 5,
+taken from the news article (The Decoder) in the same story; the SEO pages are still cited as ids
+but carry no claim. Order otherwise unchanged; no release lost.
+
+### 2026-10-16 (ledger $0.0052; 2,490 / 487 tokens)
+
+```text
+1. Reflection AI released Beam, a 501-billion-parameter open model with day-0 support in transformers, SGLang, and vLLM, covered by 4 outlets. [a1,a2,a3]
+2. Meta released Muse Spark Open, an open-weight 816B-parameter multimodal model with a 1M-token context window, covered by 2 outlets. [a4,a5]
+3. Microsoft launched the Surface Laptop Ultra, which WIRED rates 7/10 and calls a true MacBook Pro competitor for Windows hampered by battery life. [a6,a7]
+4. NVIDIA's RTX Spark laptops are off to a good start, but reviewers say CPU-limited games perform poorly due to weak single-threaded performance and Windows translation overhead. [a8,a9]
+5. OpenAI says GPT-Live-1.1 adds new voices and better accents to Voice in ChatGPT, Codex, and dots, rolling out today to all users. [a10]
+```
+Grounding: 1, 2, 4, 5: S. 3: "launched" is not stated in the cited text (the rest is); the validator
+cannot catch a verb. Diff: same five events as revision 1; sentences 3-4 still cover the two
+hardware-review stories, and the single-source releases (Glimpse, MAI-Base-2, d1-ultra) are still
+left out. The model reads launch-day reviews as launches: both stories are `product_launch` in the
+snapshot and nothing in the packet marks them as reviews. Option O1 (plan, "Brief") would mark the
+Surface story (1 of 2 titles says "Review") but not the RTX Spark story.
+
+### Result
+
+| Day | Revision 1 | Revision 2 | Lost |
+| --- | --- | --- | --- |
+| 10-13 | 5 sentences | 4 (Play private apps dropped) | a 2-outlet product launch |
+| 10-15 | SEO comparison claim as #4 | gone; robotics news from the same story | none |
+| 10-16 | 2 review sentences | 2 review sentences (reworded; one unsupported "launched") | none; New releases still not chosen |
+
+Cost unchanged: brief-2 adds 52 input tokens; mean $0.0055 per day on these 3 days, the same as revision
+1's first attempts ($0.0051-0.0060); no recovery was needed.

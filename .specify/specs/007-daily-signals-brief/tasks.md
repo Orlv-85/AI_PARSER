@@ -1,6 +1,6 @@
 # Tasks: Daily Signals Brief and Readability
 
-**Input**: `spec.md`, `plan.md` (revision 1), `research.md`, `dry-run.md` in
+**Input**: `spec.md`, `plan.md` (revision 2), `research.md`, `dry-run.md` in
 `.specify/specs/007-daily-signals-brief/`
 **Branch**: `feat/007-daily-signals-brief`
 **Rules**:
@@ -26,7 +26,7 @@
   - Files: `tests/fixtures/daily_signals/brief/` - `sig-2026-10-12..18.json`, `dig-2026-10-12..18.json`
     (public API answers, renamed from `sig-DD.json` / `dig-DD.json`), `responses.json` (all 37 raw
     provider answers, keyed by request hash), `answers.json` (per day and model: packet, attempts
-    with codes, accepted sentences), `one_liners.json` (40 expected lines and sources), short `README`
+    with codes, accepted sentences), `report-rev2.json` (brief-2 packets and answers, 3 days), `one_liners.json` (40 expected lines and sources), short `README`
     (origin, dates).
   - Steps: copy from `/Users/vyacheslavorlovskiy/GitHub/AI_PARSER-007-plan/tmp/007-brief-dryrun/`
     (planning worktree, gitignored; keep it until T0.1 is done); if missing, re-fetch the public API
@@ -39,9 +39,10 @@
   - Files: `src/app/core/daily_signals_brief.py`, `tests/unit/test_daily_signals_brief.py`
   - Test first: packet ids and links from a stored payload + digest items; quiet-day input (all items,
     max 30); 12,000-byte shrink; `input_hash` changes with packet, version or model; body pinned
-    (prompt text, thinking disabled, 900 tokens); every validation code of plan rules 1-8 with a
-    minimal failing answer; the 14 fixture answers pass and the 3 rejected first attempts fail with
-    their codes; recovery suffix text.
+    (prompt `daily-signals-brief-2`, thinking disabled, 900 tokens); every validation code of plan
+    rules 1-9 with a minimal failing answer; the 3 brief-2 answers pass; of the 14 revision-1 answers
+    10 pass and 4 fail with `same_story`; the 3 rejected first attempts fail with their codes;
+    recovery suffix text.
   - Done when: tests pass.
   - Depends on: T0.1
 
@@ -94,8 +95,10 @@
   - Test first (MockTransport): disabled / missing key / recompute-only -> 0 brief calls; one-day run
     -> 1 call, row `ok`; rerun -> 0 calls (same input hash); changed snapshot -> 1 call; invalid then
     valid -> 2 calls, `ok`; invalid twice -> row `invalid`; LedgerStop (cap/deadline) -> extraction
-    state unchanged, `report["brief"]` says why; D-1 catch-up; backfill range; brief cap
-    `min(0.05 * days, --max-usd)`; unknown model -> `brief_model_unpriced`, no call; run report has no
+    state unchanged, `report["brief"]` says why; D-1 catch-up; backfill range; `--max-usd` is the run
+    total (plan R2): brief cap `min(0.05 * days, X - extraction spend)`, extraction spend >= X ->
+    `skipped:brief_budget_exhausted` and no brief ledger row, extraction + brief spend <= X, nightly
+    run uses `settings.daily_signals_max_usd` the same way; unknown model -> `brief_model_unpriced`, no call; run report has no
     key and no article text.
   - Depends on: T1.1, T1.3, T2.2, T2.3
 
@@ -146,8 +149,8 @@
 
 - [ ] **T5.3 Gate and PR**
   - Steps: full gate incl. PostgreSQL; PR with migration note (006 deploy race), backfill command for
-    2026-10-10..18 (owner-run, `--max-usd 0.45`), recompute after deploy (`--recompute-all` for the
-    methodology bump).
+    2026-10-10..18 (owner-run, `--max-usd 0.45` as the run total), recompute after deploy
+    (`--recompute-all` for the methodology bump).
   - Depends on: T5.1, T5.2
 
 ## Dependency summary
