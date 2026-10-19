@@ -3,6 +3,8 @@ from dataclasses import replace
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+import pytest
+
 from app.core.daily_signals_compute import (
     ArticleObs,
     DayCoverage,
@@ -540,8 +542,9 @@ def test_new_suppressed_by_title_or_summary_history():
                 "Surface Laptop Ultra."}]
     history.append((date(2026, 10, 6), "Reflection releases Beam"))
     assert names(w.snapshot(history=history)["new"]) == ["Maka"]
+    # V02: a single common-word name without a vendor is never suppressed lexically.
     history.append((date(2026, 10, 8), "Maka raises money"))
-    assert names(w.snapshot(history=history)["new"]) == []
+    assert names(w.snapshot(history=history)["new"]) == ["Maka"]
 
 
 def test_lexical_hit_in_not_yet_released_text_is_ignored():
@@ -564,3 +567,32 @@ def test_lexical_hit_in_not_yet_released_text_is_ignored():
     payload = w.snapshot(history=history)
     assert [(i["name"], i["day"]) for i in payload["new_suppressed"]] == [
         ("Atlas Pro", "2026-09-20")]
+
+
+@pytest.mark.parametrize("text", ["Acme announces Atlas Pro (preview).",
+                                  "Acme shows Atlas Pro (early access; will launch next month)."])
+def test_parenthetical_prerelease_does_not_suppress_ga(text):
+    # V01: the not-released check and the snippet use the raw digest text (parentheses kept).
+    w = World()
+    w.article(D, "a.com", e("Atlas Pro", "product", new=True))
+    payload = w.snapshot(history=[(date(2026, 9, 1), text)])
+    assert names(payload["new"]) == ["Atlas Pro"]
+    history = [(date(2026, 9, 1), "Acme ships Atlas Pro (GA) to everyone.")]
+    suppressed = w.snapshot(history=history)["new_suppressed"]
+    assert suppressed[0]["text"] == "Acme ships Atlas Pro (GA) to everyone."
+
+
+def test_single_token_needs_the_vendor_name_in_the_same_item():
+    # V02: "Beam search ..." is a homonym; a generic vendor word ("labs") is not the vendor.
+    w = World()
+    w.article(D, "a.com", e("Beam", new=True))
+    assert names(w.snapshot(history=[(date(2026, 9, 1), "Beam search improves decoding.")])[
+        "new"]) == ["Beam"]
+    v = World()
+    v.article(D, "a.com", e("Acme Labs", "company"), e("Beam", new=True, vendor="Acme Labs"))
+    history = [(date(2026, 9, 1), "Beam search is used in research labs.")]
+    assert names(v.snapshot(history=history)["new"]) == ["Beam"]
+    history.append((date(2026, 9, 2), "Acme Labs previewed nothing; Acme Labs ships Beam."))
+    assert names(v.snapshot(history=history)["new"]) == ["Beam"]  # "previewed": not released
+    history.append((date(2026, 9, 3), "Acme Labs ships Beam to customers."))
+    assert names(v.snapshot(history=history)["new"]) == []
