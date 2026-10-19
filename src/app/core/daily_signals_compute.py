@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any
 
+from app.core.daily_signals_brief import HARD_EVENTS, cut, norm
 from app.core.daily_signals_entities import (
     TOKEN,
     Entity,
@@ -21,7 +22,7 @@ from app.core.daily_signals_entities import (
 from app.core.dedup import hamming_distance, simhash64
 from app.storage.legacy_cleanup import fingerprint
 
-METHODOLOGY_VERSION = "daily-signals-2"
+METHODOLOGY_VERSION = "daily-signals-3"
 EVENT_LABELS = {
     "model_release": "model releases", "product_launch": "product launches",
     "funding": "funding rounds", "acquisition": "acquisitions", "partnership": "partnerships",
@@ -42,6 +43,18 @@ that new how why what who your you we our their into over after about vs via tha
 just says say said could would may first using use launch launches launched releases release
 released announces announced update updates""".split())
 TITLE_TOKEN = re.compile(r"[a-z0-9]+(?:[.-][a-z0-9]+)*")
+# `variant of X` only for a specific earlier entity, never a bare family word (007 noise rule 2).
+FAMILY_STOPWORDS = frozenset({"gpt", "claude", "gemini", "llama", "muse", "grok", "qwen", "clef",
+                              "nemotron"})
+# One-liners (007 plan "One-liners"): sentence split, abbreviations, launch / "is a" verbs.
+SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"'])")
+ABBREVIATION = re.compile(r"(?:\b[A-Z]\.|\b(?:Inc|Corp|Ltd|Co|Mr|Ms|Dr|vs|St|No|U\.S|e\.g|i\.e|"
+                          r"Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\.)$")
+WHAT_VERB = re.compile(r"\b(launch\w*|releas\w*|introduc\w*|announc\w*|unveil\w*|debut\w*|"
+                       r"open-sourc\w*|formed|founded|(?<!-)built|"
+                       r"(?:is|are) (?:an?|the|its|their) )",
+                       re.IGNORECASE)
+SHORT_QUOTE_WORDS = 8
 
 
 @dataclass(frozen=True)
@@ -60,6 +73,11 @@ class Thresholds:  # pylint: disable=too-many-instance-attributes
     spike_trailing_days: int = 7
     spike_min_trailing_days: int = 3
     spike_trailing_min_items: int = 10
+    quiet_items: int = 20
+    one_liner_max: int = 140
+    fold_share: float = 0.5
+    diffuse_story_min: int = 2
+    chip_hard_events: tuple[str, ...] = HARD_EVENTS
     window_days: int = 7
     window_min_complete: int = 6
     rising_min_current: int = 4
@@ -94,6 +112,7 @@ class ArticleObs:  # pylint: disable=too-many-instance-attributes
     published_at: datetime | None
     event_type: str
     mentions: tuple[EntityMention, ...] = ()
+    summary: str = ""  # the digest item summary of this day's item URL
 
 
 @dataclass(frozen=True)
@@ -201,8 +220,8 @@ def _describe(story: Story) -> None:
     story.entity_keys = sorted(k for k, n in primary.items() if n > len(members) / 2)
 
 
-def links(articles: Iterable[ArticleObs], limit: int) -> list[dict[str, str]]:
-    """Up to `limit` links: distinct publishers first, then earliest."""
+def linked_articles(articles: Iterable[ArticleObs], limit: int) -> list[ArticleObs]:
+    """Up to `limit` articles: distinct publishers first, then earliest."""
     ordered = sorted({a.article_id: a for a in articles}.values(), key=_article_order)
     first: list[ArticleObs] = []
     rest: list[ArticleObs] = []
@@ -210,8 +229,61 @@ def links(articles: Iterable[ArticleObs], limit: int) -> list[dict[str, str]]:
     for a in ordered:
         (rest if a.publisher in seen else first).append(a)
         seen.add(a.publisher)
+    return (first + rest)[:limit]
+
+
+def links(articles: Iterable[ArticleObs], limit: int) -> list[dict[str, str]]:
     return [{"title": a.title, "url": a.url, "publisher": a.publisher}
-            for a in (first + rest)[:limit]]
+            for a in linked_articles(articles, limit)]
+
+
+def sentences(text: str) -> list[str]:
+    parts: list[str] = []
+    buffer = ""
+    for piece in SENTENCE_END.split(norm(text)):
+        buffer = f"{buffer} {piece}".strip()
+        if not ABBREVIATION.search(buffer):
+            parts.append(buffer)
+            buffer = ""
+    if buffer:
+        parts.append(buffer)
+    return parts
+
+
+def name_key(text: str) -> str:
+    return re.sub(r"[\s.\-_]+", " ", norm(text).casefold()).strip()
+
+
+def one_liner(name: str, quote: str | None, summaries: Iterable[str],
+              limit: int = 140) -> tuple[str, str]:
+    """(line, source) for a New item: a digest-summary sentence that names the item and says what
+    it is or that it launched; a naming sentence when the novelty quote is a short fragment; else
+    the novelty quote (`quote`, rendered in quotation marks). Never generated."""
+    key = name_key(name)
+    named = [s for text in summaries for s in sentences(text) if key in name_key(s)]
+    for sentence in named:
+        if WHAT_VERB.search(sentence):
+            return cut(sentence, limit), "summary"
+    text = norm(quote)
+    if named and len(text.split()) < SHORT_QUOTE_WORDS:
+        return cut(named[0], limit), "summary"
+    return cut(text, limit), "quote"
+
+
+def specific_variant(older: Entity, newer: Entity) -> bool:
+    """`variant of` names a specific earlier entity of the same type (007 noise rule 2)."""
+    if older.entity_type != newer.entity_type:
+        return False
+    vendor = set(vendor_tokens(newer.vendor)) | set(tokens(newer.vendor or ""))
+    rest = [t for t in tokens(older.display_name) if t not in vendor]
+    if not rest or " ".join(rest) in FAMILY_STOPWORDS:
+        return False
+    return len(rest) > 1 or any(ch.isdigit() for ch in "".join(rest))
+
+
+def same_vendor(vendor: str | None, org: str) -> bool:
+    parts = vendor_tokens(vendor)
+    return bool(parts) and parts == vendor_tokens(org)
 
 
 def payload_hash(payload: Mapping[str, Any]) -> str:
@@ -412,16 +484,20 @@ class _Snapshot:
         e = self.entity(key)
         publishers = len({a.publisher for a in articles})
         older = [o for o in self.data.entities.values()
-                 if o.first_seen_day < self.day and token_prefix(o, e)]
+                 if o.first_seen_day < self.day and token_prefix(o, e) and specific_variant(o, e)]
         variant_of = max(older, key=lambda o: (len(o.base_tokens), o.display_name), default=None)
         level = "confirmed" if publishers >= self.t.confirmed_publishers else "early"
         order = CONFIRMED_TYPE_ORDER if level == "confirmed" else EARLY_TYPE_ORDER
-        return {"_key": key,
+        line, source = one_liner(e.display_name, quote,
+                                 [a.summary for a in linked_articles(articles, self.t.links_max)],
+                                 self.t.one_liner_max)
+        return {"_key": key, "_ids": {a.article_id for a in articles},
                 "_type_rank": order.index(e.entity_type) if e.entity_type in order else len(order),
                 "entity_id": self.entity_id(key), "name": e.display_name, "type": e.entity_type,
                 "vendor": e.vendor, "level": level,
                 "variant_of": variant_of.display_name if variant_of else None, "variants": [],
-                "novelty_quote": quote, "articles": len(articles), "publishers": publishers,
+                "novelty_quote": quote, "one_liner": line, "one_liner_source": source,
+                "articles": len(articles), "publishers": publishers,
                 "links": links(articles, self.t.links_max)}
 
     @staticmethod
@@ -475,9 +551,66 @@ class _Snapshot:
                                        trailing_mean=_r(mean), spike=True, publishers=publishers)
                 if item is not None:
                     item["_unit"] = unit
+                    item["_key"] = self.representative(unit, [self.day])
+                    item["_ids"] = {a.article_id for a in articles}
                     out.append(item)
         out.sort(key=lambda i: (-i["today"], i["name"]))
         return out
+
+    # Spike folding (007 noise rules 3 and 4) ---------------------------------------------------
+    def fold_spikes(self, spikes: list[dict[str, Any]], stories: list[Story],
+                    shown: list[tuple[Story, dict[str, Any]]], new: list[dict[str, Any]]
+                    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """(kept spikes with a reason, folded records); the target item lists the spike name
+        under `spikes`."""
+        kept: list[dict[str, Any]] = []
+        folded: list[dict[str, Any]] = []
+        for spike in spikes:
+            ids = spike["_ids"]
+            org = self.entity(spike["_key"]).type_group == "org"
+
+            def share(other: set[int], ids: set[int] = ids) -> bool:
+                return len(ids & other) >= self.t.fold_share * len(ids)
+
+            target = self._fold_target(spike, org=org, share=share, shown=shown, new=new,
+                                       kept=kept)
+            if target is not None:
+                kind, into, record = target
+                record.setdefault("spikes", []).append(spike["name"])
+                folded.append({"name": spike["name"], "into": into, "reason": kind})
+                continue
+            holding = [(len(ids & {m.article_id for m in s.members}), s.publishers, s.label)
+                       for s in stories]
+            best = min(holding, key=lambda h: (-h[0], -h[1], h[2]), default=None)
+            if org and (best is None or best[0] < self.t.diffuse_story_min):
+                folded.append({"name": spike["name"], "into": None, "reason": "diffuse"})
+                continue
+            spike["reason"] = best[2] if best is not None and best[0] else None
+            kept.append(spike)
+        return kept, folded
+
+    def _fold_target(self, spike: dict[str, Any], *, org: bool, share,
+                     shown: list[tuple[Story, dict[str, Any]]], new: list[dict[str, Any]],
+                     kept: list[dict[str, Any]]):
+        name = name_key(spike["name"])
+        for story, out in shown:
+            if not share({m.article_id for m in story.members}):
+                continue
+            if spike["_unit"] in {unit_key(k) for k in story.entity_keys} \
+                    or name in name_key(story.label) \
+                    or (org and any(same_vendor(self.entity(k).vendor, spike["name"])
+                                    for k in story.entity_keys)):
+                return "story", story.label, out
+        if not org:
+            return None
+        for item in new:
+            if share(item["_ids"]) and same_vendor(item["vendor"], spike["name"]):
+                return "new", item["name"], item
+        for other in kept:
+            if share(other["_ids"]) and same_vendor(self.entity(other["_key"]).vendor,
+                                                    spike["name"]):
+                return "spike", other["name"], other
+        return None
 
     def comparable(self, day: date) -> bool:
         cov = self.data.coverage.get(day)
@@ -500,11 +633,13 @@ class _Snapshot:
     def extracted(self, days: Iterable[date]) -> int:
         return sum(self.data.coverage[d].extracted for d in days)
 
-    def trends(self, excluded: set[str], spikes: list[dict[str, Any]] | None):
+    def trends(self, excluded: set[str], spikes: list[dict[str, Any]] | None,
+               kept: list[dict[str, Any]]):
+        """Rising and cooling; `spikes` flag rising items, only `kept` spikes are listed."""
         usable = self.windows()
         spike_units = {s["_unit"]: s for s in spikes or []}
         if usable is None:
-            rising = [dict(s) for s in (spikes or [])][:self.t.rising_max]
+            rising = [dict(s) for s in kept][:self.t.rising_max]
             return rising, [], False
         cur_days, prev_days = usable
         ratio = self.extracted(cur_days) / self.extracted(prev_days)
@@ -528,6 +663,8 @@ class _Snapshot:
                                        publishers=len({a.publisher for a in cur_a}),
                                        spike=spike is not None,
                                        trailing_mean=spike["trailing_mean"] if spike else None)
+                if item is not None and spike is not None and "reason" in spike:
+                    item["reason"] = spike["reason"]
                 if item is not None:
                     item["_unit"] = unit
                     item["_delta"] = cur - expected
@@ -543,7 +680,7 @@ class _Snapshot:
         rising.sort(key=lambda i: (-i["_delta"], -i["current_7d"], i["name"]))
         cooling.sort(key=lambda i: (-i["_delta"], -i["previous_7d"], i["name"]))
         listed = {i["_unit"] for i in rising}
-        rising += [dict(s) for s in spikes or [] if s["_unit"] not in listed]
+        rising += [dict(s) for s in kept if s["_unit"] not in listed]
         for item in rising + cooling:
             item.pop("_delta", None)
         return rising[:self.t.rising_max], cooling[:self.t.cooling_max], True
@@ -572,14 +709,17 @@ class _Snapshot:
             "state": "empty", "note": "No story was covered by more than one publisher."}
         excluded = {unit_key(k) for k in eligible}
         spikes = self.spikes(excluded)
-        rising, cooling, usable = self.trends(excluded, spikes)
+        shown = [(s, self._story(s)) for s in top[:self.t.top_max]]
+        kept, folded = self.fold_spikes(spikes or [], stories, shown, new)
+        rising, cooling, usable = self.trends(excluded, spikes, kept)
         self.sections["rising"] = {"state": "ready", "note": None} if usable else {
             "state": "spikes_only",
             "note": "Rising needs two weeks with at least 6 complete days each; showing spikes."}
         self.sections["cooling"] = {"state": "ready" if usable else "hidden", "note": None}
         self.sections["event_counts"] = {"state": "ready", "note": None}
-        for item in rising:
-            item.pop("_unit", None)
+        for item in rising + new:
+            for key in ("_unit", "_key", "_ids"):
+                item.pop(key, None)
         if cov.extracted < cov.items:
             self.notes.append(f"Extracted {cov.extracted}/{cov.items} digest items.")
         status = self.status(cov)
@@ -601,12 +741,15 @@ class _Snapshot:
                          "unmatched": max(0, cov.items - cov.matched)},
             "notes": self.notes,
             "sections": self.sections,
-            "thresholds": {k: _r(v) if isinstance(v, float) else v
+            "thresholds": {k: _r(v) if isinstance(v, float) else
+                           list(v) if isinstance(v, tuple) else v
                            for k, v in asdict(self.t).items()},
+            "quiet": cov.items < self.t.quiet_items or not top,
             "new": new,
             "new_suppressed": sorted(self.suppressed, key=lambda i: (i["name"], i["entity_id"])),
-            "top_stories": [self._story(s) for s in top[:self.t.top_max]],
+            "top_stories": [out for _, out in shown],
             "rising": rising,
+            "spikes_folded": folded,
             "cooling": cooling,
             "event_counts": self._event_counts(stories),
             "article_event_types": {a.url: a.event_type for a in self.articles},
@@ -625,7 +768,7 @@ class _Snapshot:
         return {"label": story.label, "event_type": story.event_type,
                 "articles": len(story.members), "publishers": story.publishers,
                 "entities": [self.entity(k).display_name for k in story.entity_keys],
-                "links": links(story.members, self.t.links_max)}
+                "spikes": [], "links": links(story.members, self.t.links_max)}
 
     def _event_counts(self, stories: list[Story]) -> list[dict[str, Any]]:
         out = []
