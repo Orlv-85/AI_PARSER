@@ -11,6 +11,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Set up Python 3.14
         uses: actions/setup-python@v6
@@ -36,6 +38,10 @@ jobs:
 
       - name: Run linters in parallel
         run: make -j3 --output-sync=target lint PYTHON=python PYLINT_JOBS=0
+
+      # Fails when covered code changed without its doc; opt out: commit line "Docs-Skip: <reason>".
+      - name: Code docs in sync
+        run: python scripts/check_code_docs.py --diff origin/master --strict
 
   tests:
     runs-on: ubuntu-24.04
