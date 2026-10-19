@@ -650,8 +650,12 @@ def test_one_liner_rules():
     assert one_liner("Atlas", "Introducing Atlas", ["Others wrote about it.",
                                                     "Atlas scores 90 on a benchmark."]) == \
         ("Atlas scores 90 on a benchmark.", "summary")
-    assert one_liner("Atlas", "Introducing Atlas", ["Nothing about it."]) == \
-        ("Introducing Atlas", "quote")
+    # F2: a line that leaves fewer than 3 words besides the name says nothing; no line.
+    assert one_liner("Atlas", "Introducing Atlas", ["Nothing about it."]) == (None, None)
+    assert one_liner("llm-echo 0.5", "llm-echo 0.5", ["The llm-echo debug plugin now counts."]) \
+        == (None, None)
+    assert one_liner("Atlas", "Introducing Atlas by Acme", ["Nothing."]) == \
+        ("Introducing Atlas by Acme", "quote")
     text = "Acme launched Atlas, " + "a very long phrase " * 12
     line, _ = one_liner("Atlas", None, [text])
     assert len(line) <= 140 and line.endswith("...")
@@ -667,6 +671,9 @@ def test_new_items_carry_their_one_liner():
         ("Acme launched Atlas, a robot model.", "summary")
     assert (by_name["Orion-1"]["one_liner"], by_name["Orion-1"]["one_liner_source"]) == \
         ("Today Acme launched Orion-1", "quote")
+    w.article(D, "c.com", e("Zed-9", new=True, quote="Meet Zed-9"))
+    zed = {i["name"]: i for i in w.snapshot()["new"]}["Zed-9"]
+    assert (zed["one_liner"], zed["one_liner_source"]) == (None, None)
 
 
 # 007: variant rule ---------------------------------------------------------------------------

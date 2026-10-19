@@ -578,17 +578,18 @@
         }).join("");
         const rising = sections.rising || {};
         const spikesOnly = rising.state === "spikes_only";
-        const hideSpikes = payload.quiet || (spikesOnly && !(payload.rising || []).length);
+        // A quiet day shows only cards that have items (no empty-state cards, FR-006).
+        const hideSpikes = !(payload.rising || []).length && (payload.quiet || spikesOnly);
         if (hideSpikes && !payload.quiet && rising.note) lines += signalStatus(rising.note);
         const cards = [];
         if (newList.length || !payload.quiet) {
           cards.push(signalCard("New", newList.map(signalNewItem).join(""), sections.new && sections.new.note, "signals-new", "Nothing was first seen in our corpus on this date."));
         }
-        if (!payload.quiet) {
+        if ((payload.top_stories || []).length || !payload.quiet) {
           cards.push(signalCard("Top stories", stories, sections.top_stories && sections.top_stories.note, "signals-top", "No story was covered by more than one publisher."));
         }
         if (!hideSpikes) {
-          cards.push(signalCard(spikesOnly ? "Spikes" : "Rising", (payload.rising || []).map(signalTrend).join(""), rising.note, "signals-rising", "Nothing is rising or spiking on this date."));
+          cards.push(signalCard(spikesOnly ? "Spikes" : "Rising", (payload.rising || []).map(signalTrend).join(""), payload.quiet ? null : rising.note, "signals-rising", "Nothing is rising or spiking on this date."));
         }
         const grid = cards.length ? `<div class="signal-grid cols-${cards.length}">${cards.join("")}</div>` : "";
         const cooling = sections.cooling && sections.cooling.state === "ready"

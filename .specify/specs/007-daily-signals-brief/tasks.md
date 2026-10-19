@@ -148,7 +148,7 @@
   - Done when: `dry-run.md` section 5 added: SC-001..SC-003 and SC-005 met or explained; spend.
   - Depends on: T4.2
 
-- [x] **T5.3 Gate and PR**
+- [ ] **T5.3 Gate and PR**
   - Steps: full gate incl. PostgreSQL; PR with migration note (006 deploy race), backfill command for
     2026-10-10..18 (owner-run, `--max-usd 0.45` as the run total), recompute after deploy
     (`--recompute-all` for the methodology bump).

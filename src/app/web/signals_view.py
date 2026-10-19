@@ -176,7 +176,8 @@ def render_signals(signals: DailySignalsResponse | None, *, read_error: bool = F
     rising_state = sections.get("rising")
     cooling_state = sections.get("cooling")
     spikes_only = rising_state is not None and rising_state.state == "spikes_only"
-    hide_spikes = signals.quiet or (spikes_only and not signals.rising)
+    # A quiet day shows only cards that have items (no empty-state cards, FR-006).
+    hide_spikes = not signals.rising and (signals.quiet or spikes_only)
     # The Rising/Spikes note moves to the status line when the card is hidden (not on quiet days).
     if hide_spikes and not signals.quiet and rising_state is not None and rising_state.note:
         lines.append(_status(rising_state.note))
@@ -185,14 +186,14 @@ def render_signals(signals: DailySignalsResponse | None, *, read_error: bool = F
         cards.append(_card("New", "".join(_new_item(i) for i in signals.new),
                            new_state.note if new_state else None, "signals-new",
                            "Nothing was first seen in our corpus on this date."))
-    if not signals.quiet:
+    if signals.top_stories or not signals.quiet:
         cards.append(_card("Top stories", "".join(_story(s, labels) for s in signals.top_stories),
                            top_state.note if top_state else None, "signals-top",
                            "No story was covered by more than one publisher."))
     if not hide_spikes:
+        note = rising_state.note if rising_state and not signals.quiet else None
         cards.append(_card("Spikes" if spikes_only else "Rising",
-                           "".join(_trend(i) for i in signals.rising),
-                           rising_state.note if rising_state else None, "signals-rising",
+                           "".join(_trend(i) for i in signals.rising), note, "signals-rising",
                            "Nothing is rising or spiking on this date."))
     cooling = ""
     if cooling_state and cooling_state.state == "ready":

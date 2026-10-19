@@ -425,3 +425,9 @@ Local web on a copy of the scratch database with the 10-14 brief row removed: 10
 (quiet), 10-14 (missing brief) at 1280 px and 375 px; no horizontal overflow. Date switching
 14->16->18->15->14 in the page: the client render equals the server render (identical inner HTML)
 each time. One fix from the check: the "Rising needs two weeks..." note is not shown on quiet days.
+
+**After the Checkpoint 2 fixes** (coordinator F1/F2): a one-liner that leaves fewer than 3 words
+besides the item name is dropped. Of the 42 lines above only "llm-echo 0.5" (10-18) is affected, so
+41 / 42 displayed items now have a line and llm-echo 0.5 shows its sources only; none of the 40
+fixture expectations changes. Quiet days now show Top stories and Rising/Spikes cards when they have
+items (no empty cards); on 10-12..18 no quiet day has either, so the screenshots are unchanged.

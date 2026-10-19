@@ -414,7 +414,29 @@ def test_quiet_day_render(monkeypatch, tmp_path) -> None:
                    .get("/?date=2026-10-16").text)
     assert "Quiet day: 14 items, 1 story covered by more than one outlet." in block
     assert "signal-brief\"" not in block and "Written by AI" not in block
-    assert "signal-grid" not in block
+    # F1: a quiet day still shows a card that has items (here the one top story).
+    assert 'id="signals-top"' in block and "Beam launch" in block
+    assert 'id="signals-new"' not in block and 'id="signals-rising"' not in block
+    assert 'class="signal-grid cols-1"' in block
+    rising = dict(empty, top_stories=[], sections=dict(SIGNALS["sections"], rising={
+        "state": "ready", "note": None}), rising=[dict(SIGNALS["rising"][0], spike=False,
+                                                       current_7d=6, previous_7d=1,
+                                                       expected_7d=1.0)])
+    (tmp_path / "r").mkdir()
+    block = _block(_signals_client(monkeypatch, tmp_path / "r", rising)
+                   .get("/?date=2026-10-16").text)
+    assert "<h3>Rising</h3>" in block and "7d: 1 &rarr; 6" in block
+    assert 'id="signals-top"' not in block and 'id="signals-new"' not in block
+    spikes = dict(empty, top_stories=[], rising=[SIGNALS["rising"][0]])
+    (tmp_path / "s").mkdir()
+    block = _block(_signals_client(monkeypatch, tmp_path / "s", spikes)
+                   .get("/?date=2026-10-16").text)
+    assert "<h3>Spikes</h3>" in block and "Rising needs two weeks" not in block
+    none = dict(empty, top_stories=[])
+    (tmp_path / "n").mkdir()
+    block = _block(_signals_client(monkeypatch, tmp_path / "n", none)
+                   .get("/?date=2026-10-16").text)
+    assert "signal-grid" not in block and "Rising needs two weeks" not in block
 
 
 def test_page_200_with_a_corrupt_brief_row(monkeypatch, tmp_path) -> None:

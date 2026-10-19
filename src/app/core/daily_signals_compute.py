@@ -55,6 +55,7 @@ WHAT_VERB = re.compile(r"\b(launch\w*|releas\w*|introduc\w*|announc\w*|unveil\w*
                        r"(?:is|are) (?:an?|the|its|their) )",
                        re.IGNORECASE)
 SHORT_QUOTE_WORDS = 8
+ONE_LINER_MIN_WORDS = 3  # words besides the item name; fewer says nothing ("llm-echo 0.5")
 
 
 @dataclass(frozen=True)
@@ -255,10 +256,19 @@ def name_key(text: str) -> str:
 
 
 def one_liner(name: str, quote: str | None, summaries: Iterable[str],
-              limit: int = 140) -> tuple[str, str]:
+              limit: int = 140) -> tuple[str | None, str | None]:
     """(line, source) for a New item: a digest-summary sentence that names the item and says what
     it is or that it launched; a naming sentence when the novelty quote is a short fragment; else
-    the novelty quote (`quote`, rendered in quotation marks). Never generated."""
+    the novelty quote (`quote`, rendered in quotation marks). Never generated; (None, None) when
+    the line would only repeat the name."""
+    line, source = _one_liner(name, quote, summaries, limit)
+    if len(name_key(line).replace(name_key(name), " ").split()) < ONE_LINER_MIN_WORDS:
+        return None, None
+    return line, source
+
+
+def _one_liner(name: str, quote: str | None, summaries: Iterable[str],
+               limit: int) -> tuple[str, str]:
     key = name_key(name)
     named = [s for text in summaries for s in sentences(text) if key in name_key(s)]
     for sentence in named:
