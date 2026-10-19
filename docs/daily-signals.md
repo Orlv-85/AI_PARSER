@@ -73,8 +73,9 @@ The daily job (`scripts/run_daily_digest_job.sh`, timer `ai-news-daily-digest`) 
 and then, under the same host lock and time budget, `daily-signals` with an outer `timeout`. The digest
 alone decides the job result; a signals failure or timeout is logged and ignored.
 
-`AINEWS_DAILY_SIGNALS_ENABLED` (default `false`, set by the owner in the server's private `.env`) gates
-paid extraction only. Recompute-only runs and entity commands work with the flag off and without a key.
+`AINEWS_DAILY_SIGNALS_ENABLED` gates paid extraction only. The application default is `false` (local
+runs stay free); `docker-compose.prod.yml` defaults it to `true` in production, so
+`AINEWS_DAILY_SIGNALS_ENABLED=false` in the server's private `.env` is the kill switch. Recompute-only runs and entity commands work with the flag off and without a key.
 In production it is the only signals setting that reaches the container (`docker-compose.prod.yml`
 passes it explicitly); `AINEWS_DAILY_SIGNALS_MAX_*` and `AINEWS_DAILY_SIGNALS_COMPARABLE_FROM` in the
 server `.env` have no effect there. Set caps per run with `--max-calls`, `--max-seconds`, `--max-usd`.
@@ -168,9 +169,9 @@ image and the timers are updated too.
 
 Digest, articles and weekly data are never written by signals. Pick one level:
 
-1. **Stop paid work**: set `AINEWS_DAILY_SIGNALS_ENABLED=false` in the server `.env` and recreate the
-   app (`docker compose -f docker-compose.prod.yml up -d app`). Code and tables stay; snapshots stay
-   readable.
+1. **Stop paid work**: set `AINEWS_DAILY_SIGNALS_ENABLED=false` in the server `.env`; the daily job
+   reads it on its next run, and `docker compose -f docker-compose.prod.yml up -d app` applies it to
+   the app. Code and tables stay; snapshots stay readable.
 2. **Revert code, keep the schema**: deploy a revert commit that removes the feature code but keeps
    `src/app/storage/migrations/versions/b6d1f0a7c3e5_add_daily_signals.py`. The six tables stay unused.
    Deploying an older image instead does not work: its Alembic does not know `b6d1f0a7c3e5`, so the

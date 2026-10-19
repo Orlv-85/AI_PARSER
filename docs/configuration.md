@@ -84,12 +84,13 @@ To keep local tests independent of a configured live API, run them with
 `AINEWS_JEV_ENABLED=false ./venv1/bin/pytest`.
 
 Daily AI Signals (feature 006) extract entities and events per digest article with one
-DeepSeek call each, after `daily-publish`. Paid extraction is off by default; the owner
-enables it in the server's private `.env`. Recompute-only runs and entity commands make no
+DeepSeek call each, after `daily-publish`. Paid extraction is off by default in the
+application (local runs stay free) and on by default in production (`docker-compose.prod.yml`);
+`AINEWS_DAILY_SIGNALS_ENABLED=false` in the server's private `.env` turns it off. Recompute-only runs and entity commands make no
 provider calls and work with the flag off. Details: `docs/daily-signals.md`.
 
 ```dotenv
-AINEWS_DAILY_SIGNALS_ENABLED=false          # gates paid extraction only
+AINEWS_DAILY_SIGNALS_ENABLED=false          # gates paid extraction only (production default: true)
 AINEWS_DAILY_SIGNALS_COMPARABLE_FROM=2026-10-10  # earlier digests are history-only evidence
 AINEWS_DAILY_SIGNALS_MAX_CALLS=200          # physical provider calls per run
 AINEWS_DAILY_SIGNALS_MAX_SECONDS=2700       # app-side wall limit per run

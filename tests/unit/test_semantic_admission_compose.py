@@ -33,10 +33,11 @@ def test_production_screening_requires_jev_without_enabling_local_models():
     assert Settings.model_fields["jev_enabled"].default is False  # pylint: disable=unsubscriptable-object
 
 
-def test_production_compose_keeps_daily_signals_disabled_by_default():
+def test_production_compose_enables_daily_signals_by_default():
     compose = yaml.safe_load(Path("docker-compose.prod.yml").read_text(encoding="utf-8"))
     environment = compose["services"]["app"]["environment"]
-    # The owner flips the flag in the server's private .env; paid extraction stays off otherwise.
-    assert environment["AINEWS_DAILY_SIGNALS_ENABLED"] == "${AINEWS_DAILY_SIGNALS_ENABLED:-false}"
+    # On in production after validation; AINEWS_DAILY_SIGNALS_ENABLED=false in the server .env is
+    # the kill switch. The application default stays off for local runs.
+    assert environment["AINEWS_DAILY_SIGNALS_ENABLED"] == "${AINEWS_DAILY_SIGNALS_ENABLED:-true}"
     assert not any(key.startswith("AINEWS_DAILY_SIGNALS_") and key != "AINEWS_DAILY_SIGNALS_ENABLED"
                    for key in environment)
