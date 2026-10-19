@@ -35,10 +35,13 @@ page loads never call a provider.
   signal = 1. Packaging variants of a known model (sizes, quantization, instruct/base) are not New;
   a new named version or a GA release after a preview is. People and "other" are never New. Two
   deterministic safety nets: the name must look like a name (an uppercase letter or digit, or one
-  hyphen/dot-joined token, so "dynamic workflows" is not New), and a name that already occurs in the
-  title or summary of an earlier in-scope article or digest item is not New, even when that article's
-  extraction found nothing. Refused items are kept in the stored snapshot as `new_suppressed` (reason,
-  matching day; not part of the API response). The list
+  hyphen/dot-joined token, so "dynamic workflows" is not New), and a name that already occurs in an
+  earlier published digest item (title or summary) is not New, even when that article's extraction
+  found nothing. A digest text that frames the name as not yet released (`preview`, `beta`, `alpha`,
+  `waitlist`, `early access`, `roadmap`, `plans to`, `will release`, `will launch`, `coming soon`,
+  `upcoming`) does not count, so a GA release after a preview stays New. Refused items are kept in the
+  stored snapshot as `new_suppressed` (reason, matching day, matched words and a text snippet; not
+  part of the API response). The list
   shows 8 items: confirmed first, then early models, hardware, benchmarks, datasets, techniques,
   companies, products, policies. "History: N complete days." is shown while fewer than 30 complete
   days precede D.

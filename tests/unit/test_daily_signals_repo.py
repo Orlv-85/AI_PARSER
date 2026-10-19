@@ -527,3 +527,21 @@ def test_title_only_history_suppresses_new_through_digest_text(session, repo):
     payload = json.loads(repo.get_report(D).payload)
     assert payload["new"] == []
     assert payload["new_suppressed"][0]["day"] == "2026-10-07"
+
+
+
+def test_lexical_history_reads_digest_text_not_article_summaries(session, repo):
+    # F19 decision: only what we published (digest item title and summary) counts; an RSS summary
+    # of an in-scope article that names the entity does not suppress New.
+    hist = add_article(session, "https://h.com/1", title="Meta roadmap")
+    hist.summary = "Meta says the Muse Spark Open release ships soon."
+    digest(session, date(2026, 9, 3), hist.url)
+    repo.replace_membership(date(2026, 9, 3))
+    repo.save_extraction(hist, extraction(), content_hash="h")
+    a = add_article(session, "https://a.com/1")
+    digest(session, D, a.url)
+    repo.replace_membership(D)
+    repo.save_extraction(a, extraction(model("Muse Spark Open", True)), content_hash="h")
+    repo.recompute_reports(D, now=NOW)
+    payload = json.loads(repo.get_report(D).payload)
+    assert [i["name"] for i in payload["new"]] == ["Muse Spark Open"]

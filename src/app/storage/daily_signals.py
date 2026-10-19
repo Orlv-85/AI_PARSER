@@ -473,17 +473,13 @@ class DailySignalRepo:
         return dict(out)
 
     def history_texts(self, until: date) -> list[tuple[date, str]]:
-        """Titles and summaries of in-scope articles and digest items up to `until` (F19)."""
-        texts = [(day, f"{title} {summary or ''}") for day, title, summary in self.session.execute(
-            select(DailySignalScope.scope_day, Article.title, Article.summary)
-            .join(Article, _same_article(DailySignalScope))
-            .where(DailySignalScope.scope_day <= until))]
-        texts += [(day, f"{title} {summary or ''}") for day, title, summary in self.session.execute(
+        """Published digest item titles and summaries up to `until` (F19: what we published, not
+        article RSS summaries; the window is the digest history in the database)."""
+        return [(day, f"{title} {summary or ''}") for day, title, summary in self.session.execute(
             select(NewsDigestReport.report_date, NewsDigestItem.title, NewsDigestItem.summary)
             .join(NewsDigestGroup, NewsDigestGroup.report_id == NewsDigestReport.id)
             .join(NewsDigestItem, NewsDigestItem.group_id == NewsDigestGroup.id)
             .where(NewsDigestReport.report_date <= until))]
-        return texts
 
     def get_report(self, day: date) -> DailySignalReport | None:
         return self.session.scalar(select(DailySignalReport).where(

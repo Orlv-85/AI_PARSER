@@ -535,8 +535,32 @@ def test_new_suppressed_by_title_or_summary_history():
     assert names(payload["new"]) == ["Beam", "Maka"]
     assert payload["new_suppressed"] == [{
         "name": "Surface Laptop Ultra", "entity_id": payload["new_suppressed"][0]["entity_id"],
-        "reason": "lexical_history", "day": "2026-10-07", "match": "surface laptop ultra"}]
-    history.append((date(2026, 10, 6), "Reflection previews Beam"))
+        "reason": "lexical_history", "day": "2026-10-07", "match": "surface laptop ultra",
+        "text": "The first Nvidia RTX Spark laptops cost up to $7,000. Microsoft shows the "
+                "Surface Laptop Ultra."}]
+    history.append((date(2026, 10, 6), "Reflection releases Beam"))
     assert names(w.snapshot(history=history)["new"]) == ["Maka"]
     history.append((date(2026, 10, 8), "Maka raises money"))
     assert names(w.snapshot(history=history)["new"]) == []
+
+
+def test_lexical_hit_in_not_yet_released_text_is_ignored():
+    # F19 decision: "mentioned before" is not "released before" (previews, roadmaps, waitlists);
+    # GA after a preview stays New (OD1). A later plain mention still suppresses.
+    w = World()
+    w.article(D, "a.com", e("Code Review for Claude Code", "product", new=True))
+    w.article(D, "b.com", e("Muse Spark Open", new=True))
+    w.article(D, "c.com", e("Atlas Pro", "product", new=True))
+    history = [
+        (date(2026, 9, 3), "Meta's roadmap includes the Muse Spark open weights release."),
+        (date(2026, 3, 9), "Anthropic opens a research preview of Code Review for Claude Code."),
+        (date(2026, 9, 1), "Acme Plans To ship Atlas Pro; join the waitlist."),
+        (date(2026, 9, 2), "Atlas Pro: coming soon from Acme"),
+    ]
+    payload = w.snapshot(history=history)
+    assert names(payload["new"]) == ["Muse Spark Open", "Atlas Pro", "Code Review for Claude Code"]
+    assert payload["new_suppressed"] == []
+    history.append((date(2026, 9, 20), "Acme ships Atlas Pro to all users."))
+    payload = w.snapshot(history=history)
+    assert [(i["name"], i["day"]) for i in payload["new_suppressed"]] == [
+        ("Atlas Pro", "2026-09-20")]
