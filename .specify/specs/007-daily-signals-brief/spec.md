@@ -2,7 +2,7 @@
 
 **Feature Branch**: `007-daily-signals-brief`
 **Created**: 2026-10-19
-**Status**: Draft (direction agreed with the owner)
+**Status**: Draft (open questions decided 2026-10-19; planning next)
 **Builds on**: `.specify/specs/006-daily-ai-signals/` (spec, plan, dry-run), merged in PR #39, live in
 production since 2026-10-19 (backfill 2026-08-03..10-18 done).
 **Input**: Owner review of the live block on `/?date=2026-10-16` (RU, paraphrased): "Is there no
@@ -81,10 +81,11 @@ summary of its primary article or the novelty quote; never invented.
   `core/weekly_narrative.py` (ids must exist, quotes must be substrings of supplied text, length caps,
   English, no instructions followed from article text). Invalid -> one recovery attempt -> otherwise
   no brief.
-- **FR-002 Model and cost**: model configurable; default the current DeepSeek model. The planner may
-  propose a stronger model for this single daily call if a 5-day comparison shows clearly better briefs;
-  cost per day must stay under a cent at ledger prices for the default. Calls go through the existing
-  signals ledger and per-run caps; cached by input hash and prompt version.
+- **FR-002 Model and cost**: the brief uses the stronger (more expensive) DeepSeek model by owner
+  decision (2026-10-19); extraction and every other call stay on `deepseek-flash`. The model id is a
+  setting (e.g. `AINEWS_DAILY_SIGNALS_BRIEF_MODEL`); the planner confirms the exact id and prices from
+  the DeepSeek API docs. Cost per day must stay under $0.05 at ledger prices. Calls go through the
+  existing signals ledger and per-run caps; cached by input hash, prompt version and model.
 - **FR-003 Storage and versioning**: the brief is stored with the snapshot (or alongside it) with its
   prompt version and input hash; recompute without changed inputs never regenerates it; a changed
   snapshot regenerates it on the next paid run (not on page load). Backfill command can generate briefs
@@ -111,11 +112,16 @@ summary of its primary article or the novelty quote; never invented.
 - SC-003: On 2026-10-16 the block no longer shows `variant of GPT`, separate Beam/Reflection spikes, or
   per-item `early signal` badges.
 - SC-004: Page load makes no provider calls; `/` stays 200 with a corrupt or missing brief.
-- SC-005: Daily cost increase <= $0.01 at ledger prices with the default model.
+- SC-005: Daily cost increase <= $0.05 at ledger prices with the brief model.
 - SC-006: Repo gate passes (`make lint`, full pytest incl. PostgreSQL as in CI).
 
-## Open Questions (planner proposes, owner decides)
+## Decisions (owner, 2026-10-19)
 
-1. Brief language: English (site language) by default; Russian as an option later?
-2. Stronger model for the brief only (cost vs quality, measured on 5 days)?
-3. Split New into "Confirmed" / "Single source" vs a single list with source counts.
+- D1. Brief language: English only (site language). No Russian variant in this iteration.
+- D2. Brief model: the stronger DeepSeek model (see FR-002). The dry-run still compares it with
+  `deepseek-flash` on the same days so the cost/quality gap is documented.
+- D3. New presentation (confirmed vs single source): the owner delegated the choice. The planning
+  session researches news-product practice (aggregators, newsletters, verification labels) and
+  proposes one option with a wireframe. Coordinator's starting hypothesis: one list, confirmed
+  (>= 2 publishers) items first with a small "N outlets" count, single-source items after them in a
+  muted style; no section headers unless the list is long.
