@@ -1,6 +1,7 @@
 """Daily AI Signals run: membership, bounded extraction, reconciliation and snapshot recompute.
 
 The digest is never written here; signals have their own tables, ledger and run report.
+Code map, tables, versions and invariants: daily_signals.md next to this file.
 """
 import json
 import logging

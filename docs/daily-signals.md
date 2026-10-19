@@ -6,6 +6,9 @@ published digest day: what is new, which stories several publishers covered, wha
 what is cooling, and how many events of each type happened. Everything is computed from stored data;
 page loads never call a provider.
 
+Code map for maintainers (modules, tables, versions, where to change what):
+`src/app/core/daily_signals.md`.
+
 ## How it works
 
 1. **Scope.** Only articles of the published digest for day D count (digest items matched to articles
@@ -47,7 +50,7 @@ page loads never call a provider.
   muted note "Written by AI from the linked articles; check the sources." A missing or invalid brief
   shows nothing. A **quiet day** (fewer than 20 digest items or no multi-publisher story) opens with
   an app-written line, e.g. "Quiet day: 14 items, no story covered by more than one outlet.", and
-  shows only the brief, New (if any) and the chips; no Top stories or Spikes cards.
+  shows the brief, the chips and only the cards that have items (no empty-state cards).
 - **New**: an entity first seen in our corpus on D that an article of D presents as newly announced
   (model judgment). Confirmed = at least 2 publishers, shown first with "N outlets"; single-source
   items follow muted with "via <publisher>" (no badge). Each item has one line saying what it is

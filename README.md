@@ -39,6 +39,12 @@ For an existing database, run `./venv1/bin/alembic upgrade head` first.
 
 ## Documentation
 
+Index of all docs: [docs/README.md](docs/README.md). Code docs live next to the code:
+
+- [Daily AI Signals code map](src/app/core/daily_signals.md) - flow, modules, tables, versions, where to change what.
+
+General:
+
 - [Docker and production deploy](docs/deploy.md) - Docker, CI/CD, server setup, daily digest jobs, maintenance, systemd.
 - [Configuration](docs/configuration.md) - environment variables, Jev admission, `sources.yaml` and source management.
 - [CLI usage](docs/cli.md) - web onboarding, fetch/cron, rollout knobs, search, MCP server, prune.

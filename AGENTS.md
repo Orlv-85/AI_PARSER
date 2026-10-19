@@ -48,6 +48,18 @@ When working in this repo, optimize for small, testable changes that preserve ex
 - Follow existing naming and module organization; avoid speculative refactors.
 - When changing parsing or ingestion behavior, check surrounding tests first and extend coverage for regressions.
 
+## Feature Docs Next To Code
+
+- Every feature keeps a short technical doc next to its main code file: `<main_module>.md` in the
+  same folder (example: `src/app/core/daily_signals.md` for `daily_signals.py`).
+- Content is dry and technical: flow, module map, tables, version constants, invariants, "where to
+  change what", tests. No history, no rationale essays; operator commands stay in `docs/`.
+- The main module's docstring names the doc (`... : <main_module>.md next to this file.`).
+- A change to the feature's behavior, structure or names updates that doc in the same change.
+- New features add the doc and the docstring line as part of the implementation.
+- Register a new code doc in `docs/README.md` ("Code docs") and in the `README.md`
+  "Documentation" section. `docs/` keeps general docs, operator guides and dated records only.
+
 ## Validation
 
 For scoped changes, run the smallest useful check first.
