@@ -438,3 +438,38 @@ The code keeps F19 as specified; the choice of text source is a coordinator deci
 
 Spikes: 10-15 Muse Spark Open (9 vs 0) joins and Apple drops below the cap; 10-16 Surface Laptop Ultra
 is a spike again (3 vs 0) instead of a false New. Top stories identical on all five days.
+
+## 10. Re-measure after the F19 decision (2026-10-19)
+
+**Code**: `1b4c631` (F19 reads published digest items only; texts with a not-yet-released word are
+ignored; snippet recorded). **Spend**: $0 (`--recompute-only`, 0 calls). Dumps:
+`tmp/daily-signals-validate/out-review-f19-ai_news-prodwindow.txt` and `out-review-f19-ai_news.txt`.
+
+The scratch DB also holds local digests from 2026-02-28..08-02 (a local artifact; production digests
+start 2026-08-03). Numbers are given for a copy with the production digest window (main result) and for
+the scratch DB as is.
+
+| Day | Displayed OK / BAD / uncertain | Uncapped OK / BAD / uncertain | Change against section 9 |
+| --- | --- | --- | --- |
+| 10-12 | 7 / 0 / 1 | 9 / 1 / 2 of 12 | none |
+| 10-13 | 5 / 0 / 3 | 8 / 0 / 6 of 14 | none |
+| 10-14 | 7 / 0 / 1 | 10 / 0 / 2 of 12 | none |
+| 10-15 | 8 / 0 / 0 | 8 / 1 / 3 of 12 | Muse Spark Open New again (confirmed, 9 publishers, shown #1); Trust in Depth below the cap |
+| 10-16 | 7 / 0 / 1 | 7 / 0 / 2 of 9 | Code Review for Claude Code New again (hidden #9; uncertain) |
+| **Total** | **34 / 0 / 6 = 85% OK, 0% BAD** | **42 / 2 / 15 of 59 = 71% OK, 3.4% BAD** | section 9: 82.5% / 0%, 72% / 3.5% |
+
+- Recall: **34/42** (section 9: 32/42; section 8: 34/42). Misses as in Phase P: PixelBoard, OpenCode
+  2.0, GenoMorph, Devin Oncall, OGX, Kilo Desktop, CodeOwnership, Evidence Desk.
+- F19 suppressions: none on these days (`on-demand capacity mode` stays refused by F22). On the scratch
+  DB as is, the local 2026-03-09 digest title "Anthropic rolls out Code Review for Claude Code ..." still
+  suppresses Code Review for Claude Code (no not-yet-released word in that text); everything else is
+  identical (uncapped 42 / 2 / 14 of 58, recall 33/42). Production has no digests before 2026-08-03.
+- Top stories identical to sections 8-9. Spikes: 10-15 back to the T1.6 list (GPT-6 Astra, NVIDIA,
+  Black Forest Labs, Gemini 3.8 Flash, Google DeepMind, Apple); 10-16 Beam, RTX Spark, Reflection,
+  DeepSeek, Surface Laptop Ultra.
+
+T7.2 checklist: displayed OK >= 75% / BAD <= 10% met (85% / 0%); no generic, non-AI or established item
+displayed met; uncapped still holds Maka (non-AI) and Blueprints AI (established), both hidden;
+Moltbook and Attie not New met; Beam not New, spike and top story met; **Muse Spark Open New on 10-15
+met**; Elorian Glimpse New on 10-16 and separate met; no duplicate top story met; membership 89% strict /
+98% lenient (accepted by the coordinator).

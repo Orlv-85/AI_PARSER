@@ -382,6 +382,9 @@ settled in Phase P; this phase validates the full pipeline with extracted histor
     the F18 re-extraction; displayed New 33 / 0 / 7 (82.5% OK, 0% BAD), uncapped 41 / 2 / 14,
     recall 32/42; open: Muse Spark Open is suppressed by F19 on 10-15 (text-source decision for the
     coordinator); membership 89% strict accepted.
+  - After the F19 decision (`1b4c631`, `dry-run.md` section 10, $0): displayed 34 / 0 / 6 (85% OK,
+    0% BAD), uncapped 42 / 2 / 15, recall 34/42; Muse Spark Open New on 10-15; all T7.2 checks met
+    except strict membership (accepted).
 
 ## Phase 8: Gate and rollout
 
