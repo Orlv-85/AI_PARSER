@@ -40,6 +40,7 @@ from app.storage.repos import (
 )
 from app.web.auth import SessionSigner, verify_bearer_token, verify_password
 from app.web.models import (
+    DailySignalBrief,
     DailySignalsResponse,
     DigestLinkFeedItem,
     NewsArticleDetail,
@@ -138,14 +139,33 @@ def _daily_signals_response(*, report_date: date, payload: str | None) -> DailyS
                                     notes=["Daily signals could not be read."])
 
 
+def _daily_signal_brief(*, report_date: date, row: Any) -> DailySignalBrief | None:
+    """The stored `ok` brief as the API model; missing, invalid or unreadable -> None."""
+    if row is None or row.status != "ok":
+        return None
+    try:
+        data = json.loads(row.payload)
+        return DailySignalBrief(sentences=data["sentences"], model=row.model,
+                                brief_version=row.brief_version, generated_at=row.updated_at)
+    except (ValueError, TypeError, KeyError) as exc:
+        _LOGGER.error("daily_signals_brief_unreadable report_date=%s error=%s",
+                      report_date.isoformat(), type(exc).__name__)
+        return None
+
+
 def _read_daily_signals(report_date: date) -> DailySignalsResponse:
-    """One indexed read of the stored snapshot; never calls a provider."""
+    """Indexed reads of the stored snapshot and brief; never calls a provider."""
     with SessionLocal() as session:
         repo = DailySignalRepo(session,
                                comparable_from=get_settings().daily_signals_comparable_from)
         row = repo.get_report(report_date)
         payload = row.payload if row is not None else None
-    return _daily_signals_response(report_date=report_date, payload=payload)
+        brief = _daily_signal_brief(report_date=report_date, row=repo.get_brief(report_date)) \
+            if row is not None else None
+    response = _daily_signals_response(report_date=report_date, payload=payload)
+    if response.status != "unavailable":
+        response.brief = brief
+    return response
 
 
 def _render_digest(*, report_date: date, digest: NewsDigestReport | None,

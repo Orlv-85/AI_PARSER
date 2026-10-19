@@ -267,6 +267,58 @@
       .signal-cooling {
         margin-top: 12px;
       }
+      .signal-grid.cols-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .signal-grid.cols-1 {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .signal-brief-block {
+        margin: 0 0 14px;
+        padding: 12px 14px;
+        border-left: 3px solid var(--accent);
+        background: rgba(15, 118, 110, 0.05);
+        border-radius: 0 12px 12px 0;
+      }
+      .signal-brief-block h3 {
+        margin: 0;
+        font-size: 0.8rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .signal-brief {
+        margin: 8px 0 0;
+        padding-left: 18px;
+        font-style: italic;
+      }
+      .signal-brief li + li {
+        margin-top: 6px;
+      }
+      .signal-ref {
+        color: var(--accent);
+        font-size: 0.8rem;
+        font-style: normal;
+        text-decoration: none;
+      }
+      .signal-quiet {
+        margin: 8px 0 0;
+      }
+      .signal-ai-note {
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+      .signal-what {
+        margin: 4px 0 0;
+        font-size: 0.92rem;
+      }
+      .signal-list li.signal-muted {
+        color: var(--muted);
+      }
+      .signal-list li.signal-confirmed + li.signal-muted {
+        border-top-style: dashed;
+      }
       @media (max-width: 700px) {
         main {
           padding-top: 28px;
@@ -275,7 +327,8 @@
           padding: 22px;
         }
         .preview-grid,
-        .signal-grid {
+        .signal-grid,
+        .signal-grid.cols-2 {
           grid-template-columns: 1fr;
         }
       }
@@ -408,6 +461,10 @@
       const SIGNALS_UNAVAILABLE = "Daily signals are not available for this date yet.";
       const SIGNALS_ERROR = "Daily signals are temporarily unavailable.";
       const SIGNALS_LOADING = "Loading daily signals...";
+      const SIGNALS_AI_NOTE = "Written by AI from the linked articles; check the sources.";
+      // Hard event types shown as chips (HARD_EVENTS in daily_signals_brief); others fold into "+N more".
+      const HARD_EVENTS = ["model_release", "product_launch", "funding", "acquisition", "partnership",
+        "infrastructure_deal", "hardware", "regulation_policy", "legal", "security_incident", "people_move"];
 
       const EVENT_SINGULAR = {
         "model releases": "model release", "product launches": "product launch",
@@ -438,14 +495,15 @@
         return `<p class="signal-meta">${parts.filter(Boolean).map(escapeHtml).join(" &middot; ")}</p>`;
       }
 
-      function sourceCount(count) {
-        return count + " source" + (count === 1 ? "" : "s");
+      function outletCount(count) {
+        return count + " outlet" + (count === 1 ? "" : "s");
       }
 
       function signalTrend(item) {
-        const counts = item.current_7d != null
+        let counts = item.current_7d != null
           ? `7d: ${item.previous_7d} &rarr; ${item.current_7d} (expected ${Number(item.expected_7d)})`
-          : `today ${item.today} vs ${Number(item.trailing_mean || 0)}/day`;
+          : (item.trailing_mean ? `today ${item.today} vs ${Number(item.trailing_mean)}/day` : `today ${item.today} vs none before`);
+        if (item.reason) counts += ` - ${escapeHtml(item.reason)}`;
         const badge = item.spike ? ' <span class="signal-badge">spike</span>' : "";
         return `<li><strong>${escapeHtml(item.name)}</strong>${badge}<p class="signal-meta">${counts}</p>${signalLinks(item.links)}</li>`;
       }
@@ -456,6 +514,52 @@
         return `<section class="signal-card" id="${id}"><h3>${escapeHtml(title)}</h3>${noteHtml}<ul class="signal-list">${body}</ul></section>`;
       }
 
+      function signalQuietLine(payload) {
+        const multi = (payload.top_stories || []).length;
+        const stories = multi ? `${multi} ${multi === 1 ? "story" : "stories"}` : "no story";
+        return `Quiet day: ${(payload.coverage || {}).items || 0} items, ${stories} covered by more than one outlet.`;
+      }
+
+      function signalBrief(payload) {
+        const quiet = payload.quiet ? `<p class="signal-quiet">${escapeHtml(signalQuietLine(payload))}</p>` : "";
+        const items = ((payload.brief && payload.brief.sentences) || []).map((sentence) => {
+          const refs = (sentence.links || []).filter((link) => /^https?:\/\//i.test(link.url))
+            .map((link, i) => ` <a class="signal-ref" href="${escapeHtml(link.url)}" title="${escapeHtml(link.title)}" target="_blank" rel="noreferrer">[${i + 1}]</a>`)
+            .join("");
+          return `<li>${escapeHtml(sentence.text)}${refs}</li>`;
+        });
+        if (!quiet && !items.length) return "";
+        const sentences = items.length ? `<ul class="signal-brief">${items.join("")}</ul>` : "";
+        const note = items.length ? `<p class="signal-ai-note">${escapeHtml(SIGNALS_AI_NOTE)}</p>` : "";
+        return `<div class="signal-brief-block"><h3>In brief</h3>${quiet}${sentences}${note}</div>`;
+      }
+
+      function signalChips(payload) {
+        const counts = (payload.event_counts || []).filter((c) => c.stories);
+        const hard = counts.filter((c) => HARD_EVENTS.includes(c.event_type));
+        const soft = counts.filter((c) => !HARD_EVENTS.includes(c.event_type));
+        let chips = hard.map((c) => `<li class="signal-chip">${escapeHtml(eventLabel(c.stories, c.label))}</li>`).join("");
+        if (soft.length) {
+          const title = soft.map((c) => eventLabel(c.stories, c.label)).join(", ");
+          const more = soft.reduce((sum, c) => sum + c.stories, 0);
+          chips += `<li class="signal-chip signal-chip-more" title="${escapeHtml(title)}">+${more} more</li>`;
+        }
+        return `<ul class="signal-chips">${chips}</ul>`;
+      }
+
+      function signalNewItem(item) {
+        const confirmed = item.level === "confirmed";
+        const links = item.links || [];
+        const source = confirmed || !links.length ? outletCount(item.publishers) : `via ${links[0].publisher}`;
+        const line = item.one_liner
+          ? `<p class="signal-what">${escapeHtml(item.one_liner_source === "quote" ? `"${item.one_liner}"` : item.one_liner)}</p>`
+          : "";
+        const variant = item.variant_of ? `<p class="signal-meta">variant of ${escapeHtml(item.variant_of)}</p>` : "";
+        const also = (item.variants || []).length ? `<p class="signal-meta">also: ${escapeHtml(item.variants.join(", "))}</p>` : "";
+        const quote = item.one_liner_source === "quote" ? null : item.novelty_quote;
+        return `<li class="${confirmed ? "signal-confirmed" : "signal-muted"}"><strong>${escapeHtml(item.name)}</strong>${signalMeta([item.type, item.vendor, source])}${line}${variant}${also}${signalLinks(links, quote)}</li>`;
+      }
+
       function renderSignals(payload) {
         if (!payload || payload.status === "unavailable") {
           signalsBody.innerHTML = signalStatus((payload && payload.notes && payload.notes[0]) || SIGNALS_UNAVAILABLE);
@@ -463,30 +567,34 @@
         }
         const sections = payload.sections || {};
         const labels = Object.fromEntries((payload.event_counts || []).map((c) => [c.event_type, eventLabel(1, c.label).split(" ").slice(1).join(" ")]));
-        const chips = (payload.event_counts || []).filter((c) => c.stories)
-          .map((c) => `<li class="signal-chip">${escapeHtml(eventLabel(c.stories, c.label))}</li>`).join("");
         const cov = payload.coverage || {};
-        const lines = payload.status === "partial"
+        let lines = payload.status === "partial"
           ? signalStatus(`Extracted ${cov.extracted}/${cov.items} digest items; signals may be incomplete.`)
           : (payload.notes || []).map(signalStatus).join("");
-        const newItems = (payload.new || []).map((item) => {
-          const badge = item.level === "early" ? ' <span class="signal-badge">early signal</span>' : "";
-          const variant = item.variant_of ? `<p class="signal-meta">variant of ${escapeHtml(item.variant_of)}</p>` : "";
-          const also = (item.variants || []).length ? `<p class="signal-meta">also: ${escapeHtml(item.variants.join(", "))}</p>` : "";
-          return `<li><strong>${escapeHtml(item.name)}</strong>${badge}${signalMeta([item.type, item.vendor, sourceCount(item.publishers)])}${variant}${also}${signalLinks(item.links, item.novelty_quote)}</li>`;
+        const newList = payload.new || [];
+        const stories = (payload.top_stories || []).map((story) => {
+          const spikes = (story.spikes || []).length ? `spike: ${story.spikes.join(", ")}` : null;
+          return `<li><strong>${escapeHtml(story.label)}</strong>${signalMeta([outletCount(story.publishers), labels[story.event_type], spikes])}${signalLinks(story.links)}</li>`;
         }).join("");
-        const stories = (payload.top_stories || []).map((story) =>
-          `<li><strong>${escapeHtml(story.label)}</strong>${signalMeta([sourceCount(story.publishers), labels[story.event_type]])}${signalLinks(story.links)}</li>`).join("");
         const rising = sections.rising || {};
-        const cards = [
-          signalCard("New", newItems, sections.new && sections.new.note, "signals-new", "Nothing was first seen in our corpus on this date."),
-          signalCard("Top stories", stories, sections.top_stories && sections.top_stories.note, "signals-top", "No story was covered by more than one publisher."),
-          signalCard(rising.state === "spikes_only" ? "Spikes" : "Rising", (payload.rising || []).map(signalTrend).join(""), rising.note, "signals-rising", "Nothing is rising or spiking on this date."),
-        ].join("");
+        const spikesOnly = rising.state === "spikes_only";
+        const hideSpikes = payload.quiet || (spikesOnly && !(payload.rising || []).length);
+        if (hideSpikes && !payload.quiet && rising.note) lines += signalStatus(rising.note);
+        const cards = [];
+        if (newList.length || !payload.quiet) {
+          cards.push(signalCard("New", newList.map(signalNewItem).join(""), sections.new && sections.new.note, "signals-new", "Nothing was first seen in our corpus on this date."));
+        }
+        if (!payload.quiet) {
+          cards.push(signalCard("Top stories", stories, sections.top_stories && sections.top_stories.note, "signals-top", "No story was covered by more than one publisher."));
+        }
+        if (!hideSpikes) {
+          cards.push(signalCard(spikesOnly ? "Spikes" : "Rising", (payload.rising || []).map(signalTrend).join(""), rising.note, "signals-rising", "Nothing is rising or spiking on this date."));
+        }
+        const grid = cards.length ? `<div class="signal-grid cols-${cards.length}">${cards.join("")}</div>` : "";
         const cooling = sections.cooling && sections.cooling.state === "ready"
           ? `<details class="signal-cooling"><summary>Cooling (${(payload.cooling || []).length})</summary><ul class="signal-list">${(payload.cooling || []).map(signalTrend).join("")}</ul></details>`
           : "";
-        signalsBody.innerHTML = `<ul class="signal-chips">${chips}</ul>${lines}<div class="signal-grid">${cards}</div>${cooling}`;
+        signalsBody.innerHTML = `${signalBrief(payload)}${signalChips(payload)}${lines}${grid}${cooling}`;
       }
 
       async function loadSignals(selectedDate) {

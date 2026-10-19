@@ -353,6 +353,8 @@ class DailySignalEntityItem(BaseModel):
     variant_of: str | None = None
     variants: list[str] = Field(default_factory=list)
     novelty_quote: str | None = None
+    one_liner: str | None = None
+    one_liner_source: Literal["summary", "quote"] | None = None
     articles: int
     publishers: int
     links: list[DailySignalLink] = Field(default_factory=list)
@@ -370,6 +372,7 @@ class DailySignalTrendItem(BaseModel):
     trailing_mean: float | None = None
     spike: bool = False
     publishers: int
+    reason: str | None = None
     links: list[DailySignalLink] = Field(default_factory=list)
 
 
@@ -379,7 +382,21 @@ class DailySignalStory(BaseModel):
     articles: int
     publishers: int
     entities: list[str] = Field(default_factory=list)
+    spikes: list[str] = Field(default_factory=list)
     links: list[DailySignalLink] = Field(default_factory=list)
+
+
+class DailySignalBriefSentence(BaseModel):
+    text: str
+    links: list[DailySignalLink] = Field(default_factory=list)
+    quote: str | None = None
+
+
+class DailySignalBrief(BaseModel):
+    sentences: list[DailySignalBriefSentence] = Field(default_factory=list)
+    model: str | None = None
+    brief_version: str | None = None
+    generated_at: datetime | None = None
 
 
 class DailySignalEventCount(BaseModel):
@@ -423,3 +440,5 @@ class DailySignalsResponse(BaseModel):
     cooling: list[DailySignalTrendItem] = Field(default_factory=list)
     event_counts: list[DailySignalEventCount] = Field(default_factory=list)
     article_event_types: dict[str, str] = Field(default_factory=dict)
+    quiet: bool = False
+    brief: DailySignalBrief | None = None
