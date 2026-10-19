@@ -346,7 +346,7 @@
 Runs only after the coordinator approves checkpoint 3. Prompt quality on the five target days was
 settled in Phase P; this phase validates the full pipeline with extracted history.
 
-- [ ] **T7.1 Scratch DB with production digests**
+- [x] **T7.1 Scratch DB with production digests**
   - Steps: copy `data/ai_news.db` to `tmp/daily-signals-validate/ai_news.db`;
     `AINEWS_DATABASE_URL=sqlite:///tmp/daily-signals-validate/ai_news.db ./venv1/bin/alembic upgrade head`;
     import 2026-08-03..2026-10-16 from the public digest API (read-only GET) with a session bound to that
@@ -375,6 +375,9 @@ settled in Phase P; this phase validates the full pipeline with extracted histor
     and separate from the 10-06 Glimpse company; no duplicate top story; membership precision >= 90%;
     precision, recall, spend and any prompt/stoplist change (with `EXTRACTION_VERSION` bump) recorded.
   - Depends on: T7.1
+  - Result (2026-10-19, `dry-run.md` section 8): $0.6446 spent; displayed New 31 / 3 / 6 (77.5% OK,
+    7.5% BAD), uncapped 42 / 7 / 14, recall 34/42; open: one generic item displayed ("dynamic
+    workflows") and strict membership 89%. Findings 1-4 wait for checkpoint 3 step 3.
 
 ## Phase 8: Gate and rollout
 

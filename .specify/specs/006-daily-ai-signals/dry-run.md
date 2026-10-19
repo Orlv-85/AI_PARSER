@@ -240,3 +240,118 @@ Changes after the independent review of revision 1 (plan "Review Response"):
   builds story edges on resolution keys `(type_group, base_key)`, which matches how this dry-run's
   revision-1 keys behaved (7/5). Not re-run with a full revision-4 implementation; pinned in T1.2/T1.4.
 
+
+## 8. Phase B validation (T7.1-T7.2, 2026-10-19)
+
+**Branch code**: PR #39 head `8f30549` (no code change during the review window).
+**Spend**: $0.6446 of the remaining $1.818 (hard stop not reached); validation total $1.3266 of $2.50.
+**Scripts** (not committed): `tmp/daily-signals-validate/` - `import_digests.py`, `seed_ledger.py`,
+`backfill.sh`, `report.py`; dump `out-review.txt`; run reports `run-*.json`.
+
+### Method
+
+- Scratch DB: copy of local `data/ai_news.db`, `alembic upgrade head` (a42b750d0c44 -> b6d1f0a7c3e5).
+  Public digests 2026-08-03..10-16 imported by read-only GET; 4 empty responses skipped
+  (09-19, 09-20, 09-26, 09-27, kept `missing`). 2,072 digest items, 2,010 matched to local articles
+  (97.0%, all by exact URL).
+- Ledger seeded with the 778 saved Phase P responses (run id `seed-phase-p`, cost 0). They replay only for
+  byte-identical v5 requests (same request key): all 369 target articles of 10-12..16 replayed, $0.
+- History: production CLI, `--report-date 2026-10-16 --backfill-days 75 --max-calls 700
+  --max-seconds 3500 --max-usd <remaining>`, repeated while `progress > 0`.
+- Review: stored snapshots (displayed) plus the same recompute with `new_max`/`top_max`/`links_max`
+  raised in a rolled-back transaction (uncapped). Same rubric and same reviewer as Phase P; items already
+  judged in Phase P keep their verdict.
+
+### Runs
+
+| Run | Calls | States | USD | Progress | Terminal reason |
+| --- | --- | --- | --- | --- | --- |
+| targets (10-12..16) | 0 | - (369 replayed) | 0 | 369 | - (`ok`) |
+| 1 | 700 | 699 response, 1 unknown | 0.238522 | 701 | `cap_reached` (calls) |
+| 2 | 700 | 700 response | 0.322218 | 729 | `cap_reached` (calls) |
+| 3 | 211 | 211 response | 0.083845 | 211 | - (`ok`) |
+| 4 | 0 | - | 0 | 0 | - (`ok`, stop: progress 0) |
+
+- 1,611 paid calls, $0.000400 per article on average (Phase P estimate $0.00088; history articles are
+  short, see finding 1). The unknown attempt (transport error after 0.4 s, article 75661) is counted at
+  its reservation ($0.002942); its article was extracted in the next run.
+- Result: 2,010/2,010 articles `ok`, 0 failed or skipped, 3,081 active entities, 3 `needs_review`.
+  09-12 and 10-04 stay incomplete only because of unmatched digest items (below 90% matched).
+
+### New, 2026-10-12..16
+
+| Day | Displayed OK / BAD / uncertain | Uncapped OK / BAD / uncertain | Changes against T1.6 (cached, lexical history) |
+| --- | --- | --- | --- |
+| 10-12 | 7 / 0 / 1 | 9 / 2 / 2 (13) | Displayed identical. Hidden: Gemini agent is now New (BAD-identity) |
+| 10-13 | 4 / 1 / 3 | 8 / 1 / 5 (14) | LFM2.5-24B-A2B shown #3 (BAD-identity), pushes Apple HomeView below the cap |
+| 10-14 | 6 / 1 / 1 | 10 / 1 / 2 (13) | "dynamic workflows" (Anthropic) shown #8 (BAD-generic) |
+| 10-15 | 8 / 0 / 0 | 8 / 2 / 3 (13) | identical |
+| 10-16 | 6 / 1 / 1 | 7 / 1 / 2 (10) | Surface Laptop Ultra shown #1 as confirmed (BAD-retrospective); SAT below the cap |
+| **Total** | **31 / 3 / 6 = 77.5% OK, 7.5% BAD** | **42 / 7 / 14 of 63 = 67% OK, 11% BAD** | T1.6: 34 / 0 / 6 displayed; 42 / 3 / 14 uncapped |
+
+New BAD items (the others are Phase P verdicts: Blueprints AI established, Maka non-AI, "on-demand
+capacity mode" generic, all still hidden by the cap):
+
+- **Surface Laptop Ultra** (10-16, displayed #1, 3 publishers): review articles; the laptop was
+  covered on 10-07 ("The first Nvidia RTX Spark laptops cost up to $7,000"), but that history article has
+  no content locally and its extraction is empty (finding 1). Quote: "Microsoft is throwing both arms
+  around the new Nvidia RTX Spark platform with the Surface Laptop Ultra".
+- **LFM2.5-24B-A2B** (10-13, displayed #3): a size variant of the LFM2.5 family seen on 08-06
+  (LFM2.5-2.6B). Same `family_key` `lfm2.5`, but vendor "LiquidAI" and "Liquid AI" give different vendor
+  classes, so `same_family` fails (finding 2).
+- **dynamic workflows** (10-14, displayed #8): "a brand new feature, announced on Friday, called dynamic
+  workflows"; a feature of an existing product with a generic name, announced five days earlier
+  (same verdict as "on-demand capacity mode" in Phase P).
+- **Gemini agent** (10-12, hidden #12): "Gemini Agents" was extracted on 10-08 and the same Google post
+  was in the 10-09 digest title-only (empty extraction); the plural gives a different key (finding 3).
+
+Recall (the 42 launch entities of Phase P, uncapped list): **34/42 = 81%**, unchanged. Missed as in
+Phase P: PixelBoard, OpenCode 2.0, GenoMorph, Devin Oncall, OGX, Kilo Desktop, CodeOwnership, Evidence Desk.
+
+### Named checks (T7.2 done-when)
+
+| Check | Result |
+| --- | --- |
+| Displayed OK >= 75%, BAD <= 10% | met: 77.5% / 7.5% |
+| No generic, non-AI or established-company item displayed | **missed**: "dynamic workflows" (generic) on 10-14 |
+| Same, uncapped New | **missed**: + "on-demand capacity mode", Maka, Blueprints AI (hidden, as in T1.6) |
+| Moltbook (10-13), Attie (10-15) not New | met |
+| Beam not New on 10-16, spike and top story | met: spike 4 vs 0 (4 publishers), top story 4/4 |
+| Muse Spark Open New on 10-15 | met (confirmed, 9 publishers) |
+| Elorian Glimpse New on 10-16, separate from the 10-06 Glimpse company | met (`auto:artifact:glimpse` vs `auto:org:glimpse`) |
+| No duplicate top story | met on all five days (Surface and RTX Spark stay separate on 10-16) |
+| Membership precision >= 90% | strict **89%** (59/66), lenient 98% (65/66) - see below |
+| Prompt or stoplist change | none (`daily-signals-extract-5`) |
+
+Membership (all multi-publisher stories, uncapped, 18 stories / 66 member articles): wrong members are
+the 6 emergent.sh SEO pages (pricing, "alternatives", comparisons) in the 10-15 "Gemini 4 Argon vs
+Gemini 3.1 Pro" story (on the model, not an event; known since Phase P) and the "AI Weekly Issue #537"
+roundup in the 10-13 Muse Wonder follow-up. Strict counts all 7 as wrong; lenient accepts the SEO pages
+as same-entity coverage. Top stories are identical to Phase P and T1.6 on all five days.
+
+Spikes: 10-15 identical to T1.6 (GPT-6 Astra, Nvidia, Black Forest Labs, Gemini 3.8 Flash, Google
+DeepMind, Apple). 10-16: Beam, RTX Spark, Reflection, DeepSeek; Surface Laptop Ultra is no longer a spike
+because it is now (wrongly) New. Rising and Cooling cannot be measured yet (first eligible day 10-23).
+
+### Findings (written down, not fixed: no code change during the review window)
+
+1. **History is mostly title-only in the local DB.** 1,199 of 1,641 history articles (73%; 08-03..10-09)
+   have under 300 characters of content locally; the model returns no entities for 857 of them, and they
+   still count as extracted, so those days are `complete`. Target days have full content. First-seen is
+   therefore weaker here than in production would be if production stores content (not checked:
+   production is off limits). Surface Laptop Ultra and part of Gemini agent come from this. Design
+   question for the coordinator: should a title-only article count toward the 90% completeness, and
+   should the operator guide warn about it?
+2. **Glued vendor suffix splits vendor classes**: "LiquidAI" is not normalized to "liquid" (the company
+   suffix rule only strips a separate "AI" token), so packaging suppression and `variant_of` fail across
+   the two spellings. Candidate fix: vendor alias or suffix handling for a glued "AI"/"Labs", with a T1.1 test.
+3. **Plural names are separate entities** ("Gemini Agents" vs "Gemini agent"). Candidate fix: an
+   operator alias (no code), or singular folding of the last token for artifacts (risky for names like
+   "Llama Stacks"; needs a test).
+4. **Generic feature names still pass** (lowercase common-word names: "dynamic workflows",
+   "on-demand capacity mode"). Candidate fix: treat an all-lowercase name made only of common words as
+   not New; needs a test and a re-measure ($0, cached).
+5. **Strict membership 89%** comes from one SEO cluster on 10-15, unchanged since Phase P.
+
+Fixes 2-4 are deterministic and can be re-measured on this scratch DB with `--recompute-only` ($0) after
+the review window, together with the review findings (checkpoint 3 step 3).
