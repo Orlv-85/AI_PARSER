@@ -1,5 +1,5 @@
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from importlib import import_module
 from pathlib import Path
 from typing import Any
@@ -12,6 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from app.config.settings import get_settings
 from app.core.daily_signals_compute import EVENT_LABELS
 from app.storage.models_sql import Base, DailySignalReport
+from app.storage.repos import NewsDigestRepo
 from app.web.app import create_app
 from app.web.signals_view import SINGULAR, event_label
 
@@ -249,8 +250,8 @@ def test_signals_client_rendering_hooks() -> None:
     assert "/api/news/daily-signals?date=" in template
     assert "function renderSignals(payload)" in template
     assert "if (dateInput.value !== selectedDate) return;" in template
-    load_digest = template.split("async function loadDigest", 1)[1].split("\n      }\n", 1)[0]
-    assert "loadSignals(selectedDate)" in load_digest
+    change = template.split('dateInput.addEventListener("change"', 1)[1].split("});", 1)[0]
+    assert "loadSignals(selected)" in change
     assert "escapeHtml(item.name)" in template and "/^https?:\\/\\//i.test(link.url)" in template
 
 
@@ -262,3 +263,57 @@ def test_event_labels_singular_and_plural() -> None:
     template = (Path(__file__).resolve().parents[2] / "src/app/web/digest.html").read_text()
     for plural, singular in SINGULAR.items():
         assert f'"{plural}": "{singular}"' in template
+
+
+def test_trend_without_expected_value_and_any_render_error_keep_page(monkeypatch,
+                                                                     tmp_path) -> None:
+    # F5: a stored trend with `current_7d` but `expected_7d: null` passed the model and then
+    # crashed the page; any signals failure must leave the digest page up.
+    odd = dict(SIGNALS, rising=[{"entity_id": 9, "name": "Odd Trend", "type": "model",
+                                 "today": 2, "current_7d": 3, "previous_7d": None,
+                                 "expected_7d": None, "publishers": 2, "links": []}])
+    response = _signals_client(monkeypatch, tmp_path, odd).get("/?date=2026-10-16")
+    assert response.status_code == 200
+    assert "Odd Trend" in response.text and "7d: - &rarr; 3" in response.text
+    web = import_module("app.web.app")
+    original = web.render_signals
+
+    def _boom(signals, *, read_error=False):
+        if not read_error:
+            raise RuntimeError("render bug")
+        return original(signals, read_error=True)
+
+    monkeypatch.setattr(web, "render_signals", _boom)
+    (tmp_path / "b").mkdir()
+    response = _signals_client(monkeypatch, tmp_path / "b", SIGNALS).get("/?date=2026-10-16")
+    assert response.status_code == 200
+    assert "Daily signals are temporarily unavailable." in response.text
+
+
+def test_placeholders_in_digest_text_are_not_substituted(monkeypatch, tmp_path) -> None:
+    # N1: digest text naming a template placeholder stays literal (single-pass substitution).
+    client = _signals_client(monkeypatch, tmp_path, SIGNALS)
+    web = import_module("app.web.app")
+    with web.SessionLocal() as session:
+        NewsDigestRepo(session).save_digest(report_date=date(2026, 10, 16), groups=[{
+            "title": "Models", "items": [{"title": "__SIGNALS_CONTENT__ and __REPORT_DATE__",
+                                          "summary": "s", "url": "https://a.com/p"}]}])
+        session.commit()
+    html = client.get("/?date=2026-10-16").text
+    assert "__SIGNALS_CONTENT__ and __REPORT_DATE__" in html
+    assert html.count('id="signals-new"') == 1
+
+
+def test_signals_reload_on_date_change_independent_of_digest() -> None:
+    # F16: the block is reset while loading, loaded even if the digest request fails, and an
+    # error answer says "temporarily unavailable" rather than "not available yet".
+    template = (Path(__file__).resolve().parents[2] / "src/app/web/digest.html").read_text()
+    script = template.split("<script>", 1)[1]
+    change = script.split('dateInput.addEventListener("change"', 1)[1].split("});", 1)[0]
+    assert "loadSignals(" in change and change.index("loadSignals(") < change.index("loadDigest(")
+    load_digest = script.split("async function loadDigest", 1)[1].split("\n      }\n", 1)[0]
+    assert "loadSignals(" not in load_digest
+    load_signals = script.split("async function loadSignals", 1)[1].split("\n      }\n", 1)[0]
+    assert load_signals.index("SIGNALS_LOADING") < load_signals.index("fetch(")
+    assert "SIGNALS_ERROR" in load_signals
+    assert 'const SIGNALS_ERROR = "Daily signals are temporarily unavailable.";' in script

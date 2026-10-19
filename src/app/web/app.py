@@ -77,6 +77,7 @@ from app.web.source_intake import SourceIntakeService
 
 _TEMPLATE = Path(__file__).with_name("index.html")
 _DIGEST_TEMPLATE = Path(__file__).with_name("digest.html")
+_PLACEHOLDER = re.compile(r"__[A-Z_]+__")
 _LOGIN_TEMPLATE = Path(__file__).with_name("login.html")
 _NEWS_STATS_TEMPLATE = Path(__file__).with_name("news_stats.html")
 _WEEKLY_ANALYTICS_TEMPLATE = Path(__file__).with_name("weekly_analytics.html")
@@ -179,16 +180,18 @@ def _render_digest(*, report_date: date, digest: NewsDigestReport | None,
             )
         digest_content = "".join(sections)
 
-    return (
-        _DIGEST_TEMPLATE.read_text(encoding="utf-8")
-        .replace("__HERO_TITLE__", hero_title)
-        .replace("__REPORT_DATE__", report_date.isoformat())
-        .replace("__REPORT_DATE_QUERY__", f"?date={report_date.isoformat()}")
-        .replace("__DEFAULT_REPORT_DATE__", default_report_date.isoformat())
-        .replace("__EMPTY_STATE_CLASS__", empty_state_class)
-        .replace("__DIGEST_CONTENT__", digest_content)
-        .replace("__SIGNALS_CONTENT__", signals_html)
-    )
+    values = {
+        "__HERO_TITLE__": hero_title,
+        "__REPORT_DATE__": report_date.isoformat(),
+        "__REPORT_DATE_QUERY__": f"?date={report_date.isoformat()}",
+        "__DEFAULT_REPORT_DATE__": default_report_date.isoformat(),
+        "__EMPTY_STATE_CLASS__": empty_state_class,
+        "__DIGEST_CONTENT__": digest_content,
+        "__SIGNALS_CONTENT__": signals_html,
+    }
+    # One pass: placeholder names inside inserted digest or signals text stay literal (N1).
+    return _PLACEHOLDER.sub(lambda m: values.get(m.group(0), m.group(0)),
+                            _DIGEST_TEMPLATE.read_text(encoding="utf-8"))
 
 
 def _render_login() -> str:
@@ -495,7 +498,7 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
         # Separate read: a signals failure never takes the digest page down.
         try:
             signals_html = render_signals(_read_daily_signals(report_date))
-        except (SQLAlchemyError, ValueError) as exc:
+        except Exception as exc:  # any signals failure (F5): the digest page stays up
             _LOGGER.error("daily_signals_read_failed report_date=%s error=%s",
                           report_date.isoformat(), type(exc).__name__)
             signals_html = render_signals(None, read_error=True)

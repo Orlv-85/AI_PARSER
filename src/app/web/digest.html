@@ -406,6 +406,8 @@
 
       const signalsBody = document.getElementById("daily-signals-body");
       const SIGNALS_UNAVAILABLE = "Daily signals are not available for this date yet.";
+      const SIGNALS_ERROR = "Daily signals are temporarily unavailable.";
+      const SIGNALS_LOADING = "Loading daily signals...";
 
       const EVENT_SINGULAR = {
         "model releases": "model release", "product launches": "product launch",
@@ -488,15 +490,26 @@
       }
 
       async function loadSignals(selectedDate) {
+        // Never keep the previous date's signals on screen while the new date loads.
+        signalsBody.innerHTML = signalStatus(SIGNALS_LOADING);
         let payload = null;
+        let failed = false;
         try {
           const response = await fetch("/api/news/daily-signals?date=" + encodeURIComponent(selectedDate));
-          payload = response.ok ? await response.json() : null;
+          if (response.ok) {
+            payload = await response.json();
+          } else {
+            failed = true;
+          }
         } catch (_error) {
-          payload = null;
+          failed = true;
         }
         // Ignore a late answer for a date that is no longer selected.
         if (dateInput.value !== selectedDate) return;
+        if (failed) {
+          signalsBody.innerHTML = signalStatus(SIGNALS_ERROR);
+          return;
+        }
         renderSignals(payload);
       }
 
@@ -617,7 +630,6 @@
         window.history.replaceState({}, "", nextUrl);
         updateHeroTitle(selectedDate);
         renderDigest(payload);
-        void loadSignals(selectedDate);
         await loadWeeklyPreview(selectedDate);
       }
 
@@ -633,7 +645,10 @@
       }
 
       dateInput.addEventListener("change", async () => {
-        await loadDigest(dateInput.value);
+        const selected = dateInput.value;
+        // Signals load on their own, also when the digest request fails.
+        void loadSignals(selected);
+        await loadDigest(selected);
       });
     </script>
   </body>

@@ -72,12 +72,17 @@ def _story(story: DailySignalStory, labels: dict[str, str]) -> str:
             f"{_links(story.links)}</li>")
 
 
+def _n(value: float | None) -> str:
+    """A count or rate for display; a missing value renders as "-" (F5)."""
+    return "-" if value is None else f"{value:g}"
+
+
 def _trend(item: DailySignalTrendItem) -> str:
     if item.current_7d is not None:
-        counts = (f"7d: {item.previous_7d} &rarr; {item.current_7d}"
-                  f" (expected {item.expected_7d:g})")
+        counts = (f"7d: {_n(item.previous_7d)} &rarr; {item.current_7d}"
+                  f" (expected {_n(item.expected_7d)})")
     else:
-        counts = f"today {item.today} vs {item.trailing_mean or 0:g}/day"
+        counts = f"today {item.today} vs {_n(item.trailing_mean or 0)}/day"
     badge = ' <span class="signal-badge">spike</span>' if item.spike else ""
     return (f"<li><strong>{escape(item.name)}</strong>{badge}"
             f'<p class="signal-meta">{counts}</p>{_links(item.links)}</li>')
