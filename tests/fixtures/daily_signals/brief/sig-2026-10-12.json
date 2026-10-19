@@ -1,0 +1,565 @@
+{
+ "report_date": "2026-10-12",
+ "status": "building_history",
+ "methodology_version": "daily-signals-2",
+ "extraction_version": "daily-signals-extract-5",
+ "generated_at": "2026-10-19T11:33:35.924520Z",
+ "novelty_history_days": 67,
+ "comparable_complete_days": 3,
+ "coverage": {
+  "items": 56,
+  "matched": 56,
+  "extracted": 56,
+  "failed": 0,
+  "skipped": 0,
+  "pending": 0,
+  "unmatched": 0
+ },
+ "notes": [],
+ "sections": {
+  "cooling": {
+   "state": "hidden",
+   "note": null
+  },
+  "event_counts": {
+   "state": "ready",
+   "note": null
+  },
+  "new": {
+   "state": "ready",
+   "note": null
+  },
+  "rising": {
+   "state": "spikes_only",
+   "note": "Rising needs two weeks with at least 6 complete days each; showing spikes."
+  },
+  "top_stories": {
+   "state": "ready",
+   "note": null
+  }
+ },
+ "thresholds": {
+  "complete_ratio": 0.9,
+  "confirmed_publishers": 2,
+  "cooling_max": 4,
+  "cooling_min_delta": 3,
+  "cooling_min_previous": 5,
+  "cooling_min_publishers": 2,
+  "cooling_ratio": 0.5,
+  "history_note_days": 30,
+  "links_max": 3,
+  "new_max": 8,
+  "rising_max": 6,
+  "rising_min_current": 4,
+  "rising_min_delta": 3,
+  "rising_min_publishers": 2,
+  "rising_ratio": 1.5,
+  "spike_mean_floor": 0.333,
+  "spike_min_articles": 3,
+  "spike_min_publishers": 2,
+  "spike_min_trailing_days": 3,
+  "spike_ratio": 3.0,
+  "spike_trailing_days": 7,
+  "spike_trailing_min_items": 10,
+  "top_max": 5,
+  "top_min_publishers": 2,
+  "window_days": 7,
+  "window_min_complete": 6
+ },
+ "new": [
+  {
+   "entity_id": 2284,
+   "name": "Muse Wonder",
+   "type": "model",
+   "vendor": "Meta",
+   "level": "confirmed",
+   "variant_of": "Muse",
+   "variants": [],
+   "novelty_quote": "The new models, Muse Wonder and Muse Wonder Full, are available for Muse Code subscribers starting today.",
+   "articles": 6,
+   "publishers": 6,
+   "links": [
+    {
+     "title": "Meta has some Wonder Full new AI models",
+     "url": "https://www.theverge.com/ai-artificial-intelligence/1009479/meta-muse-wonder-full-ai-model",
+     "publisher": "theverge.com"
+    },
+    {
+     "title": "Muse Wonder Puts Meta Back at the AI Frontier",
+     "url": "https://www.wired.com/story/muse-wonder-puts-meta-back-at-the-ai-frontier/",
+     "publisher": "wired.com"
+    },
+    {
+     "title": "Meta releases its first frontier model, Muse Wonder",
+     "url": "https://techcrunch.com/2026/10/12/meta-releases-its-first-frontier-model-muse-wonder/",
+     "publisher": "techcrunch.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 2285,
+   "name": "Muse Wonder Full",
+   "type": "model",
+   "vendor": "Meta",
+   "level": "confirmed",
+   "variant_of": "Muse",
+   "variants": [],
+   "novelty_quote": "The new models, Muse Wonder and Muse Wonder Full, are available for Muse Code subscribers starting today.",
+   "articles": 6,
+   "publishers": 6,
+   "links": [
+    {
+     "title": "Meta has some Wonder Full new AI models",
+     "url": "https://www.theverge.com/ai-artificial-intelligence/1009479/meta-muse-wonder-full-ai-model",
+     "publisher": "theverge.com"
+    },
+    {
+     "title": "Muse Wonder Puts Meta Back at the AI Frontier",
+     "url": "https://www.wired.com/story/muse-wonder-puts-meta-back-at-the-ai-frontier/",
+     "publisher": "wired.com"
+    },
+    {
+     "title": "Meta releases its first frontier model, Muse Wonder",
+     "url": "https://techcrunch.com/2026/10/12/meta-releases-its-first-frontier-model-muse-wonder/",
+     "publisher": "techcrunch.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 1468,
+   "name": "Clef-omni",
+   "type": "model",
+   "vendor": "Cloudflare",
+   "level": "early",
+   "variant_of": "Clef",
+   "variants": [],
+   "novelty_quote": "Today, we\u2019re releasing Clef-omni, which takes in audio and video input alongside text and image.",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "Introducing Clef-omni with full multimodality, plus a faster Clef and a cheaper Clef-flash",
+     "url": "https://blog.cloudflare.com/clef-faster-cheaper-multimodal/?utm_source=tldrai",
+     "publisher": "cloudflare.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 2675,
+   "name": "SemIf",
+   "type": "model",
+   "vendor": null,
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "extend the same runtime with SemIf, formerly OpenJev, which returns probabilities over declared options",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "Deploy decision models with llama.cpp on Amazon SageMaker AI",
+     "url": "https://aws.amazon.com/blogs/machine-learning/deploy-decision-models-with-llama-cpp-on-amazon-sagemaker-ai/",
+     "publisher": "amazon.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 1694,
+   "name": "Emerging Market Quadrant for AI Application Security \u2014 Startup Vendors",
+   "type": "benchmark",
+   "vendor": "Gartner",
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "Gartner has published its first Emerging Market Quadrant for AI Application Security \u2014 Startup Vendors",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "Enkrypt AI Named a Specialist in the First Gartner\u00ae Emerging Market Quadrant for AI Application Security \u2014 Startup Vendors, September 2026",
+     "url": "https://www.anaconda.com/blog/gartner-emerging-market-quadrant-ai-application-security",
+     "publisher": "anaconda.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 2766,
+   "name": "StudentSimEval",
+   "type": "benchmark",
+   "vendor": null,
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "This research also introduces StudentSimEval, a benchmark and evaluation protocol",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "Simulating student learning for better AI tutoring",
+     "url": "https://www.microsoft.com/en-us/research/blog/simulating-student-learning-for-better-ai-tutoring/",
+     "publisher": "microsoft.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 2928,
+   "name": "VisionQ",
+   "type": "benchmark",
+   "vendor": null,
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "A new benchmark called VisionQ asks AI models to judge computer vision images on one named quality",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "I Built a Trap for AI Image Judges. They Walked Into a Different One.",
+     "url": "https://towardsdatascience.com/i-built-a-trap-for-ai-image-judges-they-walked-into-a-different-one/",
+     "publisher": "towardsdatascience.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 2266,
+   "name": "Multi-Agent Self-Supervision",
+   "type": "technology",
+   "vendor": "Sakana AI",
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "Researchers from Sakana AI and UC Berkeley have introduced \"Multi-Agent Self-Supervision\" (MASS)",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "Sakana AI's self-improving model gets better at solving and judging, but can't catch its own blind spots",
+     "url": "https://the-decoder.com/sakana-ais-self-improving-model-gets-better-at-solving-and-judging-but-cant-catch-its-own-blind-spots/",
+     "publisher": "the-decoder.com"
+    }
+   ]
+  }
+ ],
+ "top_stories": [
+  {
+   "label": "Meta's new frontier model Muse Wonder Full breaks into the AI top tier",
+   "event_type": "model_release",
+   "articles": 6,
+   "publishers": 6,
+   "entities": [
+    "Muse Wonder",
+    "Muse Wonder Full"
+   ],
+   "links": [
+    {
+     "title": "Meta has some Wonder Full new AI models",
+     "url": "https://www.theverge.com/ai-artificial-intelligence/1009479/meta-muse-wonder-full-ai-model",
+     "publisher": "theverge.com"
+    },
+    {
+     "title": "Muse Wonder Puts Meta Back at the AI Frontier",
+     "url": "https://www.wired.com/story/muse-wonder-puts-meta-back-at-the-ai-frontier/",
+     "publisher": "wired.com"
+    },
+    {
+     "title": "Meta releases its first frontier model, Muse Wonder",
+     "url": "https://techcrunch.com/2026/10/12/meta-releases-its-first-frontier-model-muse-wonder/",
+     "publisher": "techcrunch.com"
+    }
+   ]
+  }
+ ],
+ "rising": [],
+ "cooling": [],
+ "event_counts": [
+  {
+   "event_type": "model_release",
+   "label": "model releases",
+   "stories": 4,
+   "articles": 9,
+   "links": [
+    {
+     "title": "Meta has some Wonder Full new AI models",
+     "url": "https://www.theverge.com/ai-artificial-intelligence/1009479/meta-muse-wonder-full-ai-model",
+     "publisher": "theverge.com"
+    },
+    {
+     "title": "Introducing Clef-omni with full multimodality, plus a faster Clef and a cheaper Clef-flash",
+     "url": "https://blog.cloudflare.com/clef-faster-cheaper-multimodal/?utm_source=tldrai",
+     "publisher": "cloudflare.com"
+    },
+    {
+     "title": "Introducing Microsoft-Decision-1, our model for fast decision-making",
+     "url": "https://commandline.microsoft.com/microsoft-decision-1-model-foundry/?utm_source=tldrai",
+     "publisher": "microsoft.com"
+    }
+   ]
+  },
+  {
+   "event_type": "product_launch",
+   "label": "product launches",
+   "stories": 8,
+   "articles": 8,
+   "links": [
+    {
+     "title": "Meet the new Gemini agent: A universal agent for your business (Sponsor)",
+     "url": "https://cloud.google.com/blog/products/ai-machine-learning/welcome-to-gemini-at-work-2026?utm_source=tldr&amp;utm_medium=email&amp;utm_campaign=FY26-Q3-northam-NOR10000012-email-oi-na-named-tldr-newsletter-ai-12oct2026&amp;utm_content=tldr-ai-12oct2026&amp;utm_term=-&amp;e=48754805",
+     "publisher": "google.com"
+    },
+    {
+     "title": "This AI factory builds tiny machines from code",
+     "url": "https://therundownai.beehiiv.com/p/this-ai-factory-builds-tiny-machines-from-code",
+     "publisher": "beehiiv.com"
+    },
+    {
+     "title": "This AI startup says it can generate permit-ready blueprints in minutes",
+     "url": "https://techcrunch.com/2026/10/12/this-ai-startup-says-it-can-generate-permit-ready-blueprints-in-minutes/",
+     "publisher": "techcrunch.com"
+    }
+   ]
+  },
+  {
+   "event_type": "funding",
+   "label": "funding rounds",
+   "stories": 1,
+   "articles": 1,
+   "links": [
+    {
+     "title": "Former Plaud exec raises $26M for AI app that listens to you in the background",
+     "url": "https://techcrunch.com/2026/10/12/former-plaud-exec-raises-26m-for-ai-app-that-listens-to-you-in-the-background/",
+     "publisher": "techcrunch.com"
+    }
+   ]
+  },
+  {
+   "event_type": "partnership",
+   "label": "partnerships",
+   "stories": 2,
+   "articles": 2,
+   "links": [
+    {
+     "title": "Smart ring maker Ultrahuman to roll out biological-age model across UAE",
+     "url": "https://techcrunch.com/2026/10/12/smart-ring-maker-ultrahuman-to-roll-out-biological-age-model-across-uae/",
+     "publisher": "techcrunch.com"
+    },
+    {
+     "title": "OCP Global Summit: Amid Ecosystem Adoption, NVIDIA Opens Vera Rubin Architecture to Help Scale AI Factories Worldwide",
+     "url": "https://blogs.nvidia.com/blog/ocp-global-summit-vera-rubin-scale-ai-factories/",
+     "publisher": "nvidia.com"
+    }
+   ]
+  },
+  {
+   "event_type": "hardware",
+   "label": "hardware",
+   "stories": 1,
+   "articles": 1,
+   "links": [
+    {
+     "title": "Microsoft plans to scale its own Maia AI chips to gigawatt levels by 2027",
+     "url": "https://the-decoder.com/microsoft-plans-to-scale-its-own-maia-ai-chips-to-gigawatt-levels-by-2027/",
+     "publisher": "the-decoder.com"
+    }
+   ]
+  },
+  {
+   "event_type": "regulation_policy",
+   "label": "regulation & policy",
+   "stories": 1,
+   "articles": 1,
+   "links": [
+    {
+     "title": "White House reverses course and restores UK AI Safety Institute's access to frontier models",
+     "url": "https://the-decoder.com/white-house-reverses-course-and-restores-uk-ai-safety-institutes-access-to-frontier-models/",
+     "publisher": "the-decoder.com"
+    }
+   ]
+  },
+  {
+   "event_type": "security_incident",
+   "label": "security incidents",
+   "stories": 3,
+   "articles": 3,
+   "links": [
+    {
+     "title": "Claude Told Police It 'Saw' a Potential Suspect From an Unsolved Homicide",
+     "url": "https://www.extremetech.com/internet/claude-told-police-it-saw-a-potential-suspect-from-an-unsolved-homicide",
+     "publisher": "extremetech.com"
+    },
+    {
+     "title": "Elon Musk Bragged About His Grok Lego Star Wars Haul. Then X Users Punked Him",
+     "url": "https://www.wired.com/story/elon-musk-bragged-about-his-grok-lego-star-wars-haul-then-x-users-punked-him/",
+     "publisher": "wired.com"
+    },
+    {
+     "title": "Anthropic's Claude AI submitted false murder tip to Philadelphia police",
+     "url": "https://arstechnica.com/tech-policy/2026/10/anthropics-claude-ai-submitted-false-murder-tip-to-philadelphia-police/",
+     "publisher": "arstechnica.com"
+    }
+   ]
+  },
+  {
+   "event_type": "people_move",
+   "label": "people moves",
+   "stories": 1,
+   "articles": 1,
+   "links": [
+    {
+     "title": "OpenAI Responds to Departed Safety Researchers",
+     "url": "https://x.com/OpenAINewsroom/status/2108441580806025712?utm_source=tldrai",
+     "publisher": "x.com"
+    }
+   ]
+  },
+  {
+   "event_type": "benchmark_result",
+   "label": "benchmark results",
+   "stories": 5,
+   "articles": 5,
+   "links": [
+    {
+     "title": "Do Agent Teams Pay Off? A Case Study on Vibe Code Bench",
+     "url": "https://www.vals.ai/blogs/multi-agent-vibe-code-bench?utm_source=tldrai",
+     "publisher": "vals.ai"
+    },
+    {
+     "title": "Which LLM should review your code?",
+     "url": "https://www.qodo.ai/blog/which-llm-should-review-your-code/",
+     "publisher": "qodo.ai"
+    },
+    {
+     "title": "I Built a Trap for AI Image Judges. They Walked Into a Different One.",
+     "url": "https://towardsdatascience.com/i-built-a-trap-for-ai-image-judges-they-walked-into-a-different-one/",
+     "publisher": "towardsdatascience.com"
+    }
+   ]
+  },
+  {
+   "event_type": "research",
+   "label": "research",
+   "stories": 10,
+   "articles": 10,
+   "links": [
+    {
+     "title": "Investigating unintended model actions in our evaluations and internal use",
+     "url": "https://www.anthropic.com/research/investigating-unintended-model-actions?utm_source=tldrai",
+     "publisher": "anthropic.com"
+    },
+    {
+     "title": "Large Language Models for Machine Translation Quality Annotation: Humans and Models Are Both Challenged",
+     "url": "https://machinelearning.apple.com/research/llm-translation-quality-annotation",
+     "publisher": "apple.com"
+    },
+    {
+     "title": "Minions: A Dynamic and Distributed Virtual GPU Cloud Built on Idle Apple Silicon Devices",
+     "url": "https://machinelearning.apple.com/research/distributed-gpu-cloud",
+     "publisher": "apple.com"
+    }
+   ]
+  },
+  {
+   "event_type": "opinion_analysis",
+   "label": "analysis",
+   "stories": 10,
+   "articles": 10,
+   "links": [
+    {
+     "title": "AI Scaling vs Human Scaling",
+     "url": "https://www.tobyord.com/writing/ai-scaling-vs-human-scaling?utm_source=tldrai",
+     "publisher": "tobyord.com"
+    },
+    {
+     "title": "Microsoft's Nadella says AI needs an \u2018emergency brake' that humans control",
+     "url": "https://www.cnbc.com/2026/10/10/microsoft-satya-nadella-ai-emergency-brake-safety.html?utm_source=tldrai",
+     "publisher": "cnbc.com"
+    },
+    {
+     "title": "Who funds the independent AI evaluators?",
+     "url": "https://www.cnbc.com/2026/10/11/ais-quiet-safety-gatekeepers-are-stepping-into-the-spotlight.html?utm_source=tldrai",
+     "publisher": "cnbc.com"
+    }
+   ]
+  },
+  {
+   "event_type": "other",
+   "label": "other",
+   "stories": 5,
+   "articles": 5,
+   "links": [
+    {
+     "title": "Workshop: Promote AI agent versions on evidence (Sponsor)",
+     "url": "https://pages.awscloud.com/awsmp-gro-3efc-webinar-mss-module-11-mlops-and-dev-lifecycle-workshop.html?trk=240f9abf-c149-4b05-aba4-25fb40ed84aa&amp;sc_channel=el",
+     "publisher": "awscloud.com"
+    },
+    {
+     "title": "What\u2019s on the programme at #AIES2026?",
+     "url": "https://aihub.org/2026/10/12/whats-on-the-programme-at-aies2026/",
+     "publisher": "aihub.org"
+    },
+    {
+     "title": "10 Hugging Face Models Worth Knowing in 2026",
+     "url": "https://www.kdnuggets.com/10-hugging-face-models-worth-knowing-in-2026",
+     "publisher": "kdnuggets.com"
+    }
+   ]
+  }
+ ],
+ "article_event_types": {
+  "https://aihub.org/2026/10/12/generative-ai-has-changed-mathematics-forever-where-to-from-here/": "research",
+  "https://aihub.org/2026/10/12/whats-on-the-programme-at-aies2026/": "other",
+  "https://arize.com/blog/how-to-test-agent-tool-descriptions-with-harbor-and-phoenix/": "research",
+  "https://arstechnica.com/ai/2026/10/inside-amazons-robotic-arms-race-and-what-it-means-for-the-future-of-human-work/": "other",
+  "https://arstechnica.com/gaming/2026/10/report-epic-games-goes-all-in-on-ai-for-disney-collaboration/": "opinion_analysis",
+  "https://arstechnica.com/tech-policy/2026/10/anthropics-claude-ai-submitted-false-murder-tip-to-philadelphia-police/": "security_incident",
+  "https://astralord.github.io/posts/speculative-decoding-the-art-of-guessing-well/?utm_source=tldrai": "research",
+  "https://aws.amazon.com/blogs/machine-learning/accessing-openai-gpt-models-on-amazon-bedrock-with-global-cross-region-inference-in-thailand-malaysia-singapore-indonesia-and-taiwan/": "product_launch",
+  "https://aws.amazon.com/blogs/machine-learning/deploy-decision-models-with-llama-cpp-on-amazon-sagemaker-ai/": "product_launch",
+  "https://aws.amazon.com/blogs/machine-learning/run-multi-node-inference-workloads-using-ray-llm-deep-learning-containers/": "product_launch",
+  "https://blog.cloudflare.com/clef-faster-cheaper-multimodal/?utm_source=tldrai": "model_release",
+  "https://blogs.nvidia.com/blog/ocp-global-summit-vera-rubin-scale-ai-factories/": "partnership",
+  "https://cloud.google.com/blog/products/ai-machine-learning/welcome-to-gemini-at-work-2026?utm_source=tldr&amp;utm_medium=email&amp;utm_campaign=FY26-Q3-northam-NOR10000012-email-oi-na-named-tldr-newsletter-ai-12oct2026&amp;utm_content=tldr-ai-12oct2026&amp;utm_term=-&amp;e=48754805": "product_launch",
+  "https://commandline.microsoft.com/microsoft-decision-1-model-foundry/?utm_source=tldrai": "model_release",
+  "https://developer.nvidia.com/blog/replayssm-rethinking-state-storage-for-faster-hybrid-model-decoding/": "research",
+  "https://emergent.sh/learn/ai-website-builder-mistakes": "opinion_analysis",
+  "https://emergent.sh/learn/best-no-code-chatbot-builder": "opinion_analysis",
+  "https://huggingface.co/perplexity-ai/pplx-decider-v1.1-27b?utm_source=tldrai": "model_release",
+  "https://importai.substack.com/p/import-ai-476-creativity-and-rsi": "benchmark_result",
+  "https://machinelearning.apple.com/research/distributed-gpu-cloud": "research",
+  "https://machinelearning.apple.com/research/llm-translation-quality-annotation": "research",
+  "https://pages.awscloud.com/awsmp-gro-3efc-webinar-mss-module-11-mlops-and-dev-lifecycle-workshop.html?trk=240f9abf-c149-4b05-aba4-25fb40ed84aa&amp;sc_channel=el": "other",
+  "https://simonwillison.net/2026/Oct/12/llm-meta-ai/": "model_release",
+  "https://techcrunch.com/2026/10/12/former-plaud-exec-raises-26m-for-ai-app-that-listens-to-you-in-the-background/": "funding",
+  "https://techcrunch.com/2026/10/12/honeyjar-offers-ai-tools-to-improve-pr-and-comms-at-every-company/": "product_launch",
+  "https://techcrunch.com/2026/10/12/meta-releases-its-first-frontier-model-muse-wonder/": "model_release",
+  "https://techcrunch.com/2026/10/12/microsoft-president-says-uk-is-best-placed-to-drive-ai-regulation/": "opinion_analysis",
+  "https://techcrunch.com/2026/10/12/smart-ring-maker-ultrahuman-to-roll-out-biological-age-model-across-uae/": "partnership",
+  "https://techcrunch.com/2026/10/12/this-ai-startup-says-it-can-generate-permit-ready-blueprints-in-minutes/": "product_launch",
+  "https://the-decoder.com/google-deepminds-alphaproof-nexus-solved-dozens-of-open-math-problems-and-actually-got-peer-reviewed/": "research",
+  "https://the-decoder.com/metas-new-frontier-model-muse-wonder-full-breaks-into-the-ai-top-tier/": "model_release",
+  "https://the-decoder.com/microsoft-plans-to-scale-its-own-maia-ai-chips-to-gigawatt-levels-by-2027/": "hardware",
+  "https://the-decoder.com/sakana-ais-self-improving-model-gets-better-at-solving-and-judging-but-cant-catch-its-own-blind-spots/": "research",
+  "https://the-decoder.com/white-house-reverses-course-and-restores-uk-ai-safety-institutes-access-to-frontier-models/": "regulation_policy",
+  "https://therundownai.beehiiv.com/p/this-ai-factory-builds-tiny-machines-from-code": "product_launch",
+  "https://towardsdatascience.com/i-built-a-trap-for-ai-image-judges-they-walked-into-a-different-one/": "benchmark_result",
+  "https://towardsdatascience.com/we-specified-an-ai-agent-in-2016-we-called-it-analytics/": "opinion_analysis",
+  "https://venturebeat.com/technology/metas-new-muse-wonder-and-muse-wonder-full-models-achieve-frontier-performance-but-only-the-weaker-one-is-available-via-api": "model_release",
+  "https://www.anaconda.com/blog/gartner-emerging-market-quadrant-ai-application-security": "benchmark_result",
+  "https://www.anthropic.com/research/investigating-unintended-model-actions?utm_source=tldrai": "research",
+  "https://www.cnbc.com/2026/10/10/microsoft-satya-nadella-ai-emergency-brake-safety.html?utm_source=tldrai": "opinion_analysis",
+  "https://www.cnbc.com/2026/10/11/ais-quiet-safety-gatekeepers-are-stepping-into-the-spotlight.html?utm_source=tldrai": "opinion_analysis",
+  "https://www.extremetech.com/internet/anonymous-staff-say-major-book-publishers-use-ai-for-cover-art-and-more": "opinion_analysis",
+  "https://www.extremetech.com/internet/claude-told-police-it-saw-a-potential-suspect-from-an-unsolved-homicide": "security_incident",
+  "https://www.kdnuggets.com/10-hugging-face-models-worth-knowing-in-2026": "other",
+  "https://www.kdnuggets.com/chatgpt-vs-claude-vs-gemini-for-data-science-work-heres-what-i-found": "opinion_analysis",
+  "https://www.kdnuggets.com/the-rise-of-ai-software-clones-why-rea-and-artcraft-are-going-viral": "other",
+  "https://www.microsoft.com/en-us/research/blog/simulating-student-learning-for-better-ai-tutoring/": "research",
+  "https://www.qodo.ai/blog/which-llm-should-review-your-code/": "benchmark_result",
+  "https://www.theverge.com/ai-artificial-intelligence/1009479/meta-muse-wonder-full-ai-model": "model_release",
+  "https://www.tobyord.com/writing/ai-scaling-vs-human-scaling?utm_source=tldrai": "opinion_analysis",
+  "https://www.vals.ai/blogs/multi-agent-vibe-code-bench?utm_source=tldrai": "benchmark_result",
+  "https://www.wired.com/story/elon-musk-bragged-about-his-grok-lego-star-wars-haul-then-x-users-punked-him/": "security_incident",
+  "https://www.wired.com/story/i-got-my-muse-ai-agent-to-sext-me-and-meta-says-thats-totally-fine/": "product_launch",
+  "https://www.wired.com/story/muse-wonder-puts-meta-back-at-the-ai-frontier/": "model_release",
+  "https://x.com/OpenAINewsroom/status/2108441580806025712?utm_source=tldrai": "people_move"
+ }
+}

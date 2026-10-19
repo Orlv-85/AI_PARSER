@@ -1,0 +1,700 @@
+{
+ "report_date": "2026-10-13",
+ "status": "building_history",
+ "methodology_version": "daily-signals-2",
+ "extraction_version": "daily-signals-extract-5",
+ "generated_at": "2026-10-19T11:33:35.924520Z",
+ "novelty_history_days": 68,
+ "comparable_complete_days": 4,
+ "coverage": {
+  "items": 90,
+  "matched": 90,
+  "extracted": 90,
+  "failed": 0,
+  "skipped": 0,
+  "pending": 0,
+  "unmatched": 0
+ },
+ "notes": [],
+ "sections": {
+  "cooling": {
+   "state": "hidden",
+   "note": null
+  },
+  "event_counts": {
+   "state": "ready",
+   "note": null
+  },
+  "new": {
+   "state": "ready",
+   "note": null
+  },
+  "rising": {
+   "state": "spikes_only",
+   "note": "Rising needs two weeks with at least 6 complete days each; showing spikes."
+  },
+  "top_stories": {
+   "state": "ready",
+   "note": null
+  }
+ },
+ "thresholds": {
+  "complete_ratio": 0.9,
+  "confirmed_publishers": 2,
+  "cooling_max": 4,
+  "cooling_min_delta": 3,
+  "cooling_min_previous": 5,
+  "cooling_min_publishers": 2,
+  "cooling_ratio": 0.5,
+  "history_note_days": 30,
+  "links_max": 3,
+  "new_max": 8,
+  "rising_max": 6,
+  "rising_min_current": 4,
+  "rising_min_delta": 3,
+  "rising_min_publishers": 2,
+  "rising_ratio": 1.5,
+  "spike_mean_floor": 0.333,
+  "spike_min_articles": 3,
+  "spike_min_publishers": 2,
+  "spike_min_trailing_days": 3,
+  "spike_ratio": 3.0,
+  "spike_trailing_days": 7,
+  "spike_trailing_min_items": 10,
+  "top_max": 5,
+  "top_min_publishers": 2,
+  "window_days": 7,
+  "window_min_complete": 6
+ },
+ "new": [
+  {
+   "entity_id": 1809,
+   "name": "Game Finder",
+   "type": "product",
+   "vendor": "Google",
+   "level": "confirmed",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "The new Game Finder feature leans on all the usage data Google\u2019s app platform has hoovered up over the years",
+   "articles": 2,
+   "publishers": 2,
+   "links": [
+    {
+     "title": "Google Play now lets anyone build private, vibe-coded apps that run on Android",
+     "url": "https://techcrunch.com/2026/10/13/google-play-now-supports-private-vibe-coded-apps-built-just-for-you/",
+     "publisher": "techcrunch.com"
+    },
+    {
+     "title": "Google wants to host your personal vibe-coded apps in the Play Store",
+     "url": "https://arstechnica.com/google/2026/10/google-wants-to-host-your-personal-vibe-coded-apps-in-the-play-store/",
+     "publisher": "arstechnica.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 1949,
+   "name": "Helix World",
+   "type": "model",
+   "vendor": "Noiz AI",
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "Today we are introducing Helix World, a real-time interactive audio-visual world model",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "Meet Helix World: A Real-Time Audio-Visual World Model",
+     "url": "https://noiz.ai/lp/blog/meet-helix-world?utm_source=tldrai",
+     "publisher": "noiz.ai"
+    }
+   ]
+  },
+  {
+   "entity_id": 2311,
+   "name": "Nemotron 3.5 Bolt 74B-A9B 24GB",
+   "type": "model",
+   "vendor": "NVIDIA",
+   "level": "early",
+   "variant_of": "NVIDIA Nemotron",
+   "variants": [],
+   "novelty_quote": "The NVIDIA Nemotron 3.5 Bolt 74B model, purpose-built for agentic AI on RTX Spark, releases on Thursday, Oct. 15.",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "All Systems Go: Global PC App Ecosystem Ready for NVIDIA RTX Spark",
+     "url": "https://blogs.nvidia.com/blog/local-ai-rtx-spark-laptops-software-updates/",
+     "publisher": "nvidia.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 1666,
+   "name": "Dynamic Model Escalation",
+   "type": "technology",
+   "vendor": "Fiddler",
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "today, we\u2019re announcing Dynamic Model Escalation, a critical capability in Centor",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "Introducing Dynamic Model Escalation: More Accurate AI Evals, No Trade-Offs To Make",
+     "url": "https://www.fiddler.ai/blog/dynamic-model-escalation-ai-evals",
+     "publisher": "fiddler.ai"
+    }
+   ]
+  },
+  {
+   "entity_id": 2491,
+   "name": "Priming",
+   "type": "technology",
+   "vendor": "Amazon Web Services",
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "We introduce priming, a method that leverages pretrained Transformer weights as a starting point",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "Can we change an AI model's architecture without retraining it from scratch?",
+     "url": "https://www.amazon.science/blog/can-we-change-an-ai-models-architecture-without-retraining-it-from-scratch?utm_source=tldrai",
+     "publisher": "amazon.science"
+    }
+   ]
+  },
+  {
+   "entity_id": 3446,
+   "name": "Satlyt",
+   "type": "company",
+   "vendor": null,
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "So he left SpaceX and co-founded Satlyt, a new company",
+   "articles": 2,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "The 2026 Startup Battlefield Top 20: From organs to orbit and everything in between",
+     "url": "https://techcrunch.com/2026/10/13/the-2026-startup-battlefield-top-20-from-organs-to-orbit-and-everything-in-between/",
+     "publisher": "techcrunch.com"
+    },
+    {
+     "title": "SpaceX and Google both said no. Now his software is riding a SpaceX rocket next to Google\u2019s",
+     "url": "https://techcrunch.com/2026/10/13/satlyt-founded-by-a-former-google-and-spacex-product-manager-raises-8m-to-run-ai-on-satellites/",
+     "publisher": "techcrunch.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 3550,
+   "name": "Xbox Labs",
+   "type": "company",
+   "vendor": "Microsoft",
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "Microsoft has created a new Xbox Labs group to experiment with decompiling and recompiling games",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "Xbox is officially embracing the chaos of AI-powered game ports",
+     "url": "https://www.theverge.com/news/1010406/xbox-labs-game-decompiling-emulation-exploration",
+     "publisher": "theverge.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 2049,
+   "name": "Joule Assistants",
+   "type": "product",
+   "vendor": "SAP",
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "SAP's new and expanded Joule Assistants",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "Agents need more than business process knowledge. They need to understand how your company actually works",
+     "url": "https://venturebeat.com/orchestration/agents-need-more-than-business-process-knowledge-they-need-to-understand-how-your-company-actually-works",
+     "publisher": "venturebeat.com"
+    }
+   ]
+  }
+ ],
+ "top_stories": [
+  {
+   "label": "Gemini 4 Argon is now available worldwide as Google's most capable frontier model",
+   "event_type": "model_release",
+   "articles": 8,
+   "publishers": 6,
+   "entities": [
+    "Gemini 4 Argon"
+   ],
+   "links": [
+    {
+     "title": "Gemini 4 Argon begins rolling out in Gemini app and Antigravity, but only if you pay",
+     "url": "https://arstechnica.com/ai/2026/10/gemini-4-argon-begins-rolling-out-in-gemini-app-and-antigravity-but-only-if-you-pay/",
+     "publisher": "arstechnica.com"
+    },
+    {
+     "title": "Gemini 4 Argon: Built to solve your hardest problems",
+     "url": "https://deepmind.google/blog/introducing-gemini-4-argon/",
+     "publisher": "deepmind.google"
+    },
+    {
+     "title": "Google makes Gemini 4 Argon broadly available with limited-time low API pricing of $2/$10 per 1M token",
+     "url": "https://venturebeat.com/technology/google-makes-gemini-4-argon-broadly-available-with-limited-time-low-api-pricing-of-2-10-per-1m-token",
+     "publisher": "venturebeat.com"
+    }
+   ]
+  },
+  {
+   "label": "Muse Wonder",
+   "event_type": "model_release",
+   "articles": 3,
+   "publishers": 3,
+   "entities": [
+    "Muse Wonder",
+    "Muse Wonder Full"
+   ],
+   "links": [
+    {
+     "title": "AI Weekly Issue #537: AI models may soon copy themselves onto smart fridges, Anthropic says",
+     "url": "https://aiweekly.co/issues/ai-models-may-soon-copy-themselves-onto-smart-fridges",
+     "publisher": "aiweekly.co"
+    },
+    {
+     "title": "Muse Wonder",
+     "url": "https://research.meta.ai/blog/muse-wonder?utm_source=tldrai",
+     "publisher": "meta.ai"
+    },
+    {
+     "title": "Meta's Watermelon ripens into a frontier model",
+     "url": "https://therundownai.beehiiv.com/p/meta-watermelon-ripens-into-a-frontier-model",
+     "publisher": "beehiiv.com"
+    }
+   ]
+  },
+  {
+   "label": "FBI arrests OpenAI employee accused of planting hidden recording device in conference room",
+   "event_type": "security_incident",
+   "articles": 3,
+   "publishers": 3,
+   "entities": [
+    "Abdulrahman Alfozan"
+   ],
+   "links": [
+    {
+     "title": "OpenAI employee arrested for allegedly planting a bug in a conference room",
+     "url": "https://www.theverge.com/ai-artificial-intelligence/1010642/openai-employee-arrested-recording-device",
+     "publisher": "theverge.com"
+    },
+    {
+     "title": "FBI arrests OpenAI employee accused of planting hidden recording device in conference room",
+     "url": "https://techcrunch.com/2026/10/13/fbi-arrests-openai-employee-accused-of-planting-hidden-recording-device-in-conference-room/",
+     "publisher": "techcrunch.com"
+    },
+    {
+     "title": "An OpenAI Employee Allegedly Used a Chatbot to Help Plant a Recording Device at the Office",
+     "url": "https://www.wired.com/story/an-openai-employee-allegedly-used-a-chatbot-to-help-plant-a-recording-device-at-the-office/",
+     "publisher": "wired.com"
+    }
+   ]
+  },
+  {
+   "label": "Rivian partner Mind Robotics hires Doug Field as president",
+   "event_type": "people_move",
+   "articles": 2,
+   "publishers": 2,
+   "entities": [
+    "Doug Field"
+   ],
+   "links": [
+    {
+     "title": "Rivian partner Mind Robotics hires Doug Field as president",
+     "url": "https://www.theverge.com/transportation/1010050/rivian-mind-robotics-hires-doug-field-ford-tesla-apple",
+     "publisher": "theverge.com"
+    },
+    {
+     "title": "Rivian\u2019s startup Mind Robotics hires former Ford EV chief Doug Field",
+     "url": "https://techcrunch.com/2026/10/13/rivians-startup-mind-robotics-hires-former-ford-ev-chief-doug-field/",
+     "publisher": "techcrunch.com"
+    }
+   ]
+  }
+ ],
+ "rising": [],
+ "cooling": [],
+ "event_counts": [
+  {
+   "event_type": "model_release",
+   "label": "model releases",
+   "stories": 6,
+   "articles": 14,
+   "links": [
+    {
+     "title": "Gemini 4 Argon begins rolling out in Gemini app and Antigravity, but only if you pay",
+     "url": "https://arstechnica.com/ai/2026/10/gemini-4-argon-begins-rolling-out-in-gemini-app-and-antigravity-but-only-if-you-pay/",
+     "publisher": "arstechnica.com"
+    },
+    {
+     "title": "AI Weekly Issue #537: AI models may soon copy themselves onto smart fridges, Anthropic says",
+     "url": "https://aiweekly.co/issues/ai-models-may-soon-copy-themselves-onto-smart-fridges",
+     "publisher": "aiweekly.co"
+    },
+    {
+     "title": "Applying technology to understand and treat disease",
+     "url": "https://blog.google/innovation-and-ai/technology/health/ai-health-research/?utm_source=tldrai",
+     "publisher": "blog.google"
+    }
+   ]
+  },
+  {
+   "event_type": "product_launch",
+   "label": "product launches",
+   "stories": 23,
+   "articles": 24,
+   "links": [
+    {
+     "title": "Behind the scenes: How Google builds, tests, and scales Agent Skills (Sponsor)",
+     "url": "https://cloud.google.com/blog/topics/developers-practitioners/behind-the-scenes-how-we-build-test-and-scale-google-agent-skills?utm_source=tldr&amp;utm_medium=email&amp;utm_campaign=FY26-Q3-northam-NOR10000012-email-oi-na-named-tldr-newsletter-ai-13oct2026&amp;utm_content=tldr-ai-13oct2026&amp;utm_term=-&amp;e=48754805",
+     "publisher": "google.com"
+    },
+    {
+     "title": "Make Your Coding Assistant a 10x AI Engineer",
+     "url": "https://sarthakai.substack.com/p/a-coding-plugin-to-make-you-a-10x?utm_source=tldrai",
+     "publisher": "substack.com"
+    },
+    {
+     "title": "OpenAI Decisions API: What it is and how to use it?",
+     "url": "https://www.analyticsvidhya.com/blog/2026/10/openai-decisions-api/",
+     "publisher": "analyticsvidhya.com"
+    }
+   ]
+  },
+  {
+   "event_type": "funding",
+   "label": "funding rounds",
+   "stories": 3,
+   "articles": 3,
+   "links": [
+    {
+     "title": "NVIDIA Announces New Investments in France\u2019s Startups",
+     "url": "https://blogs.nvidia.com/blog/france-ecosystem-agentic-computing/",
+     "publisher": "nvidia.com"
+    },
+    {
+     "title": "SpaceX and Google both said no. Now his software is riding a SpaceX rocket next to Google\u2019s",
+     "url": "https://techcrunch.com/2026/10/13/satlyt-founded-by-a-former-google-and-spacex-product-manager-raises-8m-to-run-ai-on-satellites/",
+     "publisher": "techcrunch.com"
+    },
+    {
+     "title": "Pluto Security raises $42M as AI gives enterprise security teams a new headache",
+     "url": "https://techcrunch.com/2026/10/13/pluto-security-raises-42m-as-ai-gives-enterprise-security-teams-a-new-headache/",
+     "publisher": "techcrunch.com"
+    }
+   ]
+  },
+  {
+   "event_type": "acquisition",
+   "label": "acquisitions",
+   "stories": 2,
+   "articles": 2,
+   "links": [
+    {
+     "title": "Faster Coding Raises the Stakes for the Developer Factory",
+     "url": "https://www.anaconda.com/blog/faster-coding-raises-stakes-developer-factory",
+     "publisher": "anaconda.com"
+    },
+    {
+     "title": "Disney offers $20M for Character.AI\u2019s scandal-plagued chatbot tech",
+     "url": "https://arstechnica.com/tech-policy/2026/10/disney-offers-20m-for-character-ais-scandal-plagued-chatbot-tech/",
+     "publisher": "arstechnica.com"
+    }
+   ]
+  },
+  {
+   "event_type": "partnership",
+   "label": "partnerships",
+   "stories": 2,
+   "articles": 2,
+   "links": [
+    {
+     "title": "Western mathematicians fear AI makes them dumber while China builds an entire alliance for it",
+     "url": "https://the-decoder.com/western-mathematicians-fear-ai-makes-them-dumber-while-china-builds-an-entire-alliance-for-it/",
+     "publisher": "the-decoder.com"
+    },
+    {
+     "title": "Industrial Next wants factory robots to switch tasks in minutes, not weeks",
+     "url": "https://techcrunch.com/2026/10/13/industrial-next-wants-factory-robots-to-switch-tasks-in-minutes-not-weeks/",
+     "publisher": "techcrunch.com"
+    }
+   ]
+  },
+  {
+   "event_type": "regulation_policy",
+   "label": "regulation & policy",
+   "stories": 4,
+   "articles": 4,
+   "links": [
+    {
+     "title": "Does being rude to AI work? What 6 models revealed",
+     "url": "https://arize.com/blog/does-being-rude-to-ai-work/",
+     "publisher": "arize.com"
+    },
+    {
+     "title": "EU AI Act compliance for AI agents: a practical engineering guide",
+     "url": "https://arize.com/blog/eu-ai-act-compliance-ai-agents/",
+     "publisher": "arize.com"
+    },
+    {
+     "title": "The feds are looking into reports of Tesla\u2019s robotaxis speeding through school zones",
+     "url": "https://www.theverge.com/transportation/1010364/tesla-robotaxi-school-zonespeeding-investigation",
+     "publisher": "theverge.com"
+    }
+   ]
+  },
+  {
+   "event_type": "legal",
+   "label": "legal",
+   "stories": 3,
+   "articles": 3,
+   "links": [
+    {
+     "title": "The Biggest Pro-AI Super PAC Network Has Poured Millions Into Nevada Shell Companies",
+     "url": "https://www.wired.com/story/the-biggest-pro-ai-super-pac-network-has-poured-millions-into-nevada-shell-companies/",
+     "publisher": "wired.com"
+    },
+    {
+     "title": "Character.ai will shut down if no buyer emerges, capping a fall from $2.7 billion Google deal to bankruptcy",
+     "url": "https://the-decoder.com/character-ai-will-shut-down-if-no-buyer-emerges-capping-a-fall-from-2-7-billion-google-deal-to-bankruptcy/",
+     "publisher": "the-decoder.com"
+    },
+    {
+     "title": "Judge orders OpenAI to turn over hiring records in Apple trade secrets case",
+     "url": "https://techcrunch.com/2026/10/13/judge-orders-openai-to-turn-over-hiring-records-in-apple-trade-secrets-case/",
+     "publisher": "techcrunch.com"
+    }
+   ]
+  },
+  {
+   "event_type": "security_incident",
+   "label": "security incidents",
+   "stories": 1,
+   "articles": 3,
+   "links": [
+    {
+     "title": "OpenAI employee arrested for allegedly planting a bug in a conference room",
+     "url": "https://www.theverge.com/ai-artificial-intelligence/1010642/openai-employee-arrested-recording-device",
+     "publisher": "theverge.com"
+    }
+   ]
+  },
+  {
+   "event_type": "people_move",
+   "label": "people moves",
+   "stories": 1,
+   "articles": 2,
+   "links": [
+    {
+     "title": "Rivian partner Mind Robotics hires Doug Field as president",
+     "url": "https://www.theverge.com/transportation/1010050/rivian-mind-robotics-hires-doug-field-ford-tesla-apple",
+     "publisher": "theverge.com"
+    }
+   ]
+  },
+  {
+   "event_type": "benchmark_result",
+   "label": "benchmark results",
+   "stories": 3,
+   "articles": 3,
+   "links": [
+    {
+     "title": "Decision Models Cut Agent LLM Calls by 29.6%",
+     "url": "https://discuss.huggingface.co/t/offloading-bounded-decisions-cut-agent-llm-calls-by-29-6-on-360-sop-bench-cases/190420?utm_source=tldrai",
+     "publisher": "huggingface.co"
+    },
+    {
+     "title": "Three Samplers, One Posterior: NUTS vs. Emcee vs. Nested Sampling",
+     "url": "https://towardsdatascience.com/three-samplers-one-posterior-nuts-vs-emcee-vs-nested-sampling/",
+     "publisher": "towardsdatascience.com"
+    },
+    {
+     "title": "OpenAI's AI agent platform is used by twice as many companies as Anthropic's, new VentureBeat survey finds",
+     "url": "https://venturebeat.com/orchestration/openais-ai-agent-platform-is-used-by-twice-as-many-companies-as-anthropics-new-venturebeat-survey-finds",
+     "publisher": "venturebeat.com"
+    }
+   ]
+  },
+  {
+   "event_type": "research",
+   "label": "research",
+   "stories": 8,
+   "articles": 8,
+   "links": [
+    {
+     "title": "Can we change an AI model's architecture without retraining it from scratch?",
+     "url": "https://www.amazon.science/blog/can-we-change-an-ai-models-architecture-without-retraining-it-from-scratch?utm_source=tldrai",
+     "publisher": "amazon.science"
+    },
+    {
+     "title": "How Close Are AI Models to Self-Replication?",
+     "url": "https://www.anthropic.com/research/self-replicating-ai?utm_source=tldrai",
+     "publisher": "anthropic.com"
+    },
+    {
+     "title": "Mix, Don't Tune: Bilingual Pre-Training Outperforms Hyperparameter Search in Data-Constrained Settings",
+     "url": "https://machinelearning.apple.com/research/mix-dont-tune",
+     "publisher": "apple.com"
+    }
+   ]
+  },
+  {
+   "event_type": "opinion_analysis",
+   "label": "analysis",
+   "stories": 15,
+   "articles": 16,
+   "links": [
+    {
+     "title": "Cerebras CEO pushes back on AI doomsday warnings",
+     "url": "https://techcrunch.com/2026/10/13/cerebras-ceo-pushes-back-on-ai-doomsday-warnings/",
+     "publisher": "techcrunch.com"
+    },
+    {
+     "title": "Releasing AI-generated software",
+     "url": "https://blog.ploeh.dk/2026/10/12/releasing-ai-generated-software/?utm_source=tldrai",
+     "publisher": "ploeh.dk"
+    },
+    {
+     "title": "The Expensive-Loop Problem",
+     "url": "https://www.lesswrong.com/posts/2mStxuNDMdaWdyHu6/the-expensive-loop-problem?utm_source=tldrai",
+     "publisher": "lesswrong.com"
+    }
+   ]
+  },
+  {
+   "event_type": "other",
+   "label": "other",
+   "stories": 6,
+   "articles": 6,
+   "links": [
+    {
+     "title": "Webinar: Building Reliable Workflows and Agents with AI Coding Assistants (Sponsor)",
+     "url": "https://orkes.io/webinars/from-prompt-to-production-building-business-workflows-with-ai-coding-assistants-and-conductor-skills?utm_source=Newsletter&amp;utm_medium=referral&amp;utm_campaign=TLDR+&amp;utm_content=header_webinar_building_reliable",
+     "publisher": "orkes.io"
+    },
+    {
+     "title": "What I saw around the Curve, 2026",
+     "url": "https://secondthoughts.ai/p/what-i-saw-around-the-curve-2026?utm_source=tldrai",
+     "publisher": "secondthoughts.ai"
+    },
+    {
+     "title": "AI labs are buying data from dead startups to train their models",
+     "url": "https://www.technologyreview.com/2026/10/13/1145755/ai-labs-buying-data-from-dead-startups-to-train-models/",
+     "publisher": "technologyreview.com"
+    }
+   ]
+  }
+ ],
+ "article_event_types": {
+  "https://aiweekly.co/issues/ai-models-may-soon-copy-themselves-onto-smart-fridges": "model_release",
+  "https://arize.com/blog/does-being-rude-to-ai-work/": "regulation_policy",
+  "https://arize.com/blog/eu-ai-act-compliance-ai-agents/": "regulation_policy",
+  "https://arstechnica.com/ai/2026/10/gemini-4-argon-begins-rolling-out-in-gemini-app-and-antigravity-but-only-if-you-pay/": "model_release",
+  "https://arstechnica.com/google/2026/10/google-wants-to-host-your-personal-vibe-coded-apps-in-the-play-store/": "product_launch",
+  "https://arstechnica.com/tech-policy/2026/10/disney-offers-20m-for-character-ais-scandal-plagued-chatbot-tech/": "acquisition",
+  "https://aws.amazon.com/blogs/machine-learning/build-long-horizon-agents-with-grok-4-7-on-amazon-bedrock/": "model_release",
+  "https://aws.amazon.com/blogs/machine-learning/building-agents-that-transact-with-anchor-browser-and-agentcore-payments/": "product_launch",
+  "https://aws.amazon.com/blogs/machine-learning/how-shipstation-global-built-an-ai-it-help-desk-on-amazon-bedrock-agentcore/": "product_launch",
+  "https://aws.amazon.com/blogs/machine-learning/manage-private-pricing-offers-for-amazon-bedrock-with-managed-entitlements/": "other",
+  "https://aws.amazon.com/blogs/machine-learning/mixture-of-experts-kernel-engineering-on-amazon-sagemaker-ai/": "research",
+  "https://aws.amazon.com/blogs/machine-learning/natural-language-security-queries-at-orca-security-using-amazon-bedrock/": "product_launch",
+  "https://blog.google/innovation-and-ai/technology/health/ai-health-research/?utm_source=tldrai": "model_release",
+  "https://blog.ploeh.dk/2026/10/12/releasing-ai-generated-software/?utm_source=tldrai": "opinion_analysis",
+  "https://blogs.nvidia.com/blog/france-ecosystem-agentic-computing/": "funding",
+  "https://blogs.nvidia.com/blog/local-ai-rtx-spark-laptops-software-updates/": "product_launch",
+  "https://claude.com/resources/articles/uber-s-ciso-on-building-an-insider-threat-program-for-ai": "opinion_analysis",
+  "https://cloud.google.com/blog/topics/developers-practitioners/behind-the-scenes-how-we-build-test-and-scale-google-agent-skills?utm_source=tldr&amp;utm_medium=email&amp;utm_campaign=FY26-Q3-northam-NOR10000012-email-oi-na-named-tldr-newsletter-ai-13oct2026&amp;utm_content=tldr-ai-13oct2026&amp;utm_term=-&amp;e=48754805": "product_launch",
+  "https://deepmind.google/blog/developing-gemini-4-argon-responsibly-and-safely/": "model_release",
+  "https://deepmind.google/blog/gemini-4-argon-for-robotics/": "model_release",
+  "https://deepmind.google/blog/introducing-gemini-4-argon/": "model_release",
+  "https://developer.nvidia.com/blog/nvidia-runai-is-now-open-source-as-part-of-nvidia-dsx-ai-factory-platform/": "product_launch",
+  "https://developer.nvidia.com/blog/rewrite-apache-spark-udfs-gpu-acceleration-ai-agents/": "product_launch",
+  "https://discuss.huggingface.co/t/offloading-bounded-decisions-cut-agent-llm-calls-by-29-6-on-360-sop-bench-cases/190420?utm_source=tldrai": "benchmark_result",
+  "https://emergent.sh/learn/claude-haiku-5-5-vs-opus-5-5": "opinion_analysis",
+  "https://emergent.sh/learn/how-to-choose-an-app-builder": "opinion_analysis",
+  "https://huggingface.co/blog/LiquidAI/lfm25-24b-a2b": "model_release",
+  "https://machinelearning.apple.com/research/mix-dont-tune": "research",
+  "https://news.mit.edu/2026/how-artificial-neural-networks-build-their-own-learning-machinery-1013": "research",
+  "https://news.mit.edu/2026/qa-building-accountability-behind-our-words-and-ai-civic-conversations-1013": "opinion_analysis",
+  "https://noiz.ai/lp/blog/meet-helix-world?utm_source=tldrai": "model_release",
+  "https://orkes.io/webinars/from-prompt-to-production-building-business-workflows-with-ai-coding-assistants-and-conductor-skills?utm_source=Newsletter&amp;utm_medium=referral&amp;utm_campaign=TLDR+&amp;utm_content=header_webinar_building_reliable": "other",
+  "https://research.meta.ai/blog/muse-wonder?utm_source=tldrai": "model_release",
+  "https://research.nvidia.com/publication/2026-12_when-do-we-need-policy-distillation-distilling-offline-student-rollouts-often?utm_source=tldrai": "research",
+  "https://sarthakai.substack.com/p/a-coding-plugin-to-make-you-a-10x?utm_source=tldrai": "product_launch",
+  "https://secondthoughts.ai/p/what-i-saw-around-the-curve-2026?utm_source=tldrai": "other",
+  "https://simonwillison.net/2026/Oct/13/geoffrey-huntley/": "opinion_analysis",
+  "https://simonwillison.net/2026/Oct/13/llm-gemini/": "model_release",
+  "https://simonwillison.net/2026/Oct/13/redesigning-source-control-at-anthropic/": "product_launch",
+  "https://techcrunch.com/2026/10/13/cerebras-ceo-pushes-back-on-ai-doomsday-warnings/": "opinion_analysis",
+  "https://techcrunch.com/2026/10/13/cerebras-ceo-says-were-nearing-a-future-where-everyone-has-a-personal-ai-assistant-at-home/": "opinion_analysis",
+  "https://techcrunch.com/2026/10/13/facebook-is-giving-users-more-control-over-their-algorithm/": "product_launch",
+  "https://techcrunch.com/2026/10/13/fbi-arrests-openai-employee-accused-of-planting-hidden-recording-device-in-conference-room/": "security_incident",
+  "https://techcrunch.com/2026/10/13/google-play-now-supports-private-vibe-coded-apps-built-just-for-you/": "product_launch",
+  "https://techcrunch.com/2026/10/13/industrial-next-wants-factory-robots-to-switch-tasks-in-minutes-not-weeks/": "partnership",
+  "https://techcrunch.com/2026/10/13/judge-orders-openai-to-turn-over-hiring-records-in-apple-trade-secrets-case/": "legal",
+  "https://techcrunch.com/2026/10/13/laplace-intelligence-red-teams-robots-and-self-driving-cars-before-they-hit-the-real-world/": "other",
+  "https://techcrunch.com/2026/10/13/niobia-takes-the-guesswork-out-of-some-of-techs-most-expensive-mistakes/": "product_launch",
+  "https://techcrunch.com/2026/10/13/pluto-security-raises-42m-as-ai-gives-enterprise-security-teams-a-new-headache/": "funding",
+  "https://techcrunch.com/2026/10/13/rivians-startup-mind-robotics-hires-former-ford-ev-chief-doug-field/": "people_move",
+  "https://techcrunch.com/2026/10/13/satlyt-founded-by-a-former-google-and-spacex-product-manager-raises-8m-to-run-ai-on-satellites/": "funding",
+  "https://techcrunch.com/2026/10/13/the-2026-startup-battlefield-top-20-from-organs-to-orbit-and-everything-in-between/": "other",
+  "https://the-decoder.com/406-scientists-demand-ai-models-be-cut-off-from-the-internet-immediately/": "opinion_analysis",
+  "https://the-decoder.com/anthropic-study-warns-that-small-ai-models-could-soon-replicate-across-everyday-devices/": "research",
+  "https://the-decoder.com/character-ai-will-shut-down-if-no-buyer-emerges-capping-a-fall-from-2-7-billion-google-deal-to-bankruptcy/": "legal",
+  "https://the-decoder.com/gemini-4-argon-is-now-available-worldwide-as-googles-most-capable-frontier-model/": "model_release",
+  "https://the-decoder.com/machine-learning-pioneer-michael-i-jordan-dismantles-ai-doom-rhetoric-as-grand-moralizing-performance/": "opinion_analysis",
+  "https://the-decoder.com/western-mathematicians-fear-ai-makes-them-dumber-while-china-builds-an-entire-alliance-for-it/": "partnership",
+  "https://therundownai.beehiiv.com/p/meta-watermelon-ripens-into-a-frontier-model": "model_release",
+  "https://towardsdatascience.com/coding-agents-can-solve-the-task-but-how-much-work-did-they-waste/": "research",
+  "https://towardsdatascience.com/how-to-leverage-nlp-for-product-data-science/": "opinion_analysis",
+  "https://towardsdatascience.com/three-samplers-one-posterior-nuts-vs-emcee-vs-nested-sampling/": "benchmark_result",
+  "https://towardsdatascience.com/your-agent-doesnt-need-more-freedom/": "product_launch",
+  "https://venturebeat.com/data/the-next-gen-ai-stack-unifying-data-and-knowledge-without-borders": "opinion_analysis",
+  "https://venturebeat.com/orchestration/agents-need-more-than-business-process-knowledge-they-need-to-understand-how-your-company-actually-works": "product_launch",
+  "https://venturebeat.com/orchestration/openais-ai-agent-platform-is-used-by-twice-as-many-companies-as-anthropics-new-venturebeat-survey-finds": "benchmark_result",
+  "https://venturebeat.com/technology/google-makes-gemini-4-argon-broadly-available-with-limited-time-low-api-pricing-of-2-10-per-1m-token": "model_release",
+  "https://windsurf.com/blog/gemini-4-argon": "product_launch",
+  "https://www.amazon.science/blog/can-we-change-an-ai-models-architecture-without-retraining-it-from-scratch?utm_source=tldrai": "research",
+  "https://www.anaconda.com/blog/faster-coding-raises-stakes-developer-factory": "acquisition",
+  "https://www.analyticsvidhya.com/blog/2026/10/openai-decisions-api/": "product_launch",
+  "https://www.anthropic.com/research/self-replicating-ai?utm_source=tldrai": "research",
+  "https://www.baseten.co/blog/delivering-fast-real-time-text-to-speech-with-gradium/": "product_launch",
+  "https://www.extremetech.com/mobile/this-app-brings-the-pixel-11-exclusive-gboard-rambler-to-any-android-phone": "product_launch",
+  "https://www.fiddler.ai/blog/dynamic-model-escalation-ai-evals": "product_launch",
+  "https://www.kdnuggets.com/the-roadmap-to-mastering-agentic-ai-systems-in-2026": "opinion_analysis",
+  "https://www.lesswrong.com/posts/2mStxuNDMdaWdyHu6/the-expensive-loop-problem?utm_source=tldrai": "opinion_analysis",
+  "https://www.technologyreview.com/2026/10/13/1145755/ai-labs-buying-data-from-dead-startups-to-train-models/": "other",
+  "https://www.technologyreview.com/2026/10/13/1146366/open-models-have-real-benefits-do-they-outweigh-the-risks/": "opinion_analysis",
+  "https://www.theverge.com/ai-artificial-intelligence/1010642/openai-employee-arrested-recording-device": "security_incident",
+  "https://www.theverge.com/news/1010365/shopify-opens-its-catalog-up-to-more-ai-agents": "product_launch",
+  "https://www.theverge.com/news/1010406/xbox-labs-game-decompiling-emulation-exploration": "product_launch",
+  "https://www.theverge.com/tech/1009128/ray-ban-meta-audio-glasses-review-smart-glasses-headphones-wearables": "product_launch",
+  "https://www.theverge.com/transportation/1010050/rivian-mind-robotics-hires-doug-field-ford-tesla-apple": "people_move",
+  "https://www.theverge.com/transportation/1010364/tesla-robotaxi-school-zonespeeding-investigation": "regulation_policy",
+  "https://www.wired.com/story/an-openai-employee-allegedly-used-a-chatbot-to-help-plant-a-recording-device-at-the-office/": "security_incident",
+  "https://www.wired.com/story/apple-overhauls-its-smart-home-play-with-new-hardware-and-a-home-collection/": "product_launch",
+  "https://www.wired.com/story/book-excerpt-the-last-best-place-on-the-internet-wikipedia-artificial-intelligence/": "opinion_analysis",
+  "https://www.wired.com/story/openai-and-anthropic-tell-british-lawmakers-regulate-us/": "regulation_policy",
+  "https://www.wired.com/story/the-biggest-pro-ai-super-pac-network-has-poured-millions-into-nevada-shell-companies/": "legal"
+ }
+}

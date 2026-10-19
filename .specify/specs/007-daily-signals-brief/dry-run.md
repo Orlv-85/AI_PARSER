@@ -359,3 +359,75 @@ Surface story (1 of 2 titles says "Review") but not the RTX Spark story.
 
 Cost unchanged: brief-2 adds 52 input tokens; mean $0.0055 per day on these 3 days, the same as revision
 1's first attempts ($0.0051-0.0060); no recovery was needed.
+
+## 6. Implementation validation (T5.2, 2026-10-19)
+
+**Code**: branch `feat/007-daily-signals-brief` (Checkpoint 2 working tree, prompt
+`daily-signals-brief-3`, methodology `daily-signals-3`). **Spend**: 9 paid runs, ledger $0.0497 of
+the $0.50 cap: briefs $0.0388 (10 calls), extraction $0.0110 (29 calls, 10-17/18 only). Dump:
+`tmp/007-brief-validate/dump.txt` (worktree, not committed).
+
+Method: scratch copy of the 006 section 10 database (`ai_news-prodwindow.db`: local articles, public
+digests 2026-08-03..10-16) and its ledger (unchanged extraction requests replayed at $0); `alembic
+upgrade head`; the 10-17/18 public digests from the T0.1 fixtures. The local database has no articles
+for 10-17/18 (copy taken before them) and production was not touched, so those 28 articles were created
+from the digest items (title + digest summary, no body; extraction input `title_summary`). Then
+`--recompute-only --recompute-all` and one paid `daily-signals --report-date D --max-usd <remaining,
+max 0.10>` per day 2026-10-10..18, oldest first.
+
+### Briefs (prompt `daily-signals-brief-3`, `deepseek-v4-pro`)
+
+| Day | Items / quiet | Sentences | Calls | Ledger $ | Notes |
+| --- | --- | --- | --- | --- | --- |
+| 10-10 | 7 / yes | 2 | 2 | 0.0053 | first answer 4 sentences on a quiet day (`sentence_count`), recovery ok |
+| 10-11 | 1 / yes | 1 | 1 | 0.0010 | one opinion item (the only item) |
+| 10-12 | 56 / no | 5 | 1 | 0.0048 | Muse Wonder, Claude police tip, Clef-omni, pplx-decider, Maia |
+| 10-13 | 90 / no | 5 | 1 | 0.0054 | Argon, Muse Wonder, OpenAI arrest, Doug Field, Play private apps |
+| 10-14 | 73 / no | 5 | 1 | 0.0046 | Argon on Cloud, OpenAI device, Deep Review, Orion-1, Grok Voice 3.0 |
+| 10-15 | 92 / no | 5 | 1 | 0.0066 | Muse Spark Open, Nemotron Super VL, FLUX Klein, Anthropic revenue, Granite Switch |
+| 10-16 | 58 / no | 5 | 1 | 0.0054 | Beam, Muse Spark Open, GPT-Live-1.1, Glimpse, MAI-Base-2 |
+| 10-17 | 14 / yes | 1 | 1 | 0.0027 | Deepseek-V4.1-Flash-1017 |
+| 10-18 | 14 / yes | 2 | 1 | 0.0029 | Anthropic benefit fund, Disney / Character.AI |
+
+Grounding (same rubric as section 2, each sentence read against the full title and summary of every
+cited article): 31 / 31 supported, no invented name, number or quote. Weak: 10-15 #5 "According to
+Hugging Face, IBM released Granite Switch 4.1" attributes an IBM post to its host (huggingface.co);
+10-11 #1 "The Verge describes" for "The author describes" (a Verge author); 10-12 #5 keeps the digest's
+vague "according to the report".
+
+### Success criteria
+
+- **SC-001** (10-12..18): met. 28 sentences, all supported; quiet days 10-17 (1 sentence) and 10-18
+  (2) open with the template line; no review or comparison sentence on any day.
+- **SC-002**: met. 42 / 42 displayed New items have a one-liner (15 summary, 27 quote); none invented,
+  none about another subject. Weakest lines: "llm-echo 0.5" (10-18, the quote is the bare name; the
+  digest summary says "The llm-echo debug plugin's ..." without the version), "LendRecoup is Pareto
+  efficient and credit fair" (10-14), the TheoPhysEval quote about the authors (10-15).
+- **SC-003** (10-16): met. GPT-Live-1.1 has no `variant of`; Beam and Reflection fold into the Beam
+  story, RTX Spark and Surface Laptop Ultra into their stories, DeepSeek dropped as diffuse; no Spikes
+  card; no `early signal` badge.
+- **SC-005**: met. Brief cost $0.0027-0.0066 per day on 10-12..18 (mean $0.0046), $0.0053 with a
+  recovery (10-10); bound $0.05.
+
+### O1 effect on 10-16
+
+Revision 2 (no marker) chose the Surface Laptop Ultra review and the RTX Spark review story for
+sentences 3-4. With the marker (Surface story `kind: review`; RTX Spark not marked) the brief keeps
+Beam and Muse Spark Open and then covers GPT-Live-1.1, Glimpse and MAI-Base-2: both review stories
+are gone, including the unmarked RTX Spark one, and three single-source releases take their place.
+10-15: the marked "Gemini 4 Argon vs ..." comparison story is not used; Anthropic revenue and Granite
+Switch fill the slots. Spikes on 10-15 keep GPT-6 Astra, Gemini 3.8 Flash and Google DeepMind with that
+comparison story as their reason (the rule picks the largest story; it is not review-aware).
+
+### Rendering (T4.3)
+
+Local web on a copy of the scratch database with the 10-14 brief row removed: 10-16 (normal), 10-18
+(quiet), 10-14 (missing brief) at 1280 px and 375 px; no horizontal overflow. Date switching
+14->16->18->15->14 in the page: the client render equals the server render (identical inner HTML)
+each time. One fix from the check: the "Rising needs two weeks..." note is not shown on quiet days.
+
+**After the Checkpoint 2 fixes** (coordinator F1/F2): a one-liner that leaves fewer than 3 words
+besides the item name is dropped. Of the 42 lines above only "llm-echo 0.5" (10-18) is affected, so
+41 / 42 displayed items now have a line and llm-echo 0.5 shows its sources only; none of the 40
+fixture expectations changes. Quiet days now show Top stories and Rising/Spikes cards when they have
+items (no empty cards); on 10-12..18 no quiet day has either, so the screenshots are unchanged.

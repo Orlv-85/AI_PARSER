@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     daily_signals_max_calls: int = Field(default=200, ge=1, le=5000)
     daily_signals_max_seconds: int = Field(default=2700, ge=60, le=14400)
     daily_signals_max_usd: str = "0.50"
+    daily_signals_brief_model: str = "deepseek-v4-pro"
     respect_robots_txt: bool = True
     auth_enabled: bool = False
     auth_username: str | None = None

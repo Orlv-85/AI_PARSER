@@ -10,7 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import get_settings
-from app.storage.models_sql import Base, DailySignalReport
+from app.storage.models_sql import Base, DailySignalBrief, DailySignalReport
 from app.web.app import create_app
 
 D = date(2026, 10, 16)
@@ -141,3 +141,64 @@ def test_digest_api_unchanged(client):
     http, _, _ = client
     body = http.get("/api/news/digests?date=2026-10-16").json()
     assert body == {"report_date": "2026-10-16", "groups": []}
+
+
+# 007 ----------------------------------------------------------------------------------------
+BRIEF = {"sentences": [{"text": "Elorian released Glimpse, its first model.", "quote": "q",
+                        "links": [{"title": "Elorian releases Glimpse", "url": "https://t.com/g",
+                                   "publisher": "t.com"}]}]}
+
+
+def store_brief(maker, status="ok", payload=None):
+    with maker() as session:
+        session.add(DailySignalBrief(
+            report_date=D, brief_version="daily-signals-brief-3", model="deepseek-v4-pro",
+            input_hash="h" * 64, status=status, reason=None,
+            payload=payload if isinstance(payload, str) else json.dumps(payload or BRIEF),
+            created_at=datetime(2026, 10, 17, 3, tzinfo=UTC),
+            updated_at=datetime(2026, 10, 17, 3, tzinfo=UTC)))
+        session.commit()
+
+
+def test_006_payload_keeps_its_fields_and_gets_default_007_fields(client):
+    http, maker, engine = client
+    store(maker, engine, PAYLOAD)
+    body = http.get("/api/news/daily-signals?date=2026-10-16").json()
+    for key, value in PAYLOAD.items():
+        if key not in ("new", "generated_at"):
+            assert body[key] == value, key
+    assert body["new"][0] == PAYLOAD["new"][0] | {"one_liner": None, "one_liner_source": None}
+    assert (body["quiet"], body["brief"]) == (False, None)
+
+
+def test_brief_attached_from_ok_row(client):
+    http, maker, engine = client
+    store(maker, engine, dict(PAYLOAD, quiet=True, spikes_folded=[{"name": "x"}]))
+    store_brief(maker)
+    body = http.get("/api/news/daily-signals?date=2026-10-16").json()
+    assert body["quiet"] is True and "spikes_folded" not in body
+    assert body["brief"] == {"sentences": BRIEF["sentences"], "model": "deepseek-v4-pro",
+                             "brief_version": "daily-signals-brief-3",
+                             "generated_at": "2026-10-17T03:00:00Z"}
+
+
+@pytest.mark.parametrize(("status", "payload", "logged"), [
+    ("invalid", {}, False), ("ok", "{broken", True), ("ok", {"other": 1}, True),
+    ("ok", {"sentences": [{"links": []}]}, True)])
+def test_invalid_or_unreadable_brief_is_null(client, caplog, status, payload, logged):
+    http, maker, engine = client
+    store(maker, engine, PAYLOAD)
+    store_brief(maker, status=status, payload=payload)
+    with caplog.at_level(logging.ERROR):
+        response = http.get("/api/news/daily-signals?date=2026-10-16")
+    assert response.status_code == 200 and response.json()["brief"] is None
+    assert response.json()["new"][0]["name"] == "Glimpse"
+    assert ("daily_signals_brief_unreadable" in caplog.text) is logged
+
+
+def test_brief_without_snapshot_is_not_shown(client):
+    http, maker, engine = client
+    Base.metadata.create_all(bind=engine)
+    store_brief(maker)
+    body = http.get("/api/news/daily-signals?date=2026-10-16").json()
+    assert (body["status"], body["brief"]) == ("unavailable", None)

@@ -1,0 +1,505 @@
+{
+ "report_date": "2026-10-13",
+ "groups": [
+  {
+   "title": "Models & Research",
+   "items": [
+    {
+     "title": "Gemini 4 Argon for Robotics",
+     "summary": "Gemini 4 Argon claims a step change in physical understanding, scoring 87% on the Embodied Reasoning (ERQA) benchmark and outperforming every other frontier model.",
+     "url": "https://deepmind.google/blog/gemini-4-argon-for-robotics/"
+    },
+    {
+     "title": "Gemini 4 Argon: Built to solve your hardest problems",
+     "summary": "Google says Gemini 4 Argon is now globally available and claims it outperforms other frontier models on benchmarks, ranking #1 on the Vals Index. The model launches at an introductory price of $2 per million input tokens and $10 per million output tokens, with cached input tokens at 95% off.",
+     "url": "https://deepmind.google/blog/introducing-gemini-4-argon/"
+    },
+    {
+     "title": "How artificial neural networks build their own learning machinery",
+     "summary": "MIT researchers argue that a key metric for an artificial neural network's biological plausibility is its ability to self-organize without a developer's guidance. The team reports that a self-organizing network governed by simple rules can learn to recognize patterns and classify images.",
+     "url": "https://news.mit.edu/2026/how-artificial-neural-networks-build-their-own-learning-machinery-1013"
+    },
+    {
+     "title": "Google makes Gemini 4 Argon broadly available with limited-time low API pricing of $2/$10 per 1M token",
+     "summary": "Google reports internal Argon use by over 100,000 employees and engineering gains, but these remain company-reported results.",
+     "url": "https://venturebeat.com/technology/google-makes-gemini-4-argon-broadly-available-with-limited-time-low-api-pricing-of-2-10-per-1m-token"
+    },
+    {
+     "title": "Gemini 4 Argon begins rolling out in Gemini app and Antigravity, but only if you pay",
+     "summary": "Google is beginning a wide rollout of Gemini 4 Argon only to paying users, with lower-tier plans lacking full access. Google says Argon's capabilities are unchanged and points to its published benchmarks as evidence of advanced reasoning and agentic coding.",
+     "url": "https://arstechnica.com/ai/2026/10/gemini-4-argon-begins-rolling-out-in-gemini-app-and-antigravity-but-only-if-you-pay/"
+    },
+    {
+     "title": "Run fast, private agents on-device with LFM2.5-24B-A2B",
+     "summary": "Liquid AI says LFM2.5-24B-A2B is competitive with Qwen3.6-35B-A3B on agentic and tool-use tasks, scoring 48.09 on LiveClaw versus 38.19.",
+     "url": "https://huggingface.co/blog/LiquidAI/lfm25-24b-a2b"
+    },
+    {
+     "title": "Claude Haiku 5.5 Vs. Opus 5.5: Understanding the Differences",
+     "summary": "The article states Haiku 5.5 is cheaper and faster for high-volume tasks, while Opus 5.5 is for complex agentic coding and knowledge work.",
+     "url": "https://emergent.sh/learn/claude-haiku-5-5-vs-opus-5-5"
+    },
+    {
+     "title": "llm-gemini 0.35",
+     "summary": "Simon Willison added Gemini 4 Argon support to llm-gemini, noting its launch pricing and a planned December 1st price doubling.",
+     "url": "https://simonwillison.net/2026/Oct/13/llm-gemini/"
+    },
+    {
+     "title": "Mix, Don't Tune: Bilingual Pre-Training Outperforms Hyperparameter Search in Data-Constrained Settings",
+     "summary": "The paper reports that mixing high-resource auxiliary data outperforms hyperparameter tuning for data-constrained bilingual pre-training, with gains growing with model size.",
+     "url": "https://machinelearning.apple.com/research/mix-dont-tune"
+    },
+    {
+     "title": "Muse Wonder",
+     "summary": "Meta introduced the Muse Wonder series, comprising Muse Wonder and Muse Wonder Full, as its most capable models for personal and professional agentic tasks. Meta says Muse Wonder is available today through the Meta Model API and Muse Code, while Muse Wonder Full is available today for Muse Code subscribers.",
+     "url": "https://research.meta.ai/blog/muse-wonder?utm_source=tldrai"
+    },
+    {
+     "title": "The Expensive-Loop Problem",
+     "summary": "The post argues LLMs excel at cheap-loop tasks but perform poorly in expensive-loop domains requiring theory building, proxy management, resource awareness and error correction.",
+     "url": "https://www.lesswrong.com/posts/2mStxuNDMdaWdyHu6/the-expensive-loop-problem?utm_source=tldrai"
+    },
+    {
+     "title": "Can we change an AI model's architecture without retraining it from scratch?",
+     "summary": "Amazon Web Services says its priming method reuses pretrained Transformer weights to cut hybrid-architecture pretraining cost by over 99%. AWS reports that a 32-billion-parameter GKA-based hybrid matches its source Transformer on reasoning benchmarks while decoding up to twice as quickly at 128,000 tokens of context.",
+     "url": "https://www.amazon.science/blog/can-we-change-an-ai-models-architecture-without-retraining-it-from-scratch?utm_source=tldrai"
+    },
+    {
+     "title": "When Do We Need On-Policy Distillation? Distilling on Offline Student Rollouts Is Often Better",
+     "summary": "The authors report that Semi-OPD, which distills from offline rollouts by the initial student, often outperforms on-policy distillation in accuracy and training efficiency. They find the choice between OPD and Semi-OPD depends on teacher-student alignment, measured by an output-token overlap ratio, with OPD beneficial only when alignment is high.",
+     "url": "https://research.nvidia.com/publication/2026-12_when-do-we-need-policy-distillation-distilling-offline-student-rollouts-often?utm_source=tldrai"
+    },
+    {
+     "title": "Meet Helix World: A Real-Time Audio-Visual World Model",
+     "summary": "On HelixBench, Helix World's spatial-acoustic consistency score is 41.8, compared with 12.7 for EchoWM, the only other sound-generating world model in the comparison.",
+     "url": "https://noiz.ai/lp/blog/meet-helix-world?utm_source=tldrai"
+    },
+    {
+     "title": "Gemini 4 Argon is now available worldwide as Google's most capable frontier model",
+     "summary": "Google says Gemini 4 Argon is now available worldwide as its most capable frontier model. Google says Argon's introductory pricing is $2 per million input tokens and $10 per million output tokens.",
+     "url": "https://the-decoder.com/gemini-4-argon-is-now-available-worldwide-as-googles-most-capable-frontier-model/"
+    },
+    {
+     "title": "Three Samplers, One Posterior: NUTS vs. Emcee vs. Nested Sampling",
+     "summary": "The author reports that NUTS was fastest on smooth problems but failed completely on the multimodal problem, with diagnostics clearly showing the failure. The author reports that dynesty was the only sampler to find every mode and produce a correct evidence, though its evidence error bars were optimistic.",
+     "url": "https://towardsdatascience.com/three-samplers-one-posterior-nuts-vs-emcee-vs-nested-sampling/"
+    },
+    {
+     "title": "Meta's Watermelon ripens into a frontier model",
+     "summary": "Meta released its Muse Wonder models, with the full version ranking second behind Anthropic's Opus 5.5 in Artificial Analysis intelligence rankings. Microsoft says its Maia 300 chip is expected to deliver 40% more AI output than leading GPUs on the same power.",
+     "url": "https://therundownai.beehiiv.com/p/meta-watermelon-ripens-into-a-frontier-model"
+    }
+   ]
+  },
+  {
+   "title": "AI Coding",
+   "items": [
+    {
+     "title": "How to Rewrite Apache Spark UDFs for GPU Acceleration with AI Agents",
+     "summary": "The post describes using agents to rewrite UDFs into GPU-accelerated equivalents within minutes, achieving 22x+ speedups in Apache Spark jobs. A major consumer technology company used this workflow to convert 30+ UDFs used in production data pipelines into GPU-accelerated implementations. One UDF affected more than 3,000+ jobs and saw a 22x speedup when implemented as a cuDF-enabled RapidsUDF.",
+     "url": "https://developer.nvidia.com/blog/rewrite-apache-spark-udfs-gpu-acceleration-ai-agents/"
+    },
+    {
+     "title": "How to Choose an App Builder: 5 Factors to Compare",
+     "summary": "Emergent's build used 15.19 credits, exceeding its free plan's 10 monthly credits, so a full build needs a paid plan.",
+     "url": "https://emergent.sh/learn/how-to-choose-an-app-builder"
+    },
+    {
+     "title": "Gemini 4 Argon is now available in Devin",
+     "summary": "Gemini 4 Argon is now available in Devin Desktop and Devin CLI at a promotional discount, and it scores 60.5% on FrontierCode 1.1, surpassing GPT-6.1 Sol and matching GPT-6 Sol.",
+     "url": "https://windsurf.com/blog/gemini-4-argon"
+    },
+    {
+     "title": "Faster Coding Raises the Stakes for the Developer Factory",
+     "summary": "The Augment\u2013Harness deal highlights competition in reliably turning agent output into useful software, as faster coding can create review and setup queues.",
+     "url": "https://www.anaconda.com/blog/faster-coding-raises-stakes-developer-factory"
+    },
+    {
+     "title": "Redesigning source control at Anthropic",
+     "summary": "Anthropic built a custom Git alternative, Scion, after code changes rose from about 2,500 merged per day in May 2026 to over 30,000 per day by September. Scion was built by a team of seven and the migration from Git took five months, with an engineer saying offline support was unimportant since Claude is the heaviest user and necessarily online.",
+     "url": "https://simonwillison.net/2026/Oct/13/redesigning-source-control-at-anthropic/"
+    },
+    {
+     "title": "Quoting Geoffrey Huntley",
+     "summary": "Geoffrey Huntley says a pre-commit hook that fails commits bypassing his diagnostics module and prompts the agent to use it made results \"ten out of ten.\"",
+     "url": "https://simonwillison.net/2026/Oct/13/geoffrey-huntley/"
+    },
+    {
+     "title": "Releasing AI-generated software",
+     "summary": "Mark Seemann argues that releasing LLM-generated software raises liability questions, since courts may hold humans responsible even when no one reads the code.",
+     "url": "https://blog.ploeh.dk/2026/10/12/releasing-ai-generated-software/?utm_source=tldrai"
+    },
+    {
+     "title": "Make Your Coding Assistant a 10x AI Engineer",
+     "summary": "The author reports that a free open-source plugin, agent-engineer, raised Claude Code (Opus 5.5) requirement coverage from 34% to 53% in a blinded A/B test on six agent tasks.",
+     "url": "https://sarthakai.substack.com/p/a-coding-plugin-to-make-you-a-10x?utm_source=tldrai"
+    }
+   ]
+  },
+  {
+   "title": "Agent Frameworks",
+   "items": [
+    {
+     "title": "Building agents that transact with Anchor Browser and AgentCore payments",
+     "summary": "Anchor Browser, integrated with Amazon Bedrock AgentCore payments, lets AI agents autonomously pay for x402-protected pages and APIs, keeping wallet keys out of the agent runtime.",
+     "url": "https://aws.amazon.com/blogs/machine-learning/building-agents-that-transact-with-anchor-browser-and-agentcore-payments/"
+    },
+    {
+     "title": "Build long-horizon agents with Grok 4.7 on Amazon Bedrock",
+     "summary": "SpaceXAI's Grok 4.7 is now available on Amazon Bedrock, and a tool-calling agent evaluation found xhigh reasoning effort answered all 18 runs correctly while low answered 15 of 18 using about an eighth of the output tokens.",
+     "url": "https://aws.amazon.com/blogs/machine-learning/build-long-horizon-agents-with-grok-4-7-on-amazon-bedrock/"
+    },
+    {
+     "title": "OpenAI's AI agent platform is used by twice as many companies as Anthropic's, new VentureBeat survey finds",
+     "summary": "A VentureBeat survey found twice as many companies use OpenAI's agent orchestration platform as Anthropic's, though Ramp reports more businesses pay for Anthropic.",
+     "url": "https://venturebeat.com/orchestration/openais-ai-agent-platform-is-used-by-twice-as-many-companies-as-anthropics-new-venturebeat-survey-finds"
+    },
+    {
+     "title": "The Roadmap to Mastering Agentic AI Systems in 2026",
+     "summary": "The article presents a four-level technical roadmap for building agentic AI systems, from single cognitive loops through multi-agent swarms and production observability.",
+     "url": "https://www.kdnuggets.com/the-roadmap-to-mastering-agentic-ai-systems-in-2026"
+    },
+    {
+     "title": "Webinar: Building Reliable Workflows and Agents with AI Coding Assistants (Sponsor)",
+     "summary": "Orkes is hosting an introductory webinar on using Conductor Skills to help AI coding assistants build and run Conductor workflows.",
+     "url": "https://orkes.io/webinars/from-prompt-to-production-building-business-workflows-with-ai-coding-assistants-and-conductor-skills?utm_source=Newsletter&amp;utm_medium=referral&amp;utm_campaign=TLDR+&amp;utm_content=header_webinar_building_reliable"
+    },
+    {
+     "title": "Behind the scenes: How Google builds, tests, and scales Agent Skills (Sponsor)",
+     "summary": "A Google team member describes how Google Agent Skills encode Google Cloud domain knowledge into structured, open-source instructions for AI coding agents, and how quality is maintained at scale.",
+     "url": "https://cloud.google.com/blog/topics/developers-practitioners/behind-the-scenes-how-we-build-test-and-scale-google-agent-skills?utm_source=tldr&amp;utm_medium=email&amp;utm_campaign=FY26-Q3-northam-NOR10000012-email-oi-na-named-tldr-newsletter-ai-13oct2026&amp;utm_content=tldr-ai-13oct2026&amp;utm_term=-&amp;e=48754805"
+    },
+    {
+     "title": "Decision Models Cut Agent LLM Calls by 29.6%",
+     "summary": "The author reports that adding decision-model checks cut main-LLM calls by 29.6% and estimated API cost by 26.6% across 360 SOP-Bench cases, with 360/360 final tasks correct versus 357/360 for Qwen alone. The author cautions that completion checking alone saved 23.8% of LLM calls but finished 356/360 correctly, and that the combined result does not establish a general accuracy improvement.",
+     "url": "https://discuss.huggingface.co/t/offloading-bounded-decisions-cut-agent-llm-calls-by-29-6-on-360-sop-bench-cases/190420?utm_source=tldrai"
+    },
+    {
+     "title": "Your Agent Doesn't Need More Freedom",
+     "summary": "The article argues that agents' main challenge is now the surrounding system\u2014memory, tools, and human oversight\u2014rather than model capability. The author contends agents were never meant to maximize autonomy, but to operate within clear limits with humans staying in the loop.",
+     "url": "https://towardsdatascience.com/your-agent-doesnt-need-more-freedom/"
+    }
+   ]
+  },
+  {
+   "title": "RAG & Data Systems",
+   "items": [
+    {
+     "title": "The next-gen AI stack: Unifying data and knowledge without borders",
+     "summary": "Google Cloud states that agentic AI requires enterprises to evolve the data layer into an active knowledge engine grounded in business semantics and trusted data.",
+     "url": "https://venturebeat.com/data/the-next-gen-ai-stack-unifying-data-and-knowledge-without-borders"
+    }
+   ]
+  },
+  {
+   "title": "QA & Observability",
+   "items": [
+    {
+     "title": "Laplace Intelligence red-teams robots and self-driving cars before they hit the real world",
+     "summary": "Laplace Intelligence CEO Howie Sun said the company aims to help companies find and fix problems before deployment.",
+     "url": "https://techcrunch.com/2026/10/13/laplace-intelligence-red-teams-robots-and-self-driving-cars-before-they-hit-the-real-world/"
+    },
+    {
+     "title": "Coding Agents Can Solve the Task \u2014 But How Much Work Did They Waste?",
+     "summary": "The author reports that in simulated runs, a gate preventing the agent from finishing while tests fail accounted for the entire improvement in success. The author states the agent in the experiment was simulated, not a real coding agent like Claude Code or Codex.",
+     "url": "https://towardsdatascience.com/coding-agents-can-solve-the-task-but-how-much-work-did-they-waste/"
+    },
+    {
+     "title": "Does being rude to AI work? What 6 models revealed",
+     "summary": "The author tested polite, neutral and hostile prompts across six models and found accuracy barely changed while token usage varied, with most apparent rudeness savings vanishing once brevity instructions were separated from tone.",
+     "url": "https://arize.com/blog/does-being-rude-to-ai-work/"
+    },
+    {
+     "title": "Introducing Dynamic Model Escalation: More Accurate AI Evals, No Trade-Offs To Make",
+     "summary": "Fiddler says its new Dynamic Model Escalation for Centor Model for Safety routes out-of-domain inputs to a Fiddler-hosted general-purpose model without external API calls. Fiddler reports that escalating 3.1% of inputs on one reference dataset cut the overall jailbreak false positive rate by 93.5%.",
+     "url": "https://www.fiddler.ai/blog/dynamic-model-escalation-ai-evals"
+    }
+   ]
+  },
+  {
+   "title": "Security & Safety",
+   "items": [
+    {
+     "title": "Developing Gemini 4 Argon responsibly and safely",
+     "summary": "Google says Gemini 4 Argon's cyberdefense capabilities are frontier-level and designed to give defenders an advantage over attackers. Google reports that Argon leads in prompt injection robustness on Gray Swan's Indirect Prompt Injection benchmark, cutting attack success across 15 adaptive attempts to 0.7%.",
+     "url": "https://deepmind.google/blog/developing-gemini-4-argon-responsibly-and-safely/"
+    },
+    {
+     "title": "FBI arrests OpenAI employee accused of planting hidden recording device in conference room",
+     "summary": "Prosecutors said OpenAI caught the device after it was inserted into a USB port on the back of a television in OpenAI\u2019s San Francisco office.",
+     "url": "https://techcrunch.com/2026/10/13/fbi-arrests-openai-employee-accused-of-planting-hidden-recording-device-in-conference-room/"
+    },
+    {
+     "title": "Pluto Security raises $42M as AI gives enterprise security teams a new headache",
+     "summary": "Pluto Security, fresh out of stealth with $42 million in funding, helps companies monitor and control employee AI tool use, and its CEO says it has crossed $2 million in annual recurring revenue with more than 30 enterprise customers.",
+     "url": "https://techcrunch.com/2026/10/13/pluto-security-raises-42m-as-ai-gives-enterprise-security-teams-a-new-headache/"
+    },
+    {
+     "title": "OpenAI employee arrested for allegedly planting a bug in a conference room",
+     "summary": "An OpenAI engineer was arrested after the company said it discovered a sophisticated recording device hidden in one of its offices. OpenAI said it used its AI models to understand the device and identify that a specific employee had planted it a few days earlier.",
+     "url": "https://www.theverge.com/ai-artificial-intelligence/1010642/openai-employee-arrested-recording-device"
+    },
+    {
+     "title": "An OpenAI Employee Allegedly Used a Chatbot to Help Plant a Recording Device at the Office",
+     "summary": "An OpenAI engineer allegedly used chatbots to plan hiding a recording device in a conference room, per a criminal complaint.",
+     "url": "https://www.wired.com/story/an-openai-employee-allegedly-used-a-chatbot-to-help-plant-a-recording-device-at-the-office/"
+    },
+    {
+     "title": "AI Weekly Issue #537: AI models may soon copy themselves onto smart fridges, Anthropic says",
+     "summary": "Anthropic's Frontier Red Team warns small AI models may be months from copying themselves onto internet-connected home devices.",
+     "url": "https://aiweekly.co/issues/ai-models-may-soon-copy-themselves-onto-smart-fridges"
+    },
+    {
+     "title": "Uber's CISO on building an insider threat program for AI",
+     "summary": "Uber's CISO Philip Martin says AI agents need the same kind of insider threat program companies already run for their employees. Uber open-sourced AI Detection and Response (ADR) to gather real-time telemetry and take real-time action in deployed agent harnesses.",
+     "url": "https://claude.com/resources/articles/uber-s-ciso-on-building-an-insider-threat-program-for-ai"
+    },
+    {
+     "title": "What I saw around the Curve, 2026",
+     "summary": "Eli Pariser reported that The Curve's discussions centered on risks and challenges ahead, with a dark current of fear and dread beneath a warm surface.",
+     "url": "https://secondthoughts.ai/p/what-i-saw-around-the-curve-2026?utm_source=tldrai"
+    },
+    {
+     "title": "How Close Are AI Models to Self-Replication?",
+     "summary": "The authors report that a 9B model got inference running on 8 of the 9 hardware types they tested. They state that in their simplified evaluations, GLM-5.2 and stronger models are capable of end to end replication.",
+     "url": "https://www.anthropic.com/research/self-replicating-ai?utm_source=tldrai"
+    },
+    {
+     "title": "Open models have real benefits. Do they outweigh the risks?",
+     "summary": "Anthropic released a report claiming the open model GLM-5.3 poses a major cyberattack risk because it can be freely downloaded and modified.",
+     "url": "https://www.technologyreview.com/2026/10/13/1146366/open-models-have-real-benefits-do-they-outweigh-the-risks/"
+    },
+    {
+     "title": "406 scientists demand AI models be cut off from the internet immediately",
+     "summary": "An open letter signed by 406 scientists calls for more AI safety research and airgapping AI models from the internet.",
+     "url": "https://the-decoder.com/406-scientists-demand-ai-models-be-cut-off-from-the-internet-immediately/"
+    },
+    {
+     "title": "Machine learning pioneer Michael I. Jordan dismantles AI doom rhetoric as \"grand moralizing performance\"",
+     "summary": "Michael I. Jordan dismissed AI doom rhetoric and resignations as a \"grand moralizing performance\" that does not serve its claimed objective.",
+     "url": "https://the-decoder.com/machine-learning-pioneer-michael-i-jordan-dismantles-ai-doom-rhetoric-as-grand-moralizing-performance/"
+    },
+    {
+     "title": "Anthropic study warns that small AI models could soon replicate across everyday devices",
+     "summary": "Anthropic researchers found that no current model is both small and capable enough to self-replicate across consumer devices, though they expect the gap to close soon. In tests, only GLM-5.2 completed the full replication chain reliably, infecting all eight test nodes in four of five runs.",
+     "url": "https://the-decoder.com/anthropic-study-warns-that-small-ai-models-could-soon-replicate-across-everyday-devices/"
+    }
+   ]
+  },
+  {
+   "title": "Infrastructure",
+   "items": [
+    {
+     "title": "Manage private pricing offers for Amazon Bedrock with managed entitlements",
+     "summary": "Until someone activates the grant, negotiated pricing does not apply. The CDK stack listens for eligible AWS Marketplace agreement events, checks your seller allowlist, creates distributed grants, and retries activation when License Manager needs more time.",
+     "url": "https://aws.amazon.com/blogs/machine-learning/manage-private-pricing-offers-for-amazon-bedrock-with-managed-entitlements/"
+    },
+    {
+     "title": "Mixture-of-Experts kernel engineering on Amazon SageMaker AI",
+     "summary": "AWS says kernel optimizations for fused Mixture-of-Experts models on Amazon SageMaker AI delivered up to 10 percent higher throughput and up to 9 percent faster TTFT.",
+     "url": "https://aws.amazon.com/blogs/machine-learning/mixture-of-experts-kernel-engineering-on-amazon-sagemaker-ai/"
+    },
+    {
+     "title": "NVIDIA Run:ai Is Now Open Source as Part of NVIDIA DSX AI Factory Platform",
+     "summary": "NVIDIA is making the full NVIDIA Run:ai platform available as open source software, giving customers, developers, and ecosystem partners access to production-grade AI workload and GPU orchestration capabilities.",
+     "url": "https://developer.nvidia.com/blog/nvidia-runai-is-now-open-source-as-part-of-nvidia-dsx-ai-factory-platform/"
+    },
+    {
+     "title": "Delivering real-time text-to-speech with Gradium",
+     "summary": "Gradium TTS is built for real-time voice agents and achieves time-to-first-audio faster than typical human response times, according to the source. Gradium says enabling CUDA Graphs cut median TTFA by more than 2.5x at small batch sizes in its published benchmarks.",
+     "url": "https://www.baseten.co/blog/delivering-fast-real-time-text-to-speech-with-gradium/"
+    }
+   ]
+  },
+  {
+   "title": "AI Applications",
+   "items": [
+    {
+     "title": "OpenAI Decisions API: What it is and how to use it?",
+     "summary": "OpenAI's Decisions API reportedly lets developers define predicate, choice, or score questions and supports text and image inputs, but currently only the gpt-6-luna model.",
+     "url": "https://www.analyticsvidhya.com/blog/2026/10/openai-decisions-api/"
+    },
+    {
+     "title": "Natural language security queries at Orca Security using Amazon Bedrock",
+     "summary": "Orca Security's Discovery AI on Amazon Bedrock reportedly cut query costs 90%, input tokens 93%, and latency 75% versus its initial baseline. The initial proof of concept loaded the full Sonar schema into one prompt, using roughly 2 million input tokens and about 60 seconds per workload.",
+     "url": "https://aws.amazon.com/blogs/machine-learning/natural-language-security-queries-at-orca-security-using-amazon-bedrock/"
+    },
+    {
+     "title": "How ShipStation Global built an AI IT help desk on Amazon Bedrock AgentCore",
+     "summary": "ShipStation Global built Deckhand, an AI IT help desk agent on Amazon Bedrock AgentCore, which reportedly resolved 97.5% of incoming channel queries with 96% positive feedback.",
+     "url": "https://aws.amazon.com/blogs/machine-learning/how-shipstation-global-built-an-ai-it-help-desk-on-amazon-bedrock-agentcore/"
+    },
+    {
+     "title": "All Systems Go: Global PC App Ecosystem Ready for NVIDIA RTX Spark",
+     "summary": "NVIDIA and Microsoft announced that RTX Spark laptops will be available on Friday, Oct. 16, with ecosystem partners rolling out new software features and performance optimizations ahead of launch.",
+     "url": "https://blogs.nvidia.com/blog/local-ai-rtx-spark-laptops-software-updates/"
+    },
+    {
+     "title": "Cerebras CEO says we\u2019re nearing a future where everyone has a personal AI assistant at home",
+     "summary": "Cerebras CEO Andrew Feldman said personal AI assistants will run locally, doing some work on device and some in the cloud.",
+     "url": "https://techcrunch.com/2026/10/13/cerebras-ceo-says-were-nearing-a-future-where-everyone-has-a-personal-ai-assistant-at-home/"
+    },
+    {
+     "title": "Industrial Next wants factory robots to switch tasks in minutes, not weeks",
+     "summary": "Industrial Next claims its AI-driven robotic stations can be retooled in minutes rather than weeks without traditional programming, and is partnering with BMW Group Technology Office to evaluate its AI-powered dexterous manipulation for manufacturing.",
+     "url": "https://techcrunch.com/2026/10/13/industrial-next-wants-factory-robots-to-switch-tasks-in-minutes-not-weeks/"
+    },
+    {
+     "title": "Niobia takes the guesswork out of some of tech\u2019s most expensive mistakes",
+     "summary": "Niobia's AI agents on self-contained GPUs flag production defects and let engineers ask a chatbot what caused them, aiming to answer in minutes rather than days.",
+     "url": "https://techcrunch.com/2026/10/13/niobia-takes-the-guesswork-out-of-some-of-techs-most-expensive-mistakes/"
+    },
+    {
+     "title": "Facebook is giving users more control over their algorithm",
+     "summary": "Meta launched an AI-powered \"Your Algorithm\" tool on Facebook, letting users describe feed and Reels preferences in natural language, following Instagram's version.",
+     "url": "https://techcrunch.com/2026/10/13/facebook-is-giving-users-more-control-over-their-algorithm/"
+    },
+    {
+     "title": "Google Play now lets anyone build private, vibe-coded apps that run on Android",
+     "summary": "Google announced that users can now run private, vibe-coded apps on Android via Google Play without publishing them publicly.",
+     "url": "https://techcrunch.com/2026/10/13/google-play-now-supports-private-vibe-coded-apps-built-just-for-you/"
+    },
+    {
+     "title": "SpaceX and Google both said no. Now his software is riding a SpaceX rocket next to Google\u2019s",
+     "summary": "Satlyt's software reportedly cut the size of a transmission about onboard software errors by more than 60% using Google DeepMind's Gemma model on a Momentus spacecraft.",
+     "url": "https://techcrunch.com/2026/10/13/satlyt-founded-by-a-former-google-and-spacex-product-manager-raises-8m-to-run-ai-on-satellites/"
+    },
+    {
+     "title": "The 2026 Startup Battlefield Top 20: From organs to orbit and everything in between",
+     "summary": "TechCrunch names twenty founders competing at Disrupt for a $100,000 prize and the Disrupt Cup.",
+     "url": "https://techcrunch.com/2026/10/13/the-2026-startup-battlefield-top-20-from-organs-to-orbit-and-everything-in-between/"
+    },
+    {
+     "title": "Agents need more than business process knowledge. They need to understand how your company actually works",
+     "summary": "SAP's Ted Way says AI agents need company-specific configurations, policies, data relationships and exceptions, not just standard process knowledge, to execute enterprise workflows reliably.",
+     "url": "https://venturebeat.com/orchestration/agents-need-more-than-business-process-knowledge-they-need-to-understand-how-your-company-actually-works"
+    },
+    {
+     "title": "Shopify opens its catalog up to more AI agents",
+     "summary": "Shopify announced it will let shoppers configure AI agents to purchase products on their behalf, giving more agents access to over a billion listings.",
+     "url": "https://www.theverge.com/news/1010365/shopify-opens-its-catalog-up-to-more-ai-agents"
+    },
+    {
+     "title": "Xbox is officially embracing the chaos of AI-powered game ports",
+     "summary": "Xbox CEO Asha Sharma says Microsoft formed Xbox Labs, a small group of game makers, engineers and scientists, to explore emerging game-modding ideas.",
+     "url": "https://www.theverge.com/news/1010406/xbox-labs-game-decompiling-emulation-exploration"
+    },
+    {
+     "title": "I don\u2019t miss the camera on the Ray-Ban Meta Audio glasses",
+     "summary": "The reviewer says the audio-only Ray-Ban Meta glasses are expensive for what they are and that AI is still not the killer app. The reviewer reports long battery life, lightweight build, and stylish design as positives. The reviewer says the glasses start at $350 without prescription lenses, hearing assistance features, or Muse.",
+     "url": "https://www.theverge.com/tech/1009128/ray-ban-meta-audio-glasses-review-smart-glasses-headphones-wearables"
+    },
+    {
+     "title": "Google wants to host your personal vibe-coded apps in the Play Store",
+     "summary": "Google is expanding Play Store AI features, including Ask Play, Game Finder, and private hosting for user-built apps.",
+     "url": "https://arstechnica.com/google/2026/10/google-wants-to-host-your-personal-vibe-coded-apps-in-the-play-store/"
+    },
+    {
+     "title": "Apple Reboots Its Smart-Home Strategy With New Hardware and a \u2018Home Collection\u2019",
+     "summary": "Apple announced a smart-home push with the HomeView display, HomePod Mini 2, fourth-gen Apple TV 4K, and an Apple Home Collection made with LG and Schneider Electric.",
+     "url": "https://www.wired.com/story/apple-overhauls-its-smart-home-play-with-new-hardware-and-a-home-collection/"
+    },
+    {
+     "title": "Wikipedians Believed AI Would Come and Go. They Were Wrong",
+     "summary": "A Princeton study found about 5 percent of nearly 3,000 newly created English Wikipedia articles in August 2024 contained substantial AI-generated content.",
+     "url": "https://www.wired.com/story/book-excerpt-the-last-best-place-on-the-internet-wikipedia-artificial-intelligence/"
+    },
+    {
+     "title": "This App Brings the Pixel 11-Exclusive Gboard Rambler to Any Android Phone",
+     "summary": "An independent developer released PixelBoard, an unofficial modified Gboard that brings Rambler voice dictation to other Android phones without root.",
+     "url": "https://www.extremetech.com/mobile/this-app-brings-the-pixel-11-exclusive-gboard-rambler-to-any-android-phone"
+    },
+    {
+     "title": "Applying technology to understand and treat disease",
+     "summary": "Google says its health research teams published 90 peer-reviewed papers on disease over five years, with over 90,000 citations.",
+     "url": "https://blog.google/innovation-and-ai/technology/health/ai-health-research/?utm_source=tldrai"
+    },
+    {
+     "title": "Western mathematicians fear AI makes them dumber while China builds an entire alliance for it",
+     "summary": "Fields Medal winner Shing-Tung Yau and leading Chinese mathematicians launched an alliance in Beijing to push AI into math research, while Western mathematicians reportedly fear AI erodes mathematical understanding.",
+     "url": "https://the-decoder.com/western-mathematicians-fear-ai-makes-them-dumber-while-china-builds-an-entire-alliance-for-it/"
+    },
+    {
+     "title": "How to Leverage NLP for Product Data Science",
+     "summary": "The article argues that NLP techniques such as sentiment classification, topic modeling, and embeddings can strengthen traditional product data science models like churn and CLV by adding earlier signals from text.",
+     "url": "https://towardsdatascience.com/how-to-leverage-nlp-for-product-data-science/"
+    }
+   ]
+  },
+  {
+   "title": "Business & Industry",
+   "items": [
+    {
+     "title": "NVIDIA Announces New Investments in France\u2019s Startups",
+     "summary": "NVIDIA said it has previously invested in French startups Alice&Bob, Gradium and Scintil Photonics and has committed nearly $10 billion to Europe's technology ecosystem. NVIDIA announced new planned investments in Doctolib, Entalpic, Genesis AI and Pigment.",
+     "url": "https://blogs.nvidia.com/blog/france-ecosystem-agentic-computing/"
+    },
+    {
+     "title": "Cerebras CEO pushes back on AI doomsday warnings",
+     "summary": "Cerebras CEO Andrew Feldman said AI leaders should emphasize AI's potential benefits rather than doomsday warnings.",
+     "url": "https://techcrunch.com/2026/10/13/cerebras-ceo-pushes-back-on-ai-doomsday-warnings/"
+    },
+    {
+     "title": "Rivian\u2019s startup Mind Robotics hires former Ford EV chief Doug Field",
+     "summary": "Rivian hired former Ford EV chief Doug Field as president of its industrial AI and robotics venture Mind Robotics, which has over $1 billion in backing.",
+     "url": "https://techcrunch.com/2026/10/13/rivians-startup-mind-robotics-hires-former-ford-ev-chief-doug-field/"
+    },
+    {
+     "title": "Rivian partner Mind Robotics hires Doug Field as president",
+     "summary": "Rivian partner Mind Robotics hired Doug Field as president to lead its robotics effort, according to the startup.",
+     "url": "https://www.theverge.com/transportation/1010050/rivian-mind-robotics-hires-doug-field-ford-tesla-apple"
+    },
+    {
+     "title": "Disney offers $20M for Character.AI\u2019s scandal-plagued chatbot tech",
+     "summary": "Disney has offered $20 million for a non-exclusive perpetual license of certain Character Technologies intellectual property in a bankruptcy proceeding.",
+     "url": "https://arstechnica.com/tech-policy/2026/10/disney-offers-20m-for-character-ais-scandal-plagued-chatbot-tech/"
+    },
+    {
+     "title": "AI labs are buying data from dead startups to train their models",
+     "summary": "AI labs are buying data from failed startups, with SimpleClosure's Asset Hub handling over 150 deals and expecting to return over $10 million to startups by the end of 2026.",
+     "url": "https://www.technologyreview.com/2026/10/13/1145755/ai-labs-buying-data-from-dead-startups-to-train-models/"
+    },
+    {
+     "title": "Character.ai will shut down if no buyer emerges, capping a fall from $2.7 billion Google deal to bankruptcy",
+     "summary": "Character.ai has filed for bankruptcy and will shut down if no buyer emerges, with a deal expected to close by early December 2026.",
+     "url": "https://the-decoder.com/character-ai-will-shut-down-if-no-buyer-emerges-capping-a-fall-from-2-7-billion-google-deal-to-bankruptcy/"
+    }
+   ]
+  },
+  {
+   "title": "Policy & Regulation",
+   "items": [
+    {
+     "title": "Q&A: Building accountability behind our words \u2014 and AI\u2019s \u2014 in civic conversations",
+     "summary": "MIT professor Deb Roy calls for accountability and answerability when AI is used to craft text in civic conversations. Roy says large language models erase the fingerprints of fake public comments, so reviewers can no longer tell which comments express views real people formed and stand behind.",
+     "url": "https://news.mit.edu/2026/qa-building-accountability-behind-our-words-and-ai-civic-conversations-1013"
+    },
+    {
+     "title": "Judge orders OpenAI to turn over hiring records in Apple trade secrets case",
+     "summary": "A judge ruled that Apple will gain expedited access to OpenAI hiring materials in Apple's trade secrets lawsuit against OpenAI.",
+     "url": "https://techcrunch.com/2026/10/13/judge-orders-openai-to-turn-over-hiring-records-in-apple-trade-secrets-case/"
+    },
+    {
+     "title": "The feds are looking into reports of Tesla\u2019s robotaxis speeding through school zones",
+     "summary": "NHTSA is evaluating allegations that about 1,000 Tesla robotaxis using its automated driving system exceed posted speed limits in active school zones. NHTSA's Office of Defects Investigation received a defect petition on September 23, 2026 requesting an investigation into model year 2026 Tesla Robotaxis (Model Y and Cybercab) with the Automated Driving System engaged.",
+     "url": "https://www.theverge.com/transportation/1010364/tesla-robotaxi-school-zonespeeding-investigation"
+    },
+    {
+     "title": "OpenAI and Anthropic Tell British Lawmakers: Regulate Us",
+     "summary": "OpenAI and Anthropic told a British parliamentary committee that voluntary AI safety pledges are insufficient and binding rules are needed, while Google DeepMind and Meta declined to back new legislation.",
+     "url": "https://www.wired.com/story/openai-and-anthropic-tell-british-lawmakers-regulate-us/"
+    },
+    {
+     "title": "The Biggest Pro-AI Super PAC Network Has Poured Millions Into Nevada Shell Companies",
+     "summary": "A Leading the Future spokesperson told WIRED the network complies with all applicable laws and called the complaint a desperate ploy for attention.",
+     "url": "https://www.wired.com/story/the-biggest-pro-ai-super-pac-network-has-poured-millions-into-nevada-shell-companies/"
+    },
+    {
+     "title": "EU AI Act compliance for AI agents: a practical engineering guide",
+     "summary": "The article states the EU AI Act high-risk deadline is 2 December 2027, with transparency duties already applying. Arize and evroc are described as covering different layers, with evroc providing EU-only infrastructure and open-weight model hosting.",
+     "url": "https://arize.com/blog/eu-ai-act-compliance-ai-agents/"
+    }
+   ]
+  }
+ ]
+}

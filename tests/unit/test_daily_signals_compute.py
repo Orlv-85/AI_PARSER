@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from app.core.daily_signals_compute import (
+    METHODOLOGY_VERSION,
     ArticleObs,
     DayCoverage,
     EntityMention,
@@ -15,7 +16,9 @@ from app.core.daily_signals_compute import (
     cluster,
     compute_snapshot,
     links,
+    one_liner,
     payload_hash,
+    sentences,
 )
 from app.core.daily_signals_entities import Mention, Override, reconcile
 
@@ -36,8 +39,10 @@ class World:
         self.articles = {}
         self.coverage = {}
         self.overrides = []
+        self.summaries = {}
 
-    def article(self, day, publisher, *entities, event="model_release", title=None, at=None):
+    def article(self, day, publisher, *entities, event="model_release", title=None, at=None,
+                summary=""):
         article_id = len(self.articles) + 1
         ids = []
         for spec in entities:
@@ -50,6 +55,7 @@ class World:
         when = at if at is not None else datetime(day.year, day.month, day.day, 12)
         self.articles[article_id] = (day, title or f"Article {article_id}", publisher, event, when,
                                      ids)
+        self.summaries[article_id] = summary
         return article_id
 
     def day(self, day, items, extracted=None, kind=None, published=True):
@@ -70,7 +76,7 @@ class World:
             by_day.setdefault(day, []).append(ArticleObs(
                 article_id=article_id, scope_day=day, title=title,
                 url=f"https://{publisher}/{article_id}", publisher=publisher, published_at=at,
-                event_type=event, mentions=mentions))
+                event_type=event, mentions=mentions, summary=self.summaries[article_id]))
         return result, by_day
 
     def snapshot(self, day=D, thresholds=None, history=()):
@@ -391,7 +397,10 @@ def test_spikes_from_complete_trailing_days():
     assert snapshot["sections"]["rising"]["state"] == "spikes_only"
     assert snapshot["sections"]["cooling"] == {"state": "hidden", "note": None}
     assert [(r["name"], r["today"], r["trailing_mean"], r["spike"]) for r in rising] == [
-        ("Atlas", 3, 0.333, True), ("Orion", 3, 0.0, True)]
+        ("Atlas", 3, 0.333, True)]
+    # 007: Orion is the story's primary entity, so its spike folds into that top story.
+    assert snapshot["spikes_folded"] == [{"name": "Orion", "into": "Article 2", "reason": "story"}]
+    assert snapshot["top_stories"][0]["spikes"] == ["Orion"]
     # Days with fewer than 10 digest items are not trailing days (10-10 with 7, 10-11 with 1).
     assert spike_world(trailing_items=7).snapshot()["rising"] == []
 
@@ -596,3 +605,178 @@ def test_single_token_needs_the_vendor_name_in_the_same_item():
     assert names(v.snapshot(history=history)["new"]) == ["Beam"]  # "previewed": not released
     history.append((date(2026, 9, 3), "Acme Labs ships Beam to customers."))
     assert names(v.snapshot(history=history)["new"]) == []
+
+
+# 007: one-liners -----------------------------------------------------------------------------
+BRIEF = FIXTURES / "brief"
+
+
+def test_one_liners_of_the_40_dry_run_items():
+    expected = json.loads((BRIEF / "one_liners.json").read_text())
+    seen = {}
+    for day in range(12, 19):
+        signals = json.loads((BRIEF / f"sig-2026-10-{day}.json").read_text())
+        digest = json.loads((BRIEF / f"dig-2026-10-{day}.json").read_text())
+        summary = {i["url"]: i["summary"] for g in digest["groups"] for i in g["items"]}
+        for item in signals["new"]:
+            line, source = one_liner(item["name"], item["novelty_quote"],
+                                     [summary.get(link["url"]) or "" for link in item["links"]])
+            seen[f"2026-10-{day}/{item['name']}"] = {"one_liner": line, "source": source}
+    assert len(seen) == 40
+    assert seen == expected
+    assert sum(1 for v in seen.values() if v["source"] == "summary") == 15
+
+
+def test_sentence_split_keeps_abbreviations():
+    text = ("Acme Inc. shipped Atlas on Oct. 16 in the U.S. after a J. Doe review. "
+            "It is a 5.6B model, e.g. for chat. Next sentence follows!")
+    assert sentences(text) == [
+        "Acme Inc. shipped Atlas on Oct. 16 in the U.S. after a J. Doe review.",
+        "It is a 5.6B model, e.g. for chat.", "Next sentence follows!"]
+
+
+def test_one_liner_rules():
+    long_quote = "Today we are happy to release our newest image model to everyone"
+    # Name match folds dots, dashes and spaces: FLUX.3 names "FLUX 3".
+    assert one_liner("FLUX.3 Klein", long_quote, ["Black Forest Labs released FLUX 3 Klein."]) == \
+        ("Black Forest Labs released FLUX 3 Klein.", "summary")
+    # "Codex-built" is not the verb "built"; a sentence without a WHAT verb loses to the quote.
+    assert one_liner("Evidence Desk", long_quote,
+                     ["The Codex-built Evidence Desk passed a wrong claim."]) == \
+        (long_quote, "quote")
+    assert one_liner("Evidence Desk", long_quote,
+                     ["Evidence Desk is a browser tool for claims."])[1] == "summary"
+    # A quote under 8 words loses to any sentence that names the item.
+    assert one_liner("Atlas", "Introducing Atlas", ["Others wrote about it.",
+                                                    "Atlas scores 90 on a benchmark."]) == \
+        ("Atlas scores 90 on a benchmark.", "summary")
+    # F2: a line that leaves fewer than 3 words besides the name says nothing; no line.
+    assert one_liner("Atlas", "Introducing Atlas", ["Nothing about it."]) == (None, None)
+    assert one_liner("llm-echo 0.5", "llm-echo 0.5", ["The llm-echo debug plugin now counts."]) \
+        == (None, None)
+    assert one_liner("Atlas", "Introducing Atlas by Acme", ["Nothing."]) == \
+        ("Introducing Atlas by Acme", "quote")
+    text = "Acme launched Atlas, " + "a very long phrase " * 12
+    line, _ = one_liner("Atlas", None, [text])
+    assert len(line) <= 140 and line.endswith("...")
+    assert text.startswith(line[:-3]) and text[len(line) - 3] == " "  # cut at a word boundary
+
+
+def test_new_items_carry_their_one_liner():
+    w = World()
+    w.article(D, "a.com", e("Atlas", new=True), summary="Acme launched Atlas, a robot model.")
+    w.article(D, "b.com", e("Orion-1", new=True), summary="Unrelated text.")
+    by_name = {i["name"]: i for i in w.snapshot()["new"]}
+    assert (by_name["Atlas"]["one_liner"], by_name["Atlas"]["one_liner_source"]) == \
+        ("Acme launched Atlas, a robot model.", "summary")
+    assert (by_name["Orion-1"]["one_liner"], by_name["Orion-1"]["one_liner_source"]) == \
+        ("Today Acme launched Orion-1", "quote")
+    w.article(D, "c.com", e("Zed-9", new=True, quote="Meet Zed-9"))
+    zed = {i["name"]: i for i in w.snapshot()["new"]}["Zed-9"]
+    assert (zed["one_liner"], zed["one_liner_source"]) == (None, None)
+
+
+# 007: variant rule ---------------------------------------------------------------------------
+@pytest.mark.parametrize(("older", "newer", "shown"), [
+    (e("GPT", vendor="OpenAI"), e("GPT-Live-1.1", new=True, vendor="OpenAI"), None),
+    (e("NVIDIA Nemotron", vendor="NVIDIA"),
+     e("NVIDIA Nemotron Indic", "dataset", new=True, vendor="NVIDIA"), None),
+    (e("NVIDIA Nemotron", vendor="NVIDIA"),
+     e("NVIDIA Nemotron Ultra", new=True, vendor="NVIDIA"), None),
+    (e("Muse Spark", vendor="Meta"), e("Muse Spark Open", new=True, vendor="Meta"), "Muse Spark"),
+    (e("DeepSeek-V4.1-Flash", vendor="DeepSeek"),
+     e("DeepSeek-V4.1-Flash-1017", new=True, vendor="DeepSeek"), "DeepSeek-V4.1-Flash"),
+    (e("Atlas Robotics", "product", vendor="Acme"), e("Atlas Robotics Pro", new=True,
+                                                      vendor="Acme"), None),
+])
+def test_variant_of_only_for_a_specific_earlier_entity(older, newer, shown):
+    w = World()
+    w.article(date(2026, 10, 12), "a.com", older)
+    w.article(D, "b.com", newer)
+    item, = w.snapshot()["new"]
+    assert item["variant_of"] == shown
+
+
+# 007: spike folding --------------------------------------------------------------------------
+def trailing(w, items=10):
+    for i in range(1, 4):
+        w.day(D - timedelta(days=i), items)
+    w.day(D, 30)
+    return w
+
+
+def folded(snapshot):
+    return {f["name"]: (f["reason"], f["into"]) for f in snapshot["spikes_folded"]}
+
+
+def test_spikes_fold_into_story_by_entity_label_and_vendor():
+    w = trailing(World())
+    for i in range(3):
+        w.article(D, f"p{i}.com", e("Beam", vendor="Glint Labs"), e("Reflection", "company",
+                                                                    role="mentioned"),
+                  e("Glint Labs", "company", role="mentioned"),
+                  title=f"Reflection ships Beam open model part {i}")
+    snapshot = w.snapshot()
+    story, = snapshot["top_stories"]
+    assert folded(snapshot) == {"Beam": ("story", story["label"]),
+                                "Glint Labs": ("story", story["label"]),
+                                "Reflection": ("story", story["label"])}
+    assert sorted(story["spikes"]) == ["Beam", "Glint Labs", "Reflection"]
+    assert snapshot["rising"] == [] and snapshot["status"] != "unavailable"
+
+
+def test_org_spike_folds_into_new_item_or_earlier_spike_by_vendor():
+    w = trailing(World())
+    w.article(D, "a.com", e("Zed-1", new=True, vendor="Zeta"), e("Zeta", "company",
+                                                                  role="mentioned"))
+    w.article(D, "a.com", e("Zed-1", new=True, vendor="Zeta"), e("Zeta", "company",
+                                                                  role="mentioned"))
+    w.article(D, "b.com", e("Zeta", "company", role="mentioned"), event="funding")
+    for i in range(4):
+        w.article(D, f"q{i}.com", e("Atlas", role="mentioned", vendor="Acme"),
+                  *([e("Acme", "company", role="mentioned")] if i else []),
+                  event=["research", "funding", "legal", "hardware"][i],
+                  title=["Robots dance", "Money flows", "Court rules", "Chips arrive"][i])
+    snapshot = w.snapshot()
+    assert folded(snapshot) == {"Zeta": ("new", "Zed-1"), "Acme": ("spike", "Atlas")}
+    assert names(snapshot["rising"]) == ["Atlas"]
+
+
+def test_diffuse_company_spike_dropped_and_reason_is_largest_story():
+    w = trailing(World())
+    events = ["research", "funding", "legal"]
+    for i in range(3):
+        w.article(D, f"h{i}.com", e("Hugging Face", "company", role="mentioned"),
+                  event=events[i], title=["Robots dance", "Money flows", "Court rules"][i])
+    # GPT-6 Astra shares a comparison story that does not name it: kept, with that reason.
+    for i in range(2):
+        w.article(D, f"c{i}.com", e("GPT-6 Astra", role="mentioned"), e("Argon"),
+                  event="benchmark_result", title=f"Argon versus rivals compared {i}")
+    w.article(D, "z.com", e("GPT-6 Astra", role="mentioned"), event="opinion_analysis",
+              title="Opinion on chatbots")
+    snapshot = w.snapshot()
+    assert folded(snapshot)["Hugging Face"] == ("diffuse", None)
+    astra, = [r for r in snapshot["rising"] if r["name"] == "GPT-6 Astra"]
+    assert astra["reason"].startswith("Argon versus rivals compared")
+
+
+def test_quiet_flag_thresholds_and_methodology():
+    w = World()
+    w.day(D, 25)
+    w.article(D, "a.com", e("Atlas"), title="Acme launches Atlas robot model")
+    w.article(D, "b.com", e("Atlas"), title="Atlas robot model from Acme")
+    snapshot = w.snapshot()
+    assert snapshot["quiet"] is False
+    assert snapshot["methodology_version"] == METHODOLOGY_VERSION == "daily-signals-3"
+    assert {k: snapshot["thresholds"][k] for k in ("quiet_items", "one_liner_max", "fold_share",
+                                                    "diffuse_story_min")} == \
+        {"quiet_items": 20, "one_liner_max": 140, "fold_share": 0.5, "diffuse_story_min": 2}
+    assert snapshot["thresholds"]["chip_hard_events"][0] == "model_release"
+    assert json.loads(json.dumps(snapshot)) == snapshot
+    assert payload_hash(w.snapshot()) == payload_hash(snapshot)
+    w.day(D, 19)
+    assert w.snapshot()["quiet"] is True
+    single = World()
+    single.day(D, 25)
+    single.article(D, "a.com", e("Atlas"))
+    assert single.snapshot()["quiet"] is True

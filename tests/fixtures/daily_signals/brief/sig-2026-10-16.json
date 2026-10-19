@@ -1,0 +1,766 @@
+{
+ "report_date": "2026-10-16",
+ "status": "building_history",
+ "methodology_version": "daily-signals-2",
+ "extraction_version": "daily-signals-extract-5",
+ "generated_at": "2026-10-19T11:33:35.924520Z",
+ "novelty_history_days": 71,
+ "comparable_complete_days": 7,
+ "coverage": {
+  "items": 58,
+  "matched": 58,
+  "extracted": 58,
+  "failed": 0,
+  "skipped": 0,
+  "pending": 0,
+  "unmatched": 0
+ },
+ "notes": [],
+ "sections": {
+  "cooling": {
+   "state": "hidden",
+   "note": null
+  },
+  "event_counts": {
+   "state": "ready",
+   "note": null
+  },
+  "new": {
+   "state": "ready",
+   "note": null
+  },
+  "rising": {
+   "state": "spikes_only",
+   "note": "Rising needs two weeks with at least 6 complete days each; showing spikes."
+  },
+  "top_stories": {
+   "state": "ready",
+   "note": null
+  }
+ },
+ "thresholds": {
+  "complete_ratio": 0.9,
+  "confirmed_publishers": 2,
+  "cooling_max": 4,
+  "cooling_min_delta": 3,
+  "cooling_min_previous": 5,
+  "cooling_min_publishers": 2,
+  "cooling_ratio": 0.5,
+  "history_note_days": 30,
+  "links_max": 3,
+  "new_max": 8,
+  "rising_max": 6,
+  "rising_min_current": 4,
+  "rising_min_delta": 3,
+  "rising_min_publishers": 2,
+  "rising_ratio": 1.5,
+  "spike_mean_floor": 0.333,
+  "spike_min_articles": 3,
+  "spike_min_publishers": 2,
+  "spike_min_trailing_days": 3,
+  "spike_ratio": 3.0,
+  "spike_trailing_days": 7,
+  "spike_trailing_min_items": 10,
+  "top_max": 5,
+  "top_min_publishers": 2,
+  "window_days": 7,
+  "window_min_complete": 6
+ },
+ "new": [
+  {
+   "entity_id": 1894,
+   "name": "GPT-Live-1.1",
+   "type": "model",
+   "vendor": "OpenAI",
+   "level": "early",
+   "variant_of": "GPT",
+   "variants": [],
+   "novelty_quote": "GPT-Live-1.1 brings these updates to Voice in ChatGPT, Codex, and dots",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "GPT-Live-1.1",
+     "url": "https://threadreaderapp.com/thread/2110797830361436604.html?utm_source=tldrai",
+     "publisher": "threadreaderapp.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 1870,
+   "name": "Glimpse",
+   "type": "model",
+   "vendor": "Elorian",
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "released its first model on Friday, TechCrunch has exclusively learned. The model, Glimpse, is launching as a research preview",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "Elorian\u2019s first AI model wants to reason with images, not just about them",
+     "url": "https://techcrunch.com/2026/10/16/elorians-first-ai-model-wants-to-reason-with-images-not-just-about-them/",
+     "publisher": "techcrunch.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 2166,
+   "name": "MAI-Base-2",
+   "type": "model",
+   "vendor": "Microsoft",
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "We\u2019ve recently completed pre-training our new state-of-the-art model, MAI-Base-2",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "Inside Microsoft's Frontier Pre-Training Stack",
+     "url": "https://microsoft.ai/news/frontier-pre-training-at-microsoft-ai/?utm_source=tldrai",
+     "publisher": "microsoft.ai"
+    }
+   ]
+  },
+  {
+   "entity_id": 1575,
+   "name": "d1-ultra",
+   "type": "model",
+   "vendor": "Liquid AI",
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "Today, we release d1-ultra, our new multimodal decision model",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "d1-ultra: Introducing the World's Best Decision Model",
+     "url": "https://www.liquid.ai/blog/d1-ultra?utm_source=tldrai",
+     "publisher": "liquid.ai"
+    }
+   ]
+  },
+  {
+   "entity_id": 2319,
+   "name": "Nemotron-pretraining-Indic-v1",
+   "type": "dataset",
+   "vendor": "NVIDIA",
+   "level": "early",
+   "variant_of": "NVIDIA Nemotron",
+   "variants": [],
+   "novelty_quote": "We're excited to introduce Nemotron-pretraining-Indic-v1 approximately 2.8 trillion tokens across 22 Indian languages, releasing soon",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "Scaling Indic Pretraining: 2.8 Trillion Tokens and an Open Data Generation Pipeline",
+     "url": "https://huggingface.co/blog/nvidia/scaling-indic-pretraining",
+     "publisher": "huggingface.co"
+    }
+   ]
+  },
+  {
+   "entity_id": 1937,
+   "name": "Handwired",
+   "type": "technology",
+   "vendor": null,
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "Introducing Handwired: turn your regular JavaScript code into a neural net!",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "Introducing Handwired: JavaScript as Neural Networks",
+     "url": "https://x.com/_chenglou/status/2110557373651931267?utm_source=tldrai",
+     "publisher": "x.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 1721,
+   "name": "Evidence Desk",
+   "type": "product",
+   "vendor": null,
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "Evidence Desk is a browser tool I built with Codex.",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "I Built a Claim-Checker for Writing With Codex. It Passed a Wrong Claim.",
+     "url": "https://towardsdatascience.com/i-built-a-claim-checker-for-writing-with-codex-it-passed-a-wrong-claim/",
+     "publisher": "towardsdatascience.com"
+    }
+   ]
+  }
+ ],
+ "top_stories": [
+  {
+   "label": "Introducing Reflection Beam: an open-weight model for agentic coding on AWS",
+   "event_type": "model_release",
+   "articles": 4,
+   "publishers": 4,
+   "entities": [
+    "Beam"
+   ],
+   "links": [
+    {
+     "title": "Welcome Beam: a 501B open model you can own, customize, and scale",
+     "url": "https://huggingface.co/blog/reflection-beam",
+     "publisher": "huggingface.co"
+    },
+    {
+     "title": "Reflection's Beam aims to undercut Chinese open models with fewer tokens, not cheaper tokens",
+     "url": "https://venturebeat.com/technology/reflections-beam-aims-to-undercut-chinese-open-models-with-fewer-tokens-not-cheaper-tokens",
+     "publisher": "venturebeat.com"
+    },
+    {
+     "title": "Beam: Efficient reasoning for coding and agentic workloads",
+     "url": "https://www.baseten.co/blog/reflection-beam-launch/",
+     "publisher": "baseten.co"
+    }
+   ]
+  },
+  {
+   "label": "Muse Spark Open",
+   "event_type": "model_release",
+   "articles": 2,
+   "publishers": 2,
+   "entities": [
+    "Muse Spark Open"
+   ],
+   "links": [
+    {
+     "title": "Muse Spark Open",
+     "url": "https://research.meta.ai/blog/muse-spark-open?utm_source=tldrai",
+     "publisher": "meta.ai"
+    },
+    {
+     "title": "Meta turns Mac into an AI supercomputer",
+     "url": "https://therundownai.beehiiv.com/p/meta-turns-mac-into-an-ai-supercomputer",
+     "publisher": "beehiiv.com"
+    }
+   ]
+  },
+  {
+   "label": "Microsoft Surface Laptop Ultra Review: The First Real AI PC",
+   "event_type": "product_launch",
+   "articles": 2,
+   "publishers": 2,
+   "entities": [
+    "Surface Laptop Ultra"
+   ],
+   "links": [
+    {
+     "title": "The Surface Laptop Ultra delivers on most of Microsoft's promises",
+     "url": "https://arstechnica.com/reviews/2026/10/the-surface-laptop-ultra-delivers-on-most-of-microsofts-promises/",
+     "publisher": "arstechnica.com"
+    },
+    {
+     "title": "Microsoft Surface Laptop Ultra Review: The First Real AI PC",
+     "url": "https://www.wired.com/review/microsoft-surface-laptop-ultra/",
+     "publisher": "wired.com"
+    }
+   ]
+  },
+  {
+   "label": "NVIDIA RTX Spark and Kilo by Anaconda: New Device to Put Local AI to Work",
+   "event_type": "product_launch",
+   "articles": 2,
+   "publishers": 2,
+   "entities": [
+    "RTX Spark"
+   ],
+   "links": [
+    {
+     "title": "Nvidia's RTX Spark Laptops Are Off to a Good Start, But Performance Is Mixed",
+     "url": "https://www.extremetech.com/computing/nvidias-rtx-spark-laptops-are-off-to-a-good-start-but-performance-is-mixed",
+     "publisher": "extremetech.com"
+    },
+    {
+     "title": "NVIDIA RTX Spark and Kilo by Anaconda: New Device to Put Local AI to Work",
+     "url": "https://www.anaconda.com/blog/nvidia-rtx-spark-kilo-desktop-local-ai",
+     "publisher": "anaconda.com"
+    }
+   ]
+  }
+ ],
+ "rising": [
+  {
+   "entity_id": 730,
+   "name": "Hugging Face",
+   "type": "company",
+   "vendor": null,
+   "current_7d": null,
+   "previous_7d": null,
+   "expected_7d": null,
+   "today": 6,
+   "trailing_mean": 2.0,
+   "spike": true,
+   "publishers": 6,
+   "links": [
+    {
+     "title": "Anthropic Expanded Independent Access to Its AI Safety Work",
+     "url": "https://www.anthropic.com/news/an-update-on-independent-evaluators?utm_source=tldrai",
+     "publisher": "anthropic.com"
+    },
+    {
+     "title": "Maybe Chatbots Shouldn\u2019t Get to Say \u2018I\u2019 or \u2018Me\u2019",
+     "url": "https://www.wired.com/story/maybe-chatbots-shouldnt-get-to-say-i-or-me/",
+     "publisher": "wired.com"
+    },
+    {
+     "title": "Introducing Reflection Beam: an open-weight model for agentic coding on AWS",
+     "url": "https://aws.amazon.com/blogs/machine-learning/introducing-reflection-beam-an-open-weight-model-for-agentic-coding-on-aws/",
+     "publisher": "amazon.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 1349,
+   "name": "Beam",
+   "type": "model",
+   "vendor": "Reflection",
+   "current_7d": null,
+   "previous_7d": null,
+   "expected_7d": null,
+   "today": 4,
+   "trailing_mean": 0.0,
+   "spike": true,
+   "publishers": 4,
+   "links": [
+    {
+     "title": "Welcome Beam: a 501B open model you can own, customize, and scale",
+     "url": "https://huggingface.co/blog/reflection-beam",
+     "publisher": "huggingface.co"
+    },
+    {
+     "title": "Reflection's Beam aims to undercut Chinese open models with fewer tokens, not cheaper tokens",
+     "url": "https://venturebeat.com/technology/reflections-beam-aims-to-undercut-chinese-open-models-with-fewer-tokens-not-cheaper-tokens",
+     "publisher": "venturebeat.com"
+    },
+    {
+     "title": "Beam: Efficient reasoning for coding and agentic workloads",
+     "url": "https://www.baseten.co/blog/reflection-beam-launch/",
+     "publisher": "baseten.co"
+    }
+   ]
+  },
+  {
+   "entity_id": 2622,
+   "name": "RTX Spark",
+   "type": "hardware",
+   "vendor": "Nvidia",
+   "current_7d": null,
+   "previous_7d": null,
+   "expected_7d": null,
+   "today": 4,
+   "trailing_mean": 0.25,
+   "spike": true,
+   "publishers": 4,
+   "links": [
+    {
+     "title": "The Surface Laptop Ultra delivers on most of Microsoft's promises",
+     "url": "https://arstechnica.com/reviews/2026/10/the-surface-laptop-ultra-delivers-on-most-of-microsofts-promises/",
+     "publisher": "arstechnica.com"
+    },
+    {
+     "title": "Nvidia's RTX Spark Laptops Are Off to a Good Start, But Performance Is Mixed",
+     "url": "https://www.extremetech.com/computing/nvidias-rtx-spark-laptops-are-off-to-a-good-start-but-performance-is-mixed",
+     "publisher": "extremetech.com"
+    },
+    {
+     "title": "NVIDIA RTX Spark and Kilo by Anaconda: New Device to Put Local AI to Work",
+     "url": "https://www.anaconda.com/blog/nvidia-rtx-spark-kilo-desktop-local-ai",
+     "publisher": "anaconda.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 3422,
+   "name": "Reflection",
+   "type": "company",
+   "vendor": null,
+   "current_7d": null,
+   "previous_7d": null,
+   "expected_7d": null,
+   "today": 4,
+   "trailing_mean": 0.0,
+   "spike": true,
+   "publishers": 4,
+   "links": [
+    {
+     "title": "Welcome Beam: a 501B open model you can own, customize, and scale",
+     "url": "https://huggingface.co/blog/reflection-beam",
+     "publisher": "huggingface.co"
+    },
+    {
+     "title": "Reflection's Beam aims to undercut Chinese open models with fewer tokens, not cheaper tokens",
+     "url": "https://venturebeat.com/technology/reflections-beam-aims-to-undercut-chinese-open-models-with-fewer-tokens-not-cheaper-tokens",
+     "publisher": "venturebeat.com"
+    },
+    {
+     "title": "Beam: Efficient reasoning for coding and agentic workloads",
+     "url": "https://www.baseten.co/blog/reflection-beam-launch/",
+     "publisher": "baseten.co"
+    }
+   ]
+  },
+  {
+   "entity_id": 671,
+   "name": "DeepSeek",
+   "type": "company",
+   "vendor": null,
+   "current_7d": null,
+   "previous_7d": null,
+   "expected_7d": null,
+   "today": 3,
+   "trailing_mean": 0.0,
+   "spike": true,
+   "publishers": 2,
+   "links": [
+    {
+     "title": "Mo' turns, mo' problems",
+     "url": "https://ianbarber.blog/2026/10/15/mo-turns-mo-problems/?utm_source=tldrai",
+     "publisher": "ianbarber.blog"
+    },
+    {
+     "title": "Reflection's Beam aims to undercut Chinese open models with fewer tokens, not cheaper tokens",
+     "url": "https://venturebeat.com/technology/reflections-beam-aims-to-undercut-chinese-open-models-with-fewer-tokens-not-cheaper-tokens",
+     "publisher": "venturebeat.com"
+    },
+    {
+     "title": "Up to 60% of GPU compute goes to recomputing context. Flash storage can put that capacity back to work",
+     "url": "https://venturebeat.com/infrastructure/up-to-60-of-gpu-compute-goes-to-recomputing-context-flash-storage-can-put-that-capacity-back-to-work",
+     "publisher": "venturebeat.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 2780,
+   "name": "Surface Laptop Ultra",
+   "type": "hardware",
+   "vendor": "Microsoft",
+   "current_7d": null,
+   "previous_7d": null,
+   "expected_7d": null,
+   "today": 3,
+   "trailing_mean": 0.0,
+   "spike": true,
+   "publishers": 3,
+   "links": [
+    {
+     "title": "The Surface Laptop Ultra delivers on most of Microsoft's promises",
+     "url": "https://arstechnica.com/reviews/2026/10/the-surface-laptop-ultra-delivers-on-most-of-microsofts-promises/",
+     "publisher": "arstechnica.com"
+    },
+    {
+     "title": "Microsoft Surface Laptop Ultra Review: The First Real AI PC",
+     "url": "https://www.wired.com/review/microsoft-surface-laptop-ultra/",
+     "publisher": "wired.com"
+    },
+    {
+     "title": "A week with RTX Spark: everything we\u2019ve learned using Nvidia\u2019s new laptops",
+     "url": "https://www.theverge.com/tech/1012748/nvidia-rtx-spark-windows-arm-laptops-asus-hp-lenovo-impressions",
+     "publisher": "theverge.com"
+    }
+   ]
+  }
+ ],
+ "cooling": [],
+ "event_counts": [
+  {
+   "event_type": "model_release",
+   "label": "model releases",
+   "stories": 10,
+   "articles": 14,
+   "links": [
+    {
+     "title": "Welcome Beam: a 501B open model you can own, customize, and scale",
+     "url": "https://huggingface.co/blog/reflection-beam",
+     "publisher": "huggingface.co"
+    },
+    {
+     "title": "Muse Spark Open",
+     "url": "https://research.meta.ai/blog/muse-spark-open?utm_source=tldrai",
+     "publisher": "meta.ai"
+    },
+    {
+     "title": "FLUX 3 Image Klein",
+     "url": "https://bfl.ai/blog/flux-3-image-klein?utm_source=tldrai",
+     "publisher": "bfl.ai"
+    }
+   ]
+  },
+  {
+   "event_type": "product_launch",
+   "label": "product launches",
+   "stories": 9,
+   "articles": 11,
+   "links": [
+    {
+     "title": "The Surface Laptop Ultra delivers on most of Microsoft's promises",
+     "url": "https://arstechnica.com/reviews/2026/10/the-surface-laptop-ultra-delivers-on-most-of-microsofts-promises/",
+     "publisher": "arstechnica.com"
+    },
+    {
+     "title": "Nvidia's RTX Spark Laptops Are Off to a Good Start, But Performance Is Mixed",
+     "url": "https://www.extremetech.com/computing/nvidias-rtx-spark-laptops-are-off-to-a-good-start-but-performance-is-mixed",
+     "publisher": "extremetech.com"
+    },
+    {
+     "title": "How an Anthropic Japan BDR runs his day with a fleet of Claude agents",
+     "url": "https://claude.com/resources/articles/how-an-anthropic-japan-business-development-representative-runs-his-day",
+     "publisher": "claude.com"
+    }
+   ]
+  },
+  {
+   "event_type": "partnership",
+   "label": "partnerships",
+   "stories": 1,
+   "articles": 1,
+   "links": [
+    {
+     "title": "Anthropic Expanded Independent Access to Its AI Safety Work",
+     "url": "https://www.anthropic.com/news/an-update-on-independent-evaluators?utm_source=tldrai",
+     "publisher": "anthropic.com"
+    }
+   ]
+  },
+  {
+   "event_type": "hardware",
+   "label": "hardware",
+   "stories": 1,
+   "articles": 1,
+   "links": [
+    {
+     "title": "A week with RTX Spark: everything we\u2019ve learned using Nvidia\u2019s new laptops",
+     "url": "https://www.theverge.com/tech/1012748/nvidia-rtx-spark-windows-arm-laptops-asus-hp-lenovo-impressions",
+     "publisher": "theverge.com"
+    }
+   ]
+  },
+  {
+   "event_type": "regulation_policy",
+   "label": "regulation & policy",
+   "stories": 3,
+   "articles": 3,
+   "links": [
+    {
+     "title": "AI Weekly Issue #538: The FTC wants OpenAI's and Anthropic's safety incident records",
+     "url": "https://aiweekly.co/issues/the-ftc-wants-openais-and-anthropics-safety-incident-records",
+     "publisher": "aiweekly.co"
+    },
+    {
+     "title": "Meta may use sweeping new commercial TOS to avoid millions in AI licensing fees",
+     "url": "https://arstechnica.com/tech-policy/2026/10/meta-may-use-sweeping-new-commercial-tos-to-avoid-millions-in-ai-licensing-fees/",
+     "publisher": "arstechnica.com"
+    },
+    {
+     "title": "China plans to tighten export controls on open-weight models and 23 key AI technologies",
+     "url": "https://the-decoder.com/china-plans-to-tighten-export-controls-on-open-weight-models-and-23-key-ai-technologies/",
+     "publisher": "the-decoder.com"
+    }
+   ]
+  },
+  {
+   "event_type": "legal",
+   "label": "legal",
+   "stories": 1,
+   "articles": 1,
+   "links": [
+    {
+     "title": "\u201cthegentlemanpervert\u201d producing AI CSAM is a NJ prosecutor, say cops",
+     "url": "https://arstechnica.com/tech-policy/2026/10/thegentlemanpervert-producing-ai-csam-is-a-nj-prosecutor-say-cops/",
+     "publisher": "arstechnica.com"
+    }
+   ]
+  },
+  {
+   "event_type": "security_incident",
+   "label": "security incidents",
+   "stories": 4,
+   "articles": 4,
+   "links": [
+    {
+     "title": "17 of 40 teams that say they enforce AI agent permissions still share the credentials behind them",
+     "url": "https://venturebeat.com/security/17-of-40-teams-that-say-they-enforce-ai-agent-permissions-still-share-the-credentials-behind-them",
+     "publisher": "venturebeat.com"
+    },
+    {
+     "title": "India becomes the latest country to report rogue AI agent activity",
+     "url": "https://techcrunch.com/2026/10/16/india-becomes-the-latest-country-to-report-rogue-ai-agent-activity/",
+     "publisher": "techcrunch.com"
+    },
+    {
+     "title": "Bug turns one of the biggest fears about Ray-Ban Meta smart glasses into reality",
+     "url": "https://arstechnica.com/gadgets/2026/10/ray-ban-meta-smart-glasses-found-recording-audio-without-wearers-consent/",
+     "publisher": "arstechnica.com"
+    }
+   ]
+  },
+  {
+   "event_type": "people_move",
+   "label": "people moves",
+   "stories": 1,
+   "articles": 1,
+   "links": [
+    {
+     "title": "An Nvidia insider-turned-VC on why robotics hasn\u2019t hit its ChatGPT moment, yet",
+     "url": "https://techcrunch.com/video/a-nvidia-insider-turned-vc-on-why-robotics-hasnt-hit-its-chatgpt-moment-yet/",
+     "publisher": "techcrunch.com"
+    }
+   ]
+  },
+  {
+   "event_type": "benchmark_result",
+   "label": "benchmark results",
+   "stories": 1,
+   "articles": 1,
+   "links": [
+    {
+     "title": "Open weight takes 71.5% of tokens and 23% of spend",
+     "url": "https://vercel.com/blog/ai-gateway-production-index-october-2026?utm_source=tldrai",
+     "publisher": "vercel.com"
+    }
+   ]
+  },
+  {
+   "event_type": "research",
+   "label": "research",
+   "stories": 5,
+   "articles": 5,
+   "links": [
+    {
+     "title": "Mo' turns, mo' problems",
+     "url": "https://ianbarber.blog/2026/10/15/mo-turns-mo-problems/?utm_source=tldrai",
+     "publisher": "ianbarber.blog"
+    },
+    {
+     "title": "JEV as a Hallucination Filter: Let the LLM Write, Let JEV Check",
+     "url": "https://www.analyticsvidhya.com/blog/2026/10/rag-hallucination-filter-using-jev/",
+     "publisher": "analyticsvidhya.com"
+    },
+    {
+     "title": "How AI is helping cities tackle invisible pollution",
+     "url": "https://aihub.org/2026/10/16/how-ai-is-helping-cities-tackle-invisible-pollution/",
+     "publisher": "aihub.org"
+    }
+   ]
+  },
+  {
+   "event_type": "opinion_analysis",
+   "label": "analysis",
+   "stories": 11,
+   "articles": 11,
+   "links": [
+    {
+     "title": "How Codex Happened",
+     "url": "https://every.to/p/how-codex-happened?utm_source=tldrai",
+     "publisher": "every.to"
+    },
+    {
+     "title": "Sandboxes are dead",
+     "url": "https://e2b.dev/resources/sandboxes-are-dead",
+     "publisher": "e2b.dev"
+    },
+    {
+     "title": "Even Benchmark thinks AI is eroding the venture pact against backing rivals",
+     "url": "https://techcrunch.com/2026/10/15/even-benchmark-thinks-ai-is-eroding-the-venture-pact-against-backing-rivals/",
+     "publisher": "techcrunch.com"
+    }
+   ]
+  },
+  {
+   "event_type": "other",
+   "label": "other",
+   "stories": 5,
+   "articles": 5,
+   "links": [
+    {
+     "title": "AI-Generated Hot Girls Are Ripping Off Comedians to Boost Their Horny Content",
+     "url": "https://www.wired.com/story/ai-generated-hot-girls-are-ripping-off-comedians-to-boost-their-horny-content/",
+     "publisher": "wired.com"
+    },
+    {
+     "title": "5 Best Resources to Learn About World Models in 2026",
+     "url": "https://www.kdnuggets.com/5-best-resources-to-learn-about-world-models-in-2026",
+     "publisher": "kdnuggets.com"
+    },
+    {
+     "title": "Waymo\u2019s robotaxis are headed to Canada",
+     "url": "https://techcrunch.com/2026/10/16/waymos-robotaxis-are-headed-to-canada/",
+     "publisher": "techcrunch.com"
+    }
+   ]
+  }
+ ],
+ "article_event_types": {
+  "https://aihub.org/2026/10/16/how-ai-is-helping-cities-tackle-invisible-pollution/": "research",
+  "https://aiweekly.co/issues/the-ftc-wants-openais-and-anthropics-safety-incident-records": "regulation_policy",
+  "https://arstechnica.com/gadgets/2026/10/ray-ban-meta-smart-glasses-found-recording-audio-without-wearers-consent/": "security_incident",
+  "https://arstechnica.com/reviews/2026/10/the-surface-laptop-ultra-delivers-on-most-of-microsofts-promises/": "product_launch",
+  "https://arstechnica.com/security/2026/10/openai-models-hacked-a-crypto-wallet-and-breached-more-websites/": "security_incident",
+  "https://arstechnica.com/tech-policy/2026/10/meta-may-use-sweeping-new-commercial-tos-to-avoid-millions-in-ai-licensing-fees/": "regulation_policy",
+  "https://arstechnica.com/tech-policy/2026/10/thegentlemanpervert-producing-ai-csam-is-a-nj-prosecutor-say-cops/": "legal",
+  "https://aws.amazon.com/blogs/machine-learning/building-trust-in-ai-agents-a-production-ready-evaluation-framework-with-amazon-bedrock-agentcore/": "other",
+  "https://aws.amazon.com/blogs/machine-learning/introducing-reflection-beam-an-open-weight-model-for-agentic-coding-on-aws/": "model_release",
+  "https://bfl.ai/blog/flux-3-image-klein?utm_source=tldrai": "model_release",
+  "https://claude.com/resources/articles/how-an-anthropic-japan-business-development-representative-runs-his-day": "product_launch",
+  "https://claude.dev/blog/solving-code-review-at-anthropic/": "product_launch",
+  "https://dify.ai/blog/ai-agent-or-workflow-how-to-choose-the-right-approach": "opinion_analysis",
+  "https://e2b.dev/resources/sandboxes-are-dead": "opinion_analysis",
+  "https://emergent.sh/learn/best-database-app-builder": "opinion_analysis",
+  "https://emergent.sh/learn/what-is-a-client-dashboard": "other",
+  "https://every.to/p/how-codex-happened?utm_source=tldrai": "opinion_analysis",
+  "https://huggingface.co/blog/nvidia/scaling-indic-pretraining": "model_release",
+  "https://huggingface.co/blog/reflection-beam": "model_release",
+  "https://ianbarber.blog/2026/10/15/mo-turns-mo-problems/?utm_source=tldrai": "research",
+  "https://microsoft.ai/news/frontier-pre-training-at-microsoft-ai/?utm_source=tldrai": "model_release",
+  "https://research.google/blog/grounding-ai-agents-in-biological-reality-building-blocks-for-autonomous-wet-labs/": "research",
+  "https://research.meta.ai/blog/muse-spark-open?utm_source=tldrai": "model_release",
+  "https://simonwillison.net/2026/Oct/16/code-review/": "opinion_analysis",
+  "https://techcrunch.com/2026/10/15/even-benchmark-thinks-ai-is-eroding-the-venture-pact-against-backing-rivals/": "opinion_analysis",
+  "https://techcrunch.com/2026/10/16/elorians-first-ai-model-wants-to-reason-with-images-not-just-about-them/": "model_release",
+  "https://techcrunch.com/2026/10/16/india-becomes-the-latest-country-to-report-rogue-ai-agent-activity/": "security_incident",
+  "https://techcrunch.com/2026/10/16/jev-is-vercels-fastest-adopted-ai-model-ever/": "model_release",
+  "https://techcrunch.com/2026/10/16/mark-wahlberg-on-using-ai-in-film-the-right-way-and-being-open-to-an-ai-clone-carrying-on-his-legacy/": "opinion_analysis",
+  "https://techcrunch.com/2026/10/16/replits-ceo-says-the-future-of-work-is-the-self-driving-company/": "opinion_analysis",
+  "https://techcrunch.com/2026/10/16/waymos-robotaxis-are-headed-to-canada/": "other",
+  "https://techcrunch.com/video/a-nvidia-insider-turned-vc-on-why-robotics-hasnt-hit-its-chatgpt-moment-yet/": "people_move",
+  "https://the-decoder.com/chatgpt-becomes-a-full-chrome-browser-assistant-that-reads-and-acts-on-your-open-tabs/": "product_launch",
+  "https://the-decoder.com/china-plans-to-tighten-export-controls-on-open-weight-models-and-23-key-ai-technologies/": "regulation_policy",
+  "https://the-decoder.com/googles-gemini-4-argon-is-closer-to-the-ai-frontier-than-any-google-model-in-months/": "model_release",
+  "https://the-decoder.com/openais-new-rosalind-academic-plan-gives-research-labs-up-to-30-free-seats-for-a-year/": "product_launch",
+  "https://therundownai.beehiiv.com/p/meta-turns-mac-into-an-ai-supercomputer": "model_release",
+  "https://threadreaderapp.com/thread/2110797830361436604.html?utm_source=tldrai": "model_release",
+  "https://towardsdatascience.com/do-you-still-own-the-code-your-ai-wrote-i-built-codeownership-to-measure-it/": "product_launch",
+  "https://towardsdatascience.com/i-built-a-claim-checker-for-writing-with-codex-it-passed-a-wrong-claim/": "product_launch",
+  "https://venturebeat.com/infrastructure/up-to-60-of-gpu-compute-goes-to-recomputing-context-flash-storage-can-put-that-capacity-back-to-work": "opinion_analysis",
+  "https://venturebeat.com/orchestration/a-new-framework-teaches-ai-models-to-audit-and-repair-each-others-reasoning-improving-accuracy": "research",
+  "https://venturebeat.com/orchestration/gartner-says-agent-costs-will-rise-fivefold-by-2028-even-as-tokens-get-cheaper-here-is-how-to-keep-them-in-check": "opinion_analysis",
+  "https://venturebeat.com/security/17-of-40-teams-that-say-they-enforce-ai-agent-permissions-still-share-the-credentials-behind-them": "security_incident",
+  "https://venturebeat.com/technology/reflections-beam-aims-to-undercut-chinese-open-models-with-fewer-tokens-not-cheaper-tokens": "model_release",
+  "https://vercel.com/blog/ai-gateway-production-index-october-2026?utm_source=tldrai": "benchmark_result",
+  "https://www.anaconda.com/blog/nvidia-rtx-spark-kilo-desktop-local-ai": "product_launch",
+  "https://www.analyticsvidhya.com/blog/2026/10/rag-hallucination-filter-using-jev/": "research",
+  "https://www.anthropic.com/news/an-update-on-independent-evaluators?utm_source=tldrai": "partnership",
+  "https://www.baseten.co/blog/reflection-beam-launch/": "model_release",
+  "https://www.extremetech.com/computing/nvidias-rtx-spark-laptops-are-off-to-a-good-start-but-performance-is-mixed": "product_launch",
+  "https://www.kdnuggets.com/5-best-resources-to-learn-about-world-models-in-2026": "other",
+  "https://www.liquid.ai/blog/d1-ultra?utm_source=tldrai": "model_release",
+  "https://www.theverge.com/tech/1012748/nvidia-rtx-spark-windows-arm-laptops-asus-hp-lenovo-impressions": "hardware",
+  "https://www.wired.com/review/microsoft-surface-laptop-ultra/": "product_launch",
+  "https://www.wired.com/story/ai-generated-hot-girls-are-ripping-off-comedians-to-boost-their-horny-content/": "other",
+  "https://www.wired.com/story/maybe-chatbots-shouldnt-get-to-say-i-or-me/": "opinion_analysis",
+  "https://x.com/_chenglou/status/2110557373651931267?utm_source=tldrai": "product_launch"
+ }
+}

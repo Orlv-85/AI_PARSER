@@ -1,0 +1,162 @@
+{
+ "2026-10-12/Clef-omni": {
+  "one_liner": "Cloudflare released Clef-omni, which accepts audio, video, image, and text input, and claims it is built on a...",
+  "source": "summary"
+ },
+ "2026-10-12/Emerging Market Quadrant for AI Application Security \u2014 Startup Vendors": {
+  "one_liner": "Gartner has published its first Emerging Market Quadrant for AI Application Security - Startup Vendors",
+  "source": "quote"
+ },
+ "2026-10-12/Multi-Agent Self-Supervision": {
+  "one_liner": "Researchers from Sakana AI and UC Berkeley have introduced \"Multi-Agent Self-Supervision\" (MASS)",
+  "source": "quote"
+ },
+ "2026-10-12/Muse Wonder": {
+  "one_liner": "Meta launched two new AI models, Muse Wonder and Muse Wonder Full, claiming they rival leading models from OpenAI and Anthropic based on...",
+  "source": "summary"
+ },
+ "2026-10-12/Muse Wonder Full": {
+  "one_liner": "Meta launched two new AI models, Muse Wonder and Muse Wonder Full, claiming they rival leading models from OpenAI and Anthropic based on...",
+  "source": "summary"
+ },
+ "2026-10-12/SemIf": {
+  "one_liner": "extend the same runtime with SemIf, formerly OpenJev, which returns probabilities over declared options",
+  "source": "quote"
+ },
+ "2026-10-12/StudentSimEval": {
+  "one_liner": "This research also introduces StudentSimEval, a benchmark and evaluation protocol",
+  "source": "quote"
+ },
+ "2026-10-12/VisionQ": {
+  "one_liner": "A new benchmark called VisionQ asks AI models to judge computer vision images on one named quality",
+  "source": "quote"
+ },
+ "2026-10-13/Dynamic Model Escalation": {
+  "one_liner": "today, we're announcing Dynamic Model Escalation, a critical capability in Centor",
+  "source": "quote"
+ },
+ "2026-10-13/Game Finder": {
+  "one_liner": "The new Game Finder feature leans on all the usage data Google's app platform has hoovered up over the years",
+  "source": "quote"
+ },
+ "2026-10-13/Helix World": {
+  "one_liner": "Today we are introducing Helix World, a real-time interactive audio-visual world model",
+  "source": "quote"
+ },
+ "2026-10-13/Joule Assistants": {
+  "one_liner": "SAP's new and expanded Joule Assistants",
+  "source": "quote"
+ },
+ "2026-10-13/Nemotron 3.5 Bolt 74B-A9B 24GB": {
+  "one_liner": "The NVIDIA Nemotron 3.5 Bolt 74B model, purpose-built for agentic AI on RTX Spark, releases on Thursday, Oct. 15.",
+  "source": "quote"
+ },
+ "2026-10-13/Priming": {
+  "one_liner": "We introduce priming, a method that leverages pretrained Transformer weights as a starting point",
+  "source": "quote"
+ },
+ "2026-10-13/Satlyt": {
+  "one_liner": "So he left SpaceX and co-founded Satlyt, a new company",
+  "source": "quote"
+ },
+ "2026-10-13/Xbox Labs": {
+  "one_liner": "Xbox CEO Asha Sharma says Microsoft formed Xbox Labs, a small group of game makers, engineers and scientists, to explore emerging...",
+  "source": "summary"
+ },
+ "2026-10-14/CedarDB Cloud": {
+  "one_liner": "CedarDB announced limited availability of CedarDB Cloud on Wednesday at TechCrunch Disrupt, after beta testing with waitlist users.",
+  "source": "summary"
+ },
+ "2026-10-14/Deep Review": {
+  "one_liner": "Google Research scientists say Deep Review is launching publicly after pilots across 16,000+ submissions at STOC, ICML, NeurIPS, and ICLR.",
+  "source": "summary"
+ },
+ "2026-10-14/Epic Games Launcher": {
+  "one_liner": "Epic claims its new vibe-coded Epic Games Launcher is faster and more responsive than the current one.",
+  "source": "summary"
+ },
+ "2026-10-14/Grok Voice 3.0": {
+  "one_liner": "Today, we're announcing Grok Voice 3.0, the world's most intelligent speech-to-speech model.",
+  "source": "quote"
+ },
+ "2026-10-14/HiRO-ACEv2": {
+  "one_liner": "We introduce HiRO-ACEv2, the newest update to our High Resolution Output Ai2 Climate Emulator (HiRO-ACE) system.",
+  "source": "quote"
+ },
+ "2026-10-14/HiROv2": {
+  "one_liner": "The biggest change in HiRO-ACEv2 is the new downscaling model, HiROv2",
+  "source": "quote"
+ },
+ "2026-10-14/LendRecoup": {
+  "one_liner": "LendRecoup is Pareto efficient and credit fair",
+  "source": "quote"
+ },
+ "2026-10-14/Orion-1": {
+  "one_liner": "Artemis Security launched Orion-1, an AI model it says autonomously investigates and responds to corporate network attacks...",
+  "source": "summary"
+ },
+ "2026-10-15/Bee Eclipse": {
+  "one_liner": "Bee announced the Bee Frontier and Bee Eclipse, priced at $74.99 and $99.99 respectively, with the Eclipse competing against devices...",
+  "source": "summary"
+ },
+ "2026-10-15/Bee Frontier": {
+  "one_liner": "Bee announced the Bee Frontier and Bee Eclipse, priced at $74.99 and $99.99 respectively, with the Eclipse competing against devices...",
+  "source": "summary"
+ },
+ "2026-10-15/DolphinBench": {
+  "one_liner": "A new test called DolphinBench checks whether an AI assistant's memory helps it get things done.",
+  "source": "quote"
+ },
+ "2026-10-15/FLUX 3 Image Klein": {
+  "one_liner": "Black Forest Labs released FLUX 3 Image Klein, a 5.6-billion-parameter open-weights model for text-to-image generation, image editing...",
+  "source": "summary"
+ },
+ "2026-10-15/Granite-Switch-4.1-8B": {
+  "one_liner": "Granite-Switch-4.1-8B and -30B are released with \"batteries included\"",
+  "source": "quote"
+ },
+ "2026-10-15/Muse Spark Open": {
+  "one_liner": "the newly released Muse Spark Open (816 B)",
+  "source": "quote"
+ },
+ "2026-10-15/Nemotron 3.5 Super VL": {
+  "one_liner": "NVIDIA released Nemotron 3.5 Super VL, an open 120-billion-parameter model, plus two edge Bolt models, with Bolt E4B due Oct. 23.",
+  "source": "summary"
+ },
+ "2026-10-15/TheoPhysEval": {
+  "one_liner": "Thirty-five researchers from institutions including the International Centre for Theoretical Sciences (ICTS), Harvard University, KU...",
+  "source": "quote"
+ },
+ "2026-10-16/Evidence Desk": {
+  "one_liner": "Evidence Desk is a browser tool I built with Codex.",
+  "source": "quote"
+ },
+ "2026-10-16/GPT-Live-1.1": {
+  "one_liner": "GPT-Live-1.1 brings these updates to Voice in ChatGPT, Codex, and dots",
+  "source": "quote"
+ },
+ "2026-10-16/Glimpse": {
+  "one_liner": "Elorian released its first model, Glimpse, as a research preview with API access and a waitlist-only chat interface.",
+  "source": "summary"
+ },
+ "2026-10-16/Handwired": {
+  "one_liner": "Cheng Lou introduced Handwired, a toy project that turns regular JavaScript code into a neural net with no training, exact outputs, and...",
+  "source": "summary"
+ },
+ "2026-10-16/MAI-Base-2": {
+  "one_liner": "Microsoft says MAI-Base-2 is an MoE foundation model with 80 billion active and 2.8 trillion total parameters.",
+  "source": "summary"
+ },
+ "2026-10-16/Nemotron-pretraining-Indic-v1": {
+  "one_liner": "We're excited to introduce Nemotron-pretraining-Indic-v1 approximately 2.8 trillion tokens across 22 Indian languages, releasing soon",
+  "source": "quote"
+ },
+ "2026-10-16/d1-ultra": {
+  "one_liner": "Today, we release d1-ultra, our new multimodal decision model",
+  "source": "quote"
+ },
+ "2026-10-17/Deepseek-V4.1-Flash-1017": {
+  "one_liner": "Deepseek has released Deepseek-V4.1-Flash-1017 on its platforms and as an open-weight model on Hugging Face and ModelScope",
+  "source": "quote"
+ }
+}

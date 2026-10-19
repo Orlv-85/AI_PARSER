@@ -10,11 +10,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import get_settings
+from app.core.daily_signals_brief import HARD_EVENTS
 from app.core.daily_signals_compute import EVENT_LABELS
-from app.storage.models_sql import Base, DailySignalReport
+from app.storage.models_sql import Base, DailySignalBrief, DailySignalReport
 from app.storage.repos import NewsDigestRepo
 from app.web.app import create_app
-from app.web.signals_view import SINGULAR, event_label
+from app.web.signals_view import AI_NOTE, SINGULAR, event_label
 
 
 def test_public_digest_page_renders_digest_shell_with_yesterday_selected(
@@ -178,7 +179,7 @@ SIGNALS: dict[str, Any] = {
 }
 
 
-def _signals_client(monkeypatch, tmp_path, payload=None, *, broken=False):
+def _signals_client(monkeypatch, tmp_path, payload=None, *, broken=False, brief=None):
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()
     engine = create_engine(f"sqlite:///{tmp_path}/signals-page.db", future=True)
@@ -191,6 +192,12 @@ def _signals_client(monkeypatch, tmp_path, payload=None, *, broken=False):
                 extraction_version="e", status=payload["status"], payload_hash="x" * 64,
                 thresholds="{}", coverage="{}", payload=json.dumps(payload),
                 created_at=datetime.now(UTC), updated_at=datetime.now(UTC)))
+            if brief is not None:
+                session.add(DailySignalBrief(
+                    report_date=datetime(2026, 10, 16).date(), brief_version="b", model="m",
+                    input_hash="h", status="ok", reason=None,
+                    payload=brief if isinstance(brief, str) else json.dumps(brief),
+                    created_at=datetime.now(UTC), updated_at=datetime.now(UTC)))
             session.commit()
     web = import_module("app.web.app")
     monkeypatch.setattr(web, "create_all", lambda: Base.metadata.create_all(bind=engine))
@@ -207,14 +214,16 @@ def test_signals_block_renders_escaped_states_and_links(monkeypatch, tmp_path) -
     html = _signals_client(monkeypatch, tmp_path, SIGNALS).get("/?date=2026-10-16").text
     block = html.split('id="daily-signals-body">', 1)[1].split("</section>\n", 1)[0]
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in block and "<script>alert" not in block
-    assert "early signal" in block and "variant of Muse Spark" in block
+    # 007 D3: no per-item badge; a single-source item is muted with "via <publisher>".
+    assert "early signal" not in block and "variant of Muse Spark" in block
+    assert '<li class="signal-muted">' in block and "via a.com" in block
     assert "also: Muse Spark Open 8B" in block
     assert 'Source says: "Today we launch &lt;b&gt;it&lt;/b&gt;"' in block
     assert 'href="https://a.com/x"' in block and "javascript:" not in block
     assert "1 model release<" in block and "2 funding rounds" in block
     assert "History: 6 complete days." in block
     assert "<h3>Spikes</h3>" in block and "today 4 vs 0.25/day" in block
-    assert "4 sources &middot; model release" in block
+    assert "4 outlets &middot; model release" in block
     assert "Cooling" not in block
     assert 'id="weekly-analytics-preview"' in html
     assert html.index('id="daily-signals"') < html.index('class="digest-shell"')
@@ -317,3 +326,138 @@ def test_signals_reload_on_date_change_independent_of_digest() -> None:
     assert load_signals.index("SIGNALS_LOADING") < load_signals.index("fetch(")
     assert "SIGNALS_ERROR" in load_signals
     assert 'const SIGNALS_ERROR = "Daily signals are temporarily unavailable.";' in script
+
+
+# 007 ----------------------------------------------------------------------------------------
+BRIEF = {"sentences": [
+    {"text": "Reflection released <b>Beam</b>, covered by 4 outlets.", "quote": "q",
+     "links": [{"title": "Welcome \"Beam\"", "url": "https://hf.co/b", "publisher": "hf.co"},
+               {"title": "Bad", "url": "javascript:alert(1)", "publisher": "x.com"},
+               {"title": "VB", "url": "https://vb.com/b", "publisher": "vb.com"}]}]}
+SIGNALS_007 = dict(
+    SIGNALS, quiet=False,
+    new=[dict(SIGNALS["new"][0], name="Beam", level="confirmed", publishers=3,
+              one_liner="Reflection released Beam, an open model.", one_liner_source="summary",
+              variant_of=None, variants=[]),
+         dict(SIGNALS["new"][0], name="d1-ultra", one_liner="Today, we release d1-ultra",
+              one_liner_source="quote", variant_of=None, variants=[])],
+    top_stories=[dict(SIGNALS["top_stories"][0], spikes=["Beam", "Reflection"])],
+    rising=[],
+    event_counts=SIGNALS["event_counts"] + [
+        {"event_type": "opinion_analysis", "label": "analysis", "stories": 11, "articles": 11,
+         "links": []},
+        {"event_type": "other", "label": "other", "stories": 5, "articles": 5, "links": []}])
+
+
+def _block(html):
+    return html.split('id="daily-signals-body">', 1)[1].split("</section>\n", 1)[0]
+
+
+def test_brief_rendered_escaped_with_http_links_and_ai_note(monkeypatch, tmp_path) -> None:
+    block = _block(_signals_client(monkeypatch, tmp_path, SIGNALS_007, brief=BRIEF)
+                   .get("/?date=2026-10-16").text)
+    assert block.startswith('<div class="signal-brief-block"><h3>In brief</h3>')
+    assert '<ul class="signal-brief"><li>Reflection released &lt;b&gt;Beam&lt;/b&gt;' in block
+    assert ('<a class="signal-ref" href="https://hf.co/b" title="Welcome &quot;Beam&quot;" '
+            'target="_blank" rel="noreferrer">[1]</a>') in block
+    assert 'href="https://vb.com/b"' in block and ">[2]</a>" in block and ">[3]<" not in block
+    assert "javascript:" not in block
+    assert "Written by AI from the linked articles; check the sources." in block
+    assert block.index("signal-brief-block") < block.index("signal-chips")
+
+
+def test_d3_one_liners_spike_tags_chips_and_hidden_spikes(monkeypatch, tmp_path) -> None:
+    block = _block(_signals_client(monkeypatch, tmp_path, SIGNALS_007)
+                   .get("/?date=2026-10-16").text)
+    assert "signal-brief-block" not in block  # no brief and not quiet: nothing shown
+    assert "early signal" not in block
+    beam = block.split('<li class="signal-confirmed"><strong>Beam</strong>', 1)[1]
+    assert beam.startswith('<p class="signal-meta">model &middot; Acme &middot; 3 outlets</p>'
+                           '<p class="signal-what">Reflection released Beam, an open model.</p>')
+    assert 'Source says: "Today we launch' in beam.split("</details>", 1)[0]
+    d1 = block.split('<li class="signal-muted"><strong>d1-ultra</strong>', 1)[1]
+    d1 = d1.split("</details>", 1)[0]
+    assert "via a.com" in d1 and '<p class="signal-what">&quot;Today, we release d1-ultra&quot;' \
+        in d1 and "Source says" not in d1 and "variant of" not in d1
+    assert "4 outlets &middot; model release &middot; spike: Beam, Reflection" in block
+    assert '<li class="signal-chip">2 funding rounds</li>' in block
+    assert ('<li class="signal-chip signal-chip-more" title="11 analysis, 5 other">+16 more</li>'
+            in block)
+    assert "<h3>Spikes</h3>" not in block and 'class="signal-grid cols-2"' in block
+    assert '<p class="signals-status">Rising needs two weeks' in block
+
+
+def test_spike_reason_line(monkeypatch, tmp_path) -> None:
+    payload = dict(SIGNALS_007, rising=[
+        dict(SIGNALS["rising"][0], name="GPT-6 Astra", reason="Argon vs <Astra>"),
+        dict(SIGNALS["rising"][0], name="Zeta", trailing_mean=0.0, reason=None)])
+    block = _block(_signals_client(monkeypatch, tmp_path, payload).get("/?date=2026-10-16").text)
+    assert "<h3>Spikes</h3>" in block and 'class="signal-grid cols-3"' in block
+    assert "today 4 vs 0.25/day - Argon vs &lt;Astra&gt;" in block
+    assert "today 4 vs none before</p>" in block
+
+
+def test_quiet_day_render(monkeypatch, tmp_path) -> None:
+    quiet = dict(SIGNALS_007, quiet=True, coverage={"items": 14}, top_stories=[],
+                 new=SIGNALS_007["new"][1:])
+    brief = {"sentences": [dict(BRIEF["sentences"][0], text="Anthropic announced a fund.")]}
+    block = _block(_signals_client(monkeypatch, tmp_path, quiet, brief=brief)
+                   .get("/?date=2026-10-16").text)
+    assert ('<p class="signal-quiet">Quiet day: 14 items, no story covered by more than one '
+            'outlet.</p><ul class="signal-brief"><li>Anthropic announced a fund.') in block
+    assert 'id="signals-new"' in block and 'class="signal-grid cols-1"' in block
+    assert 'id="signals-top"' not in block and 'id="signals-rising"' not in block
+    assert "Rising needs two weeks" not in block
+    empty = dict(quiet, new=[], top_stories=[SIGNALS["top_stories"][0]])
+    (tmp_path / "q").mkdir()
+    block = _block(_signals_client(monkeypatch, tmp_path / "q", empty)
+                   .get("/?date=2026-10-16").text)
+    assert "Quiet day: 14 items, 1 story covered by more than one outlet." in block
+    assert "signal-brief\"" not in block and "Written by AI" not in block
+    # F1: a quiet day still shows a card that has items (here the one top story).
+    assert 'id="signals-top"' in block and "Beam launch" in block
+    assert 'id="signals-new"' not in block and 'id="signals-rising"' not in block
+    assert 'class="signal-grid cols-1"' in block
+    rising = dict(empty, top_stories=[], sections=dict(SIGNALS["sections"], rising={
+        "state": "ready", "note": None}), rising=[dict(SIGNALS["rising"][0], spike=False,
+                                                       current_7d=6, previous_7d=1,
+                                                       expected_7d=1.0)])
+    (tmp_path / "r").mkdir()
+    block = _block(_signals_client(monkeypatch, tmp_path / "r", rising)
+                   .get("/?date=2026-10-16").text)
+    assert "<h3>Rising</h3>" in block and "7d: 1 &rarr; 6" in block
+    assert 'id="signals-top"' not in block and 'id="signals-new"' not in block
+    spikes = dict(empty, top_stories=[], rising=[SIGNALS["rising"][0]])
+    (tmp_path / "s").mkdir()
+    block = _block(_signals_client(monkeypatch, tmp_path / "s", spikes)
+                   .get("/?date=2026-10-16").text)
+    assert "<h3>Spikes</h3>" in block and "Rising needs two weeks" not in block
+    none = dict(empty, top_stories=[])
+    (tmp_path / "n").mkdir()
+    block = _block(_signals_client(monkeypatch, tmp_path / "n", none)
+                   .get("/?date=2026-10-16").text)
+    assert "signal-grid" not in block and "Rising needs two weeks" not in block
+
+
+def test_page_200_with_a_corrupt_brief_row(monkeypatch, tmp_path) -> None:
+    response = _signals_client(monkeypatch, tmp_path, SIGNALS_007, brief="{broken").get(
+        "/?date=2026-10-16")
+    assert response.status_code == 200
+    block = _block(response.text)
+    assert "signal-brief-block" not in block and "<strong>Beam</strong>" in block
+
+
+def test_client_renderer_matches_server_classes() -> None:
+    template = (Path(__file__).resolve().parents[2] / "src/app/web/digest.html").read_text()
+    script = template.split("function renderSignals(payload)", 1)[0]
+    for marker in ('class="signal-brief-block"><h3>In brief</h3>', 'class="signal-brief"',
+                   'class="signal-ref"', 'rel="noreferrer">[${i + 1}]</a>', 'class="signal-quiet"',
+                   'class="signal-ai-note"', 'class="signal-what"', '"signal-confirmed"',
+                   '"signal-muted"', "signal-chip signal-chip-more", "via ${links[0].publisher}",
+                   "spike: ${story.spikes.join", "none before", "Quiet day: "):
+        assert marker in template, marker
+    assert "HARD_EVENTS.includes(c.event_type)" in template
+    assert "early signal" not in template
+    hard = script.split("const HARD_EVENTS = [", 1)[1].split("];", 1)[0]
+    assert [x.strip().strip('"') for x in hard.replace("\n", " ").split(",")] == list(HARD_EVENTS)
+    assert f'const SIGNALS_AI_NOTE = "{AI_NOTE}";' in template

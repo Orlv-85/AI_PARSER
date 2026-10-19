@@ -5,6 +5,7 @@ call. Per-run caps (calls, USD with reservations, app-side deadline) are checked
 before every POST. Budget ids, per-day caps, attempt limits and a watchdog are deferred.
 """
 import json
+import math
 import os
 import sqlite3
 import time
@@ -12,18 +13,21 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
-from app.core.reenrich_pilot import ENDPOINTS
-from app.storage.reenrich_pilot_journal import is_overload, priced_usage
+from app.core.reenrich_pilot import ENDPOINTS, PRICES
+from app.storage.legacy_cleanup import encoded
+from app.storage.reenrich_pilot_journal import is_overload
 
 CONNECT_TIMEOUT = httpx.Timeout(connect=10, read=20, write=10, pool=5)
 BODY_DEADLINE_SECONDS = 60
 PRE_POST_RESERVE_SECONDS = 95
 MAX_CONSECUTIVE_FAILURES = 3
 FAILURE_STATES = ("unknown", "transient", "error_billed")
+# USD per 1M tokens (input, output) = microdollars per token; the extraction model's prices.
+DEFAULT_PRICES = (PRICES["deepseek"]["input"], PRICES["deepseek"]["output"])
 
 
 class LedgerStop(RuntimeError):
@@ -51,12 +55,13 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
-class SignalsLedger:
+class SignalsLedger:  # pylint: disable=too-many-instance-attributes
     def __init__(self, path: Path, *, run_id: str, api_key: str, max_calls: int,
                  max_usd_micro: int, deadline: float,
                  clock: Callable[[], float] = time.monotonic,
                  transport: httpx.BaseTransport | None = None,
-                 endpoint: str = ENDPOINTS["deepseek"]) -> None:
+                 endpoint: str = ENDPOINTS["deepseek"],
+                 prices: tuple[float, float] = DEFAULT_PRICES) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
         os.fchmod(fd, 0o600)
@@ -79,6 +84,7 @@ class SignalsLedger:
         self.run_id = run_id
         self.caps = LedgerConfig(endpoint, max_calls, max_usd_micro, deadline)
         self.clock = clock
+        self.prices = prices
         # The key lives only in the client's headers; it is never stored in the ledger.
         self.client = httpx.Client(
             transport=transport, timeout=CONNECT_TIMEOUT,
@@ -89,6 +95,22 @@ class SignalsLedger:
     def close(self) -> None:
         self.client.close()
         self.db.close()
+
+    def priced(self, data: Any) -> int | None:
+        """Actual cost in microdollars from the answer's usage, at this ledger's prices."""
+        usage = data.get("usage") if isinstance(data, dict) else None
+        if not isinstance(usage, dict):
+            return None
+        counts = (usage.get("prompt_tokens"), usage.get("completion_tokens"))
+        if not all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in counts):
+            return None
+        prompt, completion = cast(tuple[int, int], counts)
+        return math.ceil(prompt * self.prices[0] + completion * self.prices[1])
+
+    def bound_micro(self, body: dict[str, Any], max_output: int) -> int:
+        """Reservation: the encoded body bytes as input tokens plus `max_output` tokens."""
+        return math.ceil(len(encoded(body).encode()) * self.prices[0]
+                         + max_output * self.prices[1])
 
     def replay(self, request_key: str) -> Any | None:
         row = self.db.execute(
@@ -165,7 +187,7 @@ class SignalsLedger:
                 data = json.loads(raw)
             except ValueError:
                 data = None
-        actual = priced_usage("deepseek", data) if data is not None else None
+        actual = self.priced(data) if data is not None else None
         if status is None:
             state, cost = "unknown", None
         elif actual is not None:

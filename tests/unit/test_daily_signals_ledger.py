@@ -1,4 +1,5 @@
 import json
+import math
 import stat
 
 import httpx
@@ -25,7 +26,7 @@ def ok_body(prompt=1000, completion=200):
 
 
 def ledger(tmp_path, handler, *, run_id="run-1", max_calls=10, max_usd_micro=100000,
-           deadline=10000.0, clock=None):
+           deadline=10000.0, clock=None, **options):
     calls = []
 
     def counted(request):
@@ -37,7 +38,8 @@ def ledger(tmp_path, handler, *, run_id="run-1", max_calls=10, max_usd_micro=100
     value = SignalsLedger(tmp_path / "cache" / "ledger.sqlite3", run_id=run_id,
                           api_key="secret-key", max_calls=max_calls,
                           max_usd_micro=max_usd_micro, deadline=deadline,
-                          clock=clock or Clock(), transport=httpx.MockTransport(counted))
+                          clock=clock or Clock(), transport=httpx.MockTransport(counted),
+                          **options)
     return value, calls
 
 
@@ -177,3 +179,20 @@ def test_ledger_never_stores_the_key(tmp_path):
     send(value)
     value.close()
     assert b"secret-key" not in (tmp_path / "cache" / "ledger.sqlite3").read_bytes()
+
+
+def test_prices_used_for_actual_cost_and_reservation(tmp_path):
+    flash, _ = ledger(tmp_path, lambda r: httpx.Response(200, json=ok_body()))
+    assert flash.prices == (0.30, 1.20)  # default: extraction (006) prices unchanged
+    assert flash.priced(ok_body()) == 540 and flash.bound_micro({"a": "b"}, 900) == \
+        math.ceil(len('{"a": "b"}') * 0.30 + 900 * 1.20)
+    flash.close()
+    pro, calls = ledger(tmp_path, lambda r: httpx.Response(200, json=ok_body()), run_id="pro",
+                        prices=(1.32, 3.96))
+    assert send(pro).cost_micro == math.ceil(1000 * 1.32 + 200 * 3.96)
+    assert pro.run_spend_micro() == 2112 and len(calls) == 1
+    assert pro.priced({"usage": {"prompt_tokens": True, "completion_tokens": 1}}) is None
+    body = {"x": "y" * 14500}
+    assert pro.bound_micro(body, 900) == math.ceil(len(json.dumps(body)) * 1.32 + 900 * 3.96)
+    assert pro.bound_micro(body, 900) < 25000  # two attempts stay under $0.05 per day
+    pro.close()

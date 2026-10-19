@@ -1,0 +1,595 @@
+{
+ "report_date": "2026-10-14",
+ "status": "building_history",
+ "methodology_version": "daily-signals-2",
+ "extraction_version": "daily-signals-extract-5",
+ "generated_at": "2026-10-19T11:33:35.924520Z",
+ "novelty_history_days": 69,
+ "comparable_complete_days": 5,
+ "coverage": {
+  "items": 73,
+  "matched": 73,
+  "extracted": 73,
+  "failed": 0,
+  "skipped": 0,
+  "pending": 0,
+  "unmatched": 0
+ },
+ "notes": [],
+ "sections": {
+  "cooling": {
+   "state": "hidden",
+   "note": null
+  },
+  "event_counts": {
+   "state": "ready",
+   "note": null
+  },
+  "new": {
+   "state": "ready",
+   "note": null
+  },
+  "rising": {
+   "state": "spikes_only",
+   "note": "Rising needs two weeks with at least 6 complete days each; showing spikes."
+  },
+  "top_stories": {
+   "state": "ready",
+   "note": null
+  }
+ },
+ "thresholds": {
+  "complete_ratio": 0.9,
+  "confirmed_publishers": 2,
+  "cooling_max": 4,
+  "cooling_min_delta": 3,
+  "cooling_min_previous": 5,
+  "cooling_min_publishers": 2,
+  "cooling_ratio": 0.5,
+  "history_note_days": 30,
+  "links_max": 3,
+  "new_max": 8,
+  "rising_max": 6,
+  "rising_min_current": 4,
+  "rising_min_delta": 3,
+  "rising_min_publishers": 2,
+  "rising_ratio": 1.5,
+  "spike_mean_floor": 0.333,
+  "spike_min_articles": 3,
+  "spike_min_publishers": 2,
+  "spike_min_trailing_days": 3,
+  "spike_ratio": 3.0,
+  "spike_trailing_days": 7,
+  "spike_trailing_min_items": 10,
+  "top_max": 5,
+  "top_min_publishers": 2,
+  "window_days": 7,
+  "window_min_complete": 6
+ },
+ "new": [
+  {
+   "entity_id": 1923,
+   "name": "Grok Voice 3.0",
+   "type": "model",
+   "vendor": null,
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "Today, we\u2019re announcing Grok Voice 3.0, the world\u2019s most intelligent speech-to-speech model.",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "Introducing Grok Voice 3.0",
+     "url": "https://x.ai/news/grok-voice-3",
+     "publisher": "x.ai"
+    }
+   ]
+  },
+  {
+   "entity_id": 1957,
+   "name": "HiRO-ACEv2",
+   "type": "model",
+   "vendor": null,
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "We introduce HiRO-ACEv2, the newest update to our High Resolution Output Ai2 Climate Emulator (HiRO-ACE) system.",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "HiRO-ACEv2: Simulating extreme weather at 3 km resolution for a fraction of the cost",
+     "url": "https://huggingface.co/blog/allenai/hiro-acev2",
+     "publisher": "huggingface.co"
+    }
+   ]
+  },
+  {
+   "entity_id": 1958,
+   "name": "HiROv2",
+   "type": "model",
+   "vendor": null,
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "The biggest change in HiRO-ACEv2 is the new downscaling model, HiROv2",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "HiRO-ACEv2: Simulating extreme weather at 3 km resolution for a fraction of the cost",
+     "url": "https://huggingface.co/blog/allenai/hiro-acev2",
+     "publisher": "huggingface.co"
+    }
+   ]
+  },
+  {
+   "entity_id": 2414,
+   "name": "Orion-1",
+   "type": "model",
+   "vendor": "Artemis Security",
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "Artemis Security has launched Orion-1, an AI model that investigates and responds to cyberattacks",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "AI guardrails designed to stop hackers are now blocking defenders, and Orion-1 aims to fill the gap",
+     "url": "https://the-decoder.com/ai-guardrails-designed-to-stop-hackers-are-now-blocking-defenders-and-orion-1-aims-to-fill-the-gap/",
+     "publisher": "the-decoder.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 2090,
+   "name": "LendRecoup",
+   "type": "technology",
+   "vendor": null,
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "LendRecoup is Pareto efficient and credit fair",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "Credit fairness: lending resources without losing out",
+     "url": "https://aihub.org/2026/10/14/credit-fairness-lending-resources-without-losing-out/",
+     "publisher": "aihub.org"
+    }
+   ]
+  },
+  {
+   "entity_id": 1605,
+   "name": "Deep Review",
+   "type": "product",
+   "vendor": "Google",
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "Today, we\u2019re excited to announce the public release of Deep Review",
+   "articles": 2,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "Analyzing technical documents with Deep Review",
+     "url": "https://research.google/blog/analyzing-technical-documents-with-deep-review/",
+     "publisher": "research.google"
+    },
+    {
+     "title": "Research@ 2026: 10 ways we're amplifying human ingenuity",
+     "url": "https://research.google/blog/research-2026-10-ways-were-amplifying-human-ingenuity/",
+     "publisher": "research.google"
+    }
+   ]
+  },
+  {
+   "entity_id": 1415,
+   "name": "CedarDB Cloud",
+   "type": "product",
+   "vendor": "CedarDB",
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "the company on Wednesday announced limited availability of CedarDB Cloud onstage at TechCrunch Disrupt",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "CedarDB wants one database to handle both transactions and analytics, as AI agents raise the stakes",
+     "url": "https://techcrunch.com/2026/10/14/cedardb-wants-one-database-to-handle-both-transactions-and-analytics-as-ai-agents-raise-the-stakes/",
+     "publisher": "techcrunch.com"
+    }
+   ]
+  },
+  {
+   "entity_id": 2084,
+   "name": "Epic Games Launcher",
+   "type": "product",
+   "vendor": "Epic",
+   "level": "early",
+   "variant_of": null,
+   "variants": [],
+   "novelty_quote": "In announcing the new publicly available \u201cPreview\u201d build of its Epic Games Launcher",
+   "articles": 1,
+   "publishers": 1,
+   "links": [
+    {
+     "title": "Epic says its new vibe-coded Epic Games Launcher is faster than Steam",
+     "url": "https://arstechnica.com/gaming/2026/10/programming-is-hard-epic-games-leans-on-vibe-coding-for-its-new-launcher-app/",
+     "publisher": "arstechnica.com"
+    }
+   ]
+  }
+ ],
+ "top_stories": [
+  {
+   "label": "Gemini 4 Argon Lands on Google Cloud",
+   "event_type": "model_release",
+   "articles": 3,
+   "publishers": 3,
+   "entities": [
+    "Gemini 4 Argon"
+   ],
+   "links": [
+    {
+     "title": "Gemini 4 Argon Lands on Google Cloud",
+     "url": "https://cloud.google.com/blog/products/ai-machine-learning/gemini-4-argon-available-on-google-cloud?utm_source=tldrai",
+     "publisher": "google.com"
+    },
+    {
+     "title": "Gemini 4 Argon Hands-On Review: Capabilities and Performance",
+     "url": "https://www.analyticsvidhya.com/blog/2026/10/gemini-4-argon-review/",
+     "publisher": "analyticsvidhya.com"
+    },
+    {
+     "title": "The AI race is back on",
+     "url": "https://www.theverge.com/ai-artificial-intelligence/1011311/the-ai-race-is-back-on",
+     "publisher": "theverge.com"
+    }
+   ]
+  },
+  {
+   "label": "OpenAI Employee Arrested Over Hidden Recording Device",
+   "event_type": "security_incident",
+   "articles": 2,
+   "publishers": 2,
+   "entities": [],
+   "links": [
+    {
+     "title": "OpenAI Employee Arrested Over Hidden Recording Device",
+     "url": "https://x.com/OpenAINewsroom/status/2110095403198849132?utm_source=tldrai",
+     "publisher": "x.com"
+    },
+    {
+     "title": "Recording device hidden in toilet paper found in top-secret OpenAI meeting room",
+     "url": "https://arstechnica.com/tech-policy/2026/10/fbi-arrests-openai-engineer-suspected-of-planting-bug-in-conference-room/",
+     "publisher": "arstechnica.com"
+    }
+   ]
+  }
+ ],
+ "rising": [],
+ "cooling": [],
+ "event_counts": [
+  {
+   "event_type": "model_release",
+   "label": "model releases",
+   "stories": 5,
+   "articles": 7,
+   "links": [
+    {
+     "title": "Gemini 4 Argon Lands on Google Cloud",
+     "url": "https://cloud.google.com/blog/products/ai-machine-learning/gemini-4-argon-available-on-google-cloud?utm_source=tldrai",
+     "publisher": "google.com"
+    },
+    {
+     "title": "Introducing Grok Voice 3.0",
+     "url": "https://x.ai/news/grok-voice-3",
+     "publisher": "x.ai"
+    },
+    {
+     "title": "AI guardrails designed to stop hackers are now blocking defenders, and Orion-1 aims to fill the gap",
+     "url": "https://the-decoder.com/ai-guardrails-designed-to-stop-hackers-are-now-blocking-defenders-and-orion-1-aims-to-fill-the-gap/",
+     "publisher": "the-decoder.com"
+    }
+   ]
+  },
+  {
+   "event_type": "product_launch",
+   "label": "product launches",
+   "stories": 13,
+   "articles": 13,
+   "links": [
+    {
+     "title": "Frontier Models for Every Robot",
+     "url": "https://www.pi.website/blog/api-beta?utm_source=tldrai",
+     "publisher": "pi.website"
+    },
+    {
+     "title": "How Anthropic's Dynamic Workflows Coordinate Claude Agents",
+     "url": "https://www.latent.space/p/claude-dynamic-workflows?utm_source=tldrai",
+     "publisher": "latent.space"
+    },
+    {
+     "title": "OpenCode 2.0",
+     "url": "https://anoma.ly/notes/opencode-2-0/?utm_source=tldrai",
+     "publisher": "anoma.ly"
+    }
+   ]
+  },
+  {
+   "event_type": "funding",
+   "label": "funding rounds",
+   "stories": 3,
+   "articles": 3,
+   "links": [
+    {
+     "title": "NVIDIA Announces New Investments in the UK Startup Ecosystem",
+     "url": "https://blogs.nvidia.com/blog/uk-ecosystem-deployment/",
+     "publisher": "nvidia.com"
+    },
+    {
+     "title": "Nvidia's Jensen Huang pledges $2 billion for Europe, $250 million in compute for UK safety labs",
+     "url": "https://the-decoder.com/nvidias-jensen-huang-pledges-2-billion-for-europe-250-million-in-compute-for-uk-safety-labs/",
+     "publisher": "the-decoder.com"
+    },
+    {
+     "title": "Apate sends AI agents undercover to get scammed so they can gather fraud intelligence",
+     "url": "https://techcrunch.com/2026/10/14/apate-sends-ai-agents-undercover-to-get-scammed-so-they-can-gather-fraud-intelligence/",
+     "publisher": "techcrunch.com"
+    }
+   ]
+  },
+  {
+   "event_type": "acquisition",
+   "label": "acquisitions",
+   "stories": 1,
+   "articles": 1,
+   "links": [
+    {
+     "title": "Moondream is joining Prime Intellect",
+     "url": "https://www.primeintellect.ai/blog/moondream?utm_source=tldrai",
+     "publisher": "primeintellect.ai"
+    }
+   ]
+  },
+  {
+   "event_type": "regulation_policy",
+   "label": "regulation & policy",
+   "stories": 2,
+   "articles": 2,
+   "links": [
+    {
+     "title": "SR 26-2 Model Risk Management: What Replaced SR 11-7 and What It Means for LLMs and AI Agents",
+     "url": "https://www.fiddler.ai/blog/sr-26-2-model-risk-management-guidance",
+     "publisher": "fiddler.ai"
+    },
+    {
+     "title": "Tesla's Robotaxis Blow Through School Zones, NHTSA Petition Alleges",
+     "url": "https://www.extremetech.com/cars/teslas-robotaxis-blow-through-school-zones-nhtsa-petition-alleges",
+     "publisher": "extremetech.com"
+    }
+   ]
+  },
+  {
+   "event_type": "legal",
+   "label": "legal",
+   "stories": 3,
+   "articles": 3,
+   "links": [
+    {
+     "title": "Character.ai Filed for Chapter 11 Bankruptcy",
+     "url": "https://blog.character.ai/an-update-on-character-ai/?utm_source=tldrai",
+     "publisher": "character.ai"
+    },
+    {
+     "title": "Now that Character.AI is going bankrupt, what happens to all of its users&#8217; data?",
+     "url": "https://www.theverge.com/policy/1011417/new-york-ag-characterai-bankruptcy",
+     "publisher": "theverge.com"
+    },
+    {
+     "title": "Eight states sue OpenAI, saying ChatGPT isn&#8217;t safe for kids",
+     "url": "https://www.theverge.com/ai-artificial-intelligence/1011500/openai-state-lawsuits-chatgpt-safety",
+     "publisher": "theverge.com"
+    }
+   ]
+  },
+  {
+   "event_type": "security_incident",
+   "label": "security incidents",
+   "stories": 5,
+   "articles": 6,
+   "links": [
+    {
+     "title": "OpenAI Employee Arrested Over Hidden Recording Device",
+     "url": "https://x.com/OpenAINewsroom/status/2110095403198849132?utm_source=tldrai",
+     "publisher": "x.com"
+    },
+    {
+     "title": "OpenAI finds a bug in its boardroom",
+     "url": "https://therundownai.beehiiv.com/p/openai-finds-a-bug-in-its-boardroom",
+     "publisher": "beehiiv.com"
+    },
+    {
+     "title": "Alleged OpenAI spy vibe-coded a surveillance device using his wife's chatbot account",
+     "url": "https://the-decoder.com/alleged-openai-spy-vibe-coded-a-surveillance-device-using-his-wifes-chatbot-account/",
+     "publisher": "the-decoder.com"
+    }
+   ]
+  },
+  {
+   "event_type": "people_move",
+   "label": "people moves",
+   "stories": 1,
+   "articles": 1,
+   "links": [
+    {
+     "title": "OpenAI\u2019s ironic credibility problem",
+     "url": "https://www.understandingai.org/p/openais-ironic-credibility-problem",
+     "publisher": "understandingai.org"
+    }
+   ]
+  },
+  {
+   "event_type": "benchmark_result",
+   "label": "benchmark results",
+   "stories": 1,
+   "articles": 1,
+   "links": [
+    {
+     "title": "AI Models Can Be Easily Modified to Assist Terrorist and Extremist Activity",
+     "url": "https://www.wired.com/story/ai-models-can-be-easily-modified-to-assist-terrorist-and-extremist-activity/",
+     "publisher": "wired.com"
+    }
+   ]
+  },
+  {
+   "event_type": "research",
+   "label": "research",
+   "stories": 16,
+   "articles": 16,
+   "links": [
+    {
+     "title": "Code-Switching Detection via Language-Selective Dimensions in Speech Foundation Models",
+     "url": "https://machinelearning.apple.com/research/code-switching-detection",
+     "publisher": "apple.com"
+    },
+    {
+     "title": "Lessons from scaling teams of coding agents: reach the frontier at 30% of the cost",
+     "url": "https://cohere.com/blog/lessons-from-scaling-teams-of-frontier-coding-agents",
+     "publisher": "cohere.com"
+    },
+    {
+     "title": "PathSeer: Adaptive Filtered Vector Search",
+     "url": "https://weaviate.io/blog/pathseer-filtered-vector-search",
+     "publisher": "weaviate.io"
+    }
+   ]
+  },
+  {
+   "event_type": "opinion_analysis",
+   "label": "analysis",
+   "stories": 6,
+   "articles": 6,
+   "links": [
+    {
+     "title": "Arguments About AI Consciousness Remain Highly Motivated and At Best Overconfident",
+     "url": "https://thezvi.wordpress.com/2026/10/13/arguments-about-ai-consciousness-remain-highly-motivated-and-at-best-overconfident/?utm_source=tldrai",
+     "publisher": "wordpress.com"
+    },
+    {
+     "title": "Agentic AI Governance: How to Govern AI Agents in Production",
+     "url": "https://www.fiddler.ai/blog/agentic-ai-governance-production",
+     "publisher": "fiddler.ai"
+    },
+    {
+     "title": "A Scaffold at the Gate: Building AI Applications That Can Evolve",
+     "url": "https://towardsdatascience.com/a-scaffold-at-the-gate-building-ai-applications-that-can-evolve/",
+     "publisher": "towardsdatascience.com"
+    }
+   ]
+  },
+  {
+   "event_type": "other",
+   "label": "other",
+   "stories": 11,
+   "articles": 14,
+   "links": [
+    {
+     "title": "How to Automate Invoice Downloads from Vendor Portals",
+     "url": "https://www.skyvern.com/blog/how-to-automate-downloading-invoices-september-2025/",
+     "publisher": "skyvern.com"
+    },
+    {
+     "title": "Generate presentations with Amazon Bedrock AgentCore",
+     "url": "https://aws.amazon.com/blogs/machine-learning/generate-presentations-with-amazon-bedrock-agentcore/",
+     "publisher": "amazon.com"
+    },
+    {
+     "title": "Governance Sets the Ceiling on Your Entire AI Security Program (Sponsor)",
+     "url": "https://www.sans.org/go/2026-ai-govern-field-guide?utm_source=TLDR&amp;utm_medium=Sponsored_Content&amp;utm_campaign=AI_Security_Maturity_Model_eBook_2026&amp;utm_content=SP_AI_GovernFieldGuide_10.14.26_header_governance_sets_ceiling&amp;utm_term=2026-10-14_tldr_ai&amp;utm_goal=Leads&amp;utm_rdetail=Global&amp;utm_type=Global_Campaign",
+     "publisher": "sans.org"
+    }
+   ]
+  }
+ ],
+ "article_event_types": {
+  "https://ad.doubleclick.net/ddm/trackclk/N2655160.3973022TLDR/B36343267.456171875;dc_trk_aid=653381657;dc_trk_cid=267102495;dc_lat=;dc_rdid=;tag_for_child_directed_treatment=;tfua=;ltd=;dc_tdv=1": "product_launch",
+  "https://aihub.org/2026/10/14/credit-fairness-lending-resources-without-losing-out/": "research",
+  "https://anoma.ly/notes/opencode-2-0/?utm_source=tldrai": "product_launch",
+  "https://arstechnica.com/gaming/2026/10/programming-is-hard-epic-games-leans-on-vibe-coding-for-its-new-launcher-app/": "product_launch",
+  "https://arstechnica.com/security/2026/10/anthropic-warns-small-ai-models-could-self-replicate-through-iot-devices/": "research",
+  "https://arstechnica.com/tech-policy/2026/10/fbi-arrests-openai-engineer-suspected-of-planting-bug-in-conference-room/": "security_incident",
+  "https://aws.amazon.com/blogs/machine-learning/build-self-improving-document-processing-using-amazon-bedrock-agentcore/": "other",
+  "https://aws.amazon.com/blogs/machine-learning/deploy-and-evaluate-models-with-amazon-sagemaker-jumpstart/": "other",
+  "https://aws.amazon.com/blogs/machine-learning/generate-presentations-with-amazon-bedrock-agentcore/": "other",
+  "https://aws.amazon.com/blogs/machine-learning/how-tamnoon-built-ai-powered-cloud-security-remediation-with-amazon-bedrock/": "other",
+  "https://blog.character.ai/an-update-on-character-ai/?utm_source=tldrai": "legal",
+  "https://blogs.nvidia.com/blog/european-cities-agents-urban-operations/": "other",
+  "https://blogs.nvidia.com/blog/uk-ecosystem-deployment/": "funding",
+  "https://cloud.google.com/blog/products/ai-machine-learning/gemini-4-argon-available-on-google-cloud?utm_source=tldrai": "model_release",
+  "https://cohere.com/blog/lessons-from-scaling-teams-of-frontier-coding-agents": "research",
+  "https://developer.nvidia.com/blog/optimizing-agent-reliability-and-tool-calling-efficiency-for-chip-design-using-nvidia-nemo-gym/": "research",
+  "https://emergent.sh/learn/ai-real-estate-crm-vs-traditional-crm": "opinion_analysis",
+  "https://emergent.sh/learn/best-no-code-client-dashboard": "opinion_analysis",
+  "https://emergent.sh/learn/build-dashboard-from-prompt": "other",
+  "https://huggingface.co/blog/allenai/hiro-acev2": "model_release",
+  "https://machinelearning.apple.com/research/code-switching-detection": "research",
+  "https://news.mit.edu/2026/researchers-improve-weather-forecasts-looking-two-six-weeks-out-1014": "research",
+  "https://research.google/blog/analyzing-technical-documents-with-deep-review/": "product_launch",
+  "https://research.google/blog/putting-earth-ai-to-work-geospatial-agents-for-our-planets-biggest-challenges/": "research",
+  "https://research.google/blog/research-2026-10-ways-were-amplifying-human-ingenuity/": "research",
+  "https://simonwillison.net/2026/Oct/14/tree-appreciator/": "other",
+  "https://techcrunch.com/2026/10/13/spacexsi-bundles-x-premium-grok-and-cursor-into-one-subscription/?utm_source=tldrai": "product_launch",
+  "https://techcrunch.com/2026/10/14/apate-sends-ai-agents-undercover-to-get-scammed-so-they-can-gather-fraud-intelligence/": "funding",
+  "https://techcrunch.com/2026/10/14/cedardb-wants-one-database-to-handle-both-transactions-and-analytics-as-ai-agents-raise-the-stakes/": "product_launch",
+  "https://techcrunch.com/2026/10/14/colossal-biosciences-announces-new-ai-platform-to-help-accelerate-de-extinction-efforts/": "product_launch",
+  "https://techcrunch.com/2026/10/14/deezer-will-soon-let-you-filter-out-ai-generated-music/": "product_launch",
+  "https://techcrunch.com/2026/10/14/flock-ceo-we-havent-fired-any-police-departments-as-customers/": "opinion_analysis",
+  "https://techcrunch.com/2026/10/14/mosqitter-is-turning-its-mosquito-traps-into-an-ai-powered-surveillance-network/": "product_launch",
+  "https://the-decoder.com/ai-guardrails-designed-to-stop-hackers-are-now-blocking-defenders-and-orion-1-aims-to-fill-the-gap/": "model_release",
+  "https://the-decoder.com/alleged-openai-spy-vibe-coded-a-surveillance-device-using-his-wifes-chatbot-account/": "security_incident",
+  "https://the-decoder.com/google-says-self-improving-ai-isnt-anywhere-close/": "research",
+  "https://the-decoder.com/nvidias-jensen-huang-pledges-2-billion-for-europe-250-million-in-compute-for-uk-safety-labs/": "funding",
+  "https://the-decoder.com/openai-will-reportedly-ship-at-least-one-model-this-year-but-its-flagship-still-needs-alignment-work/": "model_release",
+  "https://the-decoder.com/researchers-tracked-down-a-rogue-fleet-of-chinese-ai-agents-in-the-wild-and-actually-talked-to-it/": "security_incident",
+  "https://therundownai.beehiiv.com/p/openai-finds-a-bug-in-its-boardroom": "security_incident",
+  "https://thezvi.wordpress.com/2026/10/13/arguments-about-ai-consciousness-remain-highly-motivated-and-at-best-overconfident/?utm_source=tldrai": "opinion_analysis",
+  "https://threadreaderapp.com/thread/2109543080609165508.html?utm_source=tldrai": "other",
+  "https://towardsdatascience.com/a-scaffold-at-the-gate-building-ai-applications-that-can-evolve/": "opinion_analysis",
+  "https://towardsdatascience.com/does-stacking-beat-your-best-model/": "research",
+  "https://towardsdatascience.com/how-do-word-embeddings-capture-relationships-between-words/": "research",
+  "https://towardsdatascience.com/voting-on-features-federated-feature-selection-without-sharing-data/": "research",
+  "https://weaviate.io/blog/pathseer-filtered-vector-search": "research",
+  "https://www.anaconda.com/blog/agentic-ai-security-attack-surface": "security_incident",
+  "https://www.anaconda.com/blog/owasp-top-10-llm-applications-agents-how-to-check": "research",
+  "https://www.analyticsvidhya.com/blog/2026/10/gemini-4-argon-review/": "model_release",
+  "https://www.extremetech.com/cars/teslas-robotaxis-blow-through-school-zones-nhtsa-petition-alleges": "regulation_policy",
+  "https://www.extremetech.com/gaming/no-more-handwritten-code-epic-games-goes-all-in-on-ai-for-game-development": "other",
+  "https://www.fiddler.ai/blog/agentic-ai-governance-production": "opinion_analysis",
+  "https://www.fiddler.ai/blog/sr-26-2-model-risk-management-guidance": "regulation_policy",
+  "https://www.kdnuggets.com/few-shot-text-classification-with-scikit-llm": "research",
+  "https://www.latent.space/p/claude-dynamic-workflows?utm_source=tldrai": "product_launch",
+  "https://www.pi.website/blog/api-beta?utm_source=tldrai": "product_launch",
+  "https://www.primeintellect.ai/blog/moondream?utm_source=tldrai": "acquisition",
+  "https://www.sans.org/go/2026-ai-govern-field-guide?utm_source=TLDR&amp;utm_medium=Sponsored_Content&amp;utm_campaign=AI_Security_Maturity_Model_eBook_2026&amp;utm_content=SP_AI_GovernFieldGuide_10.14.26_header_governance_sets_ceiling&amp;utm_term=2026-10-14_tldr_ai&amp;utm_goal=Leads&amp;utm_rdetail=Global&amp;utm_type=Global_Campaign": "other",
+  "https://www.skyvern.com/blog/automating-healthcare-insurance-eligibility-verification/": "other",
+  "https://www.skyvern.com/blog/automating-pharmacy-invoice-downloads-pbm-wholesaler-portals/": "other",
+  "https://www.skyvern.com/blog/how-to-automate-downloading-invoices-september-2025/": "other",
+  "https://www.theverge.com/ai-artificial-intelligence/1011311/the-ai-race-is-back-on": "model_release",
+  "https://www.theverge.com/ai-artificial-intelligence/1011369/youtube-music-ai-label": "product_launch",
+  "https://www.theverge.com/ai-artificial-intelligence/1011500/openai-state-lawsuits-chatgpt-safety": "legal",
+  "https://www.theverge.com/news/1011654/mckinsey-ai-client-interview": "other",
+  "https://www.theverge.com/policy/1011417/new-york-ag-characterai-bankruptcy": "legal",
+  "https://www.understandingai.org/p/openais-ironic-credibility-problem": "people_move",
+  "https://www.wired.com/story/ai-is-coming-for-science-next-watch-out/": "research",
+  "https://www.wired.com/story/ai-models-can-be-easily-modified-to-assist-terrorist-and-extremist-activity/": "benchmark_result",
+  "https://www.wired.com/story/my-friend-has-no-soul/": "product_launch",
+  "https://x.ai/news/grok-voice-3": "model_release",
+  "https://x.com/OpenAINewsroom/status/2110095403198849132?utm_source=tldrai": "security_incident"
+ }
+}

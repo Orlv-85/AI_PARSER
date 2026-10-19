@@ -182,6 +182,9 @@ def test_daily_signals_defaults_and_env(monkeypatch) -> None:
     assert str(settings.daily_signals_comparable_from) == "2026-10-10"
     assert (settings.daily_signals_max_calls, settings.daily_signals_max_seconds,
             settings.daily_signals_max_usd) == (200, 2700, "0.50")
+    assert settings.daily_signals_brief_model == "deepseek-v4-pro"
+    monkeypatch.setenv("AINEWS_DAILY_SIGNALS_BRIEF_MODEL", "deepseek-flash")
+    assert Settings(_env_file=None).daily_signals_brief_model == "deepseek-flash"
     monkeypatch.setenv("AINEWS_DAILY_SIGNALS_ENABLED", "true")
     monkeypatch.setenv("AINEWS_DAILY_SIGNALS_COMPARABLE_FROM", "2026-11-01")
     monkeypatch.setenv("AINEWS_DAILY_SIGNALS_MAX_CALLS", "5")

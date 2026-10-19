@@ -545,3 +545,48 @@ def test_lexical_history_reads_digest_text_not_article_summaries(session, repo):
     repo.recompute_reports(D, now=NOW)
     payload = json.loads(repo.get_report(D).payload)
     assert [i["name"] for i in payload["new"]] == ["Muse Spark Open"]
+
+
+# 007 ----------------------------------------------------------------------------------------
+
+def test_observations_carry_the_digest_summary_of_that_day(session, repo):
+    shared = add_article(session, "https://a.com/1")
+    other = add_article(session, "https://b.com/2")
+    for day, summary in ((D - timedelta(days=1), "Day one text."), (D, "Day two text.")):
+        NewsDigestRepo(session).save_digest(report_date=day, groups=[{"title": "Models", "items": [
+            {"title": "A", "summary": summary, "url": shared.url},
+            {"title": "B", "summary": None if day == D else "", "url": other.url}]}])
+        repo.replace_membership(day)
+    for article in (shared, other):
+        repo.save_extraction(article, extraction(model("Atlas")), content_hash="h")
+    evidence, rows = repo.load_evidence()
+    result = module.reconcile(evidence, repo.overrides())
+    repo.apply_reconciliation(result, rows)
+    obs = repo.observations(result, rows, [D - timedelta(days=1), D])
+    summaries = {(d, o.url): o.summary for d, items in obs.items() for o in items}
+    # N1: save_digest stores a None summary as the string "None"; 007 reads it as "".
+    assert session.scalar(select(NewsDigestItem.summary).where(
+        NewsDigestItem.url == other.url).order_by(NewsDigestItem.id.desc())) == "None"
+    assert summaries == {(D - timedelta(days=1), shared.url): "Day one text.",
+                         (D - timedelta(days=1), other.url): "",
+                         (D, shared.url): "Day two text.", (D, other.url): ""}
+    items = repo.digest_items(D)
+    assert [(i["url"], i["summary"], i["publisher"]) for i in items] == [
+        (shared.url, "Day two text.", "a.com"), (other.url, "", "b.com")]
+    assert repo.digest_items(D + timedelta(days=1)) == []
+
+
+def test_save_brief_upserts_by_day(session, repo):
+    assert repo.get_brief(D) is None
+    first = repo.save_brief(D, brief_version="v", model="m", input_hash="h1", status="invalid",
+                            payload={}, reason="schema,schema")
+    session.commit()
+    second = repo.save_brief(D, brief_version="v", model="m", input_hash="h2", status="ok",
+                             payload={"sentences": [{"text": "x", "links": [], "quote": "q"}]})
+    session.commit()
+    assert first.id == second.id
+    row = repo.get_brief(D)
+    assert (row.input_hash, row.status, row.reason) == ("h2", "ok", None)
+    assert json.loads(row.payload)["sentences"][0]["quote"] == "q"
+    with pytest.raises(ValueError):
+        repo.save_brief(D, brief_version="v", model="m", input_hash="h", status="bad", payload={})

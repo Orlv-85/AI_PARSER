@@ -94,14 +94,16 @@ AINEWS_DAILY_SIGNALS_ENABLED=false          # gates paid extraction only (produc
 AINEWS_DAILY_SIGNALS_COMPARABLE_FROM=2026-10-10  # earlier digests are history-only evidence
 AINEWS_DAILY_SIGNALS_MAX_CALLS=200          # physical provider calls per run
 AINEWS_DAILY_SIGNALS_MAX_SECONDS=2700       # app-side wall limit per run
-AINEWS_DAILY_SIGNALS_MAX_USD=0.50           # spend cap per run, checked before every call
+AINEWS_DAILY_SIGNALS_MAX_USD=0.50           # spend cap per run (extraction + briefs), checked before every call
+AINEWS_DAILY_SIGNALS_BRIEF_MODEL=deepseek-v4-pro  # model of the daily "In brief" (007); priced models: deepseek-v4-pro, deepseek-flash
 ```
 
 The key is the existing `DS_API_KEY`. The CLI flags `--max-calls`, `--max-seconds` and
 `--max-usd` override the caps for one invocation. Bounds: calls 1-5000, seconds 60-14400.
 
 In production (`docker-compose.prod.yml`) only `AINEWS_DAILY_SIGNALS_ENABLED` is passed to the
-container; the other four settings keep their defaults there, so use the CLI flags for caps.
+container; the other settings keep their defaults there (the brief uses `deepseek-v4-pro`), so use
+the CLI flags for caps.
 
 ### Publish API token
 
