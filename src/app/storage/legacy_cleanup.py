@@ -4,6 +4,7 @@ import json
 import os
 import re
 from collections import Counter
+from collections.abc import Mapping
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
@@ -190,10 +191,24 @@ def _lock(connection: Connection) -> None:
     inspector = inspect(connection)
     for name in inspector.get_table_names():
         for foreign_key in inspector.get_foreign_keys(name):
-            if foreign_key["referred_table"] == "articles" and (
-                name != "article_aliases" or foreign_key["constrained_columns"] != ["article_id"]
-            ):
+            if foreign_key["referred_table"] == "articles" and not known_article_fk(
+                    name, foreign_key):
                 raise ValueError("Unknown article FK dependency: " + name)
+
+
+# Derived Daily AI Signals rows (feature 006) are deleted with their article by ON DELETE
+# CASCADE and are not restored; re-extraction rebuilds them (plan Decision 4).
+DERIVED_CASCADE_TABLES = frozenset({"article_signals", "daily_signal_scope"})
+
+
+def known_article_fk(name: str, foreign_key: Mapping[str, object]) -> bool:
+    if foreign_key["constrained_columns"] != ["article_id"]:
+        return False
+    if name == "article_aliases":
+        return True
+    options = foreign_key.get("options")
+    ondelete = options.get("ondelete") if isinstance(options, Mapping) else None
+    return name in DERIVED_CASCADE_TABLES and str(ondelete or "").upper() == "CASCADE"
 
 
 def apply_cleanup(engine: Engine, snapshot: dict[str, Any], manifest: dict[str, Any],

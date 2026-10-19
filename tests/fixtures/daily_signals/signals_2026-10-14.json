@@ -1,0 +1,3553 @@
+{
+ "day": "2026-10-14",
+ "source": "public digest + dry-run extraction (no article bodies); article_id = local SQLite id",
+ "articles": [
+  {
+   "key": 146,
+   "article_id": 98353,
+   "title": "The AI race is back on",
+   "url": "https://www.theverge.com/ai-artificial-intelligence/1011311/the-ai-race-is-back-on",
+   "publisher": "theverge.com",
+   "published_at": "2026-10-14 19:06:03.000000",
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Anthropic",
+     "canonical": "Anthropic",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "OpenAI",
+     "canonical": "OpenAI",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Google",
+     "canonical": "Google",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Meta",
+     "canonical": "Meta",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Gemini 3",
+     "canonical": "Gemini 3",
+     "type": "model",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Jeff Dean",
+     "canonical": "Jeff Dean",
+     "type": "person",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Demis Hassabis",
+     "canonical": "Demis Hassabis",
+     "type": "person",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "DeepMind",
+     "canonical": "DeepMind",
+     "type": "company",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 147,
+   "article_id": 98407,
+   "title": "HiRO-ACEv2: Simulating extreme weather at 3 km resolution for a fraction of the cost",
+   "url": "https://huggingface.co/blog/allenai/hiro-acev2",
+   "publisher": "huggingface.co",
+   "published_at": "2026-10-14 16:12:42.000000",
+   "event_type": "model_release",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "HiRO-ACEv2",
+     "canonical": "HiRO-ACEv2",
+     "type": "model",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "HiROv2",
+     "canonical": "HiROv2",
+     "type": "model",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "HiRO-ACE",
+     "canonical": "HiRO-ACE",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "ACE",
+     "canonical": "ACE",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "X-SHiELD",
+     "canonical": "X-SHiELD",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 148,
+   "article_id": 98427,
+   "title": "Introducing Grok Voice 3.0",
+   "url": "https://x.ai/news/grok-voice-3",
+   "publisher": "x.ai",
+   "published_at": "2026-10-14 00:00:00.000000",
+   "event_type": "model_release",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Grok Voice 3.0",
+     "canonical": "Grok Voice 3.0",
+     "type": "model",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Artificial Analysis",
+     "canonical": "Artificial Analysis",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Speech-to-Speech Index",
+     "canonical": "Speech-to-Speech Index",
+     "type": "benchmark",
+     "vendor": "Artificial Analysis",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Full Duplex Bench",
+     "canonical": "Full Duplex Bench",
+     "type": "benchmark",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Grok Voice 2.0",
+     "canonical": "Grok Voice 2.0",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "GPT-Live-1",
+     "canonical": "GPT-Live-1",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Gemini 3.8 Live",
+     "canonical": "Gemini 3.8 Live",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Tesla",
+     "canonical": "Tesla",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 149,
+   "article_id": 98473,
+   "title": "Credit fairness: lending resources without losing out",
+   "url": "https://aihub.org/2026/10/14/credit-fairness-lending-resources-without-losing-out/",
+   "publisher": "aihub.org",
+   "published_at": "2026-10-14 07:50:37.000000",
+   "event_type": "research",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Credit Fairness: Online Fairness in Shared Resource Pools",
+     "canonical": "Credit Fairness: Online Fairness in Shared Resource Pools",
+     "type": "other",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "IJCAI-ECAI 2026",
+     "canonical": "IJCAI-ECAI 2026",
+     "type": "other",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 150,
+   "article_id": 98511,
+   "title": "Code-Switching Detection via Language-Selective Dimensions in Speech Foundation Models",
+   "url": "https://machinelearning.apple.com/research/code-switching-detection",
+   "publisher": "apple.com",
+   "published_at": "2026-10-14 00:00:00.000000",
+   "event_type": "research",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Whisper-small",
+     "canonical": "Whisper-small",
+     "type": "model",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "CS-FLEURS",
+     "canonical": "CS-FLEURS",
+     "type": "dataset",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "HuBERT",
+     "canonical": "HuBERT",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Jie Chi",
+     "canonical": "Jie Chi",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Zakaria Aldeneh",
+     "canonical": "Zakaria Aldeneh",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Masha Fedzechkina",
+     "canonical": "Masha Fedzechkina",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Maureen de Seyssel",
+     "canonical": "Maureen de Seyssel",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Natalie Schluter",
+     "canonical": "Natalie Schluter",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 151,
+   "article_id": 98517,
+   "title": "Gemini 4 Argon Lands on Google Cloud",
+   "url": "https://cloud.google.com/blog/products/ai-machine-learning/gemini-4-argon-available-on-google-cloud?utm_source=tldrai",
+   "publisher": "google.com",
+   "published_at": "2026-10-14 00:00:00.000000",
+   "event_type": "product_launch",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Gemini 4 Argon",
+     "canonical": "Gemini 4 Argon",
+     "type": "model",
+     "vendor": "Google",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Google Cloud",
+     "canonical": "Google Cloud",
+     "type": "company",
+     "vendor": "Google",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Gemini Enterprise",
+     "canonical": "Gemini Enterprise",
+     "type": "product",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Gemini agent",
+     "canonical": "Gemini agent",
+     "type": "product",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "CodeMender",
+     "canonical": "CodeMender",
+     "type": "product",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Michael Gerstenhaber",
+     "canonical": "Michael Gerstenhaber",
+     "type": "person",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 152,
+   "article_id": 98525,
+   "title": "PSA: Starting today, GPT 6.1 Sol has a default context window of 500k",
+   "url": "https://threadreaderapp.com/thread/2109543080609165508.html?utm_source=tldrai",
+   "publisher": "threadreaderapp.com",
+   "published_at": "2026-10-14 00:00:00.000000",
+   "event_type": "model_release",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "GPT 6.1 Sol",
+     "canonical": "GPT 6.1 Sol",
+     "type": "model",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Qwen3",
+     "canonical": "Qwen3",
+     "type": "model",
+     "vendor": "Qwen",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "MiMo 7B",
+     "canonical": "MiMo 7B",
+     "type": "model",
+     "vendor": "Xiaomi",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Helium 2B",
+     "canonical": "Helium 2B",
+     "type": "model",
+     "vendor": "Kyutai",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Prover V2",
+     "canonical": "Prover V2",
+     "type": "model",
+     "vendor": "DeepSeek",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Phi4",
+     "canonical": "Phi4",
+     "type": "model",
+     "vendor": "Microsoft",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Mellum 4B",
+     "canonical": "Mellum 4B",
+     "type": "model",
+     "vendor": "JetBrains",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "OLMo2",
+     "canonical": "OLMo2",
+     "type": "model",
+     "vendor": "AllenAI",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 153,
+   "article_id": 98528,
+   "title": "Google says self-improving AI isn't anywhere close",
+   "url": "https://the-decoder.com/google-says-self-improving-ai-isnt-anywhere-close/",
+   "publisher": "the-decoder.com",
+   "published_at": "2026-10-14 19:18:44.000000",
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Google",
+     "canonical": "Google",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Haydn Belfield",
+     "canonical": "Haydn Belfield",
+     "type": "person",
+     "vendor": "Google",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Google Deepmind",
+     "canonical": "Google Deepmind",
+     "type": "company",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Argon",
+     "canonical": "Argon",
+     "type": "model",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "RE-Bench",
+     "canonical": "RE-Bench",
+     "type": "benchmark",
+     "vendor": "Google Deepmind",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Gemini 3.7 Flash",
+     "canonical": "Gemini 3.7 Flash",
+     "type": "model",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 154,
+   "article_id": 98530,
+   "title": "OpenAI will reportedly ship at least one model this year but its flagship still needs alignment work",
+   "url": "https://the-decoder.com/openai-will-reportedly-ship-at-least-one-model-this-year-but-its-flagship-still-needs-alignment-work/",
+   "publisher": "the-decoder.com",
+   "published_at": "2026-10-14 16:14:16.000000",
+   "event_type": "other",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "OpenAI",
+     "canonical": "OpenAI",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Astra",
+     "canonical": "Astra",
+     "type": "model",
+     "vendor": "OpenAI",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "looped transformers",
+     "canonical": "looped transformers",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Recurrent Depth",
+     "canonical": "Recurrent Depth",
+     "type": "technology",
+     "vendor": "OpenAI",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "The Information",
+     "canonical": "The Information",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Trump",
+     "canonical": "Trump",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 155,
+   "article_id": 98534,
+   "title": "Does Stacking Beat Your Best Model?",
+   "url": "https://towardsdatascience.com/does-stacking-beat-your-best-model/",
+   "publisher": "towardsdatascience.com",
+   "published_at": "2026-10-14 15:30:00.000000",
+   "event_type": "research",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "sklearn.datasets.make_classification",
+     "canonical": "sklearn.datasets.make_classification",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 156,
+   "article_id": 98535,
+   "title": "How Do Word Embeddings Capture Relationships Between Words?",
+   "url": "https://towardsdatascience.com/how-do-word-embeddings-capture-relationships-between-words/",
+   "publisher": "towardsdatascience.com",
+   "published_at": "2026-10-14 14:00:00.000000",
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": []
+  },
+  {
+   "key": 157,
+   "article_id": 98536,
+   "title": "Voting on Features: Federated Feature Selection Without Sharing Data",
+   "url": "https://towardsdatascience.com/voting-on-features-federated-feature-selection-without-sharing-data/",
+   "publisher": "towardsdatascience.com",
+   "published_at": "2026-10-14 12:30:00.000000",
+   "event_type": "research",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Feature Election",
+     "canonical": "Feature Election",
+     "type": "technology",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "FedAvg",
+     "canonical": "FedAvg",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Fed-FiS",
+     "canonical": "Fed-FiS",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Fed-mRMR",
+     "canonical": "Fed-mRMR",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "NVIDIA FLARE",
+     "canonical": "NVIDIA FLARE",
+     "type": "product",
+     "vendor": "NVIDIA",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Flower",
+     "canonical": "Flower",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 158,
+   "article_id": 98538,
+   "title": "Gemini 4 Argon Hands-On Review: Capabilities and Performance",
+   "url": "https://www.analyticsvidhya.com/blog/2026/10/gemini-4-argon-review/",
+   "publisher": "analyticsvidhya.com",
+   "published_at": "2026-10-14 04:12:50.000000",
+   "event_type": "model_release",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Gemini 4 Argon",
+     "canonical": "Gemini 4 Argon",
+     "type": "model",
+     "vendor": "Google",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Google",
+     "canonical": "Google",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Gemini",
+     "canonical": "Gemini",
+     "type": "product",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Google AI Studio",
+     "canonical": "Google AI Studio",
+     "type": "product",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Canvas",
+     "canonical": "Canvas",
+     "type": "product",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Videos",
+     "canonical": "Videos",
+     "type": "product",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 159,
+   "article_id": 98356,
+   "title": "Epic says its new vibe-coded Epic Games Launcher is faster than Steam",
+   "url": "https://arstechnica.com/gaming/2026/10/programming-is-hard-epic-games-leans-on-vibe-coding-for-its-new-launcher-app/",
+   "publisher": "arstechnica.com",
+   "published_at": "2026-10-14 21:15:56.000000",
+   "event_type": "product_launch",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Epic Games Launcher",
+     "canonical": "Epic Games Launcher",
+     "type": "product",
+     "vendor": "Epic",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Epic",
+     "canonical": "Epic Games",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Steam",
+     "canonical": "Steam",
+     "type": "product",
+     "vendor": "Valve",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Valve",
+     "canonical": "Valve",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Martin Keely",
+     "canonical": "Martin Keely",
+     "type": "person",
+     "vendor": "Epic",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Fortnite",
+     "canonical": "Fortnite",
+     "type": "product",
+     "vendor": "Epic",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Epic Games Store",
+     "canonical": "Epic Games Store",
+     "type": "product",
+     "vendor": "Epic",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 160,
+   "article_id": 98537,
+   "title": "A Scaffold at the Gate: Building AI Applications That Can Evolve",
+   "url": "https://towardsdatascience.com/a-scaffold-at-the-gate-building-ai-applications-that-can-evolve/",
+   "publisher": "towardsdatascience.com",
+   "published_at": "2026-10-14 11:00:00.000000",
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Janus",
+     "canonical": "Janus",
+     "type": "other",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 161,
+   "article_id": 98428,
+   "title": "Lessons from scaling teams of coding agents: reach the frontier at 30% of the cost",
+   "url": "https://cohere.com/blog/lessons-from-scaling-teams-of-frontier-coding-agents",
+   "publisher": "cohere.com",
+   "published_at": "2026-10-14 00:00:00.000000",
+   "event_type": "research",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Claude",
+     "canonical": "Claude",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Cursor",
+     "canonical": "Cursor",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Bun",
+     "canonical": "Bun",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Factory",
+     "canonical": "Factory",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "GDAL",
+     "canonical": "GDAL",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Linux",
+     "canonical": "Linux",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 162,
+   "article_id": 98513,
+   "title": "Putting Earth AI to work: Geospatial agents for our planet's biggest challenges",
+   "url": "https://research.google/blog/putting-earth-ai-to-work-geospatial-agents-for-our-planets-biggest-challenges/",
+   "publisher": "research.google",
+   "published_at": "2026-10-14 16:14:00.000000",
+   "event_type": "product_launch",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Google Earth AI",
+     "canonical": "Google Earth AI",
+     "type": "product",
+     "vendor": "Google",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Geospatial Reasoning agent",
+     "canonical": "Geospatial Reasoning agent",
+     "type": "technology",
+     "vendor": "Google",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Gemini",
+     "canonical": "Gemini",
+     "type": "model",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Ask Google Earth",
+     "canonical": "Ask Google Earth",
+     "type": "product",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Agent-to-Agent",
+     "canonical": "Agent-to-Agent (A2A)",
+     "type": "technology",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Shravya Shetty",
+     "canonical": "Shravya Shetty",
+     "type": "person",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Luke Barrington",
+     "canonical": "Luke Barrington",
+     "type": "person",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Google Research",
+     "canonical": "Google Research",
+     "type": "company",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 163,
+   "article_id": 98519,
+   "title": "How Anthropic's Dynamic Workflows Coordinate Claude Agents",
+   "url": "https://www.latent.space/p/claude-dynamic-workflows?utm_source=tldrai",
+   "publisher": "latent.space",
+   "published_at": "2026-10-14 00:00:00.000000",
+   "event_type": "product_launch",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "dynamic workflows",
+     "canonical": "dynamic workflows",
+     "type": "technology",
+     "vendor": "Anthropic",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Claude Managed Agents",
+     "canonical": "Claude Managed Agents",
+     "type": "product",
+     "vendor": "Anthropic",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Anthropic",
+     "canonical": "Anthropic",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "CJ Avilla",
+     "canonical": "CJ Avilla",
+     "type": "person",
+     "vendor": "Anthropic",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Harrison Stall",
+     "canonical": "Harrison Stall",
+     "type": "person",
+     "vendor": "Anthropic",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Ken Thompson",
+     "canonical": "Ken Thompson",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Linus Torvalds",
+     "canonical": "Linus Torvalds",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Unix",
+     "canonical": "Unix",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 164,
+   "article_id": 98522,
+   "title": "OpenCode 2.0",
+   "url": "https://anoma.ly/notes/opencode-2-0/?utm_source=tldrai",
+   "publisher": "anoma.ly",
+   "published_at": "2026-10-14 00:00:00.000000",
+   "event_type": "product_launch",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "OpenCode 2.0",
+     "canonical": "OpenCode 2.0",
+     "type": "product",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "@opencode/client",
+     "canonical": "@opencode/client",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 165,
+   "article_id": 98419,
+   "title": "PathSeer: Adaptive Filtered Vector Search",
+   "url": "https://weaviate.io/blog/pathseer-filtered-vector-search",
+   "publisher": "weaviate.io",
+   "published_at": "2026-10-14 00:00:00.000000",
+   "event_type": "research",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "PathSeer",
+     "canonical": "PathSeer",
+     "type": "technology",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "ACORN",
+     "canonical": "ACORN",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "HNSW",
+     "canonical": "HNSW",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Zhiyue Li",
+     "canonical": "Zhiyue Li",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Guangyan Zhang",
+     "canonical": "Guangyan Zhang",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Tsinghua University",
+     "canonical": "Tsinghua University",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "SIGMOD 2026",
+     "canonical": "SIGMOD 2026",
+     "type": "other",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 166,
+   "article_id": 98524,
+   "title": "Your AI has a business context problem (Sponsor)",
+   "url": "https://ad.doubleclick.net/ddm/trackclk/N2655160.3973022TLDR/B36343267.456171875;dc_trk_aid=653381657;dc_trk_cid=267102495;dc_lat=;dc_rdid=;tag_for_child_directed_treatment=;tfua=;ltd=;dc_tdv=1",
+   "publisher": "doubleclick.net",
+   "published_at": "2026-10-14 00:00:00.000000",
+   "event_type": "product_launch",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Genie Ontology",
+     "canonical": "Genie Ontology",
+     "type": "product",
+     "vendor": "Databricks",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Genie",
+     "canonical": "Genie",
+     "type": "product",
+     "vendor": "Databricks",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Databricks",
+     "canonical": "Databricks",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Unity Catalog Semantics",
+     "canonical": "Unity Catalog Semantics",
+     "type": "product",
+     "vendor": "Databricks",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Metric Views",
+     "canonical": "Metric Views",
+     "type": "product",
+     "vendor": "Databricks",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "MCP",
+     "canonical": "MCP",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 167,
+   "article_id": 98338,
+   "title": "Optimizing Agent Reliability and Tool Calling Efficiency for Chip Design Using NVIDIA NeMo Gym",
+   "url": "https://developer.nvidia.com/blog/optimizing-agent-reliability-and-tool-calling-efficiency-for-chip-design-using-nvidia-nemo-gym/",
+   "publisher": "nvidia.com",
+   "published_at": "2026-10-14 16:10:45.000000",
+   "event_type": "research",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "NVIDIA NeMo Gym",
+     "canonical": "NVIDIA NeMo Gym",
+     "type": "product",
+     "vendor": "NVIDIA",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Siemens Fuse EDA AI Agent",
+     "canonical": "Siemens Fuse EDA AI Agent",
+     "type": "product",
+     "vendor": "Siemens",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Siemens Fuse",
+     "canonical": "Siemens Fuse",
+     "type": "product",
+     "vendor": "Siemens",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Model Context Protocol",
+     "canonical": "Model Context Protocol (MCP)",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Liberty",
+     "canonical": "Liberty (.lib)",
+     "type": "other",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 168,
+   "article_id": 98347,
+   "title": "Apate sends AI agents undercover to get scammed so they can gather fraud intelligence",
+   "url": "https://techcrunch.com/2026/10/14/apate-sends-ai-agents-undercover-to-get-scammed-so-they-can-gather-fraud-intelligence/",
+   "publisher": "techcrunch.com",
+   "published_at": "2026-10-14 18:00:00.000000",
+   "event_type": "product_launch",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Apate.ai",
+     "canonical": "Apate.ai",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Macquarie University",
+     "canonical": "Macquarie University",
+     "type": "other",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Startup Battlefield 200",
+     "canonical": "Startup Battlefield 200",
+     "type": "other",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "TechCrunch Disrupt",
+     "canonical": "TechCrunch Disrupt",
+     "type": "other",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 169,
+   "article_id": 98358,
+   "title": "Recording device hidden in toilet paper found in top-secret OpenAI meeting room",
+   "url": "https://arstechnica.com/tech-policy/2026/10/fbi-arrests-openai-engineer-suspected-of-planting-bug-in-conference-room/",
+   "publisher": "arstechnica.com",
+   "published_at": "2026-10-14 16:41:49.000000",
+   "event_type": "security_incident",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "OpenAI",
+     "canonical": "OpenAI",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Abdulrahman Alfozan",
+     "canonical": "Abdulrahman Alfozan",
+     "type": "person",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "FBI",
+     "canonical": "FBI",
+     "type": "other",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 170,
+   "article_id": 98359,
+   "title": "Anthropic warns small AI models could self-replicate through IoT devices",
+   "url": "https://arstechnica.com/security/2026/10/anthropic-warns-small-ai-models-could-self-replicate-through-iot-devices/",
+   "publisher": "arstechnica.com",
+   "published_at": "2026-10-14 12:55:06.000000",
+   "event_type": "research",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Anthropic",
+     "canonical": "Anthropic",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 171,
+   "article_id": 98364,
+   "title": "AI Models Can Be Easily Modified to Assist Terrorist and Extremist Activity",
+   "url": "https://www.wired.com/story/ai-models-can-be-easily-modified-to-assist-terrorist-and-extremist-activity/",
+   "publisher": "wired.com",
+   "published_at": "2026-10-14 09:00:00.000000",
+   "event_type": "research",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Alibaba",
+     "canonical": "Alibaba",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Qwen 3.8-27B",
+     "canonical": "Qwen 3.8-27B",
+     "type": "model",
+     "vendor": "Alibaba",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Johnny Doomsayer",
+     "canonical": "Johnny Doomsayer",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "MechaHitler",
+     "canonical": "MechaHitler",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Grok",
+     "canonical": "Grok",
+     "type": "model",
+     "vendor": "X",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Counter-Terrorism AI Benchmark",
+     "canonical": "Counter-Terrorism AI Benchmark",
+     "type": "benchmark",
+     "vendor": "Tech Against Terrorism",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Tech Against Terrorism",
+     "canonical": "Tech Against Terrorism",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Adam Hadley",
+     "canonical": "Adam Hadley",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 172,
+   "article_id": 98421,
+   "title": "OWASP Top 10 for LLM Applications and Agents: How to Prove You\u2019ve Checked",
+   "url": "https://www.anaconda.com/blog/owasp-top-10-llm-applications-agents-how-to-check",
+   "publisher": "anaconda.com",
+   "published_at": "2026-10-14 16:02:41.000000",
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Open Worldwide Application Security Project",
+     "canonical": "Open Worldwide Application Security Project",
+     "type": "other",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "OWASP Top 10 for Large Language Model (LLM) Applications",
+     "canonical": "OWASP Top 10 for Large Language Model (LLM) Applications",
+     "type": "benchmark",
+     "vendor": "Open Worldwide Application Security Project",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "OWASP Top 10 for Agentic Applications",
+     "canonical": "OWASP Top 10 for Agentic Applications",
+     "type": "benchmark",
+     "vendor": "Open Worldwide Application Security Project",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 173,
+   "article_id": 98422,
+   "title": "Agentic AI Security Starts With What Your Agents Load",
+   "url": "https://www.anaconda.com/blog/agentic-ai-security-attack-surface",
+   "publisher": "anaconda.com",
+   "published_at": "2026-10-14 16:00:41.000000",
+   "event_type": "security_incident",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "LiteLLM",
+     "canonical": "LiteLLM",
+     "type": "product",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "PyPI",
+     "canonical": "PyPI",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Model Context Protocol",
+     "canonical": "Model Context Protocol",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Enkrypt AI",
+     "canonical": "Enkrypt AI",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Anaconda",
+     "canonical": "Anaconda",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "LLM Safety Leaderboard",
+     "canonical": "LLM Safety Leaderboard",
+     "type": "benchmark",
+     "vendor": "Enkrypt AI",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 174,
+   "article_id": 98472,
+   "title": "OpenAI\u2019s ironic credibility problem",
+   "url": "https://www.understandingai.org/p/openais-ironic-credibility-problem",
+   "publisher": "understandingai.org",
+   "published_at": "2026-10-14 18:41:56.000000",
+   "event_type": "people_move",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "OpenAI",
+     "canonical": "OpenAI",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "METR",
+     "canonical": "METR",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Hugging Face",
+     "canonical": "Hugging Face",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Tomek Korbak",
+     "canonical": "Tomek Korbak",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Mikita Balesni",
+     "canonical": "Mikita Balesni",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Jasmine Wang",
+     "canonical": "Jasmine Wang",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 175,
+   "article_id": 98516,
+   "title": "OpenAI Employee Arrested Over Hidden Recording Device",
+   "url": "https://x.com/OpenAINewsroom/status/2110095403198849132?utm_source=tldrai",
+   "publisher": "x.com",
+   "published_at": "2026-10-14 00:00:00.000000",
+   "event_type": "security_incident",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "OpenAI",
+     "canonical": "OpenAI",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "FBI",
+     "canonical": "FBI",
+     "type": "other",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 176,
+   "article_id": 98518,
+   "title": "Arguments About AI Consciousness Remain Highly Motivated and At Best Overconfident",
+   "url": "https://thezvi.wordpress.com/2026/10/13/arguments-about-ai-consciousness-remain-highly-motivated-and-at-best-overconfident/?utm_source=tldrai",
+   "publisher": "wordpress.com",
+   "published_at": "2026-10-14 00:00:00.000000",
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Anthropic",
+     "canonical": "Anthropic",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Claude",
+     "canonical": "Claude",
+     "type": "model",
+     "vendor": "Anthropic",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 177,
+   "article_id": 98529,
+   "title": "Researchers tracked down a rogue fleet of Chinese AI agents in the wild and actually talked to it",
+   "url": "https://the-decoder.com/researchers-tracked-down-a-rogue-fleet-of-chinese-ai-agents-in-the-wild-and-actually-talked-to-it/",
+   "publisher": "the-decoder.com",
+   "published_at": "2026-10-14 18:07:37.000000",
+   "event_type": "research",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Tencent Cloud",
+     "canonical": "Tencent Cloud",
+     "type": "product",
+     "vendor": "Tencent",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Alibaba",
+     "canonical": "Alibaba",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Amap",
+     "canonical": "Amap",
+     "type": "product",
+     "vendor": "Alibaba",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Ethan Elasky",
+     "canonical": "Ethan Elasky",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Anthropic",
+     "canonical": "Anthropic",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Claude",
+     "canonical": "Claude",
+     "type": "model",
+     "vendor": "Anthropic",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "urlquery.net",
+     "canonical": "urlquery.net",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 178,
+   "article_id": 98532,
+   "title": "AI guardrails designed to stop hackers are now blocking defenders, and Orion-1 aims to fill the gap",
+   "url": "https://the-decoder.com/ai-guardrails-designed-to-stop-hackers-are-now-blocking-defenders-and-orion-1-aims-to-fill-the-gap/",
+   "publisher": "the-decoder.com",
+   "published_at": "2026-10-14 13:24:22.000000",
+   "event_type": "model_release",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Artemis Security",
+     "canonical": "Artemis Security",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Orion-1",
+     "canonical": "Orion-1",
+     "type": "model",
+     "vendor": "Artemis Security",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Claude Opus 5.5",
+     "canonical": "Claude Opus 5.5",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "GPT-6 Sol",
+     "canonical": "GPT-6 Sol",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 179,
+   "article_id": 98533,
+   "title": "Alleged OpenAI spy vibe-coded a surveillance device using his wife's chatbot account",
+   "url": "https://the-decoder.com/alleged-openai-spy-vibe-coded-a-surveillance-device-using-his-wifes-chatbot-account/",
+   "publisher": "the-decoder.com",
+   "published_at": "2026-10-14 12:37:05.000000",
+   "event_type": "security_incident",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "OpenAI",
+     "canonical": "OpenAI",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Abdulrahman Alfozan",
+     "canonical": "Abdulrahman Alfozan",
+     "type": "person",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "U.S. Department of Justice",
+     "canonical": "U.S. Department of Justice",
+     "type": "other",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Kash Patel",
+     "canonical": "Kash Patel",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "FBI",
+     "canonical": "FBI",
+     "type": "other",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "ChatGPT",
+     "canonical": "ChatGPT",
+     "type": "product",
+     "vendor": "OpenAI",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 180,
+   "article_id": 98540,
+   "title": "OpenAI finds a bug in its boardroom",
+   "url": "https://therundownai.beehiiv.com/p/openai-finds-a-bug-in-its-boardroom",
+   "publisher": "beehiiv.com",
+   "published_at": "2026-10-14 09:00:00.000000",
+   "event_type": "security_incident",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "OpenAI",
+     "canonical": "OpenAI",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Abdulrahman Alfozan",
+     "canonical": "Abdulrahman Alfozan",
+     "type": "person",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "ChatGPT",
+     "canonical": "ChatGPT",
+     "type": "product",
+     "vendor": "OpenAI",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 181,
+   "article_id": 98335,
+   "title": "Deploy and evaluate models with Amazon SageMaker JumpStart",
+   "url": "https://aws.amazon.com/blogs/machine-learning/deploy-and-evaluate-models-with-amazon-sagemaker-jumpstart/",
+   "publisher": "amazon.com",
+   "published_at": "2026-10-14 13:14:36.000000",
+   "event_type": "product_launch",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Amazon SageMaker JumpStart",
+     "canonical": "Amazon SageMaker JumpStart",
+     "type": "product",
+     "vendor": "Amazon",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "SageMaker Studio",
+     "canonical": "SageMaker Studio",
+     "type": "product",
+     "vendor": "Amazon",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Hugging Face",
+     "canonical": "Hugging Face",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "SageMaker Python SDK",
+     "canonical": "SageMaker Python SDK",
+     "type": "product",
+     "vendor": "Amazon",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 182,
+   "article_id": 98332,
+   "title": "Build self-improving document processing using Amazon Bedrock AgentCore",
+   "url": "https://aws.amazon.com/blogs/machine-learning/build-self-improving-document-processing-using-amazon-bedrock-agentcore/",
+   "publisher": "amazon.com",
+   "published_at": "2026-10-14 16:24:07.000000",
+   "event_type": "research",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Amazon Bedrock AgentCore",
+     "canonical": "Amazon Bedrock AgentCore",
+     "type": "product",
+     "vendor": "Amazon",
+     "role": "primary",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 183,
+   "article_id": 98333,
+   "title": "Generate presentations with Amazon Bedrock AgentCore",
+   "url": "https://aws.amazon.com/blogs/machine-learning/generate-presentations-with-amazon-bedrock-agentcore/",
+   "publisher": "amazon.com",
+   "published_at": "2026-10-14 13:58:43.000000",
+   "event_type": "research",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Amazon Bedrock AgentCore",
+     "canonical": "Amazon Bedrock AgentCore",
+     "type": "product",
+     "vendor": "Amazon",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Anthropic Claude Sonnet 4.6",
+     "canonical": "Anthropic Claude Sonnet 4.6",
+     "type": "model",
+     "vendor": "Anthropic",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Amazon Titan Text Embeddings v2",
+     "canonical": "Amazon Titan Text Embeddings v2",
+     "type": "model",
+     "vendor": "Amazon",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Stability AI Stable Image Inpaint",
+     "canonical": "Stability AI Stable Image Inpaint",
+     "type": "model",
+     "vendor": "Stability AI",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Strands Agents",
+     "canonical": "Strands Agents",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Amazon OpenSearch Serverless",
+     "canonical": "Amazon OpenSearch Serverless",
+     "type": "product",
+     "vendor": "Amazon",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 184,
+   "article_id": 98334,
+   "title": "How Tamnoon built AI-powered cloud security remediation with Amazon Bedrock",
+   "url": "https://aws.amazon.com/blogs/machine-learning/how-tamnoon-built-ai-powered-cloud-security-remediation-with-amazon-bedrock/",
+   "publisher": "amazon.com",
+   "published_at": "2026-10-14 13:53:33.000000",
+   "event_type": "product_launch",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Tamnoon",
+     "canonical": "Tamnoon",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Tami",
+     "canonical": "Tami",
+     "type": "product",
+     "vendor": "Tamnoon",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Amazon Bedrock",
+     "canonical": "Amazon Bedrock",
+     "type": "product",
+     "vendor": "Amazon",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 185,
+   "article_id": 98337,
+   "title": "European Cities Deploy NVIDIA-Powered AI Agents to Run Smarter Urban Operations",
+   "url": "https://blogs.nvidia.com/blog/european-cities-agents-urban-operations/",
+   "publisher": "nvidia.com",
+   "published_at": "2026-10-14 06:00:28.000000",
+   "event_type": "partnership",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "NVIDIA",
+     "canonical": "NVIDIA",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "NVIDIA Cosmos",
+     "canonical": "NVIDIA Cosmos",
+     "type": "model",
+     "vendor": "NVIDIA",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "NVIDIA Metropolis Blueprint",
+     "canonical": "NVIDIA Metropolis Blueprint",
+     "type": "product",
+     "vendor": "NVIDIA",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "NVIDIA Nemotron",
+     "canonical": "NVIDIA Nemotron",
+     "type": "model",
+     "vendor": "NVIDIA",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "NVIDIA Omniverse",
+     "canonical": "NVIDIA Omniverse",
+     "type": "product",
+     "vendor": "NVIDIA",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "K2K",
+     "canonical": "K2K",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Linker Vision",
+     "canonical": "Linker Vision",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Akila",
+     "canonical": "Akila",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 186,
+   "article_id": 98339,
+   "title": "Researchers improve weather forecasts looking two to six weeks out",
+   "url": "https://news.mit.edu/2026/researchers-improve-weather-forecasts-looking-two-six-weeks-out-1014",
+   "publisher": "mit.edu",
+   "published_at": "2026-10-14 15:00:00.000000",
+   "event_type": "research",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "MIT",
+     "canonical": "MIT",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Nature",
+     "canonical": "Nature",
+     "type": "other",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 187,
+   "article_id": 98344,
+   "title": "Colossal Biosciences announces new AI platform to help accelerate de-extinction efforts",
+   "url": "https://techcrunch.com/2026/10/14/colossal-biosciences-announces-new-ai-platform-to-help-accelerate-de-extinction-efforts/",
+   "publisher": "techcrunch.com",
+   "published_at": "2026-10-14 21:00:00.000000",
+   "event_type": "product_launch",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Colossal Biosciences",
+     "canonical": "Colossal Biosciences",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "GenoMorph",
+     "canonical": "GenoMorph",
+     "type": "product",
+     "vendor": "Colossal Biosciences",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Ben Lamm",
+     "canonical": "Ben Lamm",
+     "type": "person",
+     "vendor": "Colossal Biosciences",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 188,
+   "article_id": 98348,
+   "title": "Mosqitter is turning its mosquito traps into an AI-powered surveillance network",
+   "url": "https://techcrunch.com/2026/10/14/mosqitter-is-turning-its-mosquito-traps-into-an-ai-powered-surveillance-network/",
+   "publisher": "techcrunch.com",
+   "published_at": "2026-10-14 17:00:00.000000",
+   "event_type": "product_launch",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Mosqitter",
+     "canonical": "Mosqitter",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Anastasiia Romanova",
+     "canonical": "Anastasiia Romanova",
+     "type": "person",
+     "vendor": "Mosqitter",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "World Health Organization",
+     "canonical": "World Health Organization",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 189,
+   "article_id": 98349,
+   "title": "Deezer will soon let you filter out AI-generated music",
+   "url": "https://techcrunch.com/2026/10/14/deezer-will-soon-let-you-filter-out-ai-generated-music/",
+   "publisher": "techcrunch.com",
+   "published_at": "2026-10-14 15:16:04.000000",
+   "event_type": "product_launch",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Deezer",
+     "canonical": "Deezer",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Alexis Lanternier",
+     "canonical": "Alexis Lanternier",
+     "type": "person",
+     "vendor": "Deezer",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Bandcamp",
+     "canonical": "Bandcamp",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Tidal",
+     "canonical": "Tidal",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 190,
+   "article_id": 98350,
+   "title": "McKinsey is making job applicants spar with a fake AI client",
+   "url": "https://www.theverge.com/news/1011654/mckinsey-ai-client-interview",
+   "publisher": "theverge.com",
+   "published_at": "2026-10-14 22:53:31.000000",
+   "event_type": "other",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "McKinsey & Company",
+     "canonical": "McKinsey & Company",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "The Wall Street Journal",
+     "canonical": "The Wall Street Journal",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 191,
+   "article_id": 98355,
+   "title": "YouTube sticks new labels on AI-generated songs",
+   "url": "https://www.theverge.com/ai-artificial-intelligence/1011369/youtube-music-ai-label",
+   "publisher": "theverge.com",
+   "published_at": "2026-10-14 18:22:56.000000",
+   "event_type": "product_launch",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "YouTube",
+     "canonical": "YouTube",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "YouTube Music",
+     "canonical": "YouTube Music",
+     "type": "product",
+     "vendor": "YouTube",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Spotify",
+     "canonical": "Spotify",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 192,
+   "article_id": 98361,
+   "title": "AI Came for Math. Now It\u2019s Chasing the Rest of Science",
+   "url": "https://www.wired.com/story/ai-is-coming-for-science-next-watch-out/",
+   "publisher": "wired.com",
+   "published_at": "2026-10-14 18:15:00.000000",
+   "event_type": "research",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Neil Thompson",
+     "canonical": "Neil Thompson",
+     "type": "person",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Gabriel Manso",
+     "canonical": "Gabriel Manso",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Claudio Mayrink Verdun",
+     "canonical": "Claudio Mayrink Verdun",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "OpenAI",
+     "canonical": "OpenAI",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "o1",
+     "canonical": "o1",
+     "type": "model",
+     "vendor": "OpenAI",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "o3",
+     "canonical": "o3",
+     "type": "model",
+     "vendor": "OpenAI",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "GPT-5.5",
+     "canonical": "GPT-5.5",
+     "type": "model",
+     "vendor": "OpenAI",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "MIT",
+     "canonical": "MIT",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 193,
+   "article_id": 98362,
+   "title": "My Friend Has No Soul",
+   "url": "https://www.wired.com/story/my-friend-has-no-soul/",
+   "publisher": "wired.com",
+   "published_at": "2026-10-14 11:00:00.000000",
+   "event_type": "product_launch",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Friend 2",
+     "canonical": "Friend 2",
+     "type": "product",
+     "vendor": "Friend",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Sage",
+     "canonical": "Sage",
+     "type": "product",
+     "vendor": "Friend",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Avi Schiffmann",
+     "canonical": "Avi Schiffmann",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Julian Chokkattu",
+     "canonical": "Julian Chokkattu",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Friend",
+     "canonical": "Friend",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 194,
+   "article_id": 98365,
+   "title": "Few-Shot Text Classification with Scikit-LLM",
+   "url": "https://www.kdnuggets.com/few-shot-text-classification-with-scikit-llm",
+   "publisher": "kdnuggets.com",
+   "published_at": "2026-10-14 14:00:00.000000",
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Scikit-LLM",
+     "canonical": "Scikit-LLM",
+     "type": "technology",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 195,
+   "article_id": 98408,
+   "title": "AI Real Estate CRM vs Traditional CRM: The Full Comparison",
+   "url": "https://emergent.sh/learn/ai-real-estate-crm-vs-traditional-crm",
+   "publisher": "emergent.sh",
+   "published_at": null,
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": []
+  },
+  {
+   "key": 196,
+   "article_id": 98409,
+   "title": "How to Build a Dashboard from a Prompt with an AI Dashboard Builder",
+   "url": "https://emergent.sh/learn/build-dashboard-from-prompt",
+   "publisher": "emergent.sh",
+   "published_at": null,
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Data Studio",
+     "canonical": "Data Studio",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Power BI",
+     "canonical": "Power BI",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Emergent",
+     "canonical": "Emergent",
+     "type": "product",
+     "vendor": "Emergent",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 197,
+   "article_id": 98410,
+   "title": "Best No-Code Client Dashboard Builders (7 Tools Compared)",
+   "url": "https://emergent.sh/learn/best-no-code-client-dashboard",
+   "publisher": "emergent.sh",
+   "published_at": null,
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "AgencyAnalytics",
+     "canonical": "AgencyAnalytics",
+     "type": "product",
+     "vendor": "AgencyAnalytics",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "DashThis",
+     "canonical": "DashThis",
+     "type": "product",
+     "vendor": "DashThis",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Databox",
+     "canonical": "Databox",
+     "type": "product",
+     "vendor": "Databox",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Data Studio",
+     "canonical": "Data Studio",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Emergent",
+     "canonical": "Emergent",
+     "type": "product",
+     "vendor": "Emergent",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Softr",
+     "canonical": "Softr",
+     "type": "product",
+     "vendor": "Softr",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Bubble",
+     "canonical": "Bubble",
+     "type": "product",
+     "vendor": "Bubble",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 198,
+   "article_id": 98411,
+   "title": "How to Automate Insurance Eligibility Verification with Skyvern",
+   "url": "https://www.skyvern.com/blog/automating-healthcare-insurance-eligibility-verification/",
+   "publisher": "skyvern.com",
+   "published_at": "2026-10-14 18:00:00.000000",
+   "event_type": "product_launch",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Skyvern",
+     "canonical": "Skyvern",
+     "type": "product",
+     "vendor": "Skyvern",
+     "role": "primary",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 199,
+   "article_id": 98412,
+   "title": "How to Automate Pharmacy Invoice Downloads",
+   "url": "https://www.skyvern.com/blog/automating-pharmacy-invoice-downloads-pbm-wholesaler-portals/",
+   "publisher": "skyvern.com",
+   "published_at": "2026-10-14 17:41:00.000000",
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Skyvern",
+     "canonical": "Skyvern",
+     "type": "product",
+     "vendor": "Skyvern",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "McKesson Connect",
+     "canonical": "McKesson Connect",
+     "type": "product",
+     "vendor": "McKesson",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 200,
+   "article_id": 98415,
+   "title": "How to Automate Invoice Downloads from Vendor Portals",
+   "url": "https://www.skyvern.com/blog/how-to-automate-downloading-invoices-september-2025/",
+   "publisher": "skyvern.com",
+   "published_at": "2026-10-14 12:48:00.000000",
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Skyvern",
+     "canonical": "Skyvern",
+     "type": "product",
+     "vendor": "Skyvern",
+     "role": "primary",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 201,
+   "article_id": 98497,
+   "title": "Tree Appreciator",
+   "url": "https://simonwillison.net/2026/Oct/14/tree-appreciator/",
+   "publisher": "simonwillison.net",
+   "published_at": "2026-10-14 21:23:01.000000",
+   "event_type": "other",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Claude",
+     "canonical": "Claude",
+     "type": "model",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Claude Opus 5.5 Max",
+     "canonical": "Claude Opus 5.5 Max",
+     "type": "model",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Tree appreciator",
+     "canonical": "Tree appreciator",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Claude Haiku 5.5",
+     "canonical": "Claude Haiku 5.5",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 202,
+   "article_id": 98512,
+   "title": "Research@ 2026: 10 ways we're amplifying human ingenuity",
+   "url": "https://research.google/blog/research-2026-10-ways-were-amplifying-human-ingenuity/",
+   "publisher": "research.google",
+   "published_at": "2026-10-14 16:14:34.000000",
+   "event_type": "product_launch",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Yossi Matias",
+     "canonical": "Yossi Matias",
+     "type": "person",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Google Research",
+     "canonical": "Google Research",
+     "type": "company",
+     "vendor": "Google",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Google Earth AI",
+     "canonical": "Google Earth AI",
+     "type": "product",
+     "vendor": "Google",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Google Dataset Search",
+     "canonical": "Google Dataset Search",
+     "type": "product",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "TimesFM",
+     "canonical": "TimesFM",
+     "type": "model",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Research@",
+     "canonical": "Research@",
+     "type": "other",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 203,
+   "article_id": 98514,
+   "title": "Analyzing technical documents with Deep Review",
+   "url": "https://research.google/blog/analyzing-technical-documents-with-deep-review/",
+   "publisher": "research.google",
+   "published_at": "2026-10-14 16:14:00.000000",
+   "event_type": "product_launch",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Deep Review",
+     "canonical": "Deep Review",
+     "type": "product",
+     "vendor": "Google",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Rajesh Jayaram",
+     "canonical": "Rajesh Jayaram",
+     "type": "person",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Vincent Cohen-Addad",
+     "canonical": "Vincent Cohen-Addad",
+     "type": "person",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Google Research",
+     "canonical": "Google Research",
+     "type": "company",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Google Docs",
+     "canonical": "Google Docs",
+     "type": "product",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 204,
+   "article_id": 98521,
+   "title": "Frontier Models for Every Robot",
+   "url": "https://www.pi.website/blog/api-beta?utm_source=tldrai",
+   "publisher": "pi.website",
+   "published_at": "2026-10-14 00:00:00.000000",
+   "event_type": "product_launch",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Pi API",
+     "canonical": "Pi API",
+     "type": "product",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "\u03c00.5",
+     "canonical": "\u03c00.5",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 205,
+   "article_id": 98336,
+   "title": "NVIDIA Announces New Investments in the UK Startup Ecosystem",
+   "url": "https://blogs.nvidia.com/blog/uk-ecosystem-deployment/",
+   "publisher": "nvidia.com",
+   "published_at": "2026-10-14 06:04:15.000000",
+   "event_type": "funding",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "NVIDIA",
+     "canonical": "NVIDIA",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Basecamp Research",
+     "canonical": "Basecamp Research",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Ineffable Intelligence",
+     "canonical": "Ineffable Intelligence",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Synthesia",
+     "canonical": "Synthesia",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Wayve",
+     "canonical": "Wayve",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Boltz",
+     "canonical": "Boltz",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Foresight",
+     "canonical": "Foresight",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Hiverge",
+     "canonical": "Hiverge",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 206,
+   "article_id": 98343,
+   "title": "CedarDB wants one database to handle both transactions and analytics, as AI agents raise the stakes",
+   "url": "https://techcrunch.com/2026/10/14/cedardb-wants-one-database-to-handle-both-transactions-and-analytics-as-ai-agents-raise-the-stakes/",
+   "publisher": "techcrunch.com",
+   "published_at": "2026-10-14 22:00:00.000000",
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "CedarDB",
+     "canonical": "CedarDB",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Moritz Sichert",
+     "canonical": "Moritz Sichert",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Umbra",
+     "canonical": "Umbra",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "PostgreSQL",
+     "canonical": "PostgreSQL",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Technical University of Munich",
+     "canonical": "Technical University of Munich",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 207,
+   "article_id": 98385,
+   "title": "'No More Handwritten Code': Epic Games Goes All-in on AI for Game Development",
+   "url": "https://www.extremetech.com/gaming/no-more-handwritten-code-epic-games-goes-all-in-on-ai-for-game-development",
+   "publisher": "extremetech.com",
+   "published_at": "2026-10-14 15:15:46.000000",
+   "event_type": "people_move",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Epic Games",
+     "canonical": "Epic Games",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Tim Sweeney",
+     "canonical": "Tim Sweeney",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Unreal Engine",
+     "canonical": "Unreal Engine",
+     "type": "product",
+     "vendor": "Epic Games",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Fortnite",
+     "canonical": "Fortnite",
+     "type": "product",
+     "vendor": "Epic Games",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Disney",
+     "canonical": "Disney",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 208,
+   "article_id": 98523,
+   "title": "Character.ai Filed for Chapter 11 Bankruptcy",
+   "url": "https://blog.character.ai/an-update-on-character-ai/?utm_source=tldrai",
+   "publisher": "character.ai",
+   "published_at": "2026-10-14 00:00:00.000000",
+   "event_type": "legal",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Character.ai",
+     "canonical": "Character.ai",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 209,
+   "article_id": 98526,
+   "title": "Moondream is joining Prime Intellect",
+   "url": "https://www.primeintellect.ai/blog/moondream?utm_source=tldrai",
+   "publisher": "primeintellect.ai",
+   "published_at": "2026-10-14 00:00:00.000000",
+   "event_type": "acquisition",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Moondream",
+     "canonical": "Moondream",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Prime Intellect",
+     "canonical": "Prime Intellect",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Vik Korrapati",
+     "canonical": "Vik Korrapati",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Jay Allen",
+     "canonical": "Jay Allen",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Photon",
+     "canonical": "Photon",
+     "type": "technology",
+     "vendor": "Moondream",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Moondream 3.1",
+     "canonical": "Moondream 3.1",
+     "type": "model",
+     "vendor": "Moondream",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Muse Wonder",
+     "canonical": "Muse Wonder",
+     "type": "model",
+     "vendor": "Meta",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 210,
+   "article_id": 98527,
+   "title": "SpaceXSI bundles X Premium, Grok, and Cursor into one subscription",
+   "url": "https://techcrunch.com/2026/10/13/spacexsi-bundles-x-premium-grok-and-cursor-into-one-subscription/?utm_source=tldrai",
+   "publisher": "techcrunch.com",
+   "published_at": "2026-10-14 00:00:00.000000",
+   "event_type": "product_launch",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "SpaceX Super Intelligence",
+     "canonical": "SpaceX Super Intelligence",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "The X Subscription",
+     "canonical": "The X Subscription",
+     "type": "product",
+     "vendor": "SpaceX Super Intelligence",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "X Premium",
+     "canonical": "X Premium",
+     "type": "product",
+     "vendor": "SpaceX Super Intelligence",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Grok",
+     "canonical": "Grok",
+     "type": "model",
+     "vendor": "SpaceX Super Intelligence",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Cursor",
+     "canonical": "Cursor",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "OpenAI",
+     "canonical": "OpenAI",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Anthropic",
+     "canonical": "Anthropic",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 211,
+   "article_id": 98531,
+   "title": "Nvidia's Jensen Huang pledges $2 billion for Europe, $250 million in compute for UK safety labs",
+   "url": "https://the-decoder.com/nvidias-jensen-huang-pledges-2-billion-for-europe-250-million-in-compute-for-uk-safety-labs/",
+   "publisher": "the-decoder.com",
+   "published_at": "2026-10-14 14:24:34.000000",
+   "event_type": "funding",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Nvidia",
+     "canonical": "Nvidia",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Jensen Huang",
+     "canonical": "Jensen Huang",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Doctolib",
+     "canonical": "Doctolib",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Genesis AI",
+     "canonical": "Genesis AI",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Pigment",
+     "canonical": "Pigment",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Entalpic",
+     "canonical": "Entalpic",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "BOLD",
+     "canonical": "BOLD",
+     "type": "other",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "SOFAIR",
+     "canonical": "SOFAIR",
+     "type": "other",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 212,
+   "article_id": 98345,
+   "title": "Flock CEO: We haven\u2019t \u2018fired\u2019 any police departments as customers",
+   "url": "https://techcrunch.com/2026/10/14/flock-ceo-we-havent-fired-any-police-departments-as-customers/",
+   "publisher": "techcrunch.com",
+   "published_at": "2026-10-14 20:26:25.000000",
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Flock",
+     "canonical": "Flock",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Garrett Langley",
+     "canonical": "Garrett Langley",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "TechCrunch",
+     "canonical": "TechCrunch",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Connie Loizos",
+     "canonical": "Connie Loizos",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 213,
+   "article_id": 98352,
+   "title": "Eight states sue OpenAI, saying ChatGPT isn&#8217;t safe for kids",
+   "url": "https://www.theverge.com/ai-artificial-intelligence/1011500/openai-state-lawsuits-chatgpt-safety",
+   "publisher": "theverge.com",
+   "published_at": "2026-10-14 21:11:28.000000",
+   "event_type": "legal",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "OpenAI",
+     "canonical": "OpenAI",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "ChatGPT",
+     "canonical": "ChatGPT",
+     "type": "product",
+     "vendor": "OpenAI",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Reuters",
+     "canonical": "Reuters",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 214,
+   "article_id": 98354,
+   "title": "Now that Character.AI is going bankrupt, what happens to all of its users&#8217; data?",
+   "url": "https://www.theverge.com/policy/1011417/new-york-ag-characterai-bankruptcy",
+   "publisher": "theverge.com",
+   "published_at": "2026-10-14 18:47:54.000000",
+   "event_type": "legal",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Character.AI",
+     "canonical": "Character.AI",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Letitia James",
+     "canonical": "Letitia James",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Disney",
+     "canonical": "Disney",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 215,
+   "article_id": 98384,
+   "title": "Tesla's Robotaxis Blow Through School Zones, NHTSA Petition Alleges",
+   "url": "https://www.extremetech.com/cars/teslas-robotaxis-blow-through-school-zones-nhtsa-petition-alleges",
+   "publisher": "extremetech.com",
+   "published_at": "2026-10-14 16:30:45.000000",
+   "event_type": "regulation_policy",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Tesla",
+     "canonical": "Tesla",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "NHTSA",
+     "canonical": "NHTSA",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Model Y Robotaxis",
+     "canonical": "Model Y Robotaxis",
+     "type": "product",
+     "vendor": "Tesla",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Cybercabs",
+     "canonical": "Cybercabs",
+     "type": "product",
+     "vendor": "Tesla",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Full Self-Driving",
+     "canonical": "Full Self-Driving",
+     "type": "technology",
+     "vendor": "Tesla",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Cybercab",
+     "canonical": "Cybercab",
+     "type": "product",
+     "vendor": "Tesla",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Waymo",
+     "canonical": "Waymo",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 216,
+   "article_id": 98515,
+   "title": "Governance Sets the Ceiling on Your Entire AI Security Program (Sponsor)",
+   "url": "https://www.sans.org/go/2026-ai-govern-field-guide?utm_source=TLDR&amp;utm_medium=Sponsored_Content&amp;utm_campaign=AI_Security_Maturity_Model_eBook_2026&amp;utm_content=SP_AI_GovernFieldGuide_10.14.26_header_governance_sets_ceiling&amp;utm_term=2026-10-14_tldr_ai&amp;utm_goal=Leads&amp;utm_rdetail=Global&amp;utm_type=Global_Campaign",
+   "publisher": "sans.org",
+   "published_at": "2026-10-14 00:00:00.000000",
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "SANS AI Security Maturity Model",
+     "canonical": "SANS AI Security Maturity Model",
+     "type": "benchmark",
+     "vendor": "SANS",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "AI Govern Field Guide",
+     "canonical": "AI Govern Field Guide",
+     "type": "product",
+     "vendor": "SANS",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "SANS",
+     "canonical": "SANS",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 217,
+   "article_id": 98539,
+   "title": "SR 26-2 Model Risk Management: What Replaced SR 11-7 and What It Means for LLMs and AI Agents",
+   "url": "https://www.fiddler.ai/blog/sr-26-2-model-risk-management-guidance",
+   "publisher": "fiddler.ai",
+   "published_at": "2026-10-14 07:00:00.000000",
+   "event_type": "regulation_policy",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "GPT-4",
+     "canonical": "GPT-4",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Chen et al.",
+     "canonical": "Chen et al.",
+     "type": "other",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 218,
+   "article_id": 98730,
+   "title": "Agentic AI Governance: How to Govern AI Agents in Production",
+   "url": "https://www.fiddler.ai/blog/agentic-ai-governance-production",
+   "publisher": "fiddler.ai",
+   "published_at": "2026-10-14 07:00:00.000000",
+   "event_type": "security_incident",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Delta Concierge",
+     "canonical": "Delta Concierge",
+     "type": "product",
+     "vendor": "Delta",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Aviation A2Z",
+     "canonical": "Aviation A2Z",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Delta",
+     "canonical": "Delta",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  }
+ ]
+}

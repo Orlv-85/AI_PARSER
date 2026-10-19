@@ -175,6 +175,98 @@
         margin: 0;
         color: var(--muted);
       }
+      .signals {
+        margin-top: 22px;
+        padding-top: 18px;
+        border-top: 1px solid var(--border);
+        overflow-wrap: anywhere;
+      }
+      .signals-kicker {
+        margin: 0 0 10px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+      .signals-status,
+      .signal-note,
+      .signal-meta {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+      .signal-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .signal-chip {
+        padding: 4px 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: rgba(15, 118, 110, 0.06);
+        font-size: 0.88rem;
+      }
+      .signal-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 14px;
+      }
+      .signal-card {
+        padding: 14px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        min-width: 0;
+      }
+      .signal-card h3 {
+        margin: 0;
+        font-size: 1rem;
+      }
+      .signal-list {
+        list-style: none;
+        margin: 8px 0 0;
+        padding: 0;
+      }
+      .signal-list li + li {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid var(--border);
+      }
+      .signal-badge {
+        margin-left: 6px;
+        padding: 1px 7px;
+        border-radius: 999px;
+        background: #fff3d6;
+        color: #7a4b00;
+        font-size: 0.75rem;
+      }
+      .signal-sources summary,
+      .signal-cooling summary {
+        cursor: pointer;
+        color: var(--accent);
+        font-size: 0.88rem;
+      }
+      .signal-links {
+        margin: 6px 0 0;
+        padding-left: 18px;
+        font-size: 0.88rem;
+      }
+      .signal-links a {
+        color: var(--accent);
+      }
+      .signal-quote {
+        margin: 6px 0 0;
+        font-size: 0.88rem;
+        font-style: italic;
+      }
+      .signal-cooling {
+        margin-top: 12px;
+      }
       @media (max-width: 700px) {
         main {
           padding-top: 28px;
@@ -182,7 +274,8 @@
         .hero {
           padding: 22px;
         }
-        .preview-grid {
+        .preview-grid,
+        .signal-grid {
           grid-template-columns: 1fr;
         }
       }
@@ -203,6 +296,10 @@
         <p class="lede">The latest published AI news briefing, defaulting to yesterday in UTC. Pick another date to browse earlier digests.</p>
         <label for="digest-date">Digest Date</label>
         <input id="digest-date" type="date" value="__REPORT_DATE__" />
+        <section id="daily-signals" class="signals" aria-labelledby="daily-signals-heading">
+          <p id="daily-signals-heading" class="signals-kicker">Daily AI Signals</p>
+          <div id="daily-signals-body">__SIGNALS_CONTENT__</div>
+        </section>
         <div class="digest-shell">
           <div id="digest-empty-state" class="__EMPTY_STATE_CLASS__">
             <p id="digest-empty-text" class="lede" style="margin: 0;">
@@ -305,6 +402,115 @@
             `;
           })
           .join("");
+      }
+
+      const signalsBody = document.getElementById("daily-signals-body");
+      const SIGNALS_UNAVAILABLE = "Daily signals are not available for this date yet.";
+      const SIGNALS_ERROR = "Daily signals are temporarily unavailable.";
+      const SIGNALS_LOADING = "Loading daily signals...";
+
+      const EVENT_SINGULAR = {
+        "model releases": "model release", "product launches": "product launch",
+        "funding rounds": "funding round", "acquisitions": "acquisition",
+        "partnerships": "partnership", "infrastructure deals": "infrastructure deal",
+        "security incidents": "security incident", "people moves": "people move",
+        "benchmark results": "benchmark result",
+      };
+
+      function eventLabel(count, label) {
+        return count + " " + (count === 1 ? EVENT_SINGULAR[label] || label : label);
+      }
+
+      function signalStatus(text) {
+        return `<p class="signals-status">${escapeHtml(text)}</p>`;
+      }
+
+      function signalLinks(links, quote) {
+        const items = (links || []).filter((link) => /^https?:\/\//i.test(link.url))
+          .map((link) => `<li><a href="${escapeHtml(link.url)}" target="_blank" rel="noreferrer">${escapeHtml(link.title)}</a> <span>${escapeHtml(link.publisher)}</span></li>`)
+          .join("");
+        const said = quote ? `<p class="signal-quote">Source says: "${escapeHtml(quote)}"</p>` : "";
+        if (!items && !said) return "";
+        return `<details class="signal-sources"><summary>sources</summary><ul class="signal-links">${items}</ul>${said}</details>`;
+      }
+
+      function signalMeta(parts) {
+        return `<p class="signal-meta">${parts.filter(Boolean).map(escapeHtml).join(" &middot; ")}</p>`;
+      }
+
+      function sourceCount(count) {
+        return count + " source" + (count === 1 ? "" : "s");
+      }
+
+      function signalTrend(item) {
+        const counts = item.current_7d != null
+          ? `7d: ${item.previous_7d} &rarr; ${item.current_7d} (expected ${Number(item.expected_7d)})`
+          : `today ${item.today} vs ${Number(item.trailing_mean || 0)}/day`;
+        const badge = item.spike ? ' <span class="signal-badge">spike</span>' : "";
+        return `<li><strong>${escapeHtml(item.name)}</strong>${badge}<p class="signal-meta">${counts}</p>${signalLinks(item.links)}</li>`;
+      }
+
+      function signalCard(title, body, note, id, empty) {
+        const text = note || (body ? "" : empty);
+        const noteHtml = text ? `<p class="signal-note">${escapeHtml(text)}</p>` : "";
+        return `<section class="signal-card" id="${id}"><h3>${escapeHtml(title)}</h3>${noteHtml}<ul class="signal-list">${body}</ul></section>`;
+      }
+
+      function renderSignals(payload) {
+        if (!payload || payload.status === "unavailable") {
+          signalsBody.innerHTML = signalStatus((payload && payload.notes && payload.notes[0]) || SIGNALS_UNAVAILABLE);
+          return;
+        }
+        const sections = payload.sections || {};
+        const labels = Object.fromEntries((payload.event_counts || []).map((c) => [c.event_type, eventLabel(1, c.label).split(" ").slice(1).join(" ")]));
+        const chips = (payload.event_counts || []).filter((c) => c.stories)
+          .map((c) => `<li class="signal-chip">${escapeHtml(eventLabel(c.stories, c.label))}</li>`).join("");
+        const cov = payload.coverage || {};
+        const lines = payload.status === "partial"
+          ? signalStatus(`Extracted ${cov.extracted}/${cov.items} digest items; signals may be incomplete.`)
+          : (payload.notes || []).map(signalStatus).join("");
+        const newItems = (payload.new || []).map((item) => {
+          const badge = item.level === "early" ? ' <span class="signal-badge">early signal</span>' : "";
+          const variant = item.variant_of ? `<p class="signal-meta">variant of ${escapeHtml(item.variant_of)}</p>` : "";
+          const also = (item.variants || []).length ? `<p class="signal-meta">also: ${escapeHtml(item.variants.join(", "))}</p>` : "";
+          return `<li><strong>${escapeHtml(item.name)}</strong>${badge}${signalMeta([item.type, item.vendor, sourceCount(item.publishers)])}${variant}${also}${signalLinks(item.links, item.novelty_quote)}</li>`;
+        }).join("");
+        const stories = (payload.top_stories || []).map((story) =>
+          `<li><strong>${escapeHtml(story.label)}</strong>${signalMeta([sourceCount(story.publishers), labels[story.event_type]])}${signalLinks(story.links)}</li>`).join("");
+        const rising = sections.rising || {};
+        const cards = [
+          signalCard("New", newItems, sections.new && sections.new.note, "signals-new", "Nothing was first seen in our corpus on this date."),
+          signalCard("Top stories", stories, sections.top_stories && sections.top_stories.note, "signals-top", "No story was covered by more than one publisher."),
+          signalCard(rising.state === "spikes_only" ? "Spikes" : "Rising", (payload.rising || []).map(signalTrend).join(""), rising.note, "signals-rising", "Nothing is rising or spiking on this date."),
+        ].join("");
+        const cooling = sections.cooling && sections.cooling.state === "ready"
+          ? `<details class="signal-cooling"><summary>Cooling (${(payload.cooling || []).length})</summary><ul class="signal-list">${(payload.cooling || []).map(signalTrend).join("")}</ul></details>`
+          : "";
+        signalsBody.innerHTML = `<ul class="signal-chips">${chips}</ul>${lines}<div class="signal-grid">${cards}</div>${cooling}`;
+      }
+
+      async function loadSignals(selectedDate) {
+        // Never keep the previous date's signals on screen while the new date loads.
+        signalsBody.innerHTML = signalStatus(SIGNALS_LOADING);
+        let payload = null;
+        let failed = false;
+        try {
+          const response = await fetch("/api/news/daily-signals?date=" + encodeURIComponent(selectedDate));
+          if (response.ok) {
+            payload = await response.json();
+          } else {
+            failed = true;
+          }
+        } catch (_error) {
+          failed = true;
+        }
+        // Ignore a late answer for a date that is no longer selected.
+        if (dateInput.value !== selectedDate) return;
+        if (failed) {
+          signalsBody.innerHTML = signalStatus(SIGNALS_ERROR);
+          return;
+        }
+        renderSignals(payload);
       }
 
       function renderWeeklyPreviewList(node, items, message, limit = 3) {
@@ -439,7 +645,10 @@
       }
 
       dateInput.addEventListener("change", async () => {
-        await loadDigest(dateInput.value);
+        const selected = dateInput.value;
+        // Signals load on their own, also when the digest request fails.
+        void loadSignals(selected);
+        await loadDigest(selected);
       });
     </script>
   </body>

@@ -178,3 +178,16 @@ def test_settings_treat_blank_publish_token_as_unset() -> None:
     settings = Settings(_env_file=None, publish_api_token="   ")
 
     assert settings.publish_api_token is None
+
+
+@pytest.mark.parametrize("method", ["POST", "PUT", "PATCH", "DELETE"])
+def test_daily_signals_api_is_public_for_reads_only(monkeypatch, tmp_path, method) -> None:
+    client = _build_client(monkeypatch, tmp_path)
+    url = "/api/news/daily-signals?date=2026-10-16"
+    assert client.get(url).status_code == 200
+    # HEAD passes the auth check; FastAPI does not route HEAD for GET endpoints (405).
+    assert client.head(url).status_code != 401
+    assert client.request(method, url, json={}).status_code == 401
+    # The publish token is only for the two publish paths, not for daily signals.
+    bearer = {"Authorization": f"Bearer {_PUBLISH_TOKEN}"}
+    assert client.request(method, url, json={}, headers=bearer).status_code == 401

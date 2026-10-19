@@ -174,3 +174,38 @@ def test_settings_allow_mcp_with_valid_token_when_enabled() -> None:
         _env_file=None,
     )
     assert settings.mcp_auth_enabled is True
+
+
+def test_daily_signals_defaults_and_env(monkeypatch) -> None:
+    settings = Settings(_env_file=None)
+    assert settings.daily_signals_enabled is False
+    assert str(settings.daily_signals_comparable_from) == "2026-10-10"
+    assert (settings.daily_signals_max_calls, settings.daily_signals_max_seconds,
+            settings.daily_signals_max_usd) == (200, 2700, "0.50")
+    monkeypatch.setenv("AINEWS_DAILY_SIGNALS_ENABLED", "true")
+    monkeypatch.setenv("AINEWS_DAILY_SIGNALS_COMPARABLE_FROM", "2026-11-01")
+    monkeypatch.setenv("AINEWS_DAILY_SIGNALS_MAX_CALLS", "5")
+    monkeypatch.setenv("AINEWS_DAILY_SIGNALS_MAX_SECONDS", "600")
+    monkeypatch.setenv("AINEWS_DAILY_SIGNALS_MAX_USD", "1.25")
+    settings = Settings(_env_file=None)
+    assert settings.daily_signals_enabled is True
+    assert str(settings.daily_signals_comparable_from) == "2026-11-01"
+    assert (settings.daily_signals_max_calls, settings.daily_signals_max_seconds,
+            settings.daily_signals_max_usd) == (5, 600, "1.25")
+
+
+@pytest.mark.parametrize("value", ["abc", "0", "-1", "nan", "inf", "0.0000001"])
+def test_daily_signals_rejects_invalid_usd(value) -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, daily_signals_max_usd=value)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("daily_signals_max_calls", 0), ("daily_signals_max_calls", 5001),
+    ("daily_signals_max_seconds", 59), ("daily_signals_max_seconds", 14401)])
+def test_daily_signals_cap_bounds(field, value) -> None:
+    # N3: the plan's bounds (calls 1..5000, seconds 60..14400) are enforced.
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, **{field: value})
+    assert Settings(_env_file=None, daily_signals_max_calls=5000,
+                    daily_signals_max_seconds=14400).daily_signals_max_seconds == 14400

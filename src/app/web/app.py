@@ -26,6 +26,7 @@ from app.core.source_onboarding import (
 )
 from app.storage import SessionLocal, create_all
 from app.storage.admission import read_collection_status
+from app.storage.daily_signals import DailySignalRepo
 from app.storage.models_sql import Article, Base, FetchRun, NewsDigestReport
 from app.storage.repos import (
     ArticleRepo,
@@ -39,6 +40,7 @@ from app.storage.repos import (
 )
 from app.web.auth import SessionSigner, verify_bearer_token, verify_password
 from app.web.models import (
+    DailySignalsResponse,
     DigestLinkFeedItem,
     NewsArticleDetail,
     NewsCollectionStatusResponse,
@@ -70,10 +72,12 @@ from app.web.models import (
 )
 from app.web.service import SourceOnboardingService, UpdateRunService
 from app.web.settings_store import UpdateSettingsStore
+from app.web.signals_view import render_signals
 from app.web.source_intake import SourceIntakeService
 
 _TEMPLATE = Path(__file__).with_name("index.html")
 _DIGEST_TEMPLATE = Path(__file__).with_name("digest.html")
+_PLACEHOLDER = re.compile(r"__[A-Z_]+__")
 _LOGIN_TEMPLATE = Path(__file__).with_name("login.html")
 _NEWS_STATS_TEMPLATE = Path(__file__).with_name("news_stats.html")
 _WEEKLY_ANALYTICS_TEMPLATE = Path(__file__).with_name("weekly_analytics.html")
@@ -121,7 +125,31 @@ def _article_category_metadata(article: object) -> dict[str, Any]:
     return result
 
 
-def _render_digest(*, report_date: date, digest: NewsDigestReport | None) -> str:
+def _daily_signals_response(*, report_date: date, payload: str | None) -> DailySignalsResponse:
+    """Stored snapshot as the API model; missing or unreadable -> `unavailable`."""
+    if payload is None:
+        return DailySignalsResponse(report_date=report_date, status="unavailable")
+    try:
+        return DailySignalsResponse.model_validate(json.loads(payload))
+    except (ValueError, TypeError) as exc:
+        _LOGGER.error("daily_signals_payload_unreadable report_date=%s error=%s",
+                      report_date.isoformat(), type(exc).__name__)
+        return DailySignalsResponse(report_date=report_date, status="unavailable",
+                                    notes=["Daily signals could not be read."])
+
+
+def _read_daily_signals(report_date: date) -> DailySignalsResponse:
+    """One indexed read of the stored snapshot; never calls a provider."""
+    with SessionLocal() as session:
+        repo = DailySignalRepo(session,
+                               comparable_from=get_settings().daily_signals_comparable_from)
+        row = repo.get_report(report_date)
+        payload = row.payload if row is not None else None
+    return _daily_signals_response(report_date=report_date, payload=payload)
+
+
+def _render_digest(*, report_date: date, digest: NewsDigestReport | None,
+                   signals_html: str = "") -> str:
     default_report_date = datetime.now(UTC).date() - timedelta(days=1)
     hero_title = (
         "Yesterday's Digest"
@@ -152,15 +180,18 @@ def _render_digest(*, report_date: date, digest: NewsDigestReport | None) -> str
             )
         digest_content = "".join(sections)
 
-    return (
-        _DIGEST_TEMPLATE.read_text(encoding="utf-8")
-        .replace("__HERO_TITLE__", hero_title)
-        .replace("__REPORT_DATE__", report_date.isoformat())
-        .replace("__REPORT_DATE_QUERY__", f"?date={report_date.isoformat()}")
-        .replace("__DEFAULT_REPORT_DATE__", default_report_date.isoformat())
-        .replace("__EMPTY_STATE_CLASS__", empty_state_class)
-        .replace("__DIGEST_CONTENT__", digest_content)
-    )
+    values = {
+        "__HERO_TITLE__": hero_title,
+        "__REPORT_DATE__": report_date.isoformat(),
+        "__REPORT_DATE_QUERY__": f"?date={report_date.isoformat()}",
+        "__DEFAULT_REPORT_DATE__": default_report_date.isoformat(),
+        "__EMPTY_STATE_CLASS__": empty_state_class,
+        "__DIGEST_CONTENT__": digest_content,
+        "__SIGNALS_CONTENT__": signals_html,
+    }
+    # One pass: placeholder names inside inserted digest or signals text stay literal (N1).
+    return _PLACEHOLDER.sub(lambda m: values.get(m.group(0), m.group(0)),
+                            _DIGEST_TEMPLATE.read_text(encoding="utf-8"))
 
 
 def _render_login() -> str:
@@ -411,6 +442,7 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
         is_public_news_api = request.method in _PUBLIC_READ_METHODS and path in {
             "/api/news/links",
             "/api/news/digests",
+            "/api/news/daily-signals",
             "/api/news/stats/daily",
             "/api/news/weekly-analytics",
             "/api/news/weekly-analytics/reports",
@@ -463,8 +495,14 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
                 digest = NewsDigestRepo(session).get_digest(report_date=report_date)
         except SQLAlchemyError as exc:
             raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
-
-        return _render_digest(report_date=report_date, digest=digest)
+        # Separate read: a signals failure never takes the digest page down.
+        try:
+            signals_html = render_signals(_read_daily_signals(report_date))
+        except Exception as exc:  # any signals failure (F5): the digest page stays up
+            _LOGGER.error("daily_signals_read_failed report_date=%s error=%s",
+                          report_date.isoformat(), type(exc).__name__)
+            signals_html = render_signals(None, read_error=True)
+        return _render_digest(report_date=report_date, digest=digest, signals_html=signals_html)
 
     @api.get("/weekly-ai-analytics", response_class=HTMLResponse)
     def weekly_ai_analytics(
@@ -802,6 +840,14 @@ def create_app() -> FastAPI:  # pylint: disable=too-many-statements
             raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
 
         return _build_digest_response(report_date=target_date, digest=digest)
+
+    @api.get("/api/news/daily-signals", response_model=DailySignalsResponse)
+    def get_daily_signals(*, target_date: date = _NEWS_DIGEST_DATE_QUERY) -> DailySignalsResponse:
+        try:
+            create_all()
+            return _read_daily_signals(target_date)
+        except SQLAlchemyError as exc:
+            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
 
     @api.get("/api/news/stats/daily", response_model=NewsDailyStatsResponse)
     def get_news_daily_stats(

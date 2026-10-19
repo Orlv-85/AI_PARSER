@@ -406,5 +406,141 @@ class WeeklyPublication(Base):
     )
 
 
+
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
+class ArticleSignal(Base):  # pylint: disable=too-many-instance-attributes
+    """One extraction attempt result per article and extraction version (feature 006)."""
+    __tablename__ = "article_signals"
+    __table_args__ = (UniqueConstraint("article_id", "extraction_version",
+                                       name="uq_article_signals_article_version"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    article_id: Mapped[int] = mapped_column(ForeignKey("articles.id", ondelete="CASCADE"),
+                                            index=True)
+    # With the id, the article identity; rows of a deleted article never match a reused id.
+    url_canonical_hash: Mapped[str] = mapped_column(String(64))
+    extraction_version: Mapped[str] = mapped_column(String(64))
+    content_hash: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(16), index=True)
+    reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    retry_used: Mapped[bool] = mapped_column(Boolean, default=False)
+    event_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    novelty_claim: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    payload: Mapped[str] = mapped_column(Text, default="{}")
+    provenance: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+
+
+class DailySignalScope(Base):
+    """Digest membership: which articles belong to which digest day."""
+    __tablename__ = "daily_signal_scope"
+    __table_args__ = (UniqueConstraint("scope_day", "article_id",
+                                       name="uq_daily_signal_scope_day_article"),
+                      Index("ix_daily_signal_scope_kind_day", "kind", "scope_day"))
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    scope_day: Mapped[date] = mapped_column(Date)
+    article_id: Mapped[int] = mapped_column(ForeignKey("articles.id", ondelete="CASCADE"),
+                                            index=True)
+    url_canonical_hash: Mapped[str] = mapped_column(String(64))
+    kind: Mapped[str] = mapped_column(String(16))
+    publisher: Mapped[str] = mapped_column(String(255))
+    item_url: Mapped[str] = mapped_column(String(2048))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+
+
+class SignalMention(Base):  # pylint: disable=too-many-instance-attributes
+    """Mention evidence; no FK to articles so it survives retention (plan Decision 4)."""
+    __tablename__ = "signal_mentions"
+    __table_args__ = (
+        UniqueConstraint("scope_day", "article_id", "url_canonical_hash", "extraction_version",
+                         "name_key", "type_group", name="uq_signal_mentions_identity"),
+        Index("ix_signal_mentions_article_hash", "article_id", "url_canonical_hash"),
+        Index("ix_signal_mentions_group_base", "type_group", "base_key"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    article_id: Mapped[int] = mapped_column(Integer)
+    url_canonical_hash: Mapped[str] = mapped_column(String(64))
+    scope_day: Mapped[date] = mapped_column(Date, index=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    extraction_version: Mapped[str] = mapped_column(String(64))
+    publisher: Mapped[str] = mapped_column(String(255))
+    surface_name: Mapped[str] = mapped_column(String(255))
+    canonical_name: Mapped[str] = mapped_column(String(255))
+    name_key: Mapped[str] = mapped_column(String(255))
+    base_key: Mapped[str] = mapped_column(String(255))
+    family_key: Mapped[str] = mapped_column(String(255))
+    type_group: Mapped[str] = mapped_column(String(16))
+    entity_type: Mapped[str] = mapped_column(String(32))
+    vendor: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    vendor_key: Mapped[str] = mapped_column(String(255), default="")
+    vendor_inferred: Mapped[bool] = mapped_column(Boolean, default=False)
+    role: Mapped[str] = mapped_column(String(16))
+    is_new: Mapped[bool] = mapped_column(Boolean)
+    novelty_quote: Mapped[str | None] = mapped_column(String(400), nullable=True)
+    entity_key: Mapped[str | None] = mapped_column(String(300), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+
+
+class AIEntity(Base):  # pylint: disable=too-many-instance-attributes
+    """Derived entity with a stable id per entity_key."""
+    __tablename__ = "ai_entities"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    entity_key: Mapped[str] = mapped_column(String(300), unique=True)
+    display_name: Mapped[str] = mapped_column(String(255))
+    type_group: Mapped[str] = mapped_column(String(16))
+    type: Mapped[str] = mapped_column(String(32))
+    vendor: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    vendor_class: Mapped[str] = mapped_column(String(255), default="")
+    base_key: Mapped[str] = mapped_column(String(255))
+    family_key: Mapped[str] = mapped_column(String(255))
+    first_seen_day: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    needs_review: Mapped[bool] = mapped_column(Boolean, default=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+
+
+class AIEntityOverride(Base):  # pylint: disable=too-many-instance-attributes
+    """Operator alias/merge override selecting mentions by stable selectors."""
+    __tablename__ = "ai_entity_overrides"
+    __table_args__ = (UniqueConstraint("kind", "type_group", "match_key", "vendor_class",
+                                       name="uq_ai_entity_overrides_selector"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    kind: Mapped[str] = mapped_column(String(16), index=True)
+    type_group: Mapped[str] = mapped_column(String(16))
+    match_key: Mapped[str] = mapped_column(String(255))
+    vendor_class: Mapped[str] = mapped_column(String(255), default="")
+    target_base_key: Mapped[str] = mapped_column(String(255))
+    target_vendor_class: Mapped[str] = mapped_column(String(255), default="")
+    target_entity_key: Mapped[str] = mapped_column(String(300))
+    note: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+
+
+class DailySignalReport(Base):  # pylint: disable=too-many-instance-attributes
+    """Stored daily signals snapshot (one per comparable published day)."""
+    __tablename__ = "daily_signal_reports"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    report_date: Mapped[date] = mapped_column(Date, unique=True, index=True)
+    methodology_version: Mapped[str] = mapped_column(String(64))
+    extraction_version: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(32))
+    payload_hash: Mapped[str] = mapped_column(String(64))
+    thresholds: Mapped[str] = mapped_column(Text)
+    payload: Mapped[str] = mapped_column(Text)
+    coverage: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+
 Index("ix_articles_published_at_desc", Article.published_at.desc())
 Index("ix_articles_rank_score_desc", Article.rank_score.desc())

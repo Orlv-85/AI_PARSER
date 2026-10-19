@@ -43,6 +43,56 @@ the Troubleshooting section of `README.md`.
       "cause": "is_public_news_api was a path-only allowlist; the same paths also serve POST handlers that write data. Publishers now need credentials.",
       "fix": "The allowlist is public for GET/HEAD only; other methods on /api/ require a session cookie, or AINEWS_PUBLISH_API_TOKEN as 'Authorization: Bearer <token>' for POST to the two publish paths. In production the token comes from the AINEWS_PUBLISH_API_TOKEN repository secret (deploy workflows write it to .env); give the publisher the same value.",
       "verification": "tests/unit/test_public_api_write_auth.py; production probe: curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{}' https://<host>/api/news/digests returns 401."
+    },
+    {
+      "id": "sqlalchemy-dict-over-result",
+      "date": "2026-10-18",
+      "area": "storage (SQLAlchemy 2.1)",
+      "symptom": "TypeError: 'ChunkedIteratorResult' object is not subscriptable from dict(session.execute(select(a, b)).tuples()); also SADeprecationWarning: The Result.tuples() method is deprecated.",
+      "cause": "A Result has a keys() method, so dict() treats it as a mapping and subscripts it instead of iterating rows. Result.tuples() is deprecated in SQLAlchemy 2.1 (rows already behave like tuples).",
+      "fix": "Materialize the rows first: dict(session.execute(stmt).all()); iterate the Result directly elsewhere; do not call .tuples().",
+      "verification": "tests/unit/test_daily_signals_repo.py passes with -W error::DeprecationWarning."
+    },
+    {
+      "id": "alembic-only-db-has-no-digest-tables",
+      "date": "2026-10-18",
+      "area": "migrations / tests",
+      "symptom": "A migration test that upgrades a fresh SQLite file with `alembic upgrade` and then writes NewsDigestReport fails with 'no such table: news_digest_reports'.",
+      "cause": "The digest tables (news_digest_reports/groups/items) have no Alembic migration; they are created by create_all() when the app or CLI starts. A database built only by Alembic lacks them.",
+      "fix": "In migration tests, use tables that migrations create (e.g. articles) for pre-feature rows, or call Base.metadata.create_all() before writing digests.",
+      "verification": "tests/unit/test_daily_signals_migration.py passes."
+    },
+    {
+      "id": "alembic-env-disables-loggers",
+      "date": "2026-10-18",
+      "area": "tests (caplog)",
+      "symptom": "Full suite: tests/unit/test_mcp_server.py and test_ingest_rss_additional.py fail with empty caplog.text, but pass when run alone.",
+      "cause": "A test that runs `alembic command.upgrade` executes src/app/storage/migrations/env.py, whose logging.config.fileConfig(alembic.ini) disables all existing loggers. Every test collected after it loses log capture. test_weekly_storage.py does the same but sorts after the affected files.",
+      "fix": "In migration tests, monkeypatch logging.config.fileConfig to a no-op before calling alembic commands.",
+      "verification": "Full ./venv1/bin/pytest passes with tests/unit/test_daily_signals_migration.py collected before test_mcp_server.py."
+    },
+    {
+      "id": "local-suite-skips-postgres-integration",
+      "date": "2026-10-18",
+      "area": "tests/integration, CI",
+      "symptom": "Local ./venv1/bin/pytest is green with '9 skipped', but CI fails in tests/integration/test_legacy_cleanup_postgres.py, e.g. 'ValueError: Unknown article FK dependency: article_signals'.",
+      "evidence": ["GitHub Actions run 39145455108 (branch feat/006-daily-ai-signals)"],
+      "cause": "The PostgreSQL integration tests skip unless AINEWS_TEST_POSTGRES_URL is set; CI sets it with a postgres:18-alpine service. Separately, legacy cleanup refuses to run when any table has an unknown FK to articles, so a new table referencing articles must be declared to that guard.",
+      "fix": "Run the suite against a local Postgres like CI: docker run -d --rm --name ainews-pg-test -e POSTGRES_USER=ainews_test -e POSTGRES_PASSWORD=isolated_ci_test -e POSTGRES_DB=ainews_test -p 55432:5432 postgres:18-alpine, then AINEWS_TEST_POSTGRES_URL=postgresql+psycopg://ainews_test:isolated_ci_test@127.0.0.1:55432/ainews_test in the clean-copy run. For a new FK to articles, extend legacy_cleanup.known_article_fk (derived signals tables are accepted only with ON DELETE CASCADE).",
+      "verification": "Full suite with the URL set: 1082 passed, 0 skipped."
+    },
+    {
+      "id": "sqlite-reused-article-id-inherits-signals",
+      "date": "2026-10-19",
+      "area": "storage/daily_signals",
+      "symptom": "On local SQLite a newly fetched article shows as already extracted for daily signals, or appears in an older day's observations with another article's entities; on PostgreSQL the same flow is correct.",
+      "evidence": [
+        "PR #39 review (A-claude A04, A-gpt A05/A06): delete an extracted article, insert a new one that gets the same id, publish it in a digest",
+        "tests/unit/test_daily_signals_repo.py enabled PRAGMA foreign_keys=ON, unlike the app"
+      ],
+      "cause": "The app never enables SQLite foreign keys, so ON DELETE CASCADE does not remove article_signals and daily_signal_scope rows of a deleted article, and SQLite reuses the highest rowid. Rows keyed by article_id alone were inherited by the new article.",
+      "fix": "Key scope, extraction rows, coverage, observations and evidence writes by (article_id, url_canonical_hash); both tables store url_canonical_hash and a stale row is ignored or taken over and reset. The global SQLite pragma stays unchanged. Commit a1a91bd (F9).",
+      "verification": "test_reused_article_id_without_fk_enforcement_inherits_nothing (no FK pragma) fails on 8f30549 and passes after the fix; full suite with PostgreSQL green."
     }
   ]
 }

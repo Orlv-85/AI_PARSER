@@ -1,0 +1,3174 @@
+{
+ "day": "2026-10-12",
+ "source": "public digest + dry-run extraction (no article bodies); article_id = local SQLite id",
+ "articles": [
+  {
+   "key": 0,
+   "article_id": 97952,
+   "title": "Meta releases its first frontier model, Muse Wonder",
+   "url": "https://techcrunch.com/2026/10/12/meta-releases-its-first-frontier-model-muse-wonder/",
+   "publisher": "techcrunch.com",
+   "published_at": "2026-10-12 17:56:56.000000",
+   "event_type": "model_release",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Muse Wonder",
+     "canonical": "Muse Wonder",
+     "type": "model",
+     "vendor": "Meta",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Muse Wonder Full",
+     "canonical": "Muse Wonder Full",
+     "type": "model",
+     "vendor": "Meta",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Meta",
+     "canonical": "Meta",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Muse Spark",
+     "canonical": "Muse Spark",
+     "type": "model",
+     "vendor": "Meta",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Fable 5.1",
+     "canonical": "Fable 5.1",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "GPT-6 Astra",
+     "canonical": "GPT-6 Astra",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "MemoryBench",
+     "canonical": "MemoryBench",
+     "type": "benchmark",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 1,
+   "article_id": 97959,
+   "title": "Meta's new Muse Wonder and Muse Wonder Full models achieve frontier performance, but only the weaker one is available via API",
+   "url": "https://venturebeat.com/technology/metas-new-muse-wonder-and-muse-wonder-full-models-achieve-frontier-performance-but-only-the-weaker-one-is-available-via-api",
+   "publisher": "venturebeat.com",
+   "published_at": "2026-10-12 20:04:04.000000",
+   "event_type": "model_release",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Muse Wonder",
+     "canonical": "Muse Wonder",
+     "type": "model",
+     "vendor": "Meta",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Muse Wonder Full",
+     "canonical": "Muse Wonder Full",
+     "type": "model",
+     "vendor": "Meta",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Meta Superintelligence Labs",
+     "canonical": "Meta Superintelligence Labs",
+     "type": "company",
+     "vendor": "Meta",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Alexandr Wang",
+     "canonical": "Alexandr Wang",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Artificial Analysis",
+     "canonical": "Artificial Analysis",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Claude Sonnet 5.5",
+     "canonical": "Claude Sonnet 5.5",
+     "type": "model",
+     "vendor": "Anthropic",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "GPT-6 Astra",
+     "canonical": "GPT-6 Astra",
+     "type": "model",
+     "vendor": "OpenAI",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Claude Opus 5.5",
+     "canonical": "Claude Opus 5.5",
+     "type": "model",
+     "vendor": "Anthropic",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 2,
+   "article_id": 97960,
+   "title": "Meta has some Wonder Full new AI models",
+   "url": "https://www.theverge.com/ai-artificial-intelligence/1009479/meta-muse-wonder-full-ai-model",
+   "publisher": "theverge.com",
+   "published_at": "2026-10-12 17:00:00.000000",
+   "event_type": "model_release",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Muse Wonder",
+     "canonical": "Muse Wonder",
+     "type": "model",
+     "vendor": "Meta",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Muse Wonder Full",
+     "canonical": "Muse Wonder Full",
+     "type": "model",
+     "vendor": "Meta",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Meta",
+     "canonical": "Meta",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Muse Spark",
+     "canonical": "Muse Spark",
+     "type": "model",
+     "vendor": "Meta",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Muse",
+     "canonical": "Muse",
+     "type": "product",
+     "vendor": "Meta",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "GPT-6 Astra",
+     "canonical": "GPT-6 Astra",
+     "type": "model",
+     "vendor": "OpenAI",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Claude Opus 5.5",
+     "canonical": "Claude Opus 5.5",
+     "type": "model",
+     "vendor": "Anthropic",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Gemini 4 Argon",
+     "canonical": "Gemini 4 Argon",
+     "type": "model",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 3,
+   "article_id": 97966,
+   "title": "Muse Wonder Puts Meta Back at the AI Frontier",
+   "url": "https://www.wired.com/story/muse-wonder-puts-meta-back-at-the-ai-frontier/",
+   "publisher": "wired.com",
+   "published_at": "2026-10-12 17:00:27.000000",
+   "event_type": "model_release",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Muse Wonder",
+     "canonical": "Muse Wonder",
+     "type": "model",
+     "vendor": "Meta",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Muse Wonder Full",
+     "canonical": "Muse Wonder Full",
+     "type": "model",
+     "vendor": "Meta",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Meta",
+     "canonical": "Meta",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Mark Zuckerberg",
+     "canonical": "Mark Zuckerberg",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Meta Superintelligence Labs",
+     "canonical": "Meta Superintelligence Labs",
+     "type": "company",
+     "vendor": "Meta",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Alexandr Wang",
+     "canonical": "Alexandr Wang",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Llama",
+     "canonical": "Llama",
+     "type": "model",
+     "vendor": "Meta",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Muse Code",
+     "canonical": "Muse Code",
+     "type": "product",
+     "vendor": "Meta",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 4,
+   "article_id": 97972,
+   "title": "10 Hugging Face Models Worth Knowing in 2026",
+   "url": "https://www.kdnuggets.com/10-hugging-face-models-worth-knowing-in-2026",
+   "publisher": "kdnuggets.com",
+   "published_at": "2026-10-12 12:00:00.000000",
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Hugging Face",
+     "canonical": "Hugging Face",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Hugging Face Hub",
+     "canonical": "Hugging Face Hub",
+     "type": "product",
+     "vendor": "Hugging Face",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 5,
+   "article_id": 98053,
+   "title": "Import AI 476: Creativity and RSI; worse-than-China open weight models; AI goes to space",
+   "url": "https://importai.substack.com/p/import-ai-476-creativity-and-rsi",
+   "publisher": "substack.com",
+   "published_at": "2026-10-12 12:30:39.000000",
+   "event_type": "benchmark_result",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Humanity's Sixth Sense",
+     "canonical": "Humanity's Sixth Sense",
+     "type": "benchmark",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Elorian",
+     "canonical": "Elorian",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Scale AI",
+     "canonical": "Scale AI",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "HSS",
+     "canonical": "Humanity's Sixth Sense",
+     "type": "benchmark",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 6,
+   "article_id": 98081,
+   "title": "AI Scaling vs Human Scaling",
+   "url": "https://www.tobyord.com/writing/ai-scaling-vs-human-scaling?utm_source=tldrai",
+   "publisher": "tobyord.com",
+   "published_at": "2026-10-12 00:00:00.000000",
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Toby Ord",
+     "canonical": "Toby Ord",
+     "type": "person",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 7,
+   "article_id": 98085,
+   "title": "Introducing Clef-omni with full multimodality, plus a faster Clef and a cheaper Clef-flash",
+   "url": "https://blog.cloudflare.com/clef-faster-cheaper-multimodal/?utm_source=tldrai",
+   "publisher": "cloudflare.com",
+   "published_at": "2026-10-12 00:00:00.000000",
+   "event_type": "model_release",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Clef-omni",
+     "canonical": "Clef-omni",
+     "type": "model",
+     "vendor": "Cloudflare",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Clef",
+     "canonical": "Clef",
+     "type": "model",
+     "vendor": "Cloudflare",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Clef-flash",
+     "canonical": "Clef-flash",
+     "type": "model",
+     "vendor": "Cloudflare",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Cloudflare",
+     "canonical": "Cloudflare",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Jev",
+     "canonical": "Jev",
+     "type": "model",
+     "vendor": "TypeSafe",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 8,
+   "article_id": 98086,
+   "title": "Introducing Microsoft-Decision-1, our model for fast decision-making",
+   "url": "https://commandline.microsoft.com/microsoft-decision-1-model-foundry/?utm_source=tldrai",
+   "publisher": "microsoft.com",
+   "published_at": "2026-10-12 00:00:00.000000",
+   "event_type": "model_release",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Microsoft-Decision-1",
+     "canonical": "Microsoft-Decision-1",
+     "type": "model",
+     "vendor": "Microsoft",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Microsoft",
+     "canonical": "Microsoft",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Microsoft Foundry",
+     "canonical": "Microsoft Foundry",
+     "type": "product",
+     "vendor": "Microsoft",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "OpenRouter",
+     "canonical": "OpenRouter",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "H2O-Lightning-4B v1.1",
+     "canonical": "H2O-Lightning-4B v1.1",
+     "type": "model",
+     "vendor": "H2O",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "GPT-6 Sol",
+     "canonical": "GPT-6 Sol",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Qwen3.5-9B",
+     "canonical": "Qwen3.5-9B",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Jev",
+     "canonical": "Jev",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 9,
+   "article_id": 98087,
+   "title": "pplx-decider-v1.1-27b",
+   "url": "https://huggingface.co/perplexity-ai/pplx-decider-v1.1-27b?utm_source=tldrai",
+   "publisher": "huggingface.co",
+   "published_at": "2026-10-12 00:00:00.000000",
+   "event_type": "model_release",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "pplx-decider-v1.1-27b",
+     "canonical": "pplx-decider-v1.1-27b",
+     "type": "model",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "pplx-decider-v1-27b",
+     "canonical": "pplx-decider-v1-27b",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Jev",
+     "canonical": "Jev",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Qwen3.8-27B",
+     "canonical": "Qwen3.8-27B",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Decision Index",
+     "canonical": "Decision Index",
+     "type": "benchmark",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 10,
+   "article_id": 98092,
+   "title": "Meta's new frontier model Muse Wonder Full breaks into the AI top tier",
+   "url": "https://the-decoder.com/metas-new-frontier-model-muse-wonder-full-breaks-into-the-ai-top-tier/",
+   "publisher": "the-decoder.com",
+   "published_at": "2026-10-12 18:48:29.000000",
+   "event_type": "model_release",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Muse Wonder Full",
+     "canonical": "Muse Wonder Full",
+     "type": "model",
+     "vendor": "Meta",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Muse Wonder",
+     "canonical": "Muse Wonder",
+     "type": "model",
+     "vendor": "Meta",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Meta",
+     "canonical": "Meta",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Artificial Analysis Intelligence Index v4.3",
+     "canonical": "Artificial Analysis Intelligence Index v4.3",
+     "type": "benchmark",
+     "vendor": "Artificial Analysis",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Muse Spark 1.3",
+     "canonical": "Muse Spark 1.3",
+     "type": "model",
+     "vendor": "Meta",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Terminal-Bench 4.0",
+     "canonical": "Terminal-Bench 4.0",
+     "type": "benchmark",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Llama",
+     "canonical": "Llama",
+     "type": "model",
+     "vendor": "Meta",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 11,
+   "article_id": 98093,
+   "title": "Sakana AI's self-improving model gets better at solving and judging, but can't catch its own blind spots",
+   "url": "https://the-decoder.com/sakana-ais-self-improving-model-gets-better-at-solving-and-judging-but-cant-catch-its-own-blind-spots/",
+   "publisher": "the-decoder.com",
+   "published_at": "2026-10-12 17:58:54.000000",
+   "event_type": "research",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Sakana AI",
+     "canonical": "Sakana AI",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Multi-Agent Self-Supervision",
+     "canonical": "Multi-Agent Self-Supervision",
+     "type": "technology",
+     "vendor": "Sakana AI",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "MASS",
+     "canonical": "Multi-Agent Self-Supervision",
+     "type": "technology",
+     "vendor": "Sakana AI",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "UC Berkeley",
+     "canonical": "UC Berkeley",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 12,
+   "article_id": 98098,
+   "title": "Google Deepmind's AlphaProof Nexus solved dozens of open math problems and actually got peer reviewed",
+   "url": "https://the-decoder.com/google-deepminds-alphaproof-nexus-solved-dozens-of-open-math-problems-and-actually-got-peer-reviewed/",
+   "publisher": "the-decoder.com",
+   "published_at": "2026-10-12 09:35:54.000000",
+   "event_type": "research",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "AlphaProof Nexus",
+     "canonical": "AlphaProof Nexus",
+     "type": "model",
+     "vendor": "Google Deepmind",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Google Deepmind",
+     "canonical": "Google Deepmind",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Gemini 3.1 Pro",
+     "canonical": "Gemini 3.1 Pro",
+     "type": "model",
+     "vendor": "Google Deepmind",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "AlphaProof",
+     "canonical": "AlphaProof",
+     "type": "model",
+     "vendor": "Google Deepmind",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Lean",
+     "canonical": "Lean",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "OEIS",
+     "canonical": "OEIS integer sequence database",
+     "type": "dataset",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Terence Tao",
+     "canonical": "Terence Tao",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Association for Human Mathematics",
+     "canonical": "Association for Human Mathematics",
+     "type": "other",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 13,
+   "article_id": 98268,
+   "title": "llm-meta-ai 0.2",
+   "url": "https://simonwillison.net/2026/Oct/12/llm-meta-ai/",
+   "publisher": "simonwillison.net",
+   "published_at": "2026-10-12 23:58:46.000000",
+   "event_type": "model_release",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Muse Wonder",
+     "canonical": "Muse Wonder",
+     "type": "model",
+     "vendor": "Meta AI",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Muse Wonder Full",
+     "canonical": "Muse Wonder Full",
+     "type": "model",
+     "vendor": "Meta AI",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Meta AI",
+     "canonical": "Meta AI",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "GPT-6.1 Sol",
+     "canonical": "GPT-6.1 Sol",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Muse 1.3",
+     "canonical": "Muse 1.3",
+     "type": "model",
+     "vendor": "Meta AI",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Muse 1.2",
+     "canonical": "Muse 1.2",
+     "type": "model",
+     "vendor": "Meta AI",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "llm-meta-ai",
+     "canonical": "llm-meta-ai",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Artificial Analysis",
+     "canonical": "Artificial Analysis",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 14,
+   "article_id": 97970,
+   "title": "The Rise of AI Software Clones: Why REA and ArtCraft Are Going Viral",
+   "url": "https://www.kdnuggets.com/the-rise-of-ai-software-clones-why-rea-and-artcraft-are-going-viral",
+   "publisher": "kdnuggets.com",
+   "published_at": "2026-10-12 16:00:00.000000",
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "REA",
+     "canonical": "Reverse Engineer Anything (REA)",
+     "type": "product",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "ArtCraft",
+     "canonical": "ArtCraft",
+     "type": "product",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Adobe Creative Cloud",
+     "canonical": "Adobe Creative Cloud",
+     "type": "product",
+     "vendor": "Adobe",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Microsoft Office",
+     "canonical": "Microsoft Office",
+     "type": "product",
+     "vendor": "Microsoft",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "GIMP",
+     "canonical": "GIMP",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Inkscape",
+     "canonical": "Inkscape",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "LibreOffice",
+     "canonical": "LibreOffice",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Photoshop",
+     "canonical": "Photoshop",
+     "type": "product",
+     "vendor": "Adobe",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 15,
+   "article_id": 98021,
+   "title": "Which LLM should review your code?",
+   "url": "https://www.qodo.ai/blog/which-llm-should-review-your-code/",
+   "publisher": "qodo.ai",
+   "published_at": "2026-10-12 10:20:19.000000",
+   "event_type": "benchmark_result",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Qodo",
+     "canonical": "Qodo",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Claude Sonnet 4.6",
+     "canonical": "Claude Sonnet 4.6",
+     "type": "model",
+     "vendor": "Anthropic",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "OpenAI",
+     "canonical": "OpenAI",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Anthropic",
+     "canonical": "Anthropic",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Google",
+     "canonical": "Google",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 16,
+   "article_id": 98077,
+   "title": "Meet the new Gemini agent: A universal agent for your business (Sponsor)",
+   "url": "https://cloud.google.com/blog/products/ai-machine-learning/welcome-to-gemini-at-work-2026?utm_source=tldr&amp;utm_medium=email&amp;utm_campaign=FY26-Q3-northam-NOR10000012-email-oi-na-named-tldr-newsletter-ai-12oct2026&amp;utm_content=tldr-ai-12oct2026&amp;utm_term=-&amp;e=48754805",
+   "publisher": "google.com",
+   "published_at": "2026-10-12 00:00:00.000000",
+   "event_type": "product_launch",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Gemini",
+     "canonical": "Gemini agent",
+     "type": "product",
+     "vendor": "Google Cloud",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Thomas Kurian",
+     "canonical": "Thomas Kurian",
+     "type": "person",
+     "vendor": "Google Cloud",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Google Cloud",
+     "canonical": "Google Cloud",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Workspace",
+     "canonical": "Workspace",
+     "type": "product",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Gmail",
+     "canonical": "Gmail",
+     "type": "product",
+     "vendor": "Google",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Smart Routing",
+     "canonical": "Smart Routing",
+     "type": "technology",
+     "vendor": "Google Cloud",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 17,
+   "article_id": 98083,
+   "title": "Do Agent Teams Pay Off? A Case Study on Vibe Code Bench",
+   "url": "https://www.vals.ai/blogs/multi-agent-vibe-code-bench?utm_source=tldrai",
+   "publisher": "vals.ai",
+   "published_at": "2026-10-12 00:00:00.000000",
+   "event_type": "benchmark_result",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Vibe Code Bench",
+     "canonical": "Vibe Code Bench",
+     "type": "benchmark",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "GPT 6 Sol",
+     "canonical": "GPT 6 Sol",
+     "type": "model",
+     "vendor": "OpenAI",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Claude Opus 5.5",
+     "canonical": "Claude Opus 5.5",
+     "type": "model",
+     "vendor": "Anthropic",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "OpenAI",
+     "canonical": "OpenAI",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Anthropic",
+     "canonical": "Anthropic",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Docker Compose",
+     "canonical": "Docker Compose",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 18,
+   "article_id": 98311,
+   "title": "We Specified an AI Agent in 2016. We Called It Analytics.",
+   "url": "https://towardsdatascience.com/we-specified-an-ai-agent-in-2016-we-called-it-analytics/",
+   "publisher": "towardsdatascience.com",
+   "published_at": "2026-10-12 12:30:00.000000",
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "IBM",
+     "canonical": "IBM",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Real-Time Analysis of a Musical Performance Using Analytics",
+     "canonical": "Real-Time Analysis of a Musical Performance Using Analytics",
+     "type": "other",
+     "vendor": "IBM",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "US 2018/0137425 A1",
+     "canonical": "US 2018/0137425 A1",
+     "type": "other",
+     "vendor": "IBM",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 19,
+   "article_id": 98049,
+   "title": "Large Language Models for Machine Translation Quality Annotation: Humans and Models Are Both Challenged",
+   "url": "https://machinelearning.apple.com/research/llm-translation-quality-annotation",
+   "publisher": "apple.com",
+   "published_at": "2026-10-12 00:00:00.000000",
+   "event_type": "research",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Hala Almaghout",
+     "canonical": "Hala Almaghout",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Christian Federmann",
+     "canonical": "Christian Federmann",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Qin Gao",
+     "canonical": "Qin Gao",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Multidimensional Quality Metrics",
+     "canonical": "Multidimensional Quality Metrics (MQM)",
+     "type": "benchmark",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Error Span Annotation",
+     "canonical": "Error Span Annotation (ESA)",
+     "type": "benchmark",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "WMT23",
+     "canonical": "WMT23",
+     "type": "dataset",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "WMT25",
+     "canonical": "WMT25",
+     "type": "dataset",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 20,
+   "article_id": 98052,
+   "title": "Simulating student learning for better AI tutoring",
+   "url": "https://www.microsoft.com/en-us/research/blog/simulating-student-learning-for-better-ai-tutoring/",
+   "publisher": "microsoft.com",
+   "published_at": "2026-10-12 16:00:00.000000",
+   "event_type": "research",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "StudentSim",
+     "canonical": "StudentSim",
+     "type": "technology",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 21,
+   "article_id": 98084,
+   "title": "Workshop: Promote AI agent versions on evidence (Sponsor)",
+   "url": "https://pages.awscloud.com/awsmp-gro-3efc-webinar-mss-module-11-mlops-and-dev-lifecycle-workshop.html?trk=240f9abf-c149-4b05-aba4-25fb40ed84aa&amp;sc_channel=el",
+   "publisher": "awscloud.com",
+   "published_at": "2026-10-12 00:00:00.000000",
+   "event_type": "other",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "AWS",
+     "canonical": "AWS",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Leonardo Murillo",
+     "canonical": "Leonardo Murillo",
+     "type": "person",
+     "vendor": "AWS",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Thaddeus Worsnop",
+     "canonical": "Thaddeus Worsnop",
+     "type": "person",
+     "vendor": "AWS",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "AWS Marketplace",
+     "canonical": "AWS Marketplace",
+     "type": "product",
+     "vendor": "AWS",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 22,
+   "article_id": 98121,
+   "title": "How to test agent tool descriptions with Harbor and Phoenix",
+   "url": "https://arize.com/blog/how-to-test-agent-tool-descriptions-with-harbor-and-phoenix/",
+   "publisher": "arize.com",
+   "published_at": "2026-10-12 14:30:47.000000",
+   "event_type": "benchmark_result",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Harbor",
+     "canonical": "Harbor",
+     "type": "product",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Phoenix",
+     "canonical": "Phoenix",
+     "type": "product",
+     "vendor": "Arize",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Codex",
+     "canonical": "Codex",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "PXI",
+     "canonical": "PXI",
+     "type": "product",
+     "vendor": "Arize",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Arize",
+     "canonical": "Arize",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Arize AX",
+     "canonical": "Arize AX",
+     "type": "product",
+     "vendor": "Arize",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 23,
+   "article_id": 98312,
+   "title": "I Built a Trap for AI Image Judges. They Walked Into a Different One.",
+   "url": "https://towardsdatascience.com/i-built-a-trap-for-ai-image-judges-they-walked-into-a-different-one/",
+   "publisher": "towardsdatascience.com",
+   "published_at": "2026-10-12 11:00:00.000000",
+   "event_type": "benchmark_result",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "VisionQ",
+     "canonical": "VisionQ",
+     "type": "benchmark",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "GPT-4o",
+     "canonical": "GPT-4o",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Claude",
+     "canonical": "Claude",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 24,
+   "article_id": 97962,
+   "title": "Anthropic's Claude AI submitted false murder tip to Philadelphia police",
+   "url": "https://arstechnica.com/tech-policy/2026/10/anthropics-claude-ai-submitted-false-murder-tip-to-philadelphia-police/",
+   "publisher": "arstechnica.com",
+   "published_at": "2026-10-12 18:21:36.000000",
+   "event_type": "security_incident",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Anthropic",
+     "canonical": "Anthropic",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Claude Haiku 4.5",
+     "canonical": "Claude Haiku 4.5",
+     "type": "model",
+     "vendor": "Anthropic",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Claude",
+     "canonical": "Claude",
+     "type": "model",
+     "vendor": "Anthropic",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Philadelphia Police Department",
+     "canonical": "Philadelphia Police Department",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 25,
+   "article_id": 97964,
+   "title": "I Got My Muse AI Agent to Sext Me\u2014and Meta Says That\u2019s Totally Fine",
+   "url": "https://www.wired.com/story/i-got-my-muse-ai-agent-to-sext-me-and-meta-says-thats-totally-fine/",
+   "publisher": "wired.com",
+   "published_at": "2026-10-12 20:13:28.000000",
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Muse",
+     "canonical": "Muse",
+     "type": "product",
+     "vendor": "Meta",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Meta",
+     "canonical": "Meta",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Daniel Roberts",
+     "canonical": "Daniel Roberts",
+     "type": "person",
+     "vendor": "Meta",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "WIRED",
+     "canonical": "WIRED",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Rachel Reid",
+     "canonical": "Rachel Reid",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 26,
+   "article_id": 97965,
+   "title": "Elon Musk Bragged About His Grok Lego Star Wars Haul. Then X Users Punked Him",
+   "url": "https://www.wired.com/story/elon-musk-bragged-about-his-grok-lego-star-wars-haul-then-x-users-punked-him/",
+   "publisher": "wired.com",
+   "published_at": "2026-10-12 17:55:12.000000",
+   "event_type": "security_incident",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Elon Musk",
+     "canonical": "Elon Musk",
+     "type": "person",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Grok Bot",
+     "canonical": "Grok Bot",
+     "type": "product",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Lego",
+     "canonical": "Lego",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Enderman",
+     "canonical": "Enderman",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Sophia",
+     "canonical": "Sophia",
+     "type": "product",
+     "vendor": "Lego",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 27,
+   "article_id": 97994,
+   "title": "Claude Told Police It 'Saw' a Potential Suspect From an Unsolved Homicide",
+   "url": "https://www.extremetech.com/internet/claude-told-police-it-saw-a-potential-suspect-from-an-unsolved-homicide",
+   "publisher": "extremetech.com",
+   "published_at": "2026-10-12 16:00:36.000000",
+   "event_type": "security_incident",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Anthropic",
+     "canonical": "Anthropic",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Claude Haiku 4.5",
+     "canonical": "Claude Haiku 4.5",
+     "type": "model",
+     "vendor": "Anthropic",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Philadelphia Police Department",
+     "canonical": "Philadelphia Police Department",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "PhillyUnsolvedMurders.com",
+     "canonical": "PhillyUnsolvedMurders.com",
+     "type": "product",
+     "vendor": "Philadelphia Police Department",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Reuters",
+     "canonical": "Reuters",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 28,
+   "article_id": 98020,
+   "title": "Enkrypt AI Named a Specialist in the First Gartner\u00ae Emerging Market Quadrant for AI Application Security \u2014 Startup Vendors, September 2026",
+   "url": "https://www.anaconda.com/blog/gartner-emerging-market-quadrant-ai-application-security",
+   "publisher": "anaconda.com",
+   "published_at": "2026-10-12 16:56:47.000000",
+   "event_type": "other",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Enkrypt AI",
+     "canonical": "Enkrypt AI",
+     "type": "company",
+     "vendor": "Anaconda",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Anaconda",
+     "canonical": "Anaconda",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Gartner",
+     "canonical": "Gartner",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "ChatGPT",
+     "canonical": "ChatGPT",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 29,
+   "article_id": 98079,
+   "title": "OpenAI Responds to Departed Safety Researchers",
+   "url": "https://x.com/OpenAINewsroom/status/2108441580806025712?utm_source=tldrai",
+   "publisher": "x.com",
+   "published_at": "2026-10-12 00:00:00.000000",
+   "event_type": "people_move",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "OpenAI",
+     "canonical": "OpenAI",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Jasmine",
+     "canonical": "Jasmine",
+     "type": "person",
+     "vendor": "OpenAI",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Mikita",
+     "canonical": "Mikita",
+     "type": "person",
+     "vendor": "OpenAI",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Tomek",
+     "canonical": "Tomek",
+     "type": "person",
+     "vendor": "OpenAI",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 30,
+   "article_id": 98080,
+   "title": "Investigating unintended model actions in our evaluations and internal use",
+   "url": "https://www.anthropic.com/research/investigating-unintended-model-actions?utm_source=tldrai",
+   "publisher": "anthropic.com",
+   "published_at": "2026-10-12 00:00:00.000000",
+   "event_type": "research",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Claude",
+     "canonical": "Claude",
+     "type": "model",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "White House",
+     "canonical": "White House",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 31,
+   "article_id": 98091,
+   "title": "Microsoft's Nadella says AI needs an \u2018emergency brake' that humans control",
+   "url": "https://www.cnbc.com/2026/10/10/microsoft-satya-nadella-ai-emergency-brake-safety.html?utm_source=tldrai",
+   "publisher": "cnbc.com",
+   "published_at": "2026-10-12 00:00:00.000000",
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Satya Nadella",
+     "canonical": "Satya Nadella",
+     "type": "person",
+     "vendor": "Microsoft",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Microsoft",
+     "canonical": "Microsoft",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Bill Gates",
+     "canonical": "Bill Gates",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Dario Amodei",
+     "canonical": "Dario Amodei",
+     "type": "person",
+     "vendor": "Anthropic",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Sam Altman",
+     "canonical": "Sam Altman",
+     "type": "person",
+     "vendor": "OpenAI",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Elon Musk",
+     "canonical": "Elon Musk",
+     "type": "person",
+     "vendor": "SpaceX",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Anthropic",
+     "canonical": "Anthropic",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "OpenAI",
+     "canonical": "OpenAI",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 32,
+   "article_id": 97947,
+   "title": "Accessing OpenAI GPT models on Amazon Bedrock with global cross-Region inference in Thailand, Malaysia, Singapore, Indonesia, and Taiwan",
+   "url": "https://aws.amazon.com/blogs/machine-learning/accessing-openai-gpt-models-on-amazon-bedrock-with-global-cross-region-inference-in-thailand-malaysia-singapore-indonesia-and-taiwan/",
+   "publisher": "amazon.com",
+   "published_at": "2026-10-12 17:52:22.000000",
+   "event_type": "product_launch",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "OpenAI",
+     "canonical": "OpenAI",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Amazon Bedrock",
+     "canonical": "Amazon Bedrock",
+     "type": "product",
+     "vendor": "Amazon",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "GPT-6 Sol",
+     "canonical": "GPT-6 Sol",
+     "type": "model",
+     "vendor": "OpenAI",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "GPT-6 Luna",
+     "canonical": "GPT-6 Luna",
+     "type": "model",
+     "vendor": "OpenAI",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "GPT-6 Astra",
+     "canonical": "GPT-6 Astra",
+     "type": "model",
+     "vendor": "OpenAI",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "AWS",
+     "canonical": "AWS",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 33,
+   "article_id": 97948,
+   "title": "Deploy decision models with llama.cpp on Amazon SageMaker AI",
+   "url": "https://aws.amazon.com/blogs/machine-learning/deploy-decision-models-with-llama-cpp-on-amazon-sagemaker-ai/",
+   "publisher": "amazon.com",
+   "published_at": "2026-10-12 15:51:46.000000",
+   "event_type": "other",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "llama.cpp",
+     "canonical": "llama.cpp",
+     "type": "technology",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Amazon SageMaker AI",
+     "canonical": "Amazon SageMaker AI",
+     "type": "product",
+     "vendor": "Amazon",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "SemIf",
+     "canonical": "SemIf",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "OpenJev",
+     "canonical": "OpenJev",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "AWS Deep Learning Containers",
+     "canonical": "AWS Deep Learning Containers",
+     "type": "product",
+     "vendor": "Amazon",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "WhisperX",
+     "canonical": "WhisperX",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "vLLM-Omni",
+     "canonical": "vLLM-Omni",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Amazon S3",
+     "canonical": "Amazon S3",
+     "type": "product",
+     "vendor": "Amazon",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 34,
+   "article_id": 97949,
+   "title": "Run multi-node inference workloads using Ray LLM Deep Learning Containers",
+   "url": "https://aws.amazon.com/blogs/machine-learning/run-multi-node-inference-workloads-using-ray-llm-deep-learning-containers/",
+   "publisher": "amazon.com",
+   "published_at": "2026-10-12 15:50:14.000000",
+   "event_type": "other",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Ray LLM Deep Learning Containers",
+     "canonical": "Ray LLM Deep Learning Containers",
+     "type": "product",
+     "vendor": "Amazon",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Amazon EKS",
+     "canonical": "Amazon Elastic Kubernetes Service (Amazon EKS)",
+     "type": "product",
+     "vendor": "Amazon",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Ray Serve",
+     "canonical": "Ray Serve",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "AWS Deep Learning Containers",
+     "canonical": "AWS Deep Learning Containers",
+     "type": "product",
+     "vendor": "Amazon",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Ray",
+     "canonical": "Ray",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 35,
+   "article_id": 97950,
+   "title": "OCP Global Summit: Amid Ecosystem Adoption, NVIDIA Opens Vera Rubin Architecture to Help Scale AI Factories Worldwide",
+   "url": "https://blogs.nvidia.com/blog/ocp-global-summit-vera-rubin-scale-ai-factories/",
+   "publisher": "nvidia.com",
+   "published_at": "2026-10-12 15:00:25.000000",
+   "event_type": "partnership",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "NVIDIA",
+     "canonical": "NVIDIA",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Vera Rubin",
+     "canonical": "Vera Rubin",
+     "type": "technology",
+     "vendor": "NVIDIA",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Open Compute Project",
+     "canonical": "Open Compute Project",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "NVIDIA MGX",
+     "canonical": "NVIDIA MGX",
+     "type": "technology",
+     "vendor": "NVIDIA",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "NVIDIA DSX AI Factory",
+     "canonical": "NVIDIA DSX AI Factory",
+     "type": "product",
+     "vendor": "NVIDIA",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Meta",
+     "canonical": "Meta",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "NVIDIA Spectrum-X Ethernet SuperNIC",
+     "canonical": "NVIDIA Spectrum-X Ethernet SuperNIC",
+     "type": "product",
+     "vendor": "NVIDIA",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Cisco",
+     "canonical": "Cisco",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 36,
+   "article_id": 97951,
+   "title": "ReplaySSM: Rethinking State Storage for Faster Hybrid-Model Decoding",
+   "url": "https://developer.nvidia.com/blog/replayssm-rethinking-state-storage-for-faster-hybrid-model-decoding/",
+   "publisher": "nvidia.com",
+   "published_at": "2026-10-12 16:00:54.000000",
+   "event_type": "research",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "ReplaySSM",
+     "canonical": "ReplaySSM",
+     "type": "technology",
+     "vendor": "NVIDIA",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "NVIDIA",
+     "canonical": "NVIDIA",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Dao AI Lab at Princeton",
+     "canonical": "Dao AI Lab at Princeton",
+     "type": "other",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "NVIDIA Nemotron 3",
+     "canonical": "NVIDIA Nemotron 3",
+     "type": "model",
+     "vendor": "NVIDIA",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Qwen3.5",
+     "canonical": "Qwen3.5",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Kimi-K3",
+     "canonical": "Kimi-K3",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "GLM-5.3-Flash",
+     "canonical": "GLM-5.3-Flash",
+     "type": "model",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Mamba-2",
+     "canonical": "Mamba-2",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 37,
+   "article_id": 98050,
+   "title": "Minions: A Dynamic and Distributed Virtual GPU Cloud Built on Idle Apple Silicon Devices",
+   "url": "https://machinelearning.apple.com/research/distributed-gpu-cloud",
+   "publisher": "apple.com",
+   "published_at": "2026-10-12 00:00:00.000000",
+   "event_type": "research",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Minions",
+     "canonical": "Minions",
+     "type": "technology",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Apple Silicon",
+     "canonical": "Apple Silicon",
+     "type": "technology",
+     "vendor": "Apple",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "MLX",
+     "canonical": "MLX",
+     "type": "technology",
+     "vendor": "Apple",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 38,
+   "article_id": 98082,
+   "title": "What is Speculative Decoding?",
+   "url": "https://astralord.github.io/posts/speculative-decoding-the-art-of-guessing-well/?utm_source=tldrai",
+   "publisher": "github.io",
+   "published_at": "2026-10-12 00:00:00.000000",
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "EAGLE-3",
+     "canonical": "EAGLE-3",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "DFlash",
+     "canonical": "DFlash",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "DSpark",
+     "canonical": "DSpark",
+     "type": "technology",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 39,
+   "article_id": 98095,
+   "title": "Microsoft plans to scale its own Maia AI chips to gigawatt levels by 2027",
+   "url": "https://the-decoder.com/microsoft-plans-to-scale-its-own-maia-ai-chips-to-gigawatt-levels-by-2027/",
+   "publisher": "the-decoder.com",
+   "published_at": "2026-10-12 15:24:03.000000",
+   "event_type": "infrastructure_deal",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Microsoft",
+     "canonical": "Microsoft",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Scott Guthrie",
+     "canonical": "Scott Guthrie",
+     "type": "person",
+     "vendor": "Microsoft",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Satya Nadella",
+     "canonical": "Satya Nadella",
+     "type": "person",
+     "vendor": "Microsoft",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Copilot",
+     "canonical": "Microsoft Copilot",
+     "type": "product",
+     "vendor": "Microsoft",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "GitHub Copilot",
+     "canonical": "GitHub Copilot",
+     "type": "product",
+     "vendor": "Microsoft",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 40,
+   "article_id": 97954,
+   "title": "Honeyjar offers AI tools to improve PR and comms at every company",
+   "url": "https://techcrunch.com/2026/10/12/honeyjar-offers-ai-tools-to-improve-pr-and-comms-at-every-company/",
+   "publisher": "techcrunch.com",
+   "published_at": "2026-10-12 15:45:00.000000",
+   "event_type": "product_launch",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Honeyjar",
+     "canonical": "Honeyjar",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Michelle Masek",
+     "canonical": "Michelle Masek",
+     "type": "person",
+     "vendor": "Honeyjar",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Nadia Jamshidi",
+     "canonical": "Nadia Jamshidi",
+     "type": "person",
+     "vendor": "Honeyjar",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Obvious Ventures",
+     "canonical": "Obvious Ventures",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "TechCrunch Disrupt",
+     "canonical": "TechCrunch Disrupt",
+     "type": "other",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 41,
+   "article_id": 97956,
+   "title": "This AI startup says it can generate permit-ready blueprints in minutes",
+   "url": "https://techcrunch.com/2026/10/12/this-ai-startup-says-it-can-generate-permit-ready-blueprints-in-minutes/",
+   "publisher": "techcrunch.com",
+   "published_at": "2026-10-12 15:27:59.000000",
+   "event_type": "product_launch",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Blueprints AI",
+     "canonical": "Blueprints AI",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Al Dram",
+     "canonical": "Al Dram",
+     "type": "person",
+     "vendor": "Blueprints AI",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Coco Cao",
+     "canonical": "Coco Cao",
+     "type": "person",
+     "vendor": "Blueprints AI",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "ChatGPT",
+     "canonical": "ChatGPT",
+     "type": "product",
+     "vendor": "OpenAI",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "OpenAI",
+     "canonical": "OpenAI",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Drams Design-Build",
+     "canonical": "Drams Design-Build",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 42,
+   "article_id": 97957,
+   "title": "Smart ring maker Ultrahuman to roll out biological-age model across UAE",
+   "url": "https://techcrunch.com/2026/10/12/smart-ring-maker-ultrahuman-to-roll-out-biological-age-model-across-uae/",
+   "publisher": "techcrunch.com",
+   "published_at": "2026-10-12 14:09:34.000000",
+   "event_type": "partnership",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Ultrahuman",
+     "canonical": "Ultrahuman",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Abu Dhabi Public Health Center",
+     "canonical": "Abu Dhabi Public Health Center",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Ultrahuman Ring",
+     "canonical": "Ultrahuman Ring",
+     "type": "product",
+     "vendor": "Ultrahuman",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Mohit Kumar",
+     "canonical": "Mohit Kumar",
+     "type": "person",
+     "vendor": "Ultrahuman",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 43,
+   "article_id": 97958,
+   "title": "Former Plaud exec raises $26M for AI app that listens to you in the background",
+   "url": "https://techcrunch.com/2026/10/12/former-plaud-exec-raises-26m-for-ai-app-that-listens-to-you-in-the-background/",
+   "publisher": "techcrunch.com",
+   "published_at": "2026-10-12 12:47:59.000000",
+   "event_type": "funding",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Ambi",
+     "canonical": "Ambi",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Peter Mo",
+     "canonical": "Peter Mo",
+     "type": "person",
+     "vendor": "Ambi",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Plaud",
+     "canonical": "Plaud",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Luminous Ventures",
+     "canonical": "Luminous Ventures",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Huaqin",
+     "canonical": "Huaqin",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 44,
+   "article_id": 97963,
+   "title": "Amazon has over 1 million robot workers. What\u2019s next for human employees?",
+   "url": "https://arstechnica.com/ai/2026/10/inside-amazons-robotic-arms-race-and-what-it-means-for-the-future-of-human-work/",
+   "publisher": "arstechnica.com",
+   "published_at": "2026-10-12 12:43:10.000000",
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Amazon",
+     "canonical": "Amazon",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Brian Greenwood",
+     "canonical": "Brian Greenwood",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "George Mason University",
+     "canonical": "George Mason University",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 45,
+   "article_id": 97971,
+   "title": "ChatGPT vs. Claude vs. Gemini for Data Science Work: Here\u2019s What I Found",
+   "url": "https://www.kdnuggets.com/chatgpt-vs-claude-vs-gemini-for-data-science-work-heres-what-i-found",
+   "publisher": "kdnuggets.com",
+   "published_at": "2026-10-12 14:00:00.000000",
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "ChatGPT",
+     "canonical": "ChatGPT",
+     "type": "product",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Claude",
+     "canonical": "Claude",
+     "type": "product",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Gemini",
+     "canonical": "Gemini",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 46,
+   "article_id": 97993,
+   "title": "Anonymous Staff Say Major Book Publishers Use AI for Cover Art and More",
+   "url": "https://www.extremetech.com/internet/anonymous-staff-say-major-book-publishers-use-ai-for-cover-art-and-more",
+   "publisher": "extremetech.com",
+   "published_at": "2026-10-12 18:03:50.000000",
+   "event_type": "other",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "HarperCollins",
+     "canonical": "HarperCollins",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Simon & Schuster",
+     "canonical": "Simon & Schuster",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Hachette",
+     "canonical": "Hachette",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "ChatGPT",
+     "canonical": "ChatGPT",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Claude",
+     "canonical": "Claude",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Jasper",
+     "canonical": "Jasper",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Mia Ballard",
+     "canonical": "Mia Ballard",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Shy Girl",
+     "canonical": "Shy Girl",
+     "type": "other",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 47,
+   "article_id": 98016,
+   "title": "9 AI Website Builder Mistakes to Fix Before You Publish",
+   "url": "https://emergent.sh/learn/ai-website-builder-mistakes",
+   "publisher": "emergent.sh",
+   "published_at": null,
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "ClearLedger Bookkeeping",
+     "canonical": "ClearLedger Bookkeeping",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Emergent",
+     "canonical": "Emergent",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 48,
+   "article_id": 98017,
+   "title": "8 Best No-Code Chatbot Builders in 2026 (I Tested 10)",
+   "url": "https://emergent.sh/learn/best-no-code-chatbot-builder",
+   "publisher": "emergent.sh",
+   "published_at": null,
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Tidio",
+     "canonical": "Tidio",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Emergent",
+     "canonical": "Emergent",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Chatbase",
+     "canonical": "Chatbase",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Botpress",
+     "canonical": "Botpress",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Manychat",
+     "canonical": "Manychat",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Voiceflow",
+     "canonical": "Voiceflow",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Botsonic",
+     "canonical": "Botsonic",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Zapier Chatbots",
+     "canonical": "Zapier Chatbots",
+     "type": "product",
+     "vendor": "Zapier",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 49,
+   "article_id": 98033,
+   "title": "Generative AI has changed mathematics forever. Where to from here?",
+   "url": "https://aihub.org/2026/10/12/generative-ai-has-changed-mathematics-forever-where-to-from-here/",
+   "publisher": "aihub.org",
+   "published_at": "2026-10-12 07:52:41.000000",
+   "event_type": "research",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "OpenAI",
+     "canonical": "OpenAI",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Astra",
+     "canonical": "Astra",
+     "type": "model",
+     "vendor": "OpenAI",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "ChatGPT",
+     "canonical": "ChatGPT",
+     "type": "product",
+     "vendor": "OpenAI",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Claude",
+     "canonical": "Claude",
+     "type": "product",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "arXiv",
+     "canonical": "arXiv",
+     "type": "other",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 50,
+   "article_id": 98122,
+   "title": "This AI factory builds tiny machines from code",
+   "url": "https://therundownai.beehiiv.com/p/this-ai-factory-builds-tiny-machines-from-code",
+   "publisher": "beehiiv.com",
+   "published_at": "2026-10-12 09:00:00.000000",
+   "event_type": "funding",
+   "novelty_claim": true,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Atomic Machines",
+     "canonical": "Atomic Machines",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Jeff Holden",
+     "canonical": "Jeff Holden",
+     "type": "person",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Matter Compiler",
+     "canonical": "Matter Compiler",
+     "type": "technology",
+     "vendor": "Atomic Machines",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "PrimeSwitch",
+     "canonical": "PrimeSwitch",
+     "type": "product",
+     "vendor": "Atomic Machines",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Amazon Prime",
+     "canonical": "Amazon Prime",
+     "type": "product",
+     "vendor": "Amazon",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Uber",
+     "canonical": "Uber",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 51,
+   "article_id": 97961,
+   "title": "Epic Games reportedly pivoting to \"AI first\" game development model",
+   "url": "https://arstechnica.com/gaming/2026/10/report-epic-games-goes-all-in-on-ai-for-disney-collaboration/",
+   "publisher": "arstechnica.com",
+   "published_at": "2026-10-12 20:59:50.000000",
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Epic Games",
+     "canonical": "Epic Games",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Walt Disney Company",
+     "canonical": "Walt Disney Company",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Claude",
+     "canonical": "Claude",
+     "type": "model",
+     "vendor": "Anthropic",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Tim Sweeney",
+     "canonical": "Tim Sweeney",
+     "type": "person",
+     "vendor": "Epic Games",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Unreal Engine",
+     "canonical": "Unreal Engine",
+     "type": "technology",
+     "vendor": "Epic Games",
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 52,
+   "article_id": 98088,
+   "title": "Who funds the independent AI evaluators?",
+   "url": "https://www.cnbc.com/2026/10/11/ais-quiet-safety-gatekeepers-are-stepping-into-the-spotlight.html?utm_source=tldrai",
+   "publisher": "cnbc.com",
+   "published_at": "2026-10-12 00:00:00.000000",
+   "event_type": "opinion_analysis",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Model Evaluation and Threat Research",
+     "canonical": "Model Evaluation and Threat Research (METR)",
+     "type": "company",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Apollo Research",
+     "canonical": "Apollo Research",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Transluce",
+     "canonical": "Transluce",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Anthropic",
+     "canonical": "Anthropic",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "OpenAI",
+     "canonical": "OpenAI",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Dario Amodei",
+     "canonical": "Dario Amodei",
+     "type": "person",
+     "vendor": "Anthropic",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Sam Altman",
+     "canonical": "Sam Altman",
+     "type": "person",
+     "vendor": "OpenAI",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Suresh Venkatasubramanian",
+     "canonical": "Suresh Venkatasubramanian",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 53,
+   "article_id": 97955,
+   "title": "Microsoft president says UK is best placed to drive AI regulation",
+   "url": "https://techcrunch.com/2026/10/12/microsoft-president-says-uk-is-best-placed-to-drive-ai-regulation/",
+   "publisher": "techcrunch.com",
+   "published_at": "2026-10-12 15:31:19.000000",
+   "event_type": "regulation_policy",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "Brad Smith",
+     "canonical": "Brad Smith",
+     "type": "person",
+     "vendor": "Microsoft",
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Microsoft",
+     "canonical": "Microsoft",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "AI Security Institute",
+     "canonical": "AI Security Institute (AISI)",
+     "type": "other",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Anthropic",
+     "canonical": "Anthropic",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "OpenAI",
+     "canonical": "OpenAI",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Dario Amodei",
+     "canonical": "Dario Amodei",
+     "type": "person",
+     "vendor": "Anthropic",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Sam Altman",
+     "canonical": "Sam Altman",
+     "type": "person",
+     "vendor": "OpenAI",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Donald Trump",
+     "canonical": "Donald Trump",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 54,
+   "article_id": 98032,
+   "title": "What\u2019s on the programme at #AIES2026?",
+   "url": "https://aihub.org/2026/10/12/whats-on-the-programme-at-aies2026/",
+   "publisher": "aihub.org",
+   "published_at": "2026-10-12 10:19:32.000000",
+   "event_type": "other",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "AAAI / ACM Conference on Artificial Intelligence, Ethics, and Society",
+     "canonical": "AAAI / ACM Conference on Artificial Intelligence, Ethics, and Society (AIES)",
+     "type": "other",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Sandra Wachter",
+     "canonical": "Sandra Wachter",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Stefan Larsson",
+     "canonical": "Stefan Larsson",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Irina Shklovski",
+     "canonical": "Irina Shklovski",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Tadayoshi Kohno",
+     "canonical": "Tadayoshi Kohno",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Virginia Dignum",
+     "canonical": "Virginia Dignum",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  },
+  {
+   "key": 55,
+   "article_id": 98096,
+   "title": "White House reverses course and restores UK AI Safety Institute's access to frontier models",
+   "url": "https://the-decoder.com/white-house-reverses-course-and-restores-uk-ai-safety-institutes-access-to-frontier-models/",
+   "publisher": "the-decoder.com",
+   "published_at": "2026-10-12 13:14:54.000000",
+   "event_type": "regulation_policy",
+   "novelty_claim": false,
+   "prompt": "v1",
+   "entities": [
+    {
+     "name": "AI Security Institute",
+     "canonical": "AI Security Institute (AISI)",
+     "type": "other",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "White House",
+     "canonical": "White House",
+     "type": "other",
+     "vendor": null,
+     "role": "primary",
+     "is_new": false
+    },
+    {
+     "name": "Anthropic",
+     "canonical": "Anthropic",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Google DeepMind",
+     "canonical": "Google DeepMind",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "OpenAI",
+     "canonical": "OpenAI",
+     "type": "company",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Claude Mythos 5.1",
+     "canonical": "Claude Mythos 5.1",
+     "type": "model",
+     "vendor": "Anthropic",
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Kanishka Narayan",
+     "canonical": "Kanishka Narayan",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    },
+    {
+     "name": "Andy Burnham",
+     "canonical": "Andy Burnham",
+     "type": "person",
+     "vendor": null,
+     "role": "mentioned",
+     "is_new": false
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,91 @@
+{
+  "title": "Jev as a second opinion for novelty in Daily AI Signals",
+  "created": "2026-10-19",
+  "status": "backlog",
+  "depends_on": [
+    "PR #39 (006-daily-ai-signals) merged and running in production",
+    "Phase 7 validation numbers recorded in .specify/specs/006-daily-ai-signals/dry-run.md"
+  ],
+  "problem": "New is decided by one DeepSeek flash call per article (entity-level is_new + exact quote) plus deterministic checks. After code fixes the displayed precision is 85% with 6 of 40 items in a grey zone (features of existing products, internal tools, startup profiles, reviews) and some BAD items hidden below the display cap. Prompt revisions did not move precision without losing recall.",
+  "idea": "Ask Jev, the cheap probability-returning classifier already used for admission, relevance and topic, a separate novelty question per article (optionally per candidate entity). Show an entity as New only when DeepSeek marks it new with a quote AND Jev confirms the article announces a new release with confidence above a threshold. Two different models must both be wrong for a false New.",
+  "facts": {
+    "jev_client": "src/app/core/jev.py (JevRelevanceScorer): body {model, state, questions}; question types 'choice' and 'noul'; answers carry a choice and a probability/confidence",
+    "rubric_location": "src/app/core/daily_rubric.py (QUESTIONS, RUBRIC_VERSION pinned for admission)",
+    "price_assumption": "Jev ~0.042 USD per million input tokens, output free (rates in daily-digest log); ~7-30x cheaper than DeepSeek per article",
+    "known_limit": "Jev holds long inputs (log message jev_input_held, reason conservative_input_bound)",
+    "current_use": "Jev runs at fetch time for admission (~150 calls/day, ~0.02 USD/day); daily signals do not call Jev"
+  },
+  "draft_question": {
+    "name": "novelty",
+    "type": "choice",
+    "criteria": {
+      "new_release_now": "The article announces, in this news, the launch, release, public availability, founding or stealth exit of a specific AI model, product, company, chip or named technique/benchmark/dataset.",
+      "update_or_feature": "An existing product or model gets an update, a new feature, setting, plan, integration, port or price change.",
+      "retrospective_or_review": "The article reviews, recounts or tests something released earlier, including year-in-review lists and hands-on reviews.",
+      "internal_or_case_study": "A tool built by a company for its own use, or a customer case study.",
+      "not_a_release": "Research findings, opinion, business or policy news without a release.",
+      "insufficient_evidence": "Cannot decide from the supplied text."
+    },
+    "notes": "Separate rubric version from the admission rubric; never modify the pinned admission questions. Optional per-entity variant: include the candidate entity name in the instructions and ask whether that entity itself is newly released."
+  },
+  "tasks": [
+    {
+      "id": "J1",
+      "title": "Offline experiment on the five gate days",
+      "steps": [
+        "Throwaway script in tmp/: run the novelty question for the 369 in-scope articles of 2026-10-12..16 (cents).",
+        "Join with the labelled New items from prompt-gate.md (displayed and hidden, OK/BAD/uncertain verdicts) and the recall list.",
+        "For thresholds 0.5..0.9 report: precision of displayed New, precision of uncapped New, recall, which grey-zone items are removed and which OK items are lost.",
+        "Also test the per-entity variant on the New candidates only."
+      ],
+      "done_when": "A short results table in a docs file and a recommendation: adopt (with threshold) or drop.",
+      "status": "todo"
+    },
+    {
+      "id": "J2",
+      "title": "Decide the gating rule",
+      "options": [
+        "AND gate: New requires DeepSeek is_new+quote and Jev new_release_now >= threshold.",
+        "Demotion: Jev below threshold moves the item to 'early signal' or below the display cap instead of removing it.",
+        "Tie-breaker only: Jev consulted for early (single-publisher) items, confirmed items unchanged."
+      ],
+      "criteria": "Choose by J1 numbers; precision gain must not cost more than a few points of recall.",
+      "status": "todo"
+    },
+    {
+      "id": "J3",
+      "title": "Implement in the signals pipeline",
+      "steps": [
+        "Store the Jev answer per article and rubric version next to article_signals (cached, versioned, re-computable), not in the admission tables.",
+        "Call Jev only for articles that have at least one is_new candidate, to keep calls minimal.",
+        "Spending and call caps via the existing per-run caps; Jev unavailable, held input or invalid answer => behave exactly as today (DeepSeek-only decision) and record the reason.",
+        "Apply the gating rule in daily_signals_compute.py as a pure function; thresholds as constants recorded in the snapshot (OD7) with a methodology version bump.",
+        "Backfill Jev answers for history with the recompute flow; no DeepSeek re-extraction needed."
+      ],
+      "tests": [
+        "Gate on/off, threshold boundaries, Jev missing/held/invalid fallback, cache reuse, no Jev call when there is no novelty candidate, snapshot hash changes only with the methodology version."
+      ],
+      "status": "todo"
+    },
+    {
+      "id": "J4",
+      "title": "Validate and roll out",
+      "steps": [
+        "Re-measure the five days and the Phase 7 history with the gate (displayed and uncapped precision, recall).",
+        "Feature flag default off; owner enables after review.",
+        "Document in docs/daily-signals.md and the plan."
+      ],
+      "status": "todo"
+    }
+  ],
+  "risks": [
+    "Article-level answer cannot say which entity is new; per-entity variant costs more calls.",
+    "Long articles held by Jev input bounds fall back to DeepSeek-only.",
+    "Another provider dependency in the daily job; must fail open to current behaviour.",
+    "Over-filtering may hide real launches; J1 must measure recall, not only precision."
+  ],
+  "out_of_scope": [
+    "Changing the admission rubric or its pinned version.",
+    "Replacing DeepSeek extraction with Jev."
+  ]
+}
