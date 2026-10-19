@@ -1,6 +1,7 @@
 import json
 from datetime import UTC, date, datetime, timedelta
 
+import httpx
 import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
@@ -153,3 +154,32 @@ def test_alias_merge_overrides_and_purge(factory):
         session.commit()
     code, out = invoke("daily-signals-entities", "purge-evidence", "--article", "1")
     assert code == 0 and json.loads(out)["purged"] == 1
+
+
+def test_json_line_includes_the_brief_block(factory, monkeypatch, tmp_path):
+    seed(factory, YESTERDAY, "Atlas", new=True)
+    code, out = invoke("daily-signals", "--recompute-only")
+    assert code == 0 and json.loads(out)["brief"] is None
+    monkeypatch.setattr(cli_main, "get_settings", lambda: Settings(
+        _env_file=None, daily_signals_enabled=True, ds_api_key="secret-key",
+        daily_signals_comparable_from=YESTERDAY - timedelta(days=30)))
+
+    def provider(request):
+        body = json.loads(request.content)
+        if body["messages"][0]["content"].startswith("Task: daily-signals-brief"):
+            content = {"sentences": []}  # invalid: a quiet day needs 1-2 sentences
+        else:
+            content = {"entities": [], "event_type": "other", "novelty_claim": False}
+        return httpx.Response(200, json={
+            "model": body["model"], "usage": {"prompt_tokens": 10, "completion_tokens": 10},
+            "choices": [{"finish_reason": "stop", "message": {"content": json.dumps(content)}}]})
+
+    real = cli_main.run_signals
+    monkeypatch.setattr(cli_main, "run_signals", lambda *a: real(
+        *a, transport=httpx.MockTransport(provider)))
+    code, out = invoke("daily-signals", "--cache-dir", str(tmp_path / "c"))
+    report = json.loads(out)
+    assert code == 0 and report["state"] == "ok"
+    assert report["brief"]["model"] == "deepseek-v4-pro"
+    assert report["brief"]["days"] == {YESTERDAY.isoformat(): "invalid"}
+    assert report["brief"]["run"]["calls"] == 2

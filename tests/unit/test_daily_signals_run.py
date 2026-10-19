@@ -15,6 +15,7 @@ from app.storage.models_sql import (
     Article,
     ArticleSignal,
     Base,
+    DailySignalBrief,
     DailySignalReport,
     NewsDigestGroup,
     NewsDigestItem,
@@ -35,11 +36,13 @@ def session_fixture(tmp_path):
     engine.dispose()
 
 
-def settings(enabled=True, key="secret-key"):
+def settings(enabled=True, key="secret-key", brief_model="unpriced-model"):
+    # 006 tests keep briefs out of the way: an unpriced brief model never calls.
     return SimpleNamespace(daily_signals_enabled=enabled,
                            daily_signals_comparable_from=date(2026, 10, 10),
                            weekly_publisher_overrides={},
-                           ds_api_key=SecretStr(key) if key is not None else None)
+                           ds_api_key=SecretStr(key) if key is not None else None,
+                           daily_signals_brief_model=brief_model)
 
 
 def seed(session, day=D, n=3):
@@ -276,3 +279,199 @@ def test_history_article_without_body_uses_summary_and_records_input_kind(sessio
     kinds = [json.loads(r.provenance)["input"]
              for r in session.scalars(select(ArticleSignal).order_by(ArticleSignal.article_id))]
     assert kinds == ["title_summary", "title_only"]  # seed bodies are under 300 chars
+
+
+# 007: brief step -----------------------------------------------------------------------------
+# run_signals starts the report with "brief": None; pylint infers only that literal.
+# pylint: disable=unsubscriptable-object
+PRO = "deepseek-v4-pro"
+
+
+def brief_answer(request, *, valid=True, usage=(800, 100)):
+    body = json.loads(request.content)
+    packet = json.loads(body["messages"][1]["content"])
+    item = packet["new"][0]
+    text = item["what"] + "." if valid else "Atlas 9 shipped, Zorg says, to everyone today."
+    content = {"sentences": [{"text": text, "ids": [item["articles"][0]],
+                              "quote": {"id": item["articles"][0], "span": item["what"]}}]}
+    return httpx.Response(200, json={
+        "model": body["model"], "usage": {"prompt_tokens": usage[0], "completion_tokens": usage[1]},
+        "choices": [{"finish_reason": "stop", "message": {"content": json.dumps(content)}}]})
+
+
+def is_brief(request):
+    return json.loads(request.content)["messages"][0]["content"].startswith(
+        "Task: daily-signals-brief")
+
+
+class Both(Fake):
+    """Extraction answers as in 006; brief answers from `brief` (valid by default)."""
+
+    def __init__(self, brief=brief_answer, extraction=answer):
+        super().__init__(lambda r: brief(r) if is_brief(r) else extraction(r))
+
+    @property
+    def briefs(self):
+        return [r for r in self.requests
+                if r["messages"][0]["content"].startswith("Task: daily-signals-brief")]
+
+
+def paid(session, tmp_path, fake, **options):
+    return run(session, tmp_path, fake, settings=settings(brief_model=PRO), **options)
+
+
+def brief_row(session, day=D):
+    return session.scalar(select(DailySignalBrief).where(DailySignalBrief.report_date == day))
+
+
+def brief_ledger_rows(tmp_path):
+    ledger = sqlite3.connect(tmp_path / "cache" / "ledger.sqlite3")
+    rows = ledger.execute("SELECT COUNT(*) FROM calls WHERE run_id LIKE '%-brief'").fetchone()[0]
+    ledger.close()
+    return rows
+
+
+def test_brief_disabled_missing_key_recompute_only_and_unpriced_make_no_call(session, tmp_path):
+    seed(session)
+    fake = Both()
+    for config, extra in ((settings(enabled=False, brief_model=PRO), {}),
+                          (settings(key=" ", brief_model=PRO), {}),
+                          (settings(brief_model=PRO), {"recompute_only": True})):
+        report = run(session, tmp_path, fake, settings=config, **extra)
+        assert report["brief"] is None
+    assert not fake.requests and brief_row(session) is None
+    unpriced = run(session, tmp_path, fake, settings=settings(brief_model="deepseek-v9"))
+    assert unpriced["brief"]["days"] == {D.isoformat(): "skipped:brief_model_unpriced"}
+    assert not fake.briefs and brief_row(session) is None
+
+
+def test_one_day_brief_then_cached_then_regenerated(session, tmp_path):
+    seed(session)
+    fake = Both()
+    first = paid(session, tmp_path, fake)
+    assert first["state"] == "ok" and len(fake.briefs) == 1
+    assert first["brief"]["days"] == {D.isoformat(): "ok"}
+    assert first["brief"]["run"] == {"calls": 1, "usd": pytest.approx((800 * 1.32 + 100 * 3.96)
+                                                                     / 1e6)}
+    row = brief_row(session)
+    assert (row.status, row.model, row.brief_version) == ("ok", PRO, "daily-signals-brief-3")
+    stored = json.loads(row.payload)["sentences"][0]
+    assert stored["text"] == "Today Acme launched Atlas 0." and stored["links"][0]["url"]
+    assert fake.briefs[0]["model"] == PRO and fake.briefs[0]["max_tokens"] == 900
+    again = paid(session, tmp_path, fake)
+    assert again["brief"]["days"] == {D.isoformat(): "cached"} and len(fake.briefs) == 1
+    item = session.scalar(select(NewsDigestItem).order_by(NewsDigestItem.id))
+    item.summary = "Acme says Atlas 0 is fast."
+    session.commit()
+    changed = paid(session, tmp_path, fake)
+    assert changed["brief"]["days"] == {D.isoformat(): "ok"} and len(fake.briefs) == 2
+    report_text = json.dumps(changed) + (tmp_path / "cache" / "runs" /
+                                         f"{changed['run_id']}.json").read_text()
+    assert "secret-key" not in report_text and "Today Acme launched" not in report_text
+
+
+def test_invalid_answer_recovers_or_is_stored_invalid(session, tmp_path):
+    seed(session)
+    answers = iter([False, True])
+    fake = Both(brief=lambda r: brief_answer(r, valid=next(answers)))
+    report = paid(session, tmp_path, fake)
+    assert report["brief"]["days"] == {D.isoformat(): "ok"} and len(fake.briefs) == 2
+    assert fake.briefs[1]["messages"][0]["content"].endswith(
+        " Correct the previous answer, rejected for: unsupported_number (sentence 1).")
+    session.query(DailySignalBrief).delete()
+    session.commit()
+    bad = Both(brief=lambda r: brief_answer(r, valid=False))
+    # Same bodies as before: the ledger replays the saved first answer, the recovery is new.
+    report = paid(session, tmp_path, bad)
+    assert report["brief"]["days"] == {D.isoformat(): "ok"}
+    session.query(DailySignalBrief).delete()
+    session.commit()
+    seed(session, date(2026, 10, 15))
+    item = session.scalar(select(NewsDigestItem).order_by(NewsDigestItem.id))
+    item.summary = "Changed text."
+    session.commit()
+    worse = Both(brief=lambda r: brief_answer(r, valid=False))
+    report = paid(session, tmp_path, worse)
+    row = brief_row(session)
+    assert report["brief"]["days"][D.isoformat()] == "invalid" and len(worse.briefs) == 2
+    assert (row.status, row.reason) == \
+        ("invalid", "unsupported_number (sentence 1),unsupported_number (sentence 1)")
+    assert paid(session, tmp_path, worse)["brief"]["days"][D.isoformat()] == "cached"
+    assert len(worse.briefs) == 2
+
+
+def test_ledger_stop_skips_briefs_and_keeps_extraction(session, tmp_path):
+    seed(session)
+    clock = {"now": 0.0, "wall": 0}
+
+    def wall():
+        # `now` is read at the start and again after extraction (recompute): from then on the
+        # run's deadline has passed.
+        clock["wall"] += 1
+        if clock["wall"] > 1:
+            clock["now"] = 10_000.0
+        return NOW
+
+    fake = Both()
+    report = run_signals(session, settings(brief_model=PRO),
+                         RunOptions(report_date=D, cache_dir=tmp_path / "cache"),
+                         transport=fake.transport, clock=lambda: clock["now"], now=wall)
+    assert (report["state"], report["progress"]) == ("ok", 3)
+    assert report["brief"]["days"] == {D.isoformat(): "skipped:deadline_reached"}
+    assert report["brief"]["terminal_reason"] == "deadline_reached"
+    assert not fake.briefs and brief_row(session) is None
+    assert report["reports_written"] == [D.isoformat()]
+    capped = paid(session, tmp_path, Both(), max_usd="0.005")
+    assert capped["state"] == "ok" and capped["articles"] == {"cached": 3}
+    assert capped["brief"]["days"] == {D.isoformat(): "skipped:cap_reached"}
+
+
+def test_brief_failure_never_breaks_the_run(session, tmp_path, monkeypatch):
+    seed(session)
+    monkeypatch.setattr("app.core.daily_signals.brief_packet",
+                        lambda *a: (_ for _ in ()).throw(KeyError("boom")))
+    report = paid(session, tmp_path, Both())
+    assert report["state"] == "ok" and report["reports_written"] == [D.isoformat()]
+    assert report["brief"]["terminal_reason"] == "error:KeyError"
+
+
+def test_backfill_range_and_one_day_catch_up(session, tmp_path):
+    seed(session, date(2026, 10, 15))
+    seed(session)
+    fake = Both()
+    report = paid(session, tmp_path, fake, backfill_days=2)
+    assert report["brief"]["days"] == {"2026-10-15": "ok", "2026-10-16": "ok"}
+    assert len(fake.briefs) == 2
+    session.delete(brief_row(session, date(2026, 10, 15)))
+    session.commit()
+    catch_up = paid(session, tmp_path, fake)
+    assert catch_up["brief"]["days"] == {"2026-10-15": "ok", "2026-10-16": "cached"}
+    # The ledger replays the identical request: no new provider call.
+    assert len(fake.briefs) == 2 and catch_up["brief"]["run"]["calls"] == 0
+    history = paid(session, tmp_path, fake, report_date=date(2026, 10, 9), backfill_days=1)
+    assert history["brief"]["days"] == {}
+
+
+def _extraction_spend(monkeypatch, usd):
+    def fake_extract(*_args, **kwargs):
+        kwargs["report"]["run"] = {"calls": 0, "usd": usd, "states": {}}
+        return round(usd * 1_000_000)
+
+    monkeypatch.setattr("app.core.daily_signals._extract_days", fake_extract)
+
+
+def test_max_usd_is_the_run_total(session, tmp_path, monkeypatch):
+    seed(session, date(2026, 10, 15))
+    seed(session)
+    run(session, tmp_path, Both(), backfill_days=2)  # extraction cached, snapshots written
+    _extraction_spend(monkeypatch, 0.50)
+    exhausted = paid(session, tmp_path, Both(), backfill_days=2)
+    assert exhausted["brief"]["days"] == {"2026-10-15": "skipped:brief_budget_exhausted",
+                                          "2026-10-16": "skipped:brief_budget_exhausted"}
+    assert brief_ledger_rows(tmp_path) == 0
+    _extraction_spend(monkeypatch, 0.49)
+    fake = Both(brief=lambda r: brief_answer(r, usage=(3000, 500)))
+    capped = paid(session, tmp_path, fake, backfill_days=2)
+    assert capped["brief"]["days"] == {"2026-10-15": "ok", "2026-10-16": "skipped:cap_reached"}
+    assert capped["run"]["usd"] + capped["brief"]["run"]["usd"] <= 0.50
+    assert capped["brief"]["run"]["usd"] == pytest.approx((3000 * 1.32 + 500 * 3.96) / 1e6)
