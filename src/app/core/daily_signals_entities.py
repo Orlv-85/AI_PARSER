@@ -6,7 +6,7 @@ assignments, whatever order the evidence arrived in.
 import re
 import unicodedata
 from collections import Counter, defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -29,6 +29,10 @@ STOPLIST = frozenset({
 })
 COMPANY_SUFFIX = frozenset({"inc", "incorporated", "corp", "corporation", "ltd", "llc", "plc",
                             "gmbh", "co", "ai"})
+# Suffixes also stripped when glued to the name ("LiquidAI"); not "co" (Cisco, Costco).
+GLUED_SUFFIX = tuple(sorted(COMPANY_SUFFIX - {"co"}, key=lambda s: (-len(s), s)))
+# Endings that are not English plurals ("Atlas", "Genesis", "Nexus", "Kairos", "Glass").
+NOT_PLURAL = ("ss", "us", "is", "os", "as")
 VENDOR_ALIASES = {"bfl": "black forest labs", "aws": "amazon", "amazon web services": "amazon",
                   "alphabet": "google", "meta platforms": "meta"}
 TYPE_GROUPS = {"model": "artifact", "product": "artifact", "hardware": "artifact",
@@ -70,6 +74,18 @@ def company_tokens(parts: Sequence[str]) -> Tokens:
     while len(rest) > 1 and rest[-1] in COMPANY_SUFFIX and len("".join(rest[:-1])) >= 3:
         rest.pop()
     return tuple(rest)
+
+
+def glued_forms(parts: Sequence[str]) -> set[str]:
+    """Space-free spellings of a vendor: the joined tokens and, for a glued company suffix with a
+    remainder of at least 3 characters, the remainder ("liquidai" -> "liquid")."""
+    joined = "".join(parts)
+    forms = {joined}
+    for suffix in GLUED_SUFFIX:
+        if joined.endswith(suffix) and len(joined) - len(suffix) >= 3:
+            forms.add(joined[:-len(suffix)])
+            break
+    return forms
 
 
 def is_stopped(parts: Sequence[str]) -> bool:
@@ -140,7 +156,8 @@ class MentionKeys:
 
 @dataclass(frozen=True)
 class Override:  # pylint: disable=too-many-instance-attributes
-    """Stored operator override; `vendor_class == ""` matches any vendor class."""
+    """Stored operator override. A selector `(type_group, base, vendor_class)` names a whole
+    automatic entity, see `selector_matches`; "" never acts as a wildcard."""
     override_id: int
     kind: str  # alias | merge
     type_group: str
@@ -173,6 +190,44 @@ class Reconciliation:
     entities: dict[str, Entity] = field(default_factory=dict)
 
 
+def _vendor_keys(members: set[Tokens]) -> dict[Tokens, str]:
+    """Union vendor spellings into classes; each member maps to its class's shortest key."""
+    parent = {m: m for m in members}
+
+    def find(m: Tokens) -> Tokens:
+        while parent[m] != m:
+            parent[m] = parent[parent[m]]
+            m = parent[m]
+        return m
+
+    ordered = sorted(members)
+    for a in ordered:
+        alias = VENDOR_ALIASES.get(" ".join(a))
+        if alias and tuple(alias.split()) in parent:
+            parent[find(a)] = find(tuple(alias.split()))
+        for b in ordered:
+            if len(a) < len(b) and b[:len(a)] == a:
+                parent[find(b)] = find(a)
+    # Members whose space-free forms meet are one vendor ("LiquidAI" = "Liquid AI"); a form
+    # that only one member has changes nothing ("OpenAI" stays "openai").
+    by_form: dict[str, Tokens] = {}
+    for a in sorted(members, key=lambda m: (len("".join(m)), m)):
+        for form in sorted(glued_forms(a)):
+            if form in by_form:
+                parent[find(a)] = find(by_form[form])
+            else:
+                by_form[form] = a
+    components: dict[Tokens, list[Tokens]] = defaultdict(list)
+    for m in members:
+        components[find(m)].append(m)
+    out: dict[Tokens, str] = {}
+    for component in components.values():
+        best = min(component, key=lambda m: (len(join(m)), join(m)))
+        for m in component:
+            out[m] = join(best)
+    return out
+
+
 class VendorClasses:
     """Vendor equivalence classes over the whole evidence set (plan Decision 2 rule 6)."""
 
@@ -183,30 +238,10 @@ class VendorClasses:
             if raw:
                 members.add(raw)
                 members.add(vendor_tokens(vendor))
-        parent = {m: m for m in members}
-
-        def find(m: Tokens) -> Tokens:
-            while parent[m] != m:
-                parent[m] = parent[parent[m]]
-                m = parent[m]
-            return m
-
-        ordered = sorted(members)
-        for a in ordered:
-            alias = VENDOR_ALIASES.get(" ".join(a))
-            if alias and tuple(alias.split()) in parent:
-                parent[find(a)] = find(tuple(alias.split()))
-            for b in ordered:
-                if len(a) < len(b) and b[:len(a)] == a:
-                    parent[find(b)] = find(a)
-        components: dict[Tokens, list[Tokens]] = defaultdict(list)
-        for m in members:
-            components[find(m)].append(m)
-        self.key: dict[Tokens, str] = {}
-        for component in components.values():
-            best = min(component, key=lambda m: (len(join(m)), join(m)))
-            for m in component:
-                self.key[m] = join(best)
+        self.key = _vendor_keys(members)
+        # Stored override selectors keep the class key they saw; map every member spelling to
+        # the current key so a class that gains a shorter member still matches (F4).
+        self.current = {join(m): self.key[m] for m in members}
         orgs = set(org_names)
         # Only org-backed classes count (CP1, gate finding 5): a product named as a vendor
         # ("Gemini") neither strips a prefix nor splits an entity by vendor.
@@ -219,6 +254,10 @@ class VendorClasses:
             return ""
         key = self.key.get(company_tokens(tokens(vendor)), "")
         return key if key in self.backed else ""
+
+    def resolve(self, selector_class: str) -> str:
+        """The current class key of a stored selector class ("" and "?" stay as they are)."""
+        return self.current.get(selector_class, selector_class)
 
 
 def mention_keys(mention: Mention, classes: VendorClasses) -> MentionKeys:
@@ -250,52 +289,129 @@ def _ranked(counter: Counter, tie=lambda value: value):
     return sorted(counter.items(), key=lambda kv: (-kv[1], tie(kv[0])))[0][0]
 
 
-def _override_target(keys: MentionKeys, overrides: Sequence[Override]) -> str | None:
-    def vendor_ok(selector_class: str) -> bool:
-        return selector_class in ("", keys.vendor_key)
+def _token_tie(parts: Tokens) -> tuple[str, Tokens]:
+    # Total order: different token tuples can join to the same key ("gpt 4o" / "gpt4o").
+    return join(parts), parts
 
+
+@dataclass(frozen=True)
+class AutoEntity:
+    """What an override selector is compared with: the automatic entity of a mention."""
+    type_group: str
+    base_key: str
+    suffix: str | None  # None for `auto:<g>:<base>`, else the class or "?"
+    vendor_class: str  # the entity's single class when unsuffixed ("" if none)
+
+
+def selector_matches(selector_class: str, auto: AutoEntity) -> bool:
+    """Selector classes (F2/F3): "" = the unsuffixed entity (whatever class it has gained) or the
+    vendorless `?` part after a split; "?" = the vendorless part only; a class = that vendor's
+    entity, including the vendorless mentions it holds."""
+    if selector_class == "":
+        return auto.suffix in (None, "?")
+    if selector_class == "?":
+        return auto.suffix == "?" or (auto.suffix is None and not auto.vendor_class)
+    return auto.suffix == selector_class or \
+        (auto.suffix is None and auto.vendor_class == selector_class)
+
+
+def selectors_overlap(a: str, b: str) -> bool:
+    """Two selector classes of one base that can name the same automatic entity."""
+    return a == b or "" in (a, b)
+
+
+def _override_target(keys: MentionKeys, auto: AutoEntity, overrides: Sequence[Override],
+                     classes: VendorClasses) -> str | None:
     group = [o for o in overrides if o.type_group == keys.type_group]
     for kind in ("alias", "merge"):
         for o in group:
-            if o.kind != kind or not vendor_ok(o.vendor_class):
+            if o.kind != kind or not selector_matches(classes.resolve(o.vendor_class), auto):
                 continue
             if o.match_key == keys.base_key or (kind == "alias" and o.match_key == keys.name_key):
                 return o.target_entity_key
     for o in group:
-        if o.target_base_key == keys.base_key and vendor_ok(o.target_vendor_class):
+        if o.target_base_key == keys.base_key and \
+                selector_matches(classes.resolve(o.target_vendor_class), auto):
             return o.target_entity_key
     return None
 
 
+def _fold_plurals(keys: dict[int, MentionKeys]) -> None:
+    """F21: a trailing plural "s" on the last base token joins the singular base when that
+    singular occurs in the evidence for the same type group ("Gemini Agents" = "Gemini agent")."""
+    present = {(k.type_group, k.base_key) for k in keys.values()}
+    for mention_id, k in sorted(keys.items()):
+        last = k.base_tokens[-1] if k.base_tokens else ""
+        if len(last) < 4 or not last.endswith("s") or last.endswith(NOT_PLURAL) or \
+                not last[-2].isalpha():
+            continue
+        base = (*k.base_tokens[:-1], last[:-1])
+        if (k.type_group, join(base)) in present:
+            keys[mention_id] = MentionKeys(
+                type_group=k.type_group, name_key=k.name_key, base_key=join(base),
+                base_tokens=base, family_key=join(family_tokens(base)),
+                vendor_key=k.vendor_key, vendor_inferred=k.vendor_inferred)
+
+
+def _auto_assignments(rows: Sequence[Mention], keys: Mapping[int, MentionKeys]) -> dict[int, str]:
+    by_resolution: dict[tuple[str, str], list[Mention]] = defaultdict(list)
+    for m in rows:
+        by_resolution[(keys[m.mention_id].type_group, keys[m.mention_id].base_key)].append(m)
+    out: dict[int, str] = {}
+    for (group, base), members in sorted(by_resolution.items()):
+        vendor_counts = Counter(keys[m.mention_id].vendor_key for m in members
+                                if keys[m.mention_id].vendor_key)
+        if len(vendor_counts) <= 1:
+            for m in members:
+                out[m.mention_id] = f"auto:{group}:{base}"
+            continue
+        top, top_n = sorted(vendor_counts.items(), key=lambda kv: (-kv[1], kv[0]))[0]
+        dominant = top_n >= 0.8 * sum(vendor_counts.values())
+        for m in members:
+            vendor_key = keys[m.mention_id].vendor_key
+            suffix = vendor_key or (top if dominant else "?")
+            out[m.mention_id] = f"auto:{group}:{base}:{suffix}"
+    return out
+
+
+def _auto_entities(auto: Mapping[int, str],
+                   keys: Mapping[int, MentionKeys]) -> dict[str, AutoEntity]:
+    classes: dict[str, set[str]] = defaultdict(set)
+    for mention_id, entity_key in auto.items():
+        if keys[mention_id].vendor_key:
+            classes[entity_key].add(keys[mention_id].vendor_key)
+    out = {}
+    for mention_id, entity_key in auto.items():
+        if entity_key in out:
+            continue
+        parts = entity_key.split(":")
+        suffix = parts[3] if len(parts) > 3 else None
+        single = sorted(classes[entity_key])
+        out[entity_key] = AutoEntity(
+            type_group=keys[mention_id].type_group, base_key=keys[mention_id].base_key,
+            suffix=suffix, vendor_class=suffix if suffix not in (None, "?") else
+            (single[0] if suffix is None and single else ""))
+    return out
+
+
 def reconcile(mentions: Iterable[Mention], overrides: Iterable[Override] = ()) -> Reconciliation:
-    """Derive entities and mention assignments from evidence (plan Decision 2, Reconciliation)."""
+    """Derive entities and mention assignments from evidence (plan Decision 2, Reconciliation).
+
+    Automatic entities are formed first; overrides then select whole automatic entities, so a
+    merge or alias keeps every member, including vendorless ones, on every later run."""
     rows = sorted(mentions, key=lambda m: m.mention_id)
     ordered_overrides = sorted(overrides, key=lambda o: o.override_id)
     classes = evidence_classes(rows)
     result = Reconciliation()
     for m in rows:
         result.keys[m.mention_id] = mention_keys(m, classes)
-    by_resolution: dict[tuple[str, str], list[Mention]] = defaultdict(list)
+    _fold_plurals(result.keys)
+    auto = _auto_assignments(rows, result.keys)
+    auto_entities = _auto_entities(auto, result.keys)
     for m in rows:
-        keys = result.keys[m.mention_id]
-        target = _override_target(keys, ordered_overrides)
-        if target is not None:
-            result.assignments[m.mention_id] = target
-        else:
-            by_resolution[(keys.type_group, keys.base_key)].append(m)
-    for (group, base), members in sorted(by_resolution.items()):
-        vendor_counts = Counter(result.keys[m.mention_id].vendor_key for m in members
-                                if result.keys[m.mention_id].vendor_key)
-        if len(vendor_counts) <= 1:
-            for m in members:
-                result.assignments[m.mention_id] = f"auto:{group}:{base}"
-            continue
-        top, top_n = sorted(vendor_counts.items(), key=lambda kv: (-kv[1], kv[0]))[0]
-        dominant = top_n >= 0.8 * sum(vendor_counts.values())
-        for m in members:
-            vendor_key = result.keys[m.mention_id].vendor_key
-            suffix = vendor_key or (top if dominant else "?")
-            result.assignments[m.mention_id] = f"auto:{group}:{base}:{suffix}"
+        target = _override_target(result.keys[m.mention_id], auto_entities[auto[m.mention_id]],
+                                  ordered_overrides, classes)
+        result.assignments[m.mention_id] = target or auto[m.mention_id]
     grouped: dict[str, list[Mention]] = defaultdict(list)
     for m in rows:
         grouped[result.assignments[m.mention_id]].append(m)
@@ -316,7 +432,7 @@ def _entity(entity_key: str, members: list[Mention], keys: dict[int, MentionKeys
     if not vendors and not vendor_class:
         vendors = Counter(m.vendor for m in members if m.vendor)
     base = Counter(k.base_tokens for k in member_keys)
-    base_tokens = _ranked(base, tie=join)
+    base_tokens = _ranked(base, tie=_token_tie)
     families = Counter(k.family_key for k in member_keys)
     return Entity(
         entity_key=entity_key,
@@ -347,14 +463,19 @@ def token_prefix(older: Entity, newer: Entity) -> bool:
         and newer.base_tokens[:n] == older.base_tokens
 
 
-def selectors_conflict(existing: Iterable[Override], new: Override) -> Override | None:
-    """An override that already owns one of `new`'s selectors (no cycles, no silent conflicts)."""
-    def selectors(o: Override) -> set[tuple[str, str, str]]:
-        return {(o.type_group, o.match_key, o.vendor_class),
-                (o.type_group, o.target_base_key, o.target_vendor_class)}
+def selectors_conflict(existing: Iterable[Override], new: Override,
+                       resolve=lambda selector_class: selector_class) -> Override | None:
+    """An override owning a selector that overlaps one of `new`'s (no cycles, no silent
+    conflicts); `resolve` maps stored classes to current class keys."""
+    def selectors(o: Override) -> list[tuple[str, str, str]]:
+        return [(o.type_group, o.match_key, resolve(o.vendor_class)),
+                (o.type_group, o.target_base_key, resolve(o.target_vendor_class))]
 
     wanted = selectors(new)
     for o in sorted(existing, key=lambda o: o.override_id):
-        if o.target_entity_key != new.target_entity_key and selectors(o) & wanted:
+        if o.target_entity_key == new.target_entity_key:
+            continue
+        if any(a[:2] == b[:2] and selectors_overlap(a[2], b[2])
+               for a in selectors(o) for b in wanted):
             return o
     return None

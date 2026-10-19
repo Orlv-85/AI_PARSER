@@ -27,6 +27,7 @@ from app.core.daily_signals_entities import (
     Mention,
     Override,
     Reconciliation,
+    evidence_classes,
     join,
     name_tokens,
     reconcile,
@@ -331,7 +332,8 @@ class DailySignalRepo:
                              target_entity_key=target_entity_key or "manual:new")
         if (match_key, vendor_class) == (target_base_key, target_vendor_class) and kind == "merge":
             raise OverrideConflict("source and target are the same selector")
-        conflict = selectors_conflict(existing, candidate)
+        classes = evidence_classes(self.load_evidence()[0])
+        conflict = selectors_conflict(existing, candidate, classes.resolve)
         if conflict is not None:
             raise OverrideConflict(f"selector owned by override {conflict.override_id}")
         row = AIEntityOverride(kind=kind, type_group=type_group_, match_key=match_key,

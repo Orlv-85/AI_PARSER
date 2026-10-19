@@ -229,7 +229,11 @@ def _selector(repo: DailySignalRepo, entity_id: int) -> tuple[AIEntity, str, str
         if owner is None:
             raise EntityCommandError(f"entity {entity_id} has no override; recompute first")
         return entity, owner.type_group, owner.target_base_key, owner.target_vendor_class
-    return entity, entity.type_group, entity.base_key, entity.vendor_class
+    # `auto:<g>:<base>[:<class>|:?]`: the suffix names the vendor part; an unsuffixed entity is
+    # named by its class (or "" without one). See `selector_matches`.
+    parts = entity.entity_key.split(":")
+    vendor = parts[3] if len(parts) > 3 else entity.vendor_class
+    return entity, entity.type_group, parts[2], vendor
 
 
 def merge_entities(repo: DailySignalRepo, source_id: int, target_id: int) -> AIEntityOverride:

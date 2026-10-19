@@ -330,3 +330,53 @@ def test_attribute_ties_are_deterministic():
     entity = result.entities["auto:artifact:zetaone"]
     assert entity.display_name == "ZETA ONE"
     assert entity.entity_type == "model"
+
+
+def test_base_token_tie_does_not_depend_on_insertion_order():
+    # F13: ("gpt", "4o") and ("gpt4o",) join to the same key; the display tokens (and so
+    # `variant_of`) must not depend on which mention got the lower id.
+    first = reconcile([mention(1, "GPT 4o"), mention(2, "GPT4o")])
+    second = reconcile([mention(1, "GPT4o"), mention(2, "GPT 4o")])
+    assert first.entities["auto:artifact:gpt4o"].base_tokens == \
+        second.entities["auto:artifact:gpt4o"].base_tokens == ("gpt", "4o")
+
+
+def test_glued_company_suffix_joins_vendor_class():
+    # F20 (Phase 7): "LiquidAI" and "Liquid AI" are one vendor; OpenAI does not become "open".
+    classes = VendorClasses(["LiquidAI", "Liquid AI", "OpenAI"],
+                            [("liquid",), ("openai",)])
+    assert classes.of("LiquidAI") == classes.of("Liquid AI") == "liquid"
+    assert classes.of("OpenAI") == "openai"
+    rows = [mention(1, "LFM2.5-2.6B", vendor="Liquid AI", day=date(2026, 8, 6)),
+            mention(2, "LFM2.5-24B-A2B", vendor="LiquidAI"), mention(90, "Liquid AI", "company")]
+    result = reconcile(rows)
+    older, newer = (result.entities[result.assignments[i]] for i in (1, 2))
+    assert older.vendor_class == newer.vendor_class == "liquid"
+    assert same_family(older, newer)
+
+
+def test_glued_suffix_needs_a_matching_member():
+    # Cisco/Costco-style words are not split, and a glued "ai" alone keeps its own key.
+    classes = VendorClasses(["Cisco", "Costco", "Sakana AI", "SakanaAI"],
+                            [("cisco",), ("costco",), ("sakana",)])
+    assert classes.of("Cisco") == "cisco" and classes.of("Costco") == "costco"
+    assert classes.of("SakanaAI") == "sakana"
+
+
+def test_trailing_plural_joins_singular_only_when_singular_exists():
+    # F21 (Phase 7): "Gemini Agents" (10-08) and "Gemini agent" (10-12) are one entity.
+    rows = [mention(1, "Gemini Agents", "product", day=date(2026, 10, 8)),
+            mention(2, "Gemini agent", "product", day=date(2026, 10, 12))]
+    result = reconcile(rows)
+    assert result.assignments[1] == result.assignments[2] == "auto:artifact:geminiagent"
+    assert result.entities["auto:artifact:geminiagent"].first_seen_day == date(2026, 10, 8)
+    assert reconcile(list(reversed(rows))) == result
+    # Without the singular in evidence nothing changes; Latin/Greek endings never fold.
+    alone = reconcile([mention(1, "Claude Teams", "product")])
+    assert set(alone.entities) == {"auto:artifact:claudeteams"}
+    names = reconcile([mention(1, "Atlas"), mention(2, "Atla"), mention(3, "Genesis"),
+                       mention(4, "Genesi"), mention(5, "Nexus"), mention(6, "Nexu")])
+    assert len(set(names.assignments.values())) == 6
+    # Other type groups do not fold into each other.
+    mixed = reconcile([mention(1, "Bots", "company"), mention(2, "Bot", "product")])
+    assert len(set(mixed.assignments.values())) == 2
