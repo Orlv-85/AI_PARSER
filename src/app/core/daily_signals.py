@@ -96,8 +96,11 @@ class _Extractor:
         for body in (base, request_body(text, recovery=True, retry=retry)):
             data = self.call(article, body, scope_day)
             if data is None:
-                self.repo.save_failure(article, content_hash=content_hash, status="failed",
-                                       reason="attempt_incomplete", retry_used=retry)
+                # An incomplete retry keeps the row skipped with its retry unused (F11); the
+                # next --retry-skipped sends the same retry bodies again.
+                if not retry:
+                    self.repo.save_failure(article, content_hash=content_hash, status="failed",
+                                           reason="attempt_incomplete")
                 return "pending"
             try:
                 extraction = parse_extraction(text, data, published)
@@ -125,15 +128,23 @@ def _gate(settings: Any, options: RunOptions, key: str) -> str | None:
 def _extract_days(session: Session, repo: DailySignalRepo, ledger: SignalsLedger, *,
                   options: RunOptions, report: dict[str, Any], counts: Counter[str]) -> None:
     extractor = _Extractor(repo, ledger, counts)
+    attempted: set[tuple[int, str, str]] = set()
     try:
         for day in run_days(options):
             for article in repo.scope_articles(day):
                 content_hash = fingerprint(source_text(article.title, article.content))
                 if not extractor.pending(article, content_hash, options.retry_skipped):
                     continue
+                # An article on several backfill days is attempted once per invocation (F12).
+                identity = (article.id, article.url_canonical_hash, content_hash)
+                if identity in attempted:
+                    counts["attempted_before"] += 1
+                    continue
+                attempted.add(identity)
                 row = repo.get_signal(article)
                 retry = bool(options.retry_skipped and row is not None
-                             and row.status == "skipped" and not row.retry_used)
+                             and row.status == "skipped" and not row.retry_used
+                             and row.content_hash == content_hash)
                 outcome = extractor.extract(article, day, retry)
                 counts[outcome] += 1
                 report["progress"] += outcome in ("ok", "skipped")
@@ -198,8 +209,9 @@ def run_signals(session: Session, settings: Any, options: RunOptions, *,
                                deadline=started + options.max_seconds, clock=clock,
                                transport=transport)
         _extract_days(session, repo, ledger, options=options, report=report, counts=counts)
-    result = repo.recompute_reports(options.report_date, all_days=options.recompute_all,
-                                    now=now())
+    # Through the latest completed day, so a backfill never leaves later reports stale (F1).
+    until = max(options.report_date, now().date() - timedelta(days=1))
+    result = repo.recompute_reports(until, all_days=options.recompute_all, now=now())
     session.commit()
     report.update(reports_written=[d.isoformat() for d in result.written],
                   reports_unchanged=result.unchanged, entities=result.entities,

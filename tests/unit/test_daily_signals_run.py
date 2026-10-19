@@ -194,3 +194,66 @@ def test_backfill_days_oldest_first_and_history(session, tmp_path):
     assert report["progress"] == 3
     assert report["reports_written"] == ["2026-10-10"]
     assert run_days(RunOptions(report_date=D)) == [D]
+
+
+def test_backfill_recomputes_through_latest_completed_day(session, tmp_path):
+    # F1: a backfill for an earlier report date must not leave later published days stale.
+    seed(session, date(2026, 10, 14), n=1)
+    seed(session, D, n=1)
+    report = run(session, tmp_path, report_date=date(2026, 10, 14), backfill_days=1)
+    assert report["reports_written"] == ["2026-10-14", "2026-10-16"]
+    only = run(session, tmp_path, report_date=date(2026, 10, 14), recompute_only=True,
+               recompute_all=True)
+    assert only["reports_unchanged"] == 2
+
+
+def _skipped_article(session, tmp_path):
+    seed(session, n=1)
+    run(session, tmp_path, Fake(lambda r: answer(r, content="not json")))
+    row = session.scalar(select(ArticleSignal))
+    assert row.status == "skipped" and not row.retry_used
+    return row
+
+
+def test_incomplete_retry_attempt_keeps_the_retry(session, tmp_path):
+    # F11: an outage during --retry-skipped must not burn the one retry.
+    row = _skipped_article(session, tmp_path)
+    outage = run(session, tmp_path, Fake(lambda r: httpx.Response(503, json={"error": "x"})),
+                 retry_skipped=True)
+    assert outage["articles"].get("pending") == 1
+    session.refresh(row)
+    assert (row.status, row.retry_used) == ("skipped", False)
+    normal = Fake()
+    run(session, tmp_path, normal)
+    assert not normal.requests
+    good = Fake()
+    retried = run(session, tmp_path, good, retry_skipped=True)
+    assert retried["articles"]["ok"] == 1 and len(good.requests) == 1
+    assert good.requests[0]["messages"][0]["content"].endswith("daily-signals-extract-5-retry1.")
+
+
+def test_changed_content_of_skipped_article_is_not_a_retry(session, tmp_path):
+    # F11: a skipped row whose content changed is extracted normally; the retry stays unused.
+    row = _skipped_article(session, tmp_path)
+    article = session.scalar(select(Article))
+    article.content = "Today Acme launched Atlas 0. Updated text."
+    session.commit()
+    fake = Fake()
+    report = run(session, tmp_path, fake, retry_skipped=True)
+    assert report["articles"]["ok"] == 1
+    assert not fake.requests[0]["messages"][0]["content"].endswith("-retry1.")
+    session.refresh(row)
+    assert (row.status, row.retry_used) == ("ok", False)
+
+
+def test_article_on_several_backfill_days_is_attempted_once(session, tmp_path):
+    # F12: after a failed attempt the same article is not dispatched again in this invocation.
+    seed(session, date(2026, 10, 15), n=1)
+    url = "https://p0.com/2026-10-15/0"
+    NewsDigestRepo(session).save_digest(report_date=D, groups=[{
+        "title": "Models", "items": [{"title": url, "summary": "s", "url": url}]}])
+    session.commit()
+    fake = Fake(lambda r: httpx.Response(503, json={"error": "overloaded"}))
+    report = run(session, tmp_path, fake, backfill_days=2)
+    assert len(fake.requests) == 1
+    assert report["articles"].get("attempted_before") == 1
