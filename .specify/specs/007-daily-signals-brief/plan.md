@@ -20,7 +20,8 @@ Dry-run (2026-10-12..18, `dry-run.md`): 14/14 briefs valid after at most one rec
 supported by their cited text, no invented name or number; brief cost $0.0024-0.0122 per day at ledger
 prices (mean $0.0060) with `deepseek-v4-pro`, $0.0006-0.0026 (mean $0.0012) with `deepseek-flash`.
 Revision 2 re-measure (`dry-run.md` section 5, pro, 10-13/15/16): SEO comparison sentence gone, one
-sentence per story; launch-day hardware reviews still chosen on 10-16 (option O1 open).
+sentence per story; launch-day hardware reviews still chosen on 10-16. Coordinator adopted O1
+(review marker, prompt `daily-signals-brief-3`); measured in T5.2.
 
 ## Decisions taken in this plan
 
@@ -49,7 +50,7 @@ input + peak output (upper bound, as in 006).
 
 ## Brief (FR-001, FR-002)
 
-**Version**: `BRIEF_VERSION = "daily-signals-brief-2"`; module `src/app/core/daily_signals_brief.py`
+**Version**: `BRIEF_VERSION = "daily-signals-brief-3"` (text below is brief-2 as measured; O1 adds one sentence); module `src/app/core/daily_signals_brief.py`
 (pure: packet, body, validation).
 
 **Packet** (`brief_packet(payload, digest_items) -> (packet, id_map)`), built from the stored snapshot
@@ -138,13 +139,21 @@ comparisons after NFKC, typographic quotes/dashes folded, whitespace collapsed, 
    sentence already reached -> `same_story`. Measured: rejects 4 of the 14 revision-1 briefs (a second
    sentence elaborating the same story); the brief-2 prompt passed it on all 3 re-measured days.
 
-**Option O1 (open, not adopted)**: mark a packet story `"kind": "review"` when at least half of its
+**Option O1 (adopted by the coordinator, 2026-10-19)**: mark a packet story `"kind": "review"` when at least half of its
 member titles match `\b(review|reviewed|hands-on|vs\.?|versus|compared|comparison|alternatives|
 tested|i tested|i built|how to|guide|explained|benchmarks? &)\b` (case-insensitive), so the prompt's
 "reviews ... only when nothing else is left" has data to act on. Offline on 2026-10-12..16 ($0): marks
 the 10-15 "Gemini 4 Argon vs ..." story (2/3) and the 10-16 Surface review story (1/2), no news story;
 misses the RTX Spark story (titles "Off to a Good Start, But Performance Is Mixed"). Not measured with
 a model call: the $0.017 left of the R1 cap does not cover two reserved pro calls.
+
+Adoption (coordinator): the marker is computed in `brief_packet` only (not stored in the snapshot, not
+shown in the UI). The prompt becomes `daily-signals-brief-3`: append to the ordering sentence
+"Stories with kind 'review' count as reviews.", change the leading tag to `Task: daily-signals-brief-3.`
+and bump `BRIEF_VERSION`; nothing else changes. The
+regex and the 50% rule are constants in `daily_signals_brief.py`. The brief-2 fixture answers stay
+valid inputs for the validator tests (validation does not depend on the prompt text). T5.2 reports
+whether 10-16 now covers a New release and whether RTX Spark still takes a slot.
 
 Invalid after recovery -> stored as `status = "invalid"` with the codes; no brief shown. This is a
 syntactic grounding check (it catches invented names, numbers and quotes); it does not prove that the
@@ -357,8 +366,8 @@ Extraction cost is unchanged (no prompt change).
 | Risk | Mitigation |
 | --- | --- |
 | Meaning drift that passes the syntactic checks | Prompt asks for attribution; manual check in validation (T5.2); muted AI label; sentences link sources |
-| SEO comparison pages enter the brief as "covered by 2 outlets" (10-15 pro #4) | Brief-2 ordering removed it on 10-15; option O1 if it recurs; 006 SEO follow-up |
-| Launch-day reviews chosen over single-source releases (10-16) | Accepted unless the coordinator takes O1; reviews on a launch day are news about the launch |
+| SEO comparison pages enter the brief as "covered by 2 outlets" (10-15 pro #4) | Brief-2 ordering removed it on 10-15; O1 marks it; 006 SEO follow-up |
+| Launch-day reviews chosen over single-source releases (10-16) | O1 adopted (review marker in the packet); RTX Spark-style titles remain; checked in T5.2 |
 | Briefs starved when extraction uses the whole run budget (R2) | Reported as `brief_budget_exhausted`; next paid run or D-1 catch-up retries |
 | Stale recap articles on quiet days (flash 10-17 #2) | Pro did not do it; watch in T5.2; later: exclude newsletter recaps from quiet-day input |
 | Ledger mis-pricing a new model | Per-model prices; unknown model refuses to call |

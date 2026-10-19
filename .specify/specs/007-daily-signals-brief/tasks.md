@@ -39,7 +39,8 @@
   - Files: `src/app/core/daily_signals_brief.py`, `tests/unit/test_daily_signals_brief.py`
   - Test first: packet ids and links from a stored payload + digest items; quiet-day input (all items,
     max 30); 12,000-byte shrink; `input_hash` changes with packet, version or model; body pinned
-    (prompt `daily-signals-brief-2`, thinking disabled, 900 tokens); every validation code of plan
+    (prompt `daily-signals-brief-3`, thinking disabled, 900 tokens); O1 review marker (10-15
+    comparison story and 10-16 Surface story marked, no news story of 10-12..16 marked); every validation code of plan
     rules 1-9 with a minimal failing answer; the 3 brief-2 answers pass; of the 14 revision-1 answers
     10 pass and 4 fail with `same_story`; the 3 rejected first attempts fail with their codes;
     recovery suffix text.
