@@ -360,9 +360,14 @@ because it is now (wrongly) New. Rising and Cooling cannot be measured yet (firs
    1,462,238 input tokens (685,440 cache hits, 47%: the system prompt repeats) and 168,536 output
    tokens over 1,610 responses: $0.6409 by the formula, $0.14 billed. Safe direction (caps stop early),
    but run reports, the $0.0009-per-article figure in `docs/daily-signals.md` and the owner's
-   backfill cap are read against inflated numbers. Candidate fix: price cache-hit and miss tokens
-   separately with current `deepseek-flash` prices (owner to confirm the prices), or keep the
-   conservative formula and say in the guide that it is an upper bound.
+   backfill cap are read against inflated numbers. Official `deepseek-flash` prices
+   (api-docs.deepseek.com/quick_start/pricing, per 1M tokens, peak = 01:00-04:00 and 06:00-10:00 UTC
+   on weekdays, off-peak half): cache hit $0.006, cache miss $0.30, output $1.20 at peak. The ledger
+   formula equals the peak miss/output prices but charges cache hits at the miss price and ignores
+   off-peak. Re-priced per call from the ledger timestamps (1,282 off-peak, 328 peak calls): $0.2626.
+   The billed $0.14 is lower still (not explained here; billing may lag or include a discount).
+   Candidate fix: price cache-hit tokens separately (peak price, so it stays an upper bound), keep
+   ignoring off-peak; say in the guide that the figure is an upper bound.
 
 Fixes 2-4 are deterministic and can be re-measured on this scratch DB with `--recompute-only` ($0) after
 the review window, together with the review findings (checkpoint 3 step 3).
