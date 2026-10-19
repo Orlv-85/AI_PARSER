@@ -94,6 +94,12 @@ def norm(value: str | None) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
+def digest_summary(value: Any) -> str:
+    """A digest item summary; empty or the literal "None" (a stored None) reads as ""."""
+    text = str(value or "").strip()
+    return "" if text == "None" else text
+
+
 def cut(text: str | None, limit: int) -> str:
     """Normalized text cut at a word boundary to `limit` characters with `...`."""
     value = norm(text)
@@ -145,7 +151,7 @@ def brief_packet(payload: Mapping[str, Any], digest_items: Iterable[Mapping[str,
             key = f"a{len(ids) + 1}"
             ids[url] = key
             article = {"title": norm(str(item.get("title") or "")),
-                       "summary": cut(str(item.get("summary") or ""), SUMMARY_MAX)}
+                       "summary": cut(digest_summary(item.get("summary")), SUMMARY_MAX)}
             publisher = item.get("publisher") or link_publisher.get(url)
             if publisher:
                 article["publisher"] = str(publisher)

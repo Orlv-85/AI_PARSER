@@ -318,3 +318,10 @@ def test_grounding_allowances():
           packet=quiet)
     with pytest.raises(BriefInvalid, match="unsupported_number"):
         check([S1, S2, with_(S3, text="Acme Robotics raised a round, covered by 4 outlets.")])
+
+
+def test_empty_or_none_digest_summary_reads_as_empty():
+    items = [{"title": f"Item {i}", "summary": value, "url": f"https://x{i}.com/a"}
+             for i, value in enumerate(["None", "  ", None, "Real text."])]
+    packet, _ = brief_packet(payload("2026-10-18"), items)
+    assert [a["summary"] for a in packet["articles"].values()] == ["", "", "", "Real text."]

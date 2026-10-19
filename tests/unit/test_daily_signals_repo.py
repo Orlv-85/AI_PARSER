@@ -555,7 +555,7 @@ def test_observations_carry_the_digest_summary_of_that_day(session, repo):
     for day, summary in ((D - timedelta(days=1), "Day one text."), (D, "Day two text.")):
         NewsDigestRepo(session).save_digest(report_date=day, groups=[{"title": "Models", "items": [
             {"title": "A", "summary": summary, "url": shared.url},
-            {"title": "B", "summary": "", "url": other.url}]}])
+            {"title": "B", "summary": None if day == D else "", "url": other.url}]}])
         repo.replace_membership(day)
     for article in (shared, other):
         repo.save_extraction(article, extraction(model("Atlas")), content_hash="h")
@@ -564,6 +564,9 @@ def test_observations_carry_the_digest_summary_of_that_day(session, repo):
     repo.apply_reconciliation(result, rows)
     obs = repo.observations(result, rows, [D - timedelta(days=1), D])
     summaries = {(d, o.url): o.summary for d, items in obs.items() for o in items}
+    # N1: save_digest stores a None summary as the string "None"; 007 reads it as "".
+    assert session.scalar(select(NewsDigestItem.summary).where(
+        NewsDigestItem.url == other.url).order_by(NewsDigestItem.id.desc())) == "None"
     assert summaries == {(D - timedelta(days=1), shared.url): "Day one text.",
                          (D - timedelta(days=1), other.url): "",
                          (D, shared.url): "Day two text.", (D, other.url): ""}

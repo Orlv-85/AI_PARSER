@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.canonicalize import canonical_url_hash
 from app.core.daily_enrichment import digest_title
+from app.core.daily_signals_brief import digest_summary
 from app.core.daily_signals_compute import (
     METHODOLOGY_VERSION,
     ArticleObs,
@@ -463,7 +464,7 @@ class DailySignalRepo:  # pylint: disable=too-many-public-methods
                 .join(NewsDigestItem, NewsDigestItem.group_id == NewsDigestGroup.id)
                 .where(NewsDigestReport.report_date.in_(sorted(wanted)))
                 .order_by(NewsDigestGroup.position, NewsDigestItem.position)):
-            summaries.setdefault((day, url), summary or "")
+            summaries.setdefault((day, url), digest_summary(summary))
         out: dict[date, list[ArticleObs]] = defaultdict(list)
         for scope, article in self.session.execute(
                 select(DailySignalScope, Article)
@@ -494,7 +495,7 @@ class DailySignalRepo:  # pylint: disable=too-many-public-methods
 
     def digest_items(self, day: date) -> list[dict[str, str]]:
         """Published digest items of a day in digest order (brief input)."""
-        return [{"title": title, "summary": summary or "", "url": url,
+        return [{"title": title, "summary": digest_summary(summary), "url": url,
                  "publisher": publisher_group(url, self.publisher_overrides)}
                 for title, summary, url in self.session.execute(
                     select(NewsDigestItem.title, NewsDigestItem.summary, NewsDigestItem.url)
