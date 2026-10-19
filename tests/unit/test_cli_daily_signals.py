@@ -37,19 +37,20 @@ def invoke(*args):
 
 
 def seed(maker, day, *names, new=False):
-    """One digest per day holding one article per name."""
+    """One digest per day holding one article per name. Titles do not name the entity, so the
+    lexical history rule (F19) stays out of these override tests."""
     with maker() as session:
         articles = []
         for name in names:
             url = f"https://p.com/{day}/{name}"
-            article = Article(title=name, url=url, url_canonical=url,
+            article = Article(title=f"Story {day} {len(articles)}", url=url, url_canonical=url,
                               url_canonical_hash=canonical_url_hash(url), content=name)
             session.add(article)
             articles.append((name, article))
         session.flush()
         NewsDigestRepo(session).save_digest(report_date=day, groups=[{
-            "title": "Models", "items": [{"title": n, "summary": "s", "url": a.url}
-                                         for n, a in articles]}])
+            "title": "Models", "items": [{"title": a.title, "summary": "s", "url": a.url}
+                                         for _, a in articles]}])
         repo = DailySignalRepo(session, comparable_from=YESTERDAY - timedelta(days=30))
         repo.replace_membership(day)
         for name, article in articles:

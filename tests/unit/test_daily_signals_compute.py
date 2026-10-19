@@ -7,6 +7,7 @@ from app.core.daily_signals_compute import (
     ArticleObs,
     DayCoverage,
     EntityMention,
+    LexicalHistory,
     SnapshotInput,
     Thresholds,
     cluster,
@@ -70,7 +71,7 @@ class World:
                 event_type=event, mentions=mentions))
         return result, by_day
 
-    def snapshot(self, day=D, thresholds=None):
+    def snapshot(self, day=D, thresholds=None, history=()):
         result, by_day = self.observations()
         coverage = dict(self.coverage)
         for d, articles in by_day.items():
@@ -81,7 +82,8 @@ class World:
         return compute_snapshot(SnapshotInput(
             day=day, observations=by_day, coverage=coverage, entities=result.entities,
             entity_ids=ids, extraction_version="daily-signals-extract-5", generated_at=GENERATED,
-            comparable_from=COMPARABLE_FROM, thresholds=thresholds or Thresholds()))
+            comparable_from=COMPARABLE_FROM, thresholds=thresholds or Thresholds(),
+            history=LexicalHistory(history)))
 
 
 def names(items):
@@ -499,3 +501,42 @@ def test_question_entities_excluded_from_trends():
         w.article(D, f"v{i}.com", e("Atlas", role="mentioned", vendor="Acme"))
         w.article(D, f"z{i}.com", e("Atlas", role="mentioned", vendor="Zeta"))
     assert "Atlas" not in names(w.snapshot()["rising"])
+
+
+def test_generic_lowercase_feature_names_are_not_new():
+    # F22 (Phase 7): New needs a proper-name shape; such entities still count elsewhere.
+    w = World()
+    w.article(D, "a.com", e("dynamic workflows", "technology", new=True),
+              e("on-demand capacity mode", "technology", new=True),
+              e("agent-engineer", "product", new=True), e("d1-ultra", new=True),
+              e("Priming", "technology", new=True))
+    payload = w.snapshot()
+    assert names(payload["new"]) == ["d1-ultra", "Priming", "agent-engineer"]
+    assert [(i["name"], i["reason"]) for i in payload["new_suppressed"]] == [
+        ("dynamic workflows", "generic_name"), ("on-demand capacity mode", "generic_name")]
+
+
+def test_new_suppressed_by_title_or_summary_history():
+    # F19 (Phase 7): a name already in an earlier in-scope title/summary is not New, even when
+    # that article's extraction found nothing (title-only history).
+    w = World()
+    for publisher in ("a.com", "b.com", "c.com"):
+        w.article(D, publisher, e("Surface Laptop Ultra", "hardware", new=True))
+    w.article(D, "d.com", e("Maka", "product", new=True))
+    w.article(D, "e.com", e("Reflection", "company"), e("Beam", new=True, vendor="Reflection"))
+    history = [
+        (date(2026, 10, 7), "The first Nvidia RTX Spark laptops cost up to $7,000. Microsoft "
+                            "shows the Surface Laptop Ultra."),
+        (date(2026, 10, 9), "a maka recipe"),  # lowercase common word: no match
+        (date(2026, 10, 5), "Beam me up"),  # vendor known but absent: no match
+        (D, "Maka streaming app"),  # the day itself never counts
+    ]
+    payload = w.snapshot(history=history)
+    assert names(payload["new"]) == ["Beam", "Maka"]
+    assert payload["new_suppressed"] == [{
+        "name": "Surface Laptop Ultra", "entity_id": payload["new_suppressed"][0]["entity_id"],
+        "reason": "lexical_history", "day": "2026-10-07", "match": "surface laptop ultra"}]
+    history.append((date(2026, 10, 6), "Reflection previews Beam"))
+    assert names(w.snapshot(history=history)["new"]) == ["Maka"]
+    history.append((date(2026, 10, 8), "Maka raises money"))
+    assert names(w.snapshot(history=history)["new"]) == []

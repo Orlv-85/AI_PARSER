@@ -266,7 +266,8 @@ def test_payload_round_trip_is_json():
 
 def test_grounding_normalizes_typographic_quotes_and_dashes():
     # F7: the article has a curly apostrophe and an en dash; the model answers in ASCII.
-    source = "Title: Acme\u2019s launch\nContent: Acme\u2019s new model Atlas \u2013 Pro launched today."
+    source = ("Title: Acme\u2019s launch\n"
+              "Content: Acme\u2019s new model Atlas \u2013 Pro launched today.")
     result = parse(source, entity("Atlas - Pro", is_new=True,
                                   is_new_quote="Acme's new model Atlas - Pro launched today"))
     assert [(e.name, e.is_new) for e in result.entities] == [("Atlas - Pro", True)]

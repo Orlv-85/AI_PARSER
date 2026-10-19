@@ -7,11 +7,20 @@ from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from app.core.daily_signals_entities import Entity, same_family, token_prefix
+from app.core.daily_signals_entities import (
+    TOKEN,
+    Entity,
+    clean,
+    company_tokens,
+    is_stopped,
+    same_family,
+    token_prefix,
+    tokens,
+)
 from app.core.dedup import hamming_distance, simhash64
 from app.storage.legacy_cleanup import fingerprint
 
-METHODOLOGY_VERSION = "daily-signals-1"
+METHODOLOGY_VERSION = "daily-signals-2"
 EVENT_LABELS = {
     "model_release": "model releases", "product_launch": "product launches",
     "funding": "funding rounds", "acquisition": "acquisitions", "partnership": "partnerships",
@@ -218,6 +227,69 @@ def unit_key(entity_key: str) -> str:
     return ":".join(parts[:3]) if parts[0] == "auto" else entity_key
 
 
+def proper_name(name: str) -> bool:
+    """F22: a New item needs a name shape: an uppercase letter or digit, or one hyphen/dot-joined
+    token ("agent-engineer"). "dynamic workflows" is a description, not a name."""
+    value = name.strip()
+    return any(ch.isupper() or ch.isdigit() for ch in value) or \
+        (" " not in value and any(ch in value for ch in "-."))
+
+
+def _contains(seq: Sequence[str], sub: Sequence[str]) -> bool:
+    n = len(sub)
+    return any(tuple(seq[i:i + n]) == tuple(sub) for i in range(len(seq) - n + 1))
+
+
+class LexicalHistory:
+    """F19: earliest day a name occurs in an in-scope title or summary (the gate's lexical rule).
+
+    A multi-token or digit-bearing name matches as a token run; a single common-word token needs
+    its exact capitalization and, when the entity has a vendor, a vendor word in the same text.
+    Built once per recompute; results are cached per entity."""
+
+    def __init__(self, texts: Iterable[tuple[date, str]]):
+        self.rows: list[tuple[date, str, tuple[str, ...]]] = []
+        self.index: dict[str, list[int]] = defaultdict(list)
+        for day, raw in sorted((d, clean(t)) for d, t in texts):
+            toks = tokens(raw)
+            for token in set(toks):
+                self.index[token].append(len(self.rows))
+            self.rows.append((day, raw, toks))
+        self.cache: dict[str, tuple[date, str] | None] = {}
+
+    def first(self, entity: Entity, before: date) -> tuple[date, str] | None:
+        if entity.entity_key not in self.cache:
+            self.cache[entity.entity_key] = self._earliest(entity)
+        found = self.cache[entity.entity_key]
+        return found if found is not None and found[0] < before else None
+
+    def _earliest(self, entity: Entity) -> tuple[date, str] | None:
+        parts = tokens(entity.display_name)
+        candidates = {company_tokens(parts) if entity.type_group == "org" else parts,
+                      entity.base_tokens}
+        vendor = set(company_tokens(tokens(entity.vendor or "")))
+        best: tuple[date, str] | None = None
+        limit = date.max
+        for words in sorted(c for c in candidates if c and not is_stopped(c)):
+            ids = sorted(set.intersection(*(set(self.index.get(w, ())) for w in words)))
+            for i in ids:
+                day, raw, toks = self.rows[i]
+                if day >= limit:
+                    break
+                if len(words) > 1 or any(ch.isdigit() for ch in words[0]):
+                    hit = _contains(toks, words)
+                else:
+                    exact = [t for t in TOKEN.findall(clean(entity.display_name))
+                             if t.casefold() == words[0]]
+                    word = exact[0] if exact else words[0][:1].upper() + words[0][1:]
+                    hit = re.search(r"(?<!\w)" + re.escape(word) + r"(?!\w)", raw) is not None \
+                        and (not vendor or bool(vendor & set(toks)))
+                if hit:
+                    best, limit = (day, " ".join(words)), day
+                    break
+        return best
+
+
 @dataclass(frozen=True)
 class SnapshotInput:  # pylint: disable=too-many-instance-attributes
     day: date
@@ -229,6 +301,7 @@ class SnapshotInput:  # pylint: disable=too-many-instance-attributes
     generated_at: datetime
     comparable_from: date
     thresholds: Thresholds = Thresholds()
+    history: LexicalHistory | None = None
 
 
 class _Snapshot:
@@ -239,6 +312,7 @@ class _Snapshot:
         self.articles = sorted(data.observations.get(data.day, ()), key=_article_order)
         self.notes: list[str] = []
         self.sections: dict[str, dict[str, Any]] = {}
+        self.suppressed: list[dict[str, Any]] = []
 
     def complete(self, day: date) -> bool:
         cov = self.data.coverage.get(day)
@@ -269,6 +343,8 @@ class _Snapshot:
             if any(same_family(e, other) and other.first_seen_day < self.day
                    for other in self.data.entities.values()):
                 continue
+            if not self._new_name_ok(key, e):
+                continue
             eligible.append(key)
         candidates = [self._new_item(key, by_entity[key], quotes[key]) for key in eligible]
         candidates.sort(key=self._new_order)
@@ -287,6 +363,23 @@ class _Snapshot:
             item.pop("_key")
             item.pop("_type_rank")
         return shown[:self.t.new_max], set(eligible)
+
+    def _new_name_ok(self, key: str, e: Entity) -> bool:
+        """F22 name shape and F19 lexical history; refusals are kept in the payload."""
+        reason, seen = None, None
+        if not proper_name(e.display_name):
+            reason = "generic_name"
+        elif self.data.history is not None:
+            seen = self.data.history.first(e, self.day)
+            reason = "lexical_history" if seen is not None else None
+        if reason is None:
+            return True
+        item: dict[str, Any] = {"name": e.display_name, "entity_id": self.entity_id(key),
+                                "reason": reason}
+        if seen is not None:
+            item |= {"day": seen[0].isoformat(), "match": seen[1]}
+        self.suppressed.append(item)
+        return False
 
     def _new_item(self, key: str, articles: list[ArticleObs], quote: str) -> dict[str, Any]:
         e = self.entity(key)
@@ -484,6 +577,7 @@ class _Snapshot:
             "thresholds": {k: _r(v) if isinstance(v, float) else v
                            for k, v in asdict(self.t).items()},
             "new": new,
+            "new_suppressed": sorted(self.suppressed, key=lambda i: (i["name"], i["entity_id"])),
             "top_stories": [self._story(s) for s in top[:self.t.top_max]],
             "rising": rising,
             "cooling": cooling,

@@ -18,6 +18,7 @@ from app.core.daily_signals_compute import (
     ArticleObs,
     DayCoverage,
     EntityMention,
+    LexicalHistory,
     SnapshotInput,
     Thresholds,
     compute_snapshot,
@@ -471,6 +472,19 @@ class DailySignalRepo:
                 event_type=events[identity][1], mentions=tuple(mentions)))
         return dict(out)
 
+    def history_texts(self, until: date) -> list[tuple[date, str]]:
+        """Titles and summaries of in-scope articles and digest items up to `until` (F19)."""
+        texts = [(day, f"{title} {summary or ''}") for day, title, summary in self.session.execute(
+            select(DailySignalScope.scope_day, Article.title, Article.summary)
+            .join(Article, _same_article(DailySignalScope))
+            .where(DailySignalScope.scope_day <= until))]
+        texts += [(day, f"{title} {summary or ''}") for day, title, summary in self.session.execute(
+            select(NewsDigestReport.report_date, NewsDigestItem.title, NewsDigestItem.summary)
+            .join(NewsDigestGroup, NewsDigestGroup.report_id == NewsDigestReport.id)
+            .join(NewsDigestItem, NewsDigestItem.group_id == NewsDigestGroup.id)
+            .where(NewsDigestReport.report_date <= until))]
+        return texts
+
     def get_report(self, day: date) -> DailySignalReport | None:
         return self.session.scalar(select(DailySignalReport).where(
             DailySignalReport.report_date == day))
@@ -517,13 +531,14 @@ class DailySignalRepo:
         span = 2 * t.window_days
         needed = {d - timedelta(days=i) for d in targets for i in range(span)}
         observations = self.observations(result, rows, needed)
+        history = LexicalHistory(self.history_texts(until))
         written, unchanged = [], 0
         generated = now or _now()
         for day in targets:
             payload = compute_snapshot(SnapshotInput(
                 day=day, observations=observations, coverage=coverage, entities=result.entities,
                 entity_ids=ids, extraction_version=EXTRACTION_VERSION, generated_at=generated,
-                comparable_from=self.comparable_from, thresholds=t))
+                comparable_from=self.comparable_from, thresholds=t, history=history))
             digest = payload_hash(payload)
             stored = self.get_report(day)
             if stored is not None and stored.payload_hash == digest:

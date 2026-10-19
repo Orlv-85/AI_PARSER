@@ -508,3 +508,22 @@ def test_newer_ok_extraction_without_entities_supersedes_old_mentions(session, r
     repo.save_extraction(a, extraction(), content_hash="h", version="v-new")
     evidence, _ = repo.load_evidence()
     assert evidence == []
+
+
+def test_title_only_history_suppresses_new_through_digest_text(session, repo):
+    # F19: the history article was extracted to nothing, but its digest title names the laptop.
+    hist = add_article(session, "https://h.com/1", title="RTX Spark laptops")
+    digest(session, date(2026, 10, 7), hist.url)
+    item = session.scalar(select(NewsDigestItem).where(NewsDigestItem.url == hist.url))
+    item.summary = "Microsoft shows the Surface Laptop Ultra."
+    repo.replace_membership(date(2026, 10, 7))
+    repo.save_extraction(hist, extraction(), content_hash="h")
+    a = add_article(session, "https://a.com/1")
+    digest(session, D, a.url)
+    repo.replace_membership(D)
+    repo.save_extraction(a, extraction(("Surface Laptop Ultra", "hardware", "primary", True)),
+                         content_hash="h")
+    repo.recompute_reports(D, now=NOW)
+    payload = json.loads(repo.get_report(D).payload)
+    assert payload["new"] == []
+    assert payload["new_suppressed"][0]["day"] == "2026-10-07"
