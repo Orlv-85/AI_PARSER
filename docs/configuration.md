@@ -97,7 +97,10 @@ AINEWS_DAILY_SIGNALS_MAX_USD=0.50           # spend cap per run, checked before 
 ```
 
 The key is the existing `DS_API_KEY`. The CLI flags `--max-calls`, `--max-seconds` and
-`--max-usd` override the caps for one invocation.
+`--max-usd` override the caps for one invocation. Bounds: calls 1-5000, seconds 60-14400.
+
+In production (`docker-compose.prod.yml`) only `AINEWS_DAILY_SIGNALS_ENABLED` is passed to the
+container; the other four settings keep their defaults there, so use the CLI flags for caps.
 
 ### Publish API token
 

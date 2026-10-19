@@ -380,14 +380,14 @@ def test_daily_job_signals_failure_keeps_success_and_removes_container(tmp_path)
     result, calls = _daily_job(tmp_path, signals_exit=124)
     assert result.returncode == 0
     assert "daily-signals failed or timed out" in result.stderr
+    # F17: the cleanup is bounded too.
+    assert calls[-2] == "timeout -k 10 60 docker rm -f ai-news-signals-2026-10-03"
     assert calls[-1].startswith("docker rm -f ai-news-signals-2026-10-03")
 
 
 def test_daily_job_skips_signals_when_budget_is_spent(tmp_path) -> None:
     started = str(int(time.time()) - 14000)
-    result, calls = _daily_job(tmp_path, args=(), env={
-        "AINEWS_DAILY_JOB_LOCKED": "1", "REPORT_DATE": "2026-10-03",
-        "AINEWS_DAILY_JOB_START": started})
+    result, calls = _daily_job(tmp_path, args=("--locked", "2026-10-03", started))
     assert result.returncode == 0
     assert "daily-signals skipped" in result.stderr
     assert [c for c in calls if c.startswith("flock ")] == []
@@ -395,18 +395,31 @@ def test_daily_job_skips_signals_when_budget_is_spent(tmp_path) -> None:
     assert len(docker) == 1 and "--report-date 2026-10-03" in docker[0]
 
 
-def test_daily_job_without_timeout_binary_runs_signals_directly(tmp_path) -> None:
+def test_daily_job_without_timeout_binary_skips_signals(tmp_path) -> None:
+    # F17: without `timeout` the signals step would have no hard bound; skip it, exit 0.
     result, calls = _daily_job(tmp_path, with_timeout=False)
     assert result.returncode == 0, result.stderr
-    assert not any(c.startswith("timeout ") for c in calls)
-    assert "ai-news daily-signals" in [c for c in calls if c.startswith("docker ")][1]
+    assert "daily-signals skipped: timeout is not installed" in result.stderr
+    docker = [c for c in calls if c.startswith("docker ")]
+    assert len(docker) == 1 and "daily-publish" in docker[0]
 
 
 def test_daily_job_locked_entry_without_start_or_date_falls_back(tmp_path) -> None:
-    result, calls = _daily_job(tmp_path, args=(), env={"AINEWS_DAILY_JOB_LOCKED": "1"})
+    result, calls = _daily_job(tmp_path, args=("--locked",))
     assert result.returncode == 0, result.stderr
     yesterday = (datetime.now(UTC).date() - timedelta(days=1)).isoformat()
     assert f"daily-publish --report-date {yesterday}" in calls[0]
+
+
+def test_daily_job_ignores_inherited_lock_marker(tmp_path) -> None:
+    # N2: a lock marker in the environment does not skip the host lock.
+    result, calls = _daily_job(tmp_path, env={
+        "AINEWS_DAILY_JOB_LOCKED": "1", "REPORT_DATE": "2026-01-01",
+        "AINEWS_DAILY_JOB_START": "1"})
+    assert result.returncode == 0, result.stderr
+    assert len([c for c in calls if c.startswith("flock ")]) == 1
+    assert "daily-publish --report-date 2026-10-03" in calls[1]
+    assert "--max-seconds 2520" in calls[-1]
 
 
 def test_daily_job_started_by_relative_path(tmp_path) -> None:

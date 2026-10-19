@@ -1,6 +1,6 @@
 # Implementation Plan: Daily AI Signals on the Main Page
 
-**Branch**: `feat/006-daily-ai-signals` | **Revision**: 6 (2026-10-18) | **Spec**: `.specify/specs/006-daily-ai-signals/spec.md`
+**Branch**: `feat/006-daily-ai-signals` | **Revision**: 7 (2026-10-19) | **Spec**: `.specify/specs/006-daily-ai-signals/spec.md`
 **Companion files**: `tasks.md` (ordered tasks), `dry-run.md` (threshold validation on real data),
 `prompt-gate.md` (Phase P result)
 **Status**: Phase B. Revision 2 addressed review 1 (R01-R17); revision 3 review 2 (S01-S15);
@@ -9,7 +9,9 @@ revision 4 review 3 (T01-T20); revision 5 records the owner decisions and applie
 the first step, C2 moves first-release scope cuts to "Deferred (not in first release)"; revision 6
 records the checkpoint 1 decision (`docs/prompt-daily-ai-signals-checkpoint1-decision-2026-10-18.md`,
 option A): prompt v5 frozen, findings 3-6 of `prompt-gate.md` fixed in code (Decisions 1, 2 and 5),
-Phase 7 bar OK >= 75% / BAD <= 10%.
+Phase 7 bar OK >= 75% / BAD <= 10%; revision 7 records the PR #39 review fixes F1-F22 and N1-N3
+(`docs/daily-ai-signals-pr39-review-consolidated-2026-10-19.md`,
+`docs/prompt-daily-ai-signals-review-fixes-2026-10-19.md`), see "Review Response".
 
 ## Summary
 
@@ -116,7 +118,11 @@ extending the summary call (changes pinned digest prompts and replays, couples f
 backfill); batching (one bad JSON loses N articles, ids can mix).
 
 **Input**: `source_text = "Title: " + digest_title(article.title)[:512] + "\nContent: " +
-(article.content or "")[:6000]`; history articles: same rule (title alone if no content).
+(article.content or "")[:6000]`; history articles: same rule (title alone if no content). Revision 7
+(F18): when the content has under 300 characters and the article has an RSS summary, the input is
+`"Title: ...\nSummary: " + summary` (HTML removed, at most 1,500 characters) and grounding uses that
+text; full and title-only articles keep the exact old text (no re-extraction). The provenance records
+the input kind (`full`, `title_summary`, `title_only`).
 
 **Request body** (exact):
 
@@ -206,7 +212,8 @@ whole-response problems; `published_at` is the article's UTC date or None):
    (`novelty_retrospective`) when the quote dates the release before the article and contains no
    same-day marker (`today`, `tonight`, `this week`, `this morning`, `just launched/released/announced/
    unveiled/introduced`, `now available/live/open`): (a) a capitalized month name or abbreviation
-   ("August", "Aug.", "Sept"; "May" only before a day number or year or after in/on/early/late/mid)
+   ("August", "Aug.", "Sept"; "May" and "March" only before a number or after
+   in/on/early/late/mid/since/until/by/of)
    whose (year, month) is before the publication (year, month), the year taken from an adjacent
    four-digit year, else the publication year; (b) "earlier this year", "last year", "last month";
    (c) a past-tense first-person launch ("we introduced|launched|released|unveiled|debuted|shipped").
@@ -377,6 +384,16 @@ jailbreak, deepfake(s), automation, workflow(s), platform`. Bare "copilot" stays
    b. `merge`: selectors `(type_group, base_key[, vendor_class])` for source and target -> one `manual:<n>`.
    Precedence alias > merge; a selector already owned by another override is refused (no cycles, no
    silent conflicts). The per-article `split` override is deferred (see "Deferred").
+   Revision 7 (PR #39 review F2-F4): automatic entities (step 4) are formed first over all mentions,
+   then a selector names a whole automatic entity, so it keeps every member, vendorless ones included,
+   on every later run. Selector class `""` = the unsuffixed entity (whatever class it gains later) or
+   the vendorless `?` part after a split; `?` = the vendorless part only; a class = that vendor's
+   entity. `""` is never a wildcard. Stored classes resolve through the current vendor classes (a class
+   that gains a shorter member keeps matching); refusal is overlap-aware (`""` overlaps a class
+   selector of the same base). Revision 7 also folds a trailing plural "s" of the last base token into
+   the singular base when that singular occurs in the evidence for the same type group (F21), and joins
+   vendor spellings whose space-free forms meet after a glued company suffix ("LiquidAI" =
+   "Liquid AI"; not "co") (F20).
 4. Automatic grouping of the remaining mentions by resolution key. Let `V` be the vendor classes present
    (explicit or inferred):
    - `|V| <= 1`: one entity `auto:<group>:<base_key>`; mentions without vendor join it;
@@ -471,7 +488,10 @@ extraction version, mention), with the article's `url_canonical_hash`, normalize
 (explicit and inferred class), role, novelty flag and quote, publisher and the assigned `entity_key`.
 - **Article identity** = `(article_id, url_canonical_hash)`. An article "exists" only if a row in
   `articles` has the same id **and** hash, so a reused SQLite id (no AUTOINCREMENT on `articles`) never
-  touches the old article's evidence.
+  touches the old article's evidence. Revision 7 (F9): `article_signals` and `daily_signal_scope` also
+  store `url_canonical_hash`; scope, coverage, observations and evidence writes join on both, and a
+  stale row of a deleted article is ignored or taken over and reset (SQLite does not enforce the
+  cascade in the app; the global pragma is unchanged).
 - **Replacement units**: a membership change of day D replaces rows `(scope_day = D, article)` of the
   version in use for that article; a re-extraction of an article in version X replaces all of that
   article's rows of version X (every scope day). Both only for existing articles.
@@ -491,7 +511,8 @@ not (their evidence stays until purged).
 
 **Snapshot recompute** (replaces fingerprints): at the end of every run (and after entity commands),
 load all observations once and recompute, in memory, the snapshot of every comparable `published` day
-from `comparable_from` to the latest completed day within the last 400 days (`--recompute-all` removes
+from `comparable_from` to the latest completed day, at most from that day minus 400 days (401 days
+inclusive; `--recompute-all` removes
 the bound; older reports are otherwise frozen). Write a report when its `payload_hash` differs or it does
 not exist; delete nothing. `payload_hash = fingerprint(payload without generated_at)` with `encoded`
 (sorted keys) and every float rounded to 3 decimals when the payload is built, so unchanged days are not
@@ -510,7 +531,7 @@ racing a signals write can only end that run with a DB error (exit 1, ignored by
 
 | Section | Rule | Value | Evidence |
 | --- | --- | --- | --- |
-| New eligibility | type group not person/other; `first_seen_day == D`; in at least one article of D the entity is primary and `is_new` (with quote, after rules 5-5a) | - | `prompt-gate.md` (v5) |
+| New eligibility | type group not person/other; `first_seen_day == D`; in at least one article of D the entity is primary and `is_new` (with quote, after rules 5-5a); revision 7: a proper-name shape (uppercase letter or digit, or one hyphen/dot-joined token; F22) and no occurrence of the name in an earlier in-scope title/summary or digest item text (F19, the gate's lexical rule; refusals stored as `new_suppressed`) | - | `prompt-gate.md` (v5), `dry-run.md` section 8 |
 | Packaging variants | not New if a family entity (Decision 2) was first seen before D | - | real Nemotron names |
 | New confirmed / early | distinct publishers on D | >= 2 / == 1 | dry-run |
 | New ordering | confirmed first (publishers desc, articles desc, type order, display name); then early items by type order model, hardware, benchmark, dataset, technology, company, product, policy, then publishers desc, articles desc, display name (CP1, gate finding 6; products stay eligible) | max 8 | `prompt-gate.md` |
@@ -636,7 +657,9 @@ daily_signal_reports
 - Migration `src/app/storage/migrations/versions/b6d1f0a7c3e5_add_daily_signals.py`, `down_revision =
   "a42b750d0c44"`. Each `create_table`/`create_index` is skipped when it exists (handles `create_all()`
   having run first). It does not serialize a concurrent `create_all()` and migration; the residual window
-  on the first deploy is accepted - the operator re-runs `alembic upgrade head`. Deploy order unchanged.
+  on the first deploy is accepted - the operator reruns the whole deploy with the same target (not only
+  `alembic upgrade head`, which would leave the release receipt and image unchanged; F15). Deploy order
+  unchanged.
 - Downgrade drops the six new tables in reverse dependency order and leaves pre-feature tables and rows
   intact; run it with the web app and jobs stopped (else `create_all()` can recreate tables).
 - SQLite vs PostgreSQL: portable types only, no JSON/ARRAY, pre-casefolded keys, no partial indexes,
@@ -822,16 +845,18 @@ date that is no longer selected, and shows the unavailable line on fetch errors.
 ```sh
 LOCK=/tmp/ai-news-auto-update.lock
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
-BUDGET=14400   # must match TimeoutStartSec in install_daily_timers.sh
-if [ -z "${AINEWS_DAILY_JOB_LOCKED:-}" ]; then
-  AINEWS_DAILY_JOB_START="$(date +%s)"
-  REPORT_DATE="${1:-$(date -u -d yesterday +%F 2>/dev/null || date -u -v-1d +%F)}"
-  export AINEWS_DAILY_JOB_START REPORT_DATE AINEWS_DAILY_JOB_LOCKED=1
-  exec flock -w 7200 "$LOCK" sh "$SCRIPT_DIR/$(basename "$0")"
+BUDGET=14400 # must match TimeoutStartSec in install_daily_timers.sh
+yesterday() { date -u -d yesterday +%F 2>/dev/null || date -u -v-1d +%F; }
+# The locked re-exec passes its marker, date and start time as arguments; nothing is taken
+# from the inherited environment.
+if [ "${1:-}" != "--locked" ]; then
+  # One host lock for publication and signals.
+  exec flock -w 7200 "$LOCK" sh "$SCRIPT_DIR/$(basename "$0")" --locked \
+    "${1:-$(yesterday)}" "$(date +%s)"
 fi
-AINEWS_DAILY_JOB_START="${AINEWS_DAILY_JOB_START:-$(date +%s)}"
-REPORT_DATE="${REPORT_DATE:-$(date -u -d yesterday +%F 2>/dev/null || date -u -v-1d +%F)}"
-# Locked: the digest decides the job result (set -e exits on failure).
+REPORT_DATE="${2:-$(yesterday)}"
+AINEWS_DAILY_JOB_START="${3:-$(date +%s)}"
+# The digest decides the job result (set -e exits on failure).
 docker compose -f "$COMPOSE_FILE" run --rm app ai-news daily-publish --report-date "$REPORT_DATE"
 # Signals: start only if >= 300 s remain after reserving 600 s for shutdown and slack.
 remaining=$((BUDGET - ($(date +%s) - AINEWS_DAILY_JOB_START) - 600))
@@ -840,20 +865,28 @@ if [ "$remaining" -lt 300 ]; then
   exit 0
 fi
 if [ "$remaining" -gt 2700 ]; then remaining=2700; fi
+# Without `timeout` the step has no hard bound; skip it rather than hold the host lock.
+if ! command -v timeout >/dev/null 2>&1; then
+  echo "daily-signals skipped: timeout is not installed" >&2
+  exit 0
+fi
 name="ai-news-signals-$REPORT_DATE"
-limit=""
-if command -v timeout >/dev/null 2>&1; then limit="timeout -k 30 $remaining"; fi
 # The app stops dispatching 180 s before the outer limit to finish snapshots and exit cleanly.
-$limit docker compose -f "$COMPOSE_FILE" run --rm --name "$name" app ai-news daily-signals \
-  --report-date "$REPORT_DATE" --max-seconds "$((remaining - 180))" \
-  || { echo "daily-signals failed or timed out; the published digest is unaffected" >&2
-       docker rm -f "$name" >/dev/null 2>&1 || true; }
+timeout -k 30 "$remaining" docker compose -f "$COMPOSE_FILE" run --rm --name "$name" app \
+  ai-news daily-signals --report-date "$REPORT_DATE" --max-seconds "$((remaining - 180))" \
+  || {
+    echo "daily-signals failed or timed out; the published digest is unaffected" >&2
+    timeout -k 10 60 docker rm -f "$name" >/dev/null 2>&1 || true
+  }
 exit 0
 ```
 
 - `SCRIPT_DIR` comes from the existing preamble (absolute), so the re-exec works when the script is
-  started by a relative path; a locked entry without START/REPORT_DATE falls back instead of failing
-  under `set -u`. `timeout -k 30` works with coreutils and busybox.
+  started by a relative path; a locked entry without date/start falls back instead of failing under
+  `set -u`. The locked re-exec passes `--locked DATE START` as arguments, so an inherited environment
+  never skips the lock (revision 7, N2). `timeout -k 30` works with coreutils and busybox; without
+  `timeout` the signals step is skipped with a log line (no unbounded run) and the cleanup is bounded
+  too (revision 7, F17).
 - Budget: lock wait <= 7200 s; publication P; signals <= remaining + 30 s where remaining = 14400 -
   elapsed - 600. Total <= 14400 - 570 s, so the unit timeout is not reached by the signals step.
 - Inside the app: dispatch stops when < 95 s remain (httpx timeouts, 60 s body deadline); the 180 s reserve covers
@@ -967,8 +1000,12 @@ procedure from `docs/troubleshooting.md` if the local `.env` breaks auth setting
 6. (owner) `AINEWS_DAILY_SIGNALS_ENABLED=true` in the server `.env`.
 7. After 2026-10-30: re-tune Rising/Cooling (T8.2).
 
-Rollback: flag false -> revert UI commit -> revert feature and downgrade with app and jobs stopped.
-Digest, articles and weekly data are untouched in every path.
+Rollback (F6; exact commands in `docs/daily-signals.md` "Rollback"): (1) flag false; (2) revert code
+but keep the migration file (the schema stays, unused) - an older image cannot be deployed while the
+database is at `b6d1f0a7c3e5` because its Alembic does not know that revision; (3) full rollback in
+this order: stop timers, wait for the host lock, stop the app, `alembic downgrade a42b750d0c44` with
+the feature image, deploy the previous release, start timers. Digest, articles and weekly data are
+untouched in every path.
 
 ## Risks and Mitigations
 
@@ -1007,6 +1044,13 @@ trigger occurs. Revision-4 text above that described them was removed or marked 
 
 The `--retry-skipped` flag (one deliberate retry per article and version, recorded in
 `article_signals.retry_used`) stays; it is bounded by the run caps.
+
+Follow-ups recorded after PR #39 review (not in this release):
+
+| Item | Why | Trigger |
+| --- | --- | --- |
+| Down-weight or exclude SEO/comparison pages per source | Top-story membership 89% strict / 98% lenient on 2026-10-12..16; the gap is one emergent.sh comparison cluster (coordinator: accepted for this release) | A second SEO cluster in top stories, or a source-quality pass |
+| Price cache-hit tokens in the ledger | The ledger charges cache hits at the miss price: Phase 7 was $0.64 by the ledger, $0.26 at list prices, $0.14 billed (safe direction) | Budgets limit useful work, or the owner asks for closer estimates |
 
 ## Spec Deltas (accepted by the owner; spec file not edited)
 
@@ -1131,6 +1175,8 @@ int = Field(default=2700, ge=60, le=14400)`; `daily_signals_max_usd: str = "0.50
 | C2 first release over-engineered | Ledger and entity cuts listed with triggers | Deferred |
 | Checkpoint 1 (gate below bar) | Option A: v5 frozen; findings 3-6 fixed in code; cached re-measure; Phase 7 bar 75% / 10% | CP1, Decisions 1, 2, 5, tasks T1.1, T1.3, T1.5, T1.6, T7.2 |
 | T1.6 finding: unbacked vendor splits an entity | Org backing also required for identity vendor classes (deviation, reported at checkpoint 2) | Decision 2 rule 6, `prompt-gate.md` "After code fixes" |
+| PR #39 review F1-F17, N1-N3 | Fixed test-first (finding -> commit/test table in the PR description): entity-level override selectors (F2-F4), (id, url hash) identity for scope and extractions (F9), newest ok version (F10), recompute through yesterday (F1), retry and backfill attempts (F11, F12), grounding and stoplist order (F7, F8), page safety and UI loading (F5, F16, N1), job `timeout` and lock marker (F17, N2), docs (F6, F14, F15), settings bounds and plan text (N3) | Decisions 1, 2, 4, Rollout and Rollback, Deferred |
+| Phase 7 findings F18-F22 | Summary input for body-less articles (F18), lexical-history and proper-name New safety nets (F19, F22, `METHODOLOGY_VERSION` daily-signals-2), glued vendor suffix (F20), plural fold (F21) | Decisions 1, 2, 5, `dry-run.md` section 8 |
 | CI: legacy cleanup refuses unknown FKs to `articles` | Guard accepts exactly `article_signals.article_id` and `daily_signal_scope.article_id` with ON DELETE CASCADE; any other FK still refuses (checkpoint 3) | Decision 4 Retention, `storage/legacy_cleanup.py` |
 | OD1-OD7, SD1-SD13 | Accepted as written; budgets $2.50 validation, $3.00 backfill | Owner Decisions (final) |
 

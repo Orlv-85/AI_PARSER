@@ -198,3 +198,14 @@ def test_daily_signals_defaults_and_env(monkeypatch) -> None:
 def test_daily_signals_rejects_invalid_usd(value) -> None:
     with pytest.raises(ValidationError):
         Settings(_env_file=None, daily_signals_max_usd=value)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("daily_signals_max_calls", 0), ("daily_signals_max_calls", 5001),
+    ("daily_signals_max_seconds", 59), ("daily_signals_max_seconds", 14401)])
+def test_daily_signals_cap_bounds(field, value) -> None:
+    # N3: the plan's bounds (calls 1..5000, seconds 60..14400) are enforced.
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, **{field: value})
+    assert Settings(_env_file=None, daily_signals_max_calls=5000,
+                    daily_signals_max_seconds=14400).daily_signals_max_seconds == 14400

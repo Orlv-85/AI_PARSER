@@ -15,6 +15,13 @@ page loads never call a provider.
    novelty flag. Answers are validated against the article text (names and quotes must occur in it;
    a quote that dates the release before the article clears "new"). Results are cached per article,
    content hash and version.
+   - **Input kinds** (stored as `input` in the extraction provenance): `full` - title and content when
+     the content has at least 300 characters; `title_summary` - title and the stored RSS summary
+     (HTML removed, at most 1,500 characters) when the content is shorter; `title_only` - neither.
+     Legacy history (before 2026-10-10) is much thinner than recent days: on production about 443 of
+     1,642 matched history items have full text and about 1,009 more have a summary. A title-only
+     article usually yields no entities but still counts as processed for day coverage (coverage
+     measures the pipeline, not how rich the source is).
 3. **Evidence and identity.** Every mention is stored as evidence that survives article retention.
    Entities are derived from all evidence by a deterministic reconciliation (normalized keys, vendor
    classes backed by company mentions, packaging families) plus operator overrides.
@@ -26,7 +33,12 @@ page loads never call a provider.
 - **New**: an entity first seen in our corpus on D that an article of D presents as newly announced
   (model judgment, shown with its quote as "Source says"). Confirmed = at least 2 publishers; early
   signal = 1. Packaging variants of a known model (sizes, quantization, instruct/base) are not New;
-  a new named version or a GA release after a preview is. People and "other" are never New. The list
+  a new named version or a GA release after a preview is. People and "other" are never New. Two
+  deterministic safety nets: the name must look like a name (an uppercase letter or digit, or one
+  hyphen/dot-joined token, so "dynamic workflows" is not New), and a name that already occurs in the
+  title or summary of an earlier in-scope article or digest item is not New, even when that article's
+  extraction found nothing. Refused items are kept in the stored snapshot as `new_suppressed` (reason,
+  matching day; not part of the API response). The list
   shows 8 items: confirmed first, then early models, hardware, benchmarks, datasets, techniques,
   companies, products, policies. "History: N complete days." is shown while fewer than 30 complete
   days precede D.
@@ -58,6 +70,9 @@ alone decides the job result; a signals failure or timeout is logged and ignored
 
 `AINEWS_DAILY_SIGNALS_ENABLED` (default `false`, set by the owner in the server's private `.env`) gates
 paid extraction only. Recompute-only runs and entity commands work with the flag off and without a key.
+In production it is the only signals setting that reaches the container (`docker-compose.prod.yml`
+passes it explicitly); `AINEWS_DAILY_SIGNALS_MAX_*` and `AINEWS_DAILY_SIGNALS_COMPARABLE_FROM` in the
+server `.env` have no effect there. Set caps per run with `--max-calls`, `--max-seconds`, `--max-usd`.
 
 Every writer must hold the host lock:
 
@@ -90,8 +105,10 @@ documented state (`ok`, `disabled`, `missing_provider_key`, `recompute_only`, `c
 
 ## Cost and limits
 
-- About $0.0009 per article (measured in the prompt gate); a typical day of 60-90 articles costs
-  $0.05-0.08.
+- The ledger prices every call as an upper bound (all input tokens at the cache-miss peak price
+  $0.30/M, output $1.20/M): about $0.0004-0.0009 per article, $0.05-0.08 for a day of 60-90 articles.
+  DeepSeek bills cache hits and off-peak hours lower; Phase 7 (1,610 calls) was $0.64 by the ledger,
+  $0.26 at list prices and $0.14 billed. Budgets read against the ledger are therefore conservative.
 - Per-run caps, checked before every provider call with a reservation: calls
   (`AINEWS_DAILY_SIGNALS_MAX_CALLS`, 200), USD (`AINEWS_DAILY_SIGNALS_MAX_USD`, 0.50) and an app-side
   deadline (`AINEWS_DAILY_SIGNALS_MAX_SECONDS`, 2700; no call starts with less than 95 s left).
@@ -134,11 +151,39 @@ $L $C app ai-news daily-signals-entities purge-evidence --article 98123
   extractions; re-extraction costs provider calls.
 - On SQLite (local) foreign keys are not enforced; loaders join `articles`, so orphans are ignored.
 
+## Deploy note (first deploy)
+
+`deploy_prod.sh` starts the app before `alembic upgrade head`, and the app's `create_all()` can race the
+migration (each create in `b6d1f0a7c3e5` is skipped when the table exists, but the two are not
+serialized). If the deploy stops at the migration, rerun the whole deploy with the same target (same
+image or tag) - not only `alembic upgrade head` - so the release receipt `.last_deploy_image`, the app
+image and the timers are updated too.
+
 ## Rollback
 
-Set `AINEWS_DAILY_SIGNALS_ENABLED=false` (stops paid work), revert the UI commit, or revert the
-feature and run `alembic downgrade a42b750d0c44` with the app and jobs stopped. Digest, articles and
-weekly data are never written by signals.
+Digest, articles and weekly data are never written by signals. Pick one level:
+
+1. **Stop paid work**: set `AINEWS_DAILY_SIGNALS_ENABLED=false` in the server `.env` and recreate the
+   app (`docker compose -f docker-compose.prod.yml up -d app`). Code and tables stay; snapshots stay
+   readable.
+2. **Revert code, keep the schema**: deploy a revert commit that removes the feature code but keeps
+   `src/app/storage/migrations/versions/b6d1f0a7c3e5_add_daily_signals.py`. The six tables stay unused.
+   Deploying an older image instead does not work: its Alembic does not know `b6d1f0a7c3e5`, so the
+   deploy stops at `alembic upgrade head`.
+3. **Full rollback (drop the tables)**, in this order, while the feature image is still installed:
+
+   ```bash
+   sudo systemctl stop ai-news-daily-fetch.timer ai-news-daily-digest.timer
+   flock -w 7200 /tmp/ai-news-auto-update.lock true      # wait for a running job
+   docker compose -f docker-compose.prod.yml stop app     # else create_all() recreates the tables
+   APP_IMAGE="$(cat .last_deploy_image)" \
+     docker compose -f docker-compose.prod.yml run --rm app alembic downgrade a42b750d0c44
+   APP_IMAGE=<previous release image> ./scripts/deploy_prod.sh   # or deploy-by-tag
+   sudo systemctl start ai-news-daily-fetch.timer ai-news-daily-digest.timer
+   ```
+
+   The downgrade must run with the feature image (it holds the migration); the old release then finds
+   the database at its own head.
 
 ## Not in the first release
 

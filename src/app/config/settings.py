@@ -74,8 +74,8 @@ class Settings(BaseSettings):
     weekly_publisher_overrides: dict[str, str] = Field(default_factory=dict)
     daily_signals_enabled: bool = False
     daily_signals_comparable_from: date = date(2026, 10, 10)
-    daily_signals_max_calls: int = Field(default=200, ge=1)
-    daily_signals_max_seconds: int = Field(default=2700, ge=1)
+    daily_signals_max_calls: int = Field(default=200, ge=1, le=5000)
+    daily_signals_max_seconds: int = Field(default=2700, ge=60, le=14400)
     daily_signals_max_usd: str = "0.50"
     respect_robots_txt: bool = True
     auth_enabled: bool = False
