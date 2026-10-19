@@ -41,6 +41,7 @@ from app.storage.models_sql import (
     AIEntityOverride,
     Article,
     ArticleSignal,
+    DailySignalBrief,
     DailySignalReport,
     DailySignalScope,
     NewsDigestGroup,
@@ -79,7 +80,7 @@ class RecomputeResult:
     reconciliation: Reconciliation
 
 
-class DailySignalRepo:
+class DailySignalRepo:  # pylint: disable=too-many-public-methods
     def __init__(self, session: Session, *, comparable_from: date,
                  publisher_overrides: Mapping[str, str] | None = None) -> None:
         self.session = session
@@ -455,6 +456,14 @@ class DailySignalRepo:
             rank = _version_rank(version)
             if rank >= events.get((article_id, url_hash), (-2, ""))[0]:
                 events[(article_id, url_hash)] = (rank, event or "other")
+        summaries: dict[tuple[date, str], str] = {}
+        for day, url, summary in self.session.execute(
+                select(NewsDigestReport.report_date, NewsDigestItem.url, NewsDigestItem.summary)
+                .join(NewsDigestGroup, NewsDigestGroup.report_id == NewsDigestReport.id)
+                .join(NewsDigestItem, NewsDigestItem.group_id == NewsDigestGroup.id)
+                .where(NewsDigestReport.report_date.in_(sorted(wanted)))
+                .order_by(NewsDigestGroup.position, NewsDigestItem.position)):
+            summaries.setdefault((day, url), summary or "")
         out: dict[date, list[ArticleObs]] = defaultdict(list)
         for scope, article in self.session.execute(
                 select(DailySignalScope, Article)
@@ -470,7 +479,8 @@ class DailySignalRepo:
                 article_id=article.id, scope_day=scope.scope_day,
                 title=str(digest_title(article.title)), url=scope.item_url,
                 publisher=scope.publisher, published_at=article.published_at,
-                event_type=events[identity][1], mentions=tuple(mentions)))
+                event_type=events[identity][1], mentions=tuple(mentions),
+                summary=summaries.get((scope.scope_day, scope.item_url), "")))
         return dict(out)
 
     def history_texts(self, until: date) -> list[tuple[date, str]]:
@@ -481,6 +491,47 @@ class DailySignalRepo:
             .join(NewsDigestGroup, NewsDigestGroup.report_id == NewsDigestReport.id)
             .join(NewsDigestItem, NewsDigestItem.group_id == NewsDigestGroup.id)
             .where(NewsDigestReport.report_date <= until))]
+
+    def digest_items(self, day: date) -> list[dict[str, str]]:
+        """Published digest items of a day in digest order (brief input)."""
+        return [{"title": title, "summary": summary or "", "url": url,
+                 "publisher": publisher_group(url, self.publisher_overrides)}
+                for title, summary, url in self.session.execute(
+                    select(NewsDigestItem.title, NewsDigestItem.summary, NewsDigestItem.url)
+                    .join(NewsDigestGroup, NewsDigestItem.group_id == NewsDigestGroup.id)
+                    .join(NewsDigestReport, NewsDigestGroup.report_id == NewsDigestReport.id)
+                    .where(NewsDigestReport.report_date == day)
+                    .order_by(NewsDigestGroup.position, NewsDigestItem.position))]
+
+    def get_brief(self, day: date) -> DailySignalBrief | None:
+        return self.session.scalar(select(DailySignalBrief).where(
+            DailySignalBrief.report_date == day))
+
+    def save_brief(self, day: date, *, brief_version: str, model: str, input_hash: str,
+                   status: str, payload: Mapping[str, Any],
+                   reason: str | None = None) -> DailySignalBrief:
+        """Insert or replace the day's brief row (same upsert pattern as `save_report`)."""
+        if status not in ("ok", "invalid"):
+            raise ValueError(status)
+        values = {"brief_version": brief_version, "model": model, "input_hash": input_hash,
+                  "status": status, "reason": reason,
+                  "payload": json.dumps(dict(payload), sort_keys=True), "updated_at": _now()}
+        row = self.get_brief(day)
+        if row is None:
+            try:
+                with self.session.begin_nested():
+                    row = DailySignalBrief(report_date=day, created_at=_now(), **values)
+                    self.session.add(row)
+                    self.session.flush()
+                return row
+            except IntegrityError:
+                row = self.get_brief(day)
+                if row is None:
+                    raise
+        for k, v in values.items():
+            setattr(row, k, v)
+        self.session.flush()
+        return row
 
     def get_report(self, day: date) -> DailySignalReport | None:
         return self.session.scalar(select(DailySignalReport).where(

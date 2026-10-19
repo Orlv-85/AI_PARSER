@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.storage.models_sql import Article, Base
 
 SIGNAL_TABLES = {"article_signals", "daily_signal_scope", "signal_mentions", "ai_entities",
-                 "ai_entity_overrides", "daily_signal_reports"}
+                 "ai_entity_overrides", "daily_signal_reports", "daily_signal_briefs"}
 
 
 def schema(url, table):
@@ -84,4 +84,22 @@ def test_upgrade_after_create_all_and_downgrade_keeps_existing_tables(tmp_path, 
         assert connection.execute(text("SELECT COUNT(*) FROM articles")).scalar() == 1
     command.upgrade(config, "head")
     assert SIGNAL_TABLES <= set(inspect(engine).get_table_names())
+    engine.dispose()
+
+
+def test_briefs_table_upgrade_downgrade_without_article_fk(tmp_path, monkeypatch):
+    path = tmp_path / "briefs.db"
+    config = upgrade(monkeypatch, path, "b6d1f0a7c3e5")
+    engine = create_engine(f"sqlite:///{path}")
+    assert "daily_signal_briefs" not in inspect(engine).get_table_names()
+    command.upgrade(config, "head")
+    columns, indexes, _, fks = schema(f"sqlite:///{path}", "daily_signal_briefs")
+    assert fks == set()
+    assert ("ix_daily_signal_briefs_report_date", ("report_date",), True) in indexes
+    assert set(columns) == {"id", "report_date", "brief_version", "model", "input_hash",
+                            "status", "reason", "payload", "created_at", "updated_at"}
+    command.downgrade(config, "b6d1f0a7c3e5")
+    tables = set(inspect(engine).get_table_names())
+    assert "daily_signal_briefs" not in tables
+    assert SIGNAL_TABLES - {"daily_signal_briefs"} <= tables
     engine.dispose()

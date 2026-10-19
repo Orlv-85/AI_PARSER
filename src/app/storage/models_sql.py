@@ -542,5 +542,21 @@ class DailySignalReport(Base):  # pylint: disable=too-many-instance-attributes
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
 
+class DailySignalBrief(Base):  # pylint: disable=too-many-instance-attributes
+    """Generated daily brief (one per day); links are stored as title/url/publisher, no FK."""
+    __tablename__ = "daily_signal_briefs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    report_date: Mapped[date] = mapped_column(Date, unique=True, index=True)
+    brief_version: Mapped[str] = mapped_column(String(64))
+    model: Mapped[str] = mapped_column(String(64))
+    input_hash: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(16))  # ok | invalid
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    payload: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+
+
 Index("ix_articles_published_at_desc", Article.published_at.desc())
 Index("ix_articles_rank_score_desc", Article.rank_score.desc())
