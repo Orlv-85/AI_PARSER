@@ -131,3 +131,27 @@ Paste this into Codex:
 ------------------------------------------------------------------------
 
 Generated at: 2026-02-21 12:48:05.096035
+
+## Repo scripts (moved from AGENTS.md, 2026-10-20)
+
+- New feature intake + Spec Kit bootstrap:
+  - `./scripts/start_feature_intake.sh`
+  - Non-interactive mode for automation:
+    - `./scripts/start_feature_intake.sh --non-interactive --json --title "..." --problem "..." --users "..." --in-scope "..." --out-of-scope "..." --acceptance "..." --constraints "..." --non-functional "..." --risks "..." --done "..."`
+- One-command feature flow (bootstrap + guarded run):
+  - `./scripts/feature_delivery_flow.sh bootstrap ...`
+  - `./scripts/feature_delivery_flow.sh run --feature-dir specs/XXX-feature --task "..." --allow "..." --approved`
+- Canonical repo entrypoint: `./scripts/run_multiagent.sh`
+- Readiness probe (live `codex exec` check): `./scripts/check_codex_ready.sh -C /ABS/PATH/TO/REPO --timeout-sec 90`
+- Required handoff artifacts are strict JSON:
+  - `tmp/tester_out.json`
+  - `tmp/generator_out.json`
+  - `tmp/reviewer_out.json`
+- Keep per-run artifacts in `tmp/runs/<run_id>/` (prompts, logs, messages, handoffs).
+- If coverage gate is required, use wrapper flags:
+  - `--coverage-cmd "<coverage command>"`
+  - `--coverage-fail-under <percent>`
+
+Smoke tests for changes to these scripts:
+
+- `./venv1/bin/pytest tests/unit/test_multiagent_wrapper_script.py tests/unit/test_check_codex_ready_script.py -q`

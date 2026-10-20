@@ -40,7 +40,6 @@ When working in this repo, optimize for small, testable changes that preserve ex
 - Preserve backward compatibility for CLI flags, API responses, and stored data unless the task explicitly requires a break.
 - Do not edit unrelated files just because they are nearby.
 - Do not overwrite user changes in a dirty worktree.
-- For behavior changes, read the closest relevant spec in `specs/` before editing.
 
 ## Code Changes
 
@@ -52,22 +51,14 @@ When working in this repo, optimize for small, testable changes that preserve ex
 
 ## Feature Docs Next To Code
 
-- Every feature keeps a short technical doc next to its main code file: `<main_module>.md` in the
-  same folder (example: `src/app/core/daily_signals.md` for `daily_signals.py`).
-- Content is dry and technical: flow, module map, tables, version constants, invariants, "where to
-  change what", tests. No history, no rationale essays; operator commands stay in `docs/`.
-- The main module's docstring names the doc (`... : <main_module>.md next to this file.`).
-- A change to the feature's behavior, structure or names updates that doc in the same change.
-- New features add the doc and the docstring line as part of the implementation.
-- Start the doc with a header so `scripts/check_code_docs.py` can check it:
-  `<!-- code-doc` / `module: <main module path>` / `covers:` / `  - <glob of the feature files>` / `-->`.
-- Sync is checked: pytest (`tests/unit/test_code_docs.py`) fails when a backticked file, constant,
-  class, function, flag or `AINEWS_*` setting in a doc no longer exists; CI fails when covered files
-  change without the doc. A change that needs no doc update (pure rename, formatting) says so with a
-  commit message line `Docs-Skip: <reason>`.
-- System overview: `src/app/README.md` (packages, entry points, code docs list).
-- Register a new code doc in `docs/README.md` ("Code docs") and in the `README.md`
-  "Documentation" section. `docs/` keeps general docs, operator guides and dated records only.
+- Each feature has a dry technical doc next to its main module: `<main_module>.md` (example:
+  `src/app/core/daily_signals.md`). Content: flow, modules, tables, versions, invariants, where to
+  change what, tests. Operator guides stay in `docs/`.
+- Header: `<!-- code-doc` / `module: <path>` / `covers:` / `  - <glob>` / `-->`. The main module's
+  docstring names the doc. Register it in `docs/README.md`, `README.md` and `src/app/README.md`.
+- Update the doc in the same change as behavior, structure or names. New features ship with it.
+- Checked by `scripts/check_code_docs.py`: pytest fails on stale names in a doc; CI fails when covered
+  files change without the doc (opt out: commit line `Docs-Skip: <reason>`).
 
 ## Validation
 
@@ -81,10 +72,6 @@ Before commit or push, run the final repo-wide quality gate:
 
 - `make lint PYTHON=./venv1/bin/python`
 - `./venv1/bin/pytest`
-
-For multi-agent orchestration changes, also run targeted smoke tests:
-
-- `./venv1/bin/pytest tests/unit/test_multiagent_wrapper_script.py tests/unit/test_check_codex_ready_script.py -q`
 
 If full validation is too expensive or blocked, state exactly what was not run and why.
 
@@ -115,23 +102,8 @@ When editing `sources.yaml`:
 
 ## Multi-Agent Workflow
 
-- New feature intake + Spec Kit bootstrap:
-  - `./scripts/start_feature_intake.sh`
-  - Non-interactive mode for automation:
-    - `./scripts/start_feature_intake.sh --non-interactive --json --title "..." --problem "..." --users "..." --in-scope "..." --out-of-scope "..." --acceptance "..." --constraints "..." --non-functional "..." --risks "..." --done "..."`
-- One-command feature flow (bootstrap + guarded run):
-  - `./scripts/feature_delivery_flow.sh bootstrap ...`
-  - `./scripts/feature_delivery_flow.sh run --feature-dir specs/XXX-feature --task "..." --allow "..." --approved`
-- Canonical repo entrypoint: `./scripts/run_multiagent.sh`
-- Readiness probe (live `codex exec` check): `./scripts/check_codex_ready.sh -C /ABS/PATH/TO/REPO --timeout-sec 90`
-- Required handoff artifacts are strict JSON:
-  - `tmp/tester_out.json`
-  - `tmp/generator_out.json`
-  - `tmp/reviewer_out.json`
-- Keep per-run artifacts in `tmp/runs/<run_id>/` (prompts, logs, messages, handoffs).
-- If coverage gate is required, use wrapper flags:
-  - `--coverage-cmd "<coverage command>"`
-  - `--coverage-fail-under <percent>`
+Codex multi-agent scripts (`scripts/run_multiagent.sh` and related; not in active use): see
+`codex_multi_agent_guide.md`, including its smoke tests.
 
 ## Troubleshooting
 
@@ -140,23 +112,8 @@ When editing `sources.yaml`:
 
 ## Specs
 
-All specs live in `specs/` (one root; numbers are unique). Present:
-
-- `001-ai-news-collector`
-- `002-fetch-pipeline-optimization`
-- `003-source-onboarding-management`
-- `004-daily-digest-public-admin`
-- `005-web-export-autoupdate`
-- `006-daily-ai-signals`
-- `007-daily-signals-brief`
-- `010-weekly-ai-analytics-for-management-dashboard`
-- `011-json-source-intake`
-- `012-web-interface`
-- `013-authentication`
-- `014-mcp-agent-fulltext`
-- `015-mcp-authentication`
-
-When a task clearly maps to one of these areas, review the matching `spec.md` first and keep implementation aligned unless the user explicitly wants to diverge.
+All specs live in `specs/<NNN>-<name>/` (`ls specs/`). Before a behavior change, read the matching
+`spec.md` and keep the implementation aligned unless the user explicitly wants to diverge.
 
 ## Response Expectations
 
@@ -166,10 +123,8 @@ When a task clearly maps to one of these areas, review the matching `spec.md` fi
 
 ## Prompts For Other Sessions
 
-- Always save every task or handoff prompt intended for another session to a file before delivering it to the user.
-- Prompt for work on a feature with a spec: `specs/<NNN>-<name>/records/prompt-<task>-<YYYY-MM-DD>.md`.
-- Any other prompt: `docs/prompt-<task>-<YYYY-MM-DD>.md`; move it to `docs/archive/<YYYY-MM>/` once done.
-- Use a descriptive task name; preserve earlier prompts instead of overwriting unrelated files.
-- Reviews, reports and checkpoints of a feature go to the same `records/` folder.
-- Include a clickable file link in the response. Inline prompt text is optional and does not replace the saved file.
-- Preserve this user preference in session-context and handoff artifacts so future sessions follow it.
+- Save every prompt for another session to a file before giving it to the user, and link it.
+- Feature with a spec: `specs/<NNN>-<name>/records/prompt-<task>-<YYYY-MM-DD>.md`; reviews and
+  reports of that feature go to the same `records/`. Other prompts: `docs/prompt-<task>-<YYYY-MM-DD>.md`,
+  moved to `docs/archive/<YYYY-MM>/` when done. Never overwrite earlier prompts.
+- Keep this rule in handoff artifacts so future sessions follow it.
