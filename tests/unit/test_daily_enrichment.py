@@ -140,6 +140,7 @@ def test_failure_retains_good_digest_and_records_reason(session, tmp_path, monke
     repo.save_digest(report_date=TARGET, groups=[{"title": "Good", "items": [
         {"title": "Good", "summary": "Previously checked", "url": "https://good.org"}]}])
     session.commit()
+    monkeypatch.setattr("app.storage.reenrich_pilot_journal.time.sleep", lambda _seconds: None)
 
     def respond(request):
         if failure == "outage":
@@ -526,3 +527,45 @@ def test_provider_overload_is_retried_then_resumable(session, tmp_path, monkeypa
     second = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
     assert second["state"] == "published"
     assert second["counts"] == {"enriched": 1}
+
+
+def test_dropped_connection_is_retried_after_one_then_five_minutes(session, tmp_path, monkeypatch):
+    article(session)
+    sleeps = []
+    monkeypatch.setattr("app.storage.reenrich_pilot_journal.time.sleep", sleeps.append)
+    dropped = {"remaining": 2}
+
+    def respond(request):
+        if "questions" not in json.loads(request.content) and dropped["remaining"]:
+            dropped["remaining"] -= 1
+            raise httpx.ReadError("connection reset", request=request)
+        return provider_response(request)
+
+    mock_client(monkeypatch, respond)
+    result = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    assert result["state"] == "published"
+    assert sleeps == [60, 300]
+    deepseek = result["usage"]["providers"]["deepseek"]
+    assert deepseek["states"]["reviewed_transport"] == 2
+    assert deepseek["unknown_usage_calls"] == 2
+
+
+def test_transport_retries_exhausted_fails_day_without_more_dispatch(
+        session, tmp_path, monkeypatch):
+    article(session)
+    monkeypatch.setattr("app.storage.reenrich_pilot_journal.time.sleep", lambda _seconds: None)
+    deepseek_calls = []
+
+    def respond(request):
+        if "questions" in json.loads(request.content):
+            return provider_response(request)
+        deepseek_calls.append(request)
+        raise httpx.ReadError("connection reset", request=request)
+
+    mock_client(monkeypatch, respond)
+    result = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    assert result["state"] == "failed_preserved_previous"
+    assert "attempts exhausted" in result["reason"]
+    assert len(deepseek_calls) == 3
+    resumed = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    assert "attempts exhausted" in resumed["reason"] and len(deepseek_calls) == 3

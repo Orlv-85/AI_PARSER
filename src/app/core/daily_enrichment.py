@@ -36,6 +36,9 @@ from app.storage.repos import NewsDigestRepo
 
 DAILY_VERSION = "daily-publication-1"
 CAPS = {"total": "5", "jev": "1", "deepseek": "4"}
+# A dropped connection may have been billed: accept its reservation and retry after 1, then 5 min.
+TRANSPORT_REVIEW_REASON = "daily-publication: transport failure, conservative reservation kept"
+TRANSPORT_RETRY_DELAYS = (60, 300)
 # Aggregator decorations only; meaningful parentheticals such as "(Sponsor)" stay.
 TITLE_JUNK = re.compile(
     r"\s*\((?:\d+ min(?:ute)? read|GitHub Repo|"
@@ -383,7 +386,9 @@ def publish_day(session, settings, target: date, root: Path):
     run.mkdir(parents=True, exist_ok=True, mode=0o700)
     cache = PageCache(root / "source-cache")
     journal = PilotJournal(run / "journal.sqlite3",
-                           {"version": DAILY_VERSION, "day": target.isoformat()}, CAPS)
+                           {"version": DAILY_VERSION, "day": target.isoformat()}, CAPS,
+                           transport_review_reason=TRANSPORT_REVIEW_REASON,
+                           transport_retry_delays=TRANSPORT_RETRY_DELAYS)
     counts: Counter[str] = Counter()
     held = []
     report: dict[str, Any] = {"report_date": target.isoformat(), "version": DAILY_VERSION,
