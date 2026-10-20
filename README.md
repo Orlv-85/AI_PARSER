@@ -76,7 +76,7 @@ the module map, API changes, private cache, provider journal, apply/restore and
 the limits of daily automation. The ten re-enrichment topics are readable and
 filterable; the ordinary JEV rubric and daily digest process remain separate.
 The completed data operation is recorded in
-[the production report](docs/reenrich-production-results-2026-10-11.md).
+[the production report](docs/archive/2026-10/reenrich-production-results-2026-10-11.md).
 
 ## Development
 
@@ -97,9 +97,9 @@ See also [docs/troubleshooting.md](docs/troubleshooting.md) for known CI/test fa
 ## Spec Artifacts
 
 - `.specify/memory/constitution.md`
-- `.specify/specs/001-ai-news-collector/spec.md`
-- `.specify/specs/001-ai-news-collector/plan.md`
-- `.specify/specs/001-ai-news-collector/tasks.md`
+- `specs/001-ai-news-collector/spec.md`
+- `specs/001-ai-news-collector/plan.md`
+- `specs/001-ai-news-collector/tasks.md`
 
 ## Agent Architecture Notes
 

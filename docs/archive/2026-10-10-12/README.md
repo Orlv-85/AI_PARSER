@@ -6,18 +6,18 @@ The archive mirrors original repository-relative paths. Shell commands, plain pa
 
 ## Completed outcomes
 
-- Semantic admission and PR #13 review fixes: [contract](../../semantic-admission-spec-2026-10-10.md), [activation](../../semantic-admission-production-activation-2026-10-10.md); final reviewed head `dece005`.
+- Semantic admission and PR #13 review fixes: [contract](../2026-10/semantic-admission-spec-2026-10-10.md), [activation](../2026-10/semantic-admission-production-activation-2026-10-10.md); final reviewed head `dece005`.
 - Production screening flags and weekly-off: PR #14, `30e3eb4`.
-- Legacy cleanup and retention 800: [outcome](../../legacy-articles-jev-cleanup-2026-10-11.md), PR #15, `c787ce0`.
-- Re-enrichment/date repair: [outcome](../../reenrich-production-results-2026-10-11.md), implementation delivered in PR #16, `4e46089`. The old context claims about uncommitted code and missing mass approval are superseded.
-- Daily publication: [October 11 receipt](../../daily-publication-results-2026-10-11.md) and [October 12 receipt](../../daily-cycle-verification-results-2026-10-12.md). Later receipts take precedence; manual resume does not establish successful automatic publication.
+- Legacy cleanup and retention 800: [outcome](../2026-10/legacy-articles-jev-cleanup-2026-10-11.md), PR #15, `c787ce0`.
+- Re-enrichment/date repair: [outcome](../2026-10/reenrich-production-results-2026-10-11.md), implementation delivered in PR #16, `4e46089`. The old context claims about uncommitted code and missing mass approval are superseded.
+- Daily publication: [October 11 receipt](../../../specs/004-daily-digest-public-admin/records/daily-publication-results-2026-10-11.md) and [October 12 receipt](../../../specs/004-daily-digest-public-admin/records/daily-cycle-verification-results-2026-10-12.md). Later receipts take precedence; manual resume does not establish successful automatic publication.
 - Historical weekly pilot: read the [later session report](weekly-pilot-session-report-2026-10-10.md) after the [earlier diagnostic](specs/010-weekly-ai-analytics-for-management-dashboard/historical-backfill-diagnostic.md). The report records subsequent publication and cancelled UI work. Runtime states apply only to the recorded time; weekly remains off under the later production policy.
 
 ## Remaining work
 
 The historical preview runner and its four mock tests are preserved below as unsupported pilot snapshots, outside the active `scripts/` and `tests/` trees. Their contents and mirrored relative layout are unchanged. The runner reserves narrative cost using `weekly_output_token_cap` (1200 by default), while the current adapter uses `weekly_narrative_output_token_cap` (2400 by default); its four mock tests bypass narrative generation and do not establish readiness for new paid runs. The maintained frozen-report entrypoint is `scripts/weekly_frozen_report.py`.
 
-The [next scheduled-cycle verification prompt](../../prompt-verify-next-scheduled-daily-cycle-2026-10-12.md) and [weekly editorial prototype prompt](../../prompt-weekly-editorial-prototype-2026-10-12.md) remain outside the archive as separate pending tasks. This archival cleanup does not execute either task. The [weekly stage index](../../weekly-report-stages-2026-10-12.md) points to the specific frozen-v4 stage-3 handoff. The completed narrative task is recorded in the [repair/delivery results](../../weekly-narrative-repair-results-2026-10-12.md), including the v0.1.89 UI follow-up.
+The [next scheduled-cycle verification prompt](../../../specs/004-daily-digest-public-admin/records/prompt-verify-next-scheduled-daily-cycle-2026-10-12.md) and [weekly editorial prototype prompt](../../../specs/010-weekly-ai-analytics-for-management-dashboard/records/prompt-weekly-editorial-prototype-2026-10-12.md) remain outside the archive as separate pending tasks. This archival cleanup does not execute either task. The [weekly stage index](../../../specs/010-weekly-ai-analytics-for-management-dashboard/records/weekly-report-stages-2026-10-12.md) points to the specific frozen-v4 stage-3 handoff. The completed narrative task is recorded in the [repair/delivery results](../../../specs/010-weekly-ai-analytics-for-management-dashboard/records/weekly-narrative-repair-results-2026-10-12.md), including the v0.1.89 UI follow-up.
 
 Local private source caches, paid responses, journals, receipts and backups remain under their existing ignored paths. Do not reset or regenerate them to understand the archive.
 

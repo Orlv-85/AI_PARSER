@@ -10,9 +10,9 @@ Spec-Driven Development workflow using multi-agent orchestration.
 Implement the project strictly following Spec Kit artifacts:
 
 -   .specify/memory/constitution.md\
--   .specify/specs/001-ai-news-collector/spec.md\
--   .specify/specs/001-ai-news-collector/plan.md\
--   .specify/specs/001-ai-news-collector/tasks.md
+-   specs/001-ai-news-collector/spec.md\
+-   specs/001-ai-news-collector/plan.md\
+-   specs/001-ai-news-collector/tasks.md
 
 ## Multi-Agent Pattern (MANDATORY)
 

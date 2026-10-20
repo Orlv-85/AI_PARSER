@@ -21,7 +21,9 @@ When working in this repo, optimize for small, testable changes that preserve ex
 - `tests/` - unit and e2e tests
 - `scripts/` - operational and deploy scripts
 - `sources.yaml` - source registry for RSS/HTML ingestion
-- `.specify/specs/` - feature specifications and change context
+- `specs/<NNN>-<name>/` - feature specs (`spec.md`, `plan.md`, `tasks.md`) and `records/` (prompts, reviews, reports of that feature)
+- `.specify/` - Spec Kit tooling only (`memory/`, `scripts/`, `templates/`); no specs here
+- `docs/` - general docs and operator guides; `docs/backlog/` - backlog JSON; `docs/archive/` - old records
 - `README.md` - setup, run, deploy, and operator commands
 
 ## Local Environment
@@ -38,7 +40,7 @@ When working in this repo, optimize for small, testable changes that preserve ex
 - Preserve backward compatibility for CLI flags, API responses, and stored data unless the task explicitly requires a break.
 - Do not edit unrelated files just because they are nearby.
 - Do not overwrite user changes in a dirty worktree.
-- For behavior changes, read the closest relevant spec in `.specify/specs/` before editing.
+- For behavior changes, read the closest relevant spec in `specs/` before editing.
 
 ## Code Changes
 
@@ -138,13 +140,21 @@ When editing `sources.yaml`:
 
 ## Specs
 
-Relevant specs currently present:
+All specs live in `specs/` (one root; numbers are unique). Present:
 
 - `001-ai-news-collector`
 - `002-fetch-pipeline-optimization`
 - `003-source-onboarding-management`
 - `004-daily-digest-public-admin`
 - `005-web-export-autoupdate`
+- `006-daily-ai-signals`
+- `007-daily-signals-brief`
+- `010-weekly-ai-analytics-for-management-dashboard`
+- `011-json-source-intake`
+- `012-web-interface`
+- `013-authentication`
+- `014-mcp-agent-fulltext`
+- `015-mcp-authentication`
 
 When a task clearly maps to one of these areas, review the matching `spec.md` first and keep implementation aligned unless the user explicitly wants to diverge.
 
@@ -157,6 +167,9 @@ When a task clearly maps to one of these areas, review the matching `spec.md` fi
 ## Prompts For Other Sessions
 
 - Always save every task or handoff prompt intended for another session to a file before delivering it to the user.
-- Use `docs/prompt-<task>-<YYYY-MM-DD>.md` with a descriptive task name; preserve earlier prompts instead of overwriting unrelated files.
+- Prompt for work on a feature with a spec: `specs/<NNN>-<name>/records/prompt-<task>-<YYYY-MM-DD>.md`.
+- Any other prompt: `docs/prompt-<task>-<YYYY-MM-DD>.md`; move it to `docs/archive/<YYYY-MM>/` once done.
+- Use a descriptive task name; preserve earlier prompts instead of overwriting unrelated files.
+- Reviews, reports and checkpoints of a feature go to the same `records/` folder.
 - Include a clickable file link in the response. Inline prompt text is optional and does not replace the saved file.
 - Preserve this user preference in session-context and handoff artifacts so future sessions follow it.

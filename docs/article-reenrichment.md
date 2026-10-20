@@ -3,7 +3,7 @@
 This change separates source publication, modification and discovery dates and
 provides tools for a frozen, resumable review of existing articles. The applied
 production operation is recorded in
-[the outcome report](reenrich-production-results-2026-10-11.md).
+[the outcome report](archive/2026-10/reenrich-production-results-2026-10-11.md).
 
 ## Application behavior
 
@@ -63,9 +63,9 @@ are unchanged.
 
 Download and pilot commands are documented in
 [the source-cache guide](article-source-cache.md) and
-[pilot preparation](reenrich-pilot-preparation-2026-10-11.md).
+[pilot preparation](archive/2026-10/reenrich-pilot-preparation-2026-10-11.md).
 The validated candidate rubric is saved in
-[the clarification artifact](reenrich-jev-rubric-clarification-2026-10-11.json).
+[the clarification artifact](archive/2026-10/reenrich-jev-rubric-clarification-2026-10-11.json).
 The one-time mass orchestration scripts and full-data rehearsal receipts are
 private under `tmp/reenrich-2026-10-11/`; they are not scheduled application jobs
 or included in the repository.

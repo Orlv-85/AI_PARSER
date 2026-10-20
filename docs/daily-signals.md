@@ -1,7 +1,7 @@
 # Daily AI Signals
 
-Feature 006 (`.specify/specs/006-daily-ai-signals/`), iteration 2 in 007
-(`.specify/specs/007-daily-signals-brief/`: brief, one-liners, noise rules). The block at the top of `/` answers, for one
+Feature 006 (`specs/006-daily-ai-signals/`), iteration 2 in 007
+(`specs/007-daily-signals-brief/`: brief, one-liners, noise rules). The block at the top of `/` answers, for one
 published digest day: what is new, which stories several publishers covered, what is spiking or rising,
 what is cooling, and how many events of each type happened. Everything is computed from stored data;
 page loads never call a provider.

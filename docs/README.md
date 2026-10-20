@@ -26,12 +26,18 @@ Updated in the same change as the code (AGENTS.md, "Feature Docs Next To Code");
 
 ## Backlog
 
-- [backlog-todo.json](backlog-todo.json) - product backlog after 007
-- [article-archive-todo.json](article-archive-todo.json) - off-site backups, full-text archive
-- [jev-novelty-second-opinion-todo.json](jev-novelty-second-opinion-todo.json) - Jev for New
+- [backlog-todo.json](backlog/backlog-todo.json) - product backlog after 007
+- [article-archive-todo.json](backlog/article-archive-todo.json) - off-site backups, full-text archive
+- [jev-novelty-second-opinion-todo.json](backlog/jev-novelty-second-opinion-todo.json) - Jev for New
 
 ## History
 
-Dated files in this folder are records, not references: `prompt-<task>-<date>.md` (prompts for
-other sessions), `*-review-*`, `*-results-*`, `*-report-*`, `*-checkpoint-*`; older ones in
-`archive/`. Feature specs live in `.specify/specs/`.
+Dated records (`prompt-<task>-<date>.md`, `*-review-*`, `*-results-*`, `*-report-*`,
+`*-checkpoint-*`) are history, not references:
+
+- records of a feature live next to its spec: `specs/<NNN>-<name>/records/`;
+- other records: `docs/prompt-<task>-<date>.md` while open, then `archive/<YYYY-MM>/`;
+- [archive/2026-10/](archive/2026-10/) - re-enrichment, semantic admission, cleanups, audits;
+  [archive/2026-10-10-12/](archive/2026-10-10-12/README.md) - session materials of Oct 10-12.
+
+Feature specs live in `specs/` (one root); `.specify/` holds only Spec Kit tooling.

@@ -113,7 +113,7 @@ Stage 1 result: all 3,681 URLs accounted for; 3,533 responses saved, 135 robots
 blocks and 13 network errors; 3,240 initial quality passes and 441 unresolved.
 All 3,533 saved responses passed offline cache verification. Model calls and
 production data changes are zero. See the
-[completed fetch report](../../../reenrich-fetch-report-2026-10-11.md) for private artifact
+[completed fetch report](../../2026-10/reenrich-fetch-report-2026-10-11.md) for private artifact
 paths, hashes, date evidence counts and scoped validation. No commit, push or
 draft PR was created. Next stop is representative sample/topic review; paid
 work still requires a monetary budget.
@@ -121,7 +121,7 @@ work still requires a monetary budget.
 Stage 2 result: bounded exploratory source review of 92 materials (40 previously
 kept, 52 freshly extracted unresolved; 70 hostnames). No new summaries or paid
 provider calls; no new downloads or production edits. The
-[topic proposal](../../../reenrich-taxonomy-proposal-2026-10-11.md) defines ten primary
+[topic proposal](../../2026-10/reenrich-taxonomy-proposal-2026-10-11.md) defines ten primary
 topics, separate Comparison/product metadata, boundaries, legacy/UI behavior,
 versioning and an 80-record pilot. The user accepted the ten working topics
 and separate Comparison. Latest proposed pilot total is $1.50, awaiting budget
@@ -135,7 +135,7 @@ texts, 28 accepted diagnostic controls, 60 hostnames. The resume-safe provider
 journal and separate source-grounded summary path are implemented. Provider
 calls remain zero. Proposed provider caps are JEV $0.25 / DeepSeek $1.25 within
 the proposed $1.50 pilot total; confirmation is pending. See the
-[pilot preparation report](../../../reenrich-pilot-preparation-2026-10-11.md).
+[pilot preparation report](../../2026-10/reenrich-pilot-preparation-2026-10-11.md).
 Prefer DeepSeek over Codex for textual article analysis, as the user reiterated.
 The next stage is the paid pilot, followed by another explicit stop.
 
@@ -144,7 +144,7 @@ The pilot ran once and stopped at 21/80 after DeepSeek reached its 300-token
 output cap. Results: 4 accepted, 2 reject candidates, 15 unresolved, 3 complete
 summaries, 59 unassessed. Conservative usage-priced total is $0.006208; no
 unknown billing, repeat payment, source download or production change. See the
-[paid checkpoint](../../../reenrich-pilot-checkpoint-2026-10-11.md). Stop before explicit
+[paid checkpoint](../../2026-10/reenrich-pilot-checkpoint-2026-10-11.md). Stop before explicit
 recovery of the truncated response and continuation of the same pilot; its
 budget remains approved and no mass-processing approval is implied.
 
@@ -154,7 +154,7 @@ assessed, 38 accepted with 38 summaries, 3 conservative reject candidates and
 superseded attempts. Conservative cumulative usage-priced cost is $0.058944.
 No completed request was repaid and no source URLs were redownloaded. Source
 and paid-plan hashes remain unchanged. See the
-[final pilot report](../../../reenrich-pilot-results-2026-10-11.md). The next checkpoint
+[final pilot report](../../2026-10/reenrich-pilot-results-2026-10-11.md). The next checkpoint
 is pilot boundary/quality review and a separate mass budget, before Stage 4.
 
 Offline review completed on the user's request without provider calls. All 39
@@ -164,7 +164,7 @@ non-AI relevance guard seven. All 13 unclassified accepts have named raw topic
 choices below confidence 0.7; bounded source review identifies working
 hypotheses of ten topic boundaries, one mixed newsletter and two admission/ML
 scope cases. Thresholds, stored results, paid journal and production are
-unchanged. See the [offline review](../../../reenrich-pilot-offline-review-2026-10-11.md).
+unchanged. See the [offline review](../../2026-10/reenrich-pilot-offline-review-2026-10-11.md).
 Next preparation is explicit rubric/admission clarification before any targeted
 paid validation or mass pass; a separate mass budget is still required.
 
@@ -182,8 +182,8 @@ Cumulative original pilot plus validation: JEV 214 calls / $0.030643;
 DeepSeek 114 calls / $0.165654; total $0.196297, conservatively usage-priced.
 The original approval and shared journal are retained; no unknown/inflight/failed
 calls, new downloads or production changes. See the
-[validation report](../../../reenrich-rubric-validation-2026-10-11.md) and
-[exact candidate questions](../../../reenrich-jev-rubric-clarification-2026-10-11.json).
+[validation report](../../2026-10/reenrich-rubric-validation-2026-10-11.md) and
+[exact candidate questions](../../2026-10/reenrich-jev-rubric-clarification-2026-10-11.json).
 The [saved context](../session-context-reenrich-2026-10-11.json) and
 [short resume prompt](prompt-resume-reenrich-2026-10-11.md) capture this handoff.
 Next stage: prepare the mass scope and separate estimate, reusing compatible
