@@ -22,7 +22,8 @@ When working in this repo, optimize for small, testable changes that preserve ex
 - `scripts/` - operational and deploy scripts
 - `sources.yaml` - source registry for RSS/HTML ingestion
 - `specs/<NNN>-<name>/` - feature specs (`spec.md`, `plan.md`, `tasks.md`) and `records/` (prompts, reviews, reports of that feature)
-- `.specify/` - Spec Kit tooling only (`memory/`, `scripts/`, `templates/`); no specs here
+- `.specify/` - Spec Kit: `templates/` is the format of new specs; `scripts/` and `memory/constitution.md`
+  are Codex-era history, not current rules; no specs here
 - `docs/` - general docs and operator guides; `docs/backlog/` - backlog JSON; `docs/archive/` - old records
 - `README.md` - setup, run, deploy, and operator commands
 
@@ -148,6 +149,9 @@ in progress; once the feature ships it is history and is not kept current.
 
 - Before a behavior change, read the feature's code doc ("Feature Docs Next To Code"): it is the
   current behavior. Keep the implementation aligned with it unless the user explicitly wants to diverge.
+- A new spec is written by the session in the format of `.specify/templates/` (`spec-template.md`,
+  `plan-template.md`, `tasks-template.md`). The Spec Kit commands (`.codex/prompts/speckit.*`) and
+  `.specify/scripts/` are Codex tooling kept for history, not used.
 - Read `spec.md` / `plan.md` for a feature in progress, or for a shipped feature that has no code
   doc yet. In the latter case check its claims against the code: status lines ("Draft") of old specs
   were never updated.

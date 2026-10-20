@@ -97,10 +97,10 @@ See also [docs/troubleshooting.md](docs/troubleshooting.md) for known CI/test fa
 
 ## Spec Artifacts
 
-- `.specify/memory/constitution.md`
-- `specs/001-ai-news-collector/spec.md`
-- `specs/001-ai-news-collector/plan.md`
-- `specs/001-ai-news-collector/tasks.md`
+- Feature specs: `specs/<NNN>-<name>/` (process and history); current behavior lives in the code
+  docs next to the code (see `AGENTS.md`).
+- Format of a new spec: `.specify/templates/`.
+- `.specify/memory/constitution.md`: principles of the first version (history, partly outdated).
 
 ## Agent Architecture Notes
 
