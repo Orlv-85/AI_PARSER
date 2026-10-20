@@ -25,3 +25,4 @@ Feature docs live next to their main module and are checked by `scripts/check_co
 | Feature | Doc |
 | --- | --- |
 | Daily AI Signals (006, 007) | `core/daily_signals.md` |
+| Fetch pipeline (001, 002, admission) | `core/pipeline.md` |

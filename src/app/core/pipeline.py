@@ -1,4 +1,8 @@
 # pylint: disable=too-many-lines
+"""Fetch cycle: sources, conditional fetch, page filter, semantic admission, scoring, articles.
+
+Behavior, decisions, invariants and code map: pipeline.md next to this file.
+"""
 import json
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
