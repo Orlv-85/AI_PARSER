@@ -13,8 +13,9 @@ from app.config.sources import SourceConfig
 from app.core.categories import CATEGORY_CRITERIA
 from app.core.jev import JevRelevanceScorer, jev_relevance_scorer
 from app.core.models import Article
-from app.core.pipeline import HtmlLinkFetchResult, run_fetch_cycle
+from app.core.pipeline import run_fetch_cycle
 from app.core.scoring import ai_relevance_score
+from app.ingest.html import HtmlListPageResult
 from app.storage.models_sql import Article as StoredArticle
 from app.storage.models_sql import Base
 
@@ -169,7 +170,7 @@ def test_ingestion_persists_jev_score_or_heuristic_on_failure(
     )
     articles = [_article(), _article(2)]
     result = (
-        HtmlLinkFetchResult(links=[str(item.url) for item in articles])
+        HtmlListPageResult(links=[str(item.url) for item in articles])
         if source_type == "html" else SimpleNamespace(items=articles)
     )
     requests = []

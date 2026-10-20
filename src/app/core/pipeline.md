@@ -118,11 +118,11 @@ function. Each rule lists the tests that check it.
   Tests: `test_landing_classification_uses_body_and_preserves_article_evidence`,
   `test_positive_html_evidence_survives_pipeline_commerce_check`.
 - The filter runs before any article download, text extraction, model call and weekly observation,
-  on every path: RSS entries, linked RSS pages, two-stage HTML, legacy HTML, and again in the
-  pipeline (`_item_exclusion_reason`: URL rules for pages already checked, text rules otherwise).
+  on every path: RSS entries, linked RSS pages, two-stage HTML, and again in the pipeline
+  (`_item_exclusion_reason`: URL rules for pages already checked, text rules otherwise).
   Tests: `test_rss_filters_before_fulltext_and_keeps_undated_news`,
   `test_all_pipeline_item_paths_filter_before_models_and_preserve_dedupe`,
-  `test_two_stage_filters_before_limit_and_model_call`, `test_legacy_html_fetcher_path_filters_before_download`,
+  `test_two_stage_filters_before_limit_and_model_call`, `test_html_fetch_cycle_filters_before_download`,
   `test_rss_linked_landing_is_removed_before_text_extraction`.
 - A missing date is never a reason to exclude. Tests: `test_rss_filters_before_fulltext_and_keeps_undated_news`,
   `test_admission_and_cache_all_ingestion_paths`.
@@ -165,7 +165,7 @@ function. Each rule lists the tests that check it.
   `test_run_fetch_cycle_html_two_stage_stops_after_known_streak`.
 - A failed or unparsable article page skips that link only and marks coverage incomplete. Tests:
   `test_process_html_links_two_stage_covers_non_batch_edge_paths`, `test_html_article_failure_retains_retry_and_continues`,
-  `test_fetch_html_uses_fetcher_and_fail_soft`,
+  `test_html_fetch_cycle_skips_failed_article_only`,
   `test_failed_or_unparsable_html_article_marks_coverage_incomplete`.
 - Article page: title is the first `h1` text without script, style and template text, else the
   URL; content by the source `extraction_strategy` (default: trafilatura, then readability).
@@ -384,7 +384,7 @@ web update (thread or process)               web/service.py: UpdateRunService
 | `storage/admission.py` | `admission_decisions` ledger (pending, settle, decision) and `collection_status` notice | no |
 | `ingest/fetcher.py` | `Fetcher`: pooled client, per-source interval, retries, conditional headers | no |
 | `ingest/rss.py` | Feed parsing, `fetch_rss_with_metadata`, optional linked full text | no |
-| `ingest/html.py` | List links (lxml or selectolax), article page build, legacy one-stage `fetch_html` | no |
+| `ingest/html.py` | List links (lxml or selectolax), `HtmlListPageResult`, article page build | no |
 | `ingest/page_filter.py` | Non-news rules: URL, text, page schema; `MANAGED_LINK_SELECTORS` | yes |
 | `ingest/date_evidence.py` | Date candidates and resolution (`DATE_EVIDENCE_VERSION`) | yes |
 | `core/jev.py` (not covered) | `JevRelevanceScorer`: one Jev request per text, in-cycle cache, stop after failure | no |
@@ -436,7 +436,7 @@ Per rule: see Behavior and Invariants. Files: `tests/unit/test_pipeline_runtime.
 `test_non_news_filter.py`, `test_publication_semantics.py`, `test_ingest_rss_additional.py`,
 `test_ingest_html_additional.py`, `test_fetcher.py`, `test_canonicalize.py`, `test_scoring.py`,
 `test_jev.py`, `test_article_evidence_cache.py` (date evidence), `tests/integration/test_pipeline.py`.
-Tests never call a network or provider (`httpx.MockTransport`, fake fetchers). Many runtime tests
-replace module attributes of `core/pipeline.py` (fetch functions, repos, `SessionLocal`) with fakes;
-the code detects some of these replacements (`_DEFAULT_FETCH_HTML` and siblings), so a refactor
-that changes imports must keep those tests meaningful.
+Tests never call a network or provider (`httpx.MockTransport`, fake `Fetcher.request`, fake fetch
+functions). Runtime tests replace module attributes of `core/pipeline.py` (fetch functions, repos,
+`SessionLocal`) with fakes of the real interfaces and run with real `Settings`; the production code
+has no branch for fakes, so a fake must offer what the real object offers.

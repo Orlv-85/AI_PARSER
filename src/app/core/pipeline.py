@@ -31,7 +31,7 @@ from app.core.models import Article as CoreArticle
 from app.core.scoring import ai_relevance_score, freshness_score, rank_score
 from app.ingest.fetcher import Fetcher
 from app.ingest.html import (
-    fetch_html,
+    HtmlListPageResult,
     fetch_html_article,
     fetch_html_links,
     fetch_html_links_with_metadata,
@@ -42,7 +42,7 @@ from app.ingest.page_filter import (
     text_exclusion_reason,
     url_exclusion_reason,
 )
-from app.ingest.rss import fetch_rss, fetch_rss_with_metadata
+from app.ingest.rss import fetch_rss
 from app.storage import SessionLocal, create_all
 from app.storage.admission import (
     clear_collection_paused,
@@ -55,11 +55,6 @@ from app.storage.admission import (
 )
 from app.storage.repos import ArticleRepo, SourceRepo, WeeklyAnalyticsRepo
 from app.storage.weekly import WeeklyStore, record_attempt, record_observation, register_source
-
-_DEFAULT_FETCH_RSS_WITH_METADATA = fetch_rss_with_metadata
-_DEFAULT_FETCH_HTML = fetch_html
-_DEFAULT_FETCH_HTML_LINKS = fetch_html_links
-_DEFAULT_FETCH_HTML_ARTICLE = fetch_html_article
 
 
 @dataclass(frozen=True)
@@ -77,15 +72,6 @@ class FetchSummary:  # pylint: disable=too-many-instance-attributes
     semantic_unresolved: int = 0
     semantic_cache_hits: int = 0
     screening_paused: int = 0
-
-
-@dataclass(frozen=True)
-class HtmlLinkFetchResult:
-    links: list[str]
-    not_modified: bool = False
-    status_code: int | None = None
-    etag: str | None = None
-    last_modified: str | None = None
 
 
 @dataclass
@@ -514,19 +500,6 @@ def _assessment_from_cached(cached: object) -> JevAssessment | None:
         return None
 
 
-def _coerce_html_link_fetch_result(result: object) -> HtmlLinkFetchResult:
-    status_code = getattr(result, "status_code", None)
-    etag = getattr(result, "etag", None)
-    last_modified = getattr(result, "last_modified", None)
-    return HtmlLinkFetchResult(
-        links=list(getattr(result, "links", [])),
-        not_modified=bool(getattr(result, "not_modified", False)),
-        status_code=int(status_code) if status_code is not None else None,
-        etag=etag if isinstance(etag, str) else None,
-        last_modified=last_modified if isinstance(last_modified, str) else None,
-    )
-
-
 def _html_link_parser_setting(settings: Settings) -> str | None:
     parser = getattr(settings, "html_link_parser", "auto")
     return parser if isinstance(parser, str) else "auto"
@@ -581,6 +554,19 @@ def _managed_source_to_config(source: object) -> SourceConfig:
     return SourceConfig.model_validate(payload)
 
 
+def _stored_validators(
+    fetch_state: dict[str, object | None] | None,
+) -> tuple[str | None, str | None]:
+    if fetch_state is None:
+        return None, None
+    etag = fetch_state.get("etag")
+    last_modified = fetch_state.get("last_modified")
+    return (
+        etag if isinstance(etag, str) else None,
+        last_modified if isinstance(last_modified, str) else None,
+    )
+
+
 def _fetch_source_items(
     *,
     config: SourceConfig,
@@ -591,8 +577,16 @@ def _fetch_source_items(
     logger: Logger,
     run_id: str,
     full_text_semaphore: BoundedSemaphore | None,
-):  # type: ignore[no-untyped-def]
+) -> list[CoreArticle] | HtmlListPageResult:
     del db_source_id
+    if config.type == "rss":
+        conditional = enable_fetch_state and bool(
+            getattr(settings, "fetch_conditional_rss_enabled", True))
+    else:
+        conditional = enable_fetch_state and bool(
+            getattr(settings, "fetch_conditional_html_list_enabled", False))
+    if_none_match, if_modified_since = (
+        _stored_validators(fetch_state) if conditional else (None, None))
     fetcher = Fetcher(
         timeout_seconds=settings.request_timeout_seconds,
         max_retries=settings.max_retries,
@@ -603,100 +597,29 @@ def _fetch_source_items(
         ),
     )
     try:
-        return _fetch_source_items_with_fetcher(
-            fetcher=fetcher,
-            config=config,
-            fetch_state=fetch_state,
-            enable_fetch_state=enable_fetch_state,
-            settings=settings,
-            logger=logger,
-            run_id=run_id,
-            full_text_semaphore=full_text_semaphore,
+        logger.info(
+            "source_fetch_started",
+            {
+                "run_id": run_id,
+                "source_id": config.id,
+                "stage": "fetch",
+                "url": str(config.url),
+            },
         )
-    finally:
-        fetcher.close()
-
-
-def _fetch_source_items_with_fetcher(
-    *,
-    fetcher: Fetcher,
-    config: SourceConfig,
-    fetch_state: dict[str, object | None] | None,
-    enable_fetch_state: bool,
-    settings: Settings,
-    logger: Logger,
-    run_id: str,
-    full_text_semaphore: BoundedSemaphore | None,
-):  # type: ignore[no-untyped-def]  # pylint: disable=too-many-return-statements
-    logger.info(
-        "source_fetch_started",
-        {
-            "run_id": run_id,
-            "source_id": config.id,
-            "stage": "fetch",
-            "url": str(config.url),
-        },
-    )
-    if config.type == "rss":
-        if_none_match = None
-        if_modified_since = None
-        if (
-            enable_fetch_state
-            and bool(getattr(settings, "fetch_conditional_rss_enabled", True))
-            and fetch_state is not None
-        ):
-            etag = fetch_state.get("etag")
-            last_modified = fetch_state.get("last_modified")
-            if_none_match = etag if isinstance(etag, str) else None
-            if_modified_since = last_modified if isinstance(last_modified, str) else None
-        use_explicit_metadata_fetch = (
-            enable_fetch_state
-            and bool(getattr(settings, "fetch_conditional_rss_enabled", True))
-            and fetch_rss_with_metadata is not _DEFAULT_FETCH_RSS_WITH_METADATA
-        )
-        if use_explicit_metadata_fetch:
-            return fetch_rss_with_metadata(
+        if config.type == "rss":
+            return fetch_rss(
                 config.id,
                 str(config.url),
                 settings.request_timeout_seconds,
                 fetcher=fetcher,
+                extract_full_text=settings.rss_extract_full_text,
+                full_text_max_items=settings.rss_full_text_max_items_per_source,
+                full_text_semaphore=full_text_semaphore,
                 if_none_match=if_none_match,
                 if_modified_since=if_modified_since,
             )
-        return fetch_rss(
-            config.id,
-            str(config.url),
-            settings.request_timeout_seconds,
-            fetcher=fetcher,
-            extract_full_text=settings.rss_extract_full_text,
-            full_text_max_items=settings.rss_full_text_max_items_per_source,
-            full_text_semaphore=full_text_semaphore,
-            if_none_match=if_none_match,
-            if_modified_since=if_modified_since,
-        )
-    html_two_stage_supported = (
-        config.type == "html"
-        and all(
-            hasattr(settings, attr)
-            for attr in ("html_known_streak_stop", "html_max_links_per_source")
-        )
-    )
-    html_conditional_enabled = bool(
-        getattr(settings, "fetch_conditional_html_list_enabled", False)
-    )
-    if config.type == "html" and html_two_stage_supported and (
-        fetch_html_links is not _DEFAULT_FETCH_HTML_LINKS
-        or fetch_html_article is not _DEFAULT_FETCH_HTML_ARTICLE
-    ):
-        if_none_match = None
-        if_modified_since = None
-        if enable_fetch_state and html_conditional_enabled and fetch_state is not None:
-            etag = fetch_state.get("etag")
-            last_modified = fetch_state.get("last_modified")
-            if_none_match = etag if isinstance(etag, str) else None
-            if_modified_since = last_modified if isinstance(last_modified, str) else None
-        if enable_fetch_state and html_conditional_enabled:
-            html_result = fetch_html_links_with_metadata(
+        if conditional:
+            return fetch_html_links_with_metadata(
                 config,
                 settings.request_timeout_seconds,
                 fetcher=fetcher,
@@ -704,52 +627,14 @@ def _fetch_source_items_with_fetcher(
                 if_none_match=if_none_match,
                 if_modified_since=if_modified_since,
             )
-            return _coerce_html_link_fetch_result(html_result)
-        return HtmlLinkFetchResult(
-            fetch_html_links(
-                config,
-                settings.request_timeout_seconds,
-                fetcher=fetcher,
-                link_parser=_html_link_parser_setting(settings),
-            )
-        )
-    if config.type == "html" and fetch_html is not _DEFAULT_FETCH_HTML:
-        return fetch_html(
+        return HtmlListPageResult(links=fetch_html_links(
             config,
             settings.request_timeout_seconds,
             fetcher=fetcher,
-        )
-    if html_two_stage_supported:
-        if_none_match = None
-        if_modified_since = None
-        if enable_fetch_state and html_conditional_enabled and fetch_state is not None:
-            etag = fetch_state.get("etag")
-            last_modified = fetch_state.get("last_modified")
-            if_none_match = etag if isinstance(etag, str) else None
-            if_modified_since = last_modified if isinstance(last_modified, str) else None
-        if enable_fetch_state and html_conditional_enabled:
-            html_result = fetch_html_links_with_metadata(
-                config,
-                settings.request_timeout_seconds,
-                fetcher=fetcher,
-                link_parser=_html_link_parser_setting(settings),
-                if_none_match=if_none_match,
-                if_modified_since=if_modified_since,
-            )
-            return _coerce_html_link_fetch_result(html_result)
-        return HtmlLinkFetchResult(
-            fetch_html_links(
-                config,
-                settings.request_timeout_seconds,
-                fetcher=fetcher,
-                link_parser=_html_link_parser_setting(settings),
-            )
-        )
-    return fetch_html(
-        config,
-        settings.request_timeout_seconds,
-        fetcher=fetcher,
-    )
+            link_parser=_html_link_parser_setting(settings),
+        ))
+    finally:
+        fetcher.close()
 
 
 def _log_source_fetch_error(
@@ -1391,17 +1276,16 @@ def _process_source_result(
     admission_state: AdmissionState | None = None,
 ) -> None:
     metrics.coverage_complete = bool(getattr(fetch_result, "coverage_complete", True))
-    if config.type in {"rss", "html"}:
-        _persist_fetch_state_if_present(
-            source_repo=source_repo,
-            db_source_id=db_source_id,
-            result=fetch_result,
-        )
-        if bool(getattr(fetch_result, "not_modified", False)):
-            metrics.not_modified = True
-            return
+    _persist_fetch_state_if_present(
+        source_repo=source_repo,
+        db_source_id=db_source_id,
+        result=fetch_result,
+    )
+    if bool(getattr(fetch_result, "not_modified", False)):
+        metrics.not_modified = True
+        return
 
-    if config.type == "html" and isinstance(fetch_result, HtmlLinkFetchResult):
+    if isinstance(fetch_result, HtmlListPageResult):
         quality_flags: list[str] = []
         (
             metrics.fetched_items,

@@ -16,7 +16,7 @@ from app.ingest import rss as rss_module
 from app.ingest.html import HtmlListPageResult
 from app.ingest.rss import RssFetchResult, _with_rss_metadata
 
-OLD_VALIDATORS = {
+OLD_VALIDATORS: dict[str, object | None] = {
     "etag": '"etag-old"', "last_modified": "Sun, 22 Feb 2026 10:00:00 GMT",
     "last_checked_at": None, "last_status_code": 200,
 }
@@ -577,10 +577,14 @@ def test_run_fetch_cycle_rss_200_persists_validators_and_processes_items(monkeyp
     assert isinstance(source_repo.updates[0]["last_checked_at"], datetime)
 
 
-def _rss_result(items: list[Article], status_code: int, **validators) -> list[Article]:
-    return _with_rss_metadata(items, RssFetchResult(
-        items=items, not_modified=status_code == 304, status_code=status_code, **validators,
+def _rss_result(
+    items: list[Article], status_code: int, *, etag: str, last_modified: str,
+) -> list[Article]:
+    wrapped: list[Article] = _with_rss_metadata(items, RssFetchResult(
+        items=items, not_modified=status_code == 304, status_code=status_code, etag=etag,
+        last_modified=last_modified,
     ))
+    return wrapped
 
 
 class _NoInsertArticleRepo(_ArticleRepo):

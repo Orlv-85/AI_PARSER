@@ -14,8 +14,8 @@ from app.config.sources import SourceConfig
 from app.core.canonicalize import canonical_url_hash
 from app.core.jev import JevRelevanceScorer
 from app.core.models import Article
-from app.core.pipeline import HtmlLinkFetchResult, run_fetch_cycle
-from app.ingest.html import fetch_html_article
+from app.core.pipeline import run_fetch_cycle
+from app.ingest.html import HtmlListPageResult, fetch_html_article
 from app.storage.admission import PAUSED_MESSAGE, set_collection_paused
 from app.storage.models_sql import (
     AdmissionDecision,
@@ -99,7 +99,7 @@ class Scenario:  # pylint: disable=too-many-instance-attributes
         if self.not_modified:
             result = SimpleNamespace(not_modified=True, status_code=304, items=[])
         elif self.source_type == "two_stage_html":
-            result = HtmlLinkFetchResult(
+            result = HtmlListPageResult(
                 links=[str(item.url) for item in self.items],
                 status_code=200, etag="new-etag", last_modified="new-modified",
             )
@@ -164,7 +164,7 @@ def test_oversized_journal_input_stays_pending_without_pausing_other_articles(
 
 
 @pytest.mark.parametrize("batch", [False, True])
-@pytest.mark.parametrize("source_type", ["rss", "legacy_html", "two_stage_html"])
+@pytest.mark.parametrize("source_type", ["rss", "two_stage_html"])
 def test_admission_and_cache_all_ingestion_paths(monkeypatch, tmp_path, batch, source_type):
     scenario = Scenario(tmp_path, monkeypatch, source_type, batch)
     scenario.items[0].published_at = None
@@ -185,7 +185,7 @@ def test_admission_and_cache_all_ingestion_paths(monkeypatch, tmp_path, batch, s
 
 
 @pytest.mark.parametrize("batch", [False, True])
-@pytest.mark.parametrize("source_type", ["rss", "legacy_html", "two_stage_html"])
+@pytest.mark.parametrize("source_type", ["rss", "two_stage_html"])
 @pytest.mark.parametrize("not_modified", [False, True])
 def test_outage_preserves_verified_and_replays_after_list_rotation(
     monkeypatch, tmp_path, batch, source_type, not_modified,

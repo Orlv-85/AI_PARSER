@@ -1,9 +1,11 @@
 import json
+from logging import getLogger
 from types import SimpleNamespace
 
+import httpx
 import pytest
 from sqlalchemy import create_engine, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
@@ -12,11 +14,11 @@ from app.core.pipeline import (
     _managed_source_to_config,
     _process_fetched_source_items,
     _process_html_links_two_stage,
+    run_fetch_cycle,
 )
 from app.ingest.html import (
     _build_html_article,
     extract_links_from_html,
-    fetch_html,
     fetch_html_article,
 )
 from app.ingest.page_filter import html_exclusion_reason, url_exclusion_reason
@@ -177,18 +179,33 @@ def test_positive_html_evidence_survives_pipeline_commerce_check(monkeypatch) ->
         assert result[:2] == (1, 0)
 
 
-def test_legacy_html_fetcher_path_filters_before_download(monkeypatch) -> None:
+def test_html_fetch_cycle_filters_before_download(monkeypatch, tmp_path) -> None:
+    pages = {
+        "https://example.com/blog":
+            "<main><a href='/about'>About</a><a href='/blog/launch'>Launch</a></main>",
+        "https://example.com/blog/launch":
+            "<h1>Introducing AI testing</h1><p>A standalone news release.</p>",
+    }
     calls = []
-    def fetch_text(**kwargs):
-        calls.append(kwargs["url"])
-        if kwargs["url"] == "https://example.com/blog":
-            return "<main><a href='/about'>About</a><a href='/blog/launch'>Launch</a></main>"
-        return "<h1>Introducing AI testing</h1><p>A standalone news release.</p>"
+    def request(_self, *, source_id, url, **_kwargs):
+        assert source_id == "example"
+        calls.append(url)
+        return httpx.Response(200, text=pages[url], request=httpx.Request("GET", url))
+    monkeypatch.setattr("app.ingest.fetcher.Fetcher.request", request)
     monkeypatch.setattr("app.ingest.html.extract_article_text", lambda **_kwargs: "Article body")
-    items = fetch_html(_source(), fetcher=SimpleNamespace(fetch_text=fetch_text))
-    assert len(items) == 1
-    assert items[0].published_at is None
+    engine = create_engine(f"sqlite:///{tmp_path}/filter.db")
+    Base.metadata.create_all(engine)
+    sessions = sessionmaker(bind=engine, autoflush=False)
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: [_source()])
+    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.pipeline.SessionLocal", sessions)
+    summary = run_fetch_cycle(settings=Settings(_env_file=None, weekly_v2_enabled=False),
+                              logger=getLogger("non-news"))
+    assert (summary.errors, summary.new) == (0, 1)
     assert calls == ["https://example.com/blog", "https://example.com/blog/launch"]
+    with sessions() as session:
+        stored = session.scalars(select(StoredArticle)).one()
+        assert (stored.url, stored.published_at) == ("https://example.com/blog/launch", None)
 
 
 def test_rss_linked_landing_is_removed_before_text_extraction(monkeypatch) -> None:

@@ -12,7 +12,8 @@ from app.config.settings import Settings
 from app.config.sources import SourceConfig
 from app.core.jev import JevAssessment
 from app.core.models import Article
-from app.core.pipeline import HtmlLinkFetchResult, run_fetch_cycle
+from app.core.pipeline import run_fetch_cycle
+from app.ingest.html import HtmlListPageResult
 from app.storage.models_sql import Article as StoredArticle
 from app.storage.models_sql import Base, Source, WeeklyCoverageAttempt
 from app.storage.repos import ArticleRepo
@@ -56,7 +57,7 @@ def test_source_savepoint_recovers_after_database_error(
         for index, config in enumerate(configs):
             items = articles[config.id]
             if source_type == "html":
-                results[index] = HtmlLinkFetchResult(
+                results[index] = HtmlListPageResult(
                     links=[str(item.url) for item in items], etag="new-validator",
                 )
             else:
@@ -218,7 +219,7 @@ def _html_configs(*keys: str) -> list[SourceConfig]:
 def _html_links(links_by_source: dict[str, list[str]]):
     def collect(*, enabled_sources, **_kwargs):
         return {
-            index: HtmlLinkFetchResult(links=links_by_source[config.id])
+            index: HtmlListPageResult(links=links_by_source[config.id])
             for index, config, *_ in enabled_sources
         }, 0
     return collect
@@ -341,7 +342,7 @@ def test_undated_item_marks_coverage_incomplete(monkeypatch, tmp_path):
     def collect(*, enabled_sources, **_kwargs):
         return {
             index: SimpleNamespace(items=[rss_items[config.id]]) if config.type == "rss"
-            else HtmlLinkFetchResult(links=[f"https://example.com/{config.id}/story-1"])
+            else HtmlListPageResult(links=[f"https://example.com/{config.id}/story-1"])
             for index, config, *_ in enabled_sources
         }, 0
 
@@ -456,3 +457,32 @@ def test_error_outside_source_loop_aborts_without_commit(monkeypatch, tmp_path, 
     with sessions() as session:
         assert not list(session.scalars(select(Source)))
         assert not list(session.scalars(select(WeeklyCoverageAttempt)))
+
+
+def test_html_fetch_cycle_skips_failed_article_only(monkeypatch, tmp_path):
+    base = "https://example.com/site"
+    pages = {
+        base: '<main><a href="/site/news-1">one</a><a href="/site/news-2">two</a>'
+              '<a href="/site/news-3">three</a></main>',
+        f"{base}/news-1": "<html><body><h1>Headline</h1><p>content</p></body></html>",
+        f"{base}/news-3": "<html><body><p>no h1</p></body></html>",
+    }
+
+    def request(_self, *, source_id, url, **_kwargs):
+        assert source_id == "site"
+        if url not in pages:
+            raise RuntimeError("fetch_failed")
+        return httpx.Response(200, text=pages[url], request=httpx.Request("GET", url))
+
+    monkeypatch.setattr("app.ingest.fetcher.Fetcher.request", request)
+    monkeypatch.setattr("app.ingest.html.extract_article_text", lambda **_kwargs: "parsed")
+    sessions = _sqlite_run(monkeypatch, tmp_path, _html_configs("site"))
+
+    summary = run_fetch_cycle(settings=_settings(), logger=getLogger("html-failure"))
+
+    assert (summary.errors, summary.new) == (0, 2)
+    with sessions() as session:
+        assert sorted(session.scalars(select(StoredArticle.title))) == [
+            "Headline", f"{base}/news-3",
+        ]
+    assert _attempts(sessions) == {"site": ("parser_failure", False)}

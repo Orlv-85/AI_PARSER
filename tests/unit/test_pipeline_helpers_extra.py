@@ -10,7 +10,6 @@ import app.core.pipeline as pipeline_module
 from app.config.sources import SourceConfig
 from app.core.models import Article
 from app.core.pipeline import (
-    HtmlLinkFetchResult,
     _fetch_result_items,
     _fetch_source_items,
     _persist_fetch_state_if_present,
@@ -19,8 +18,8 @@ from app.core.pipeline import (
     _source_group_max_workers,
     _source_repo_update_fetch_state,
     _upsert_article_rows,
-    run_fetch_cycle,
 )
+from app.ingest.html import HtmlListPageResult
 
 
 class _Logger:
@@ -73,47 +72,10 @@ def _settings(**overrides):
     return SimpleNamespace(**base)
 
 
-def test_fetch_source_items_html_and_helper_fallback_paths(monkeypatch) -> None:
+def test_fetch_source_items_html_list_and_conditional_paths(monkeypatch) -> None:
     logger = _Logger()
     html_config = _html_source()
 
-    monkeypatch.setattr("app.core.pipeline.fetch_html", lambda *_args, **_kwargs: ["legacy-html"])
-    result = _fetch_source_items(
-        config=html_config,
-        db_source_id=1,
-        fetch_state=None,
-        enable_fetch_state=False,
-        settings=_settings(),
-        logger=logger,
-        run_id="run-1",
-        full_text_semaphore=None,
-    )
-    assert result == ["legacy-html"]
-
-    monkeypatch.setattr(
-        "app.core.pipeline.fetch_html",
-        lambda *_args, **_kwargs: ["non-html-fallback"],
-    )
-    api_config = SimpleNamespace(
-        id="api_source",
-        name="API Source",
-        type="api",
-        url="https://example.com/api",
-        html=None,
-    )
-    result = _fetch_source_items(
-        config=api_config,
-        db_source_id=1,
-        fetch_state=None,
-        enable_fetch_state=False,
-        settings=_settings(),
-        logger=logger,
-        run_id="run-2",
-        full_text_semaphore=None,
-    )
-    assert result == ["non-html-fallback"]
-
-    monkeypatch.setattr("app.core.pipeline.fetch_html", pipeline_module._DEFAULT_FETCH_HTML)
     monkeypatch.setattr(
         "app.core.pipeline.fetch_html_links",
         lambda *_args, **_kwargs: ["https://example.com/news/1"],
@@ -128,12 +90,12 @@ def test_fetch_source_items_html_and_helper_fallback_paths(monkeypatch) -> None:
         run_id="run-3",
         full_text_semaphore=None,
     )
-    assert isinstance(two_stage, HtmlLinkFetchResult)
+    assert isinstance(two_stage, HtmlListPageResult)
     assert two_stage.links == ["https://example.com/news/1"]
 
     monkeypatch.setattr(
         "app.core.pipeline.fetch_html_links_with_metadata",
-        lambda *_args, **_kwargs: SimpleNamespace(
+        lambda *_args, **_kwargs: HtmlListPageResult(
             links=["https://example.com/news/2"],
             status_code=200,
             etag='"etag"',
@@ -150,7 +112,7 @@ def test_fetch_source_items_html_and_helper_fallback_paths(monkeypatch) -> None:
         run_id="run-4",
         full_text_semaphore=None,
     )
-    assert isinstance(conditional, HtmlLinkFetchResult)
+    assert isinstance(conditional, HtmlListPageResult)
     assert conditional.links == ["https://example.com/news/2"]
     assert conditional.etag == '"etag"'
 
@@ -158,18 +120,13 @@ def test_fetch_source_items_html_and_helper_fallback_paths(monkeypatch) -> None:
 def test_fetch_source_items_html_conditional_default_path(monkeypatch) -> None:
     logger = _Logger()
     html_config = _html_source()
-    monkeypatch.setattr("app.core.pipeline.fetch_html", pipeline_module._DEFAULT_FETCH_HTML)
     monkeypatch.setattr(
         "app.core.pipeline.fetch_html_links",
-        pipeline_module._DEFAULT_FETCH_HTML_LINKS,
-    )
-    monkeypatch.setattr(
-        "app.core.pipeline.fetch_html_article",
-        pipeline_module._DEFAULT_FETCH_HTML_ARTICLE,
+        lambda *_args, **_kwargs: pytest.fail("conditional HTML must use the metadata fetch"),
     )
     monkeypatch.setattr(
         "app.core.pipeline.fetch_html_links_with_metadata",
-        lambda *_args, **_kwargs: SimpleNamespace(
+        lambda *_args, **_kwargs: HtmlListPageResult(
             links=["https://example.com/news/3"],
             status_code=200,
             etag='"etag-3"',
@@ -188,7 +145,7 @@ def test_fetch_source_items_html_conditional_default_path(monkeypatch) -> None:
         full_text_semaphore=None,
     )
 
-    assert isinstance(conditional, HtmlLinkFetchResult)
+    assert isinstance(conditional, HtmlListPageResult)
     assert conditional.links == ["https://example.com/news/3"]
     assert conditional.etag == '"etag-3"'
 
@@ -200,13 +157,7 @@ def test_fetch_source_items_html_two_stage_default_nonconditional_path(monkeypat
     def _fake_fetch_html_links(*_args, **_kwargs):
         return ["https://example.com/news/4"]
 
-    monkeypatch.setattr("app.core.pipeline.fetch_html", pipeline_module._DEFAULT_FETCH_HTML)
     monkeypatch.setattr("app.core.pipeline.fetch_html_links", _fake_fetch_html_links)
-    monkeypatch.setattr("app.core.pipeline._DEFAULT_FETCH_HTML_LINKS", _fake_fetch_html_links)
-    monkeypatch.setattr(
-        "app.core.pipeline.fetch_html_article",
-        pipeline_module._DEFAULT_FETCH_HTML_ARTICLE,
-    )
 
     result = _fetch_source_items(
         config=html_config,
@@ -219,14 +170,14 @@ def test_fetch_source_items_html_two_stage_default_nonconditional_path(monkeypat
         full_text_semaphore=None,
     )
 
-    assert isinstance(result, HtmlLinkFetchResult)
+    assert isinstance(result, HtmlListPageResult)
     assert result.links == ["https://example.com/news/4"]
 
     captured: list[dict[str, object]] = []
 
     def _fake_fetch_html_links_with_metadata(*_args, **kwargs):
         captured.append(kwargs)
-        return SimpleNamespace(links=[], status_code=304, not_modified=True)
+        return HtmlListPageResult(links=[], status_code=304, not_modified=True)
 
     monkeypatch.setattr(
         "app.core.pipeline.fetch_html_links_with_metadata",
@@ -266,12 +217,12 @@ def test_fetch_source_items_closes_fetcher_after_success_and_error(monkeypatch) 
     monkeypatch.setattr("app.core.pipeline.Fetcher", _SpyFetcher)
     seen_fetchers: list[object] = []
 
-    def _fetch_html_ok(*_args, fetcher, **_kwargs):
+    def _fetch_links_ok(*_args, fetcher, **_kwargs):
         seen_fetchers.append(fetcher)
         assert not fetcher.closed
-        return ["item"]
+        return ["https://example.com/news/item"]
 
-    def _fetch_html_fails(*_args, fetcher, **_kwargs):
+    def _fetch_links_fails(*_args, fetcher, **_kwargs):
         seen_fetchers.append(fetcher)
         raise RuntimeError("fetch_failed")
 
@@ -287,10 +238,10 @@ def test_fetch_source_items_closes_fetcher_after_success_and_error(monkeypatch) 
             full_text_semaphore=None,
         )
 
-    monkeypatch.setattr("app.core.pipeline.fetch_html", _fetch_html_ok)
-    assert _fetch("run-ok") == ["item"]
+    monkeypatch.setattr("app.core.pipeline.fetch_html_links", _fetch_links_ok)
+    assert _fetch("run-ok").links == ["https://example.com/news/item"]
 
-    monkeypatch.setattr("app.core.pipeline.fetch_html", _fetch_html_fails)
+    monkeypatch.setattr("app.core.pipeline.fetch_html_links", _fetch_links_fails)
     with pytest.raises(RuntimeError, match="fetch_failed"):
         _fetch("run-error")
 
@@ -346,7 +297,6 @@ def test_profile_helpers_and_misc_pipeline_helpers() -> None:
         type="rss",
         url="https://example.com/feed",
     )
-    custom_config = SimpleNamespace(type="api")
     enabled_sources = [
         (0, rss_config, 1, None, True),
         (1, html_config, 2, None, True),
@@ -362,13 +312,6 @@ def test_profile_helpers_and_misc_pipeline_helpers() -> None:
             _settings(),
         )
         == 2
-    )
-    assert (
-        _source_group_max_workers(
-            [(0, custom_config, 1, None, True)],
-            _settings(),
-        )
-        == 1
     )
 
     assert _fetch_result_items(object()) == []
@@ -564,92 +507,12 @@ def test_process_html_links_two_stage_without_known_hash_helpers(monkeypatch) ->
     assert early_stop is False
 
 
-def test_persist_fetch_state_if_present_false_and_run_cycle_non_standard_source(
-    monkeypatch,
-) -> None:
-    logger = _Logger()
-
+def test_persist_fetch_state_if_present_skips_results_without_metadata() -> None:
     assert (
         _persist_fetch_state_if_present(
             source_repo=SimpleNamespace(),
             db_source_id=1,
-            result=SimpleNamespace(),
+            result=HtmlListPageResult(links=["https://example.com/news/1"]),
         )
         is None
     )
-
-    monkeypatch.setattr("app.core.pipeline.load_sources", _load_custom_source)
-    monkeypatch.setattr("app.core.pipeline.create_all", _noop)
-    monkeypatch.setattr("app.core.pipeline.SessionLocal", _session_factory)
-    monkeypatch.setattr("app.core.pipeline.SourceRepo", _source_repo_factory)
-    monkeypatch.setattr("app.core.pipeline.ArticleRepo", _article_repo_factory)
-    monkeypatch.setattr("app.core.pipeline.fetch_html", _empty_items)
-
-    summary = run_fetch_cycle(settings=_settings(), logger=logger)
-
-    assert summary.errors == 0
-    assert summary.fetched == 0
-
-
-def _noop() -> None:
-    pass
-
-
-def _load_custom_source(_path: object) -> list[object]:
-    return [
-        SimpleNamespace(
-            id="api_source",
-            name="API",
-            type="api",
-            url="https://example.com/api",
-            enabled=True,
-            fetch_interval_minutes=30,
-            source_weight=1.0,
-            html=None,
-        )
-    ]
-
-
-def _empty_items(*_args, **_kwargs) -> list[object]:
-    return []
-
-
-def _session_factory() -> object:
-    return _TestSession()
-
-
-def _source_repo_factory(_session: object) -> object:
-    return _TestSourceRepo()
-
-
-def _article_repo_factory(_session: object) -> object:
-    return _TestArticleRepo()
-
-
-class _TestSourceRepo:
-    def upsert_source(self, _config):
-        return SimpleNamespace(id=1)
-
-    @staticmethod
-    def get_fetch_state(*, source_id: int):
-        return {source_id: None}.get(source_id)
-
-
-class _TestArticleRepo:
-    @staticmethod
-    def insert_article(**_kwargs):
-        return SimpleNamespace(), True
-
-
-class _TestSession:
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        return False
-
-    def commit(self) -> None:
-        pass
-
-    def begin_nested(self):
-        return self
