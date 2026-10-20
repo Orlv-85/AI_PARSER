@@ -591,7 +591,7 @@ def _fetch_source_items(
     logger: Logger,
     run_id: str,
     full_text_semaphore: BoundedSemaphore | None,
-):  # type: ignore[no-untyped-def]  # pylint: disable=too-many-return-statements
+):  # type: ignore[no-untyped-def]
     del db_source_id
     fetcher = Fetcher(
         timeout_seconds=settings.request_timeout_seconds,
@@ -602,6 +602,32 @@ def _fetch_source_items(
             settings, "fetch_http_max_keepalive_connections", 10
         ),
     )
+    try:
+        return _fetch_source_items_with_fetcher(
+            fetcher=fetcher,
+            config=config,
+            fetch_state=fetch_state,
+            enable_fetch_state=enable_fetch_state,
+            settings=settings,
+            logger=logger,
+            run_id=run_id,
+            full_text_semaphore=full_text_semaphore,
+        )
+    finally:
+        fetcher.close()
+
+
+def _fetch_source_items_with_fetcher(
+    *,
+    fetcher: Fetcher,
+    config: SourceConfig,
+    fetch_state: dict[str, object | None] | None,
+    enable_fetch_state: bool,
+    settings: Settings,
+    logger: Logger,
+    run_id: str,
+    full_text_semaphore: BoundedSemaphore | None,
+):  # type: ignore[no-untyped-def]  # pylint: disable=too-many-return-statements
     logger.info(
         "source_fetch_started",
         {
@@ -1005,29 +1031,29 @@ def _process_html_links_two_stage(
         ),
     )
 
-    if admission_enabled:
-        for link, _canonical, canonical_hash in canonical_by_link:
-            is_known = False
-            if existing_canonical_hashes_fn is not None:
-                is_known = canonical_hash in known_hashes
-            elif exists_by_canonical_hash_fn is not None:
-                is_known = exists_by_canonical_hash_fn(canonical_hash)
-            ph_key = _html_placeholder_key(settings, canonical_hash)
-            if is_known:
-                settle_pending(article_repo.session, key=ph_key)
-                continue
-            upsert_pending(
-                article_repo.session,
-                key=ph_key,
-                url_canonical_hash=canonical_hash,
-                source_id=db_source_id,
-                payload={"kind": "html_link", "url": link},
-                evidence_hash="",
-                policy_version=settings.semantic_admission_policy_version,
-                model=settings.jev_model,
-            )
-
     try:
+        if admission_enabled:
+            for link, _canonical, canonical_hash in canonical_by_link:
+                is_known = False
+                if existing_canonical_hashes_fn is not None:
+                    is_known = canonical_hash in known_hashes
+                elif exists_by_canonical_hash_fn is not None:
+                    is_known = exists_by_canonical_hash_fn(canonical_hash)
+                ph_key = _html_placeholder_key(settings, canonical_hash)
+                if is_known:
+                    settle_pending(article_repo.session, key=ph_key)
+                    continue
+                upsert_pending(
+                    article_repo.session,
+                    key=ph_key,
+                    url_canonical_hash=canonical_hash,
+                    source_id=db_source_id,
+                    payload={"kind": "html_link", "url": link},
+                    evidence_hash="",
+                    policy_version=settings.semantic_admission_policy_version,
+                    model=settings.jev_model,
+                )
+
         for link, canonical, canonical_hash in canonical_by_link:
             ph_key = _html_placeholder_key(settings, canonical_hash) if admission_enabled else ""
             is_known = False

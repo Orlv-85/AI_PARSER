@@ -1,5 +1,6 @@
 import time
 from datetime import UTC, date, datetime
+from html.parser import HTMLParser
 from importlib import import_module
 from types import SimpleNamespace
 
@@ -837,3 +838,28 @@ def test_source_onboarding_validate_rejects_invalid_identifier_payloads(
         json={"candidate_ids": ["broken"]},
     )
     assert bad_candidate_ids.status_code == 422
+
+
+def test_admin_page_sort_defaults_to_published() -> None:
+    class _SortOptions(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__()
+            self.in_sort = False
+            self.options: list[tuple[str, bool]] = []
+
+        def handle_starttag(self, tag, attrs) -> None:
+            attributes = dict(attrs)
+            if tag == "select":
+                self.in_sort = attributes.get("id") == "sort"
+            elif tag == "option" and self.in_sort:
+                self.options.append((str(attributes.get("value")), "selected" in attributes))
+
+        def handle_endtag(self, tag) -> None:
+            if tag == "select":
+                self.in_sort = False
+
+    parser = _SortOptions()
+    parser.feed(import_module("app.web.app")._render_index())  # pylint: disable=protected-access
+
+    assert [value for value, _ in parser.options] == ["rank", "published", "category"]
+    assert [value for value, selected in parser.options if selected] == ["published"]
