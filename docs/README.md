@@ -2,9 +2,9 @@
 
 ## Code docs (live next to the code)
 
-Technical maps owned by the code: flow, modules, tables, versions, invariants, where to change what.
-Updated in the same change as the code (AGENTS.md, "Feature Docs Next To Code"); checked by
-`scripts/check_code_docs.py` (pytest + CI).
+Intended current behavior of a feature, its decisions, invariants and code map. Changed first, then
+the code (AGENTS.md, "Feature Docs Next To Code"); checked by `scripts/check_code_docs.py` (pytest + CI).
+Specs in `specs/` are the history of how a feature got there.
 
 | Feature | Doc | Main module |
 | --- | --- | --- |
