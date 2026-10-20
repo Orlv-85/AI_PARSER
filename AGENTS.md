@@ -58,7 +58,9 @@ code and tests follow it.
 - Each feature has a doc next to its main module: `<main_module>.md` (example:
   `src/app/core/daily_signals.md`). The main module's docstring names it.
 - Sections, short and dry:
-  - Behavior - what the feature does and guarantees now;
+  - Behavior - what the feature does and guarantees now: rules, not numbers (name the constant);
+    a Mermaid diagram of the flow; each rule names the tests that check it (`Tests: ...`), and a
+    rule without a test says so;
   - Decisions - decision and why, one or two lines each, no history;
   - Invariants;
   - Code map - flow, modules, tables, versions, where to change what;
@@ -72,8 +74,9 @@ code and tests follow it.
   generation of docs. Older features get a doc when they are next changed.
 - Header: `<!-- code-doc` / `module: <path>` / `covers:` / `  - <glob>` / `-->`. Register the doc in
   `docs/README.md`, `README.md` and `src/app/README.md`.
-- Checked by `scripts/check_code_docs.py`: pytest fails on stale names in a doc; CI fails when covered
-  files change without the doc (opt out: commit line `Docs-Skip: <reason>`).
+- Checked by `scripts/check_code_docs.py`: pytest fails on stale names in a doc (code names in
+  `src/`, `test_*` names in `tests/`); CI fails when covered files change without the doc (opt out:
+  commit line `Docs-Skip: <reason>`).
 
 ## Validation
 

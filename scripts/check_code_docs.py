@@ -12,7 +12,7 @@ A code doc is a `*.md` file under `src/` with a header comment:
 Static checks (every doc under `src/`, header or not):
 - every backticked file reference exists;
 - every backticked UPPER_CASE constant, CamelCase class, snake_case name and `--flag` occurs
-  in `src/`;
+  in `src/`; a backticked `test_*` name is a test function under `tests/`;
 - every backticked `AINEWS_*` variable is a settings field (or occurs in `src/`, scripts,
   deploy files).
 Header checks: `module` exists and its docstring names the doc; every `covers` glob matches a file;
@@ -107,7 +107,7 @@ def _word(name: str, text: str) -> bool:
     return re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", text) is not None
 
 
-def _ref_errors(doc: Doc, src: str, extra: str, settings: str) -> list[str]:
+def _ref_errors(doc: Doc, src: str, extra: str, settings: str, tests: str) -> list[str]:
     errors = []
     name = rel(doc.path)
     body = FENCE.sub("", doc.path.read_text(encoding="utf-8"))
@@ -121,6 +121,9 @@ def _ref_errors(doc: Doc, src: str, extra: str, settings: str) -> list[str]:
             if not re.search(rf"^\s+{field_name}\s*:", settings, re.MULTILINE) \
                     and not _word(ref, src + extra):
                 errors.append(f"{name}: setting `{ref}` not found")
+        elif ref.startswith("test_") and SNAKE.match(ref):
+            if not re.search(rf"\bdef {re.escape(ref)}\(", tests):
+                errors.append(f"{name}: test `{ref}` not found in tests/")
         elif CONST.match(ref) or CLASS.match(ref) or SNAKE.match(ref) or FLAG.match(ref):
             if not _word(ref, src):
                 errors.append(f"{name}: name `{ref}` not found in src/")
@@ -153,8 +156,8 @@ def _header_errors(doc: Doc) -> list[str]:
     return errors
 
 
-def static_errors(doc: Doc, src: str, extra: str, settings: str) -> list[str]:
-    return _ref_errors(doc, src, extra, settings) + _header_errors(doc)
+def static_errors(doc: Doc, src: str, extra: str, settings: str, tests: str = "") -> list[str]:
+    return _ref_errors(doc, src, extra, settings, tests) + _header_errors(doc)
 
 
 def diff_errors(docs: list[Doc], changed: list[str], messages: str) -> list[str]:
@@ -188,7 +191,8 @@ def main(argv: list[str] | None = None) -> int:
     src = _corpus([ROOT / "src"])
     extra = _corpus([ROOT / p for p in SEARCH_EXTRA if (ROOT / p).exists()])
     settings = (ROOT / "src/app/config/settings.py").read_text(encoding="utf-8")
-    errors = [e for d in docs for e in static_errors(d, src, extra, settings)]
+    tests = _corpus([ROOT / "tests"])
+    errors = [e for d in docs for e in static_errors(d, src, extra, settings, tests)]
     for error in errors:
         print(f"ERROR {error}")
     failed = bool(errors)

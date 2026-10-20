@@ -44,6 +44,14 @@ def test_stale_references_fail(tmp_path):
         assert any(f"`{name}`" in e for e in errors), name
 
 
+def test_test_names_are_checked_against_tests(tmp_path):
+    doc = tmp_path / "feature.md"
+    doc.write_text("`test_known_case` `test_removed_case`\n", encoding="utf-8")
+    tests = "def test_known_case():\n    pass\n"
+    errors = CHECK.static_errors(CHECK.parse(doc), SRC, "", SETTINGS, tests)
+    assert errors == [f"{doc}: test `test_removed_case` not found in tests/"]
+
+
 def test_fenced_blocks_are_not_checked(tmp_path):
     assert _errors(tmp_path, "```text\n`OLD_CONSTANT`\n```\n") == []
 
