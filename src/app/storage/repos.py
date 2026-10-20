@@ -222,9 +222,6 @@ class SourceRepo:
             "last_status_code": source.last_status_code,
         }
 
-    def get_source_fetch_state(self, source_id: int) -> dict[str, object | None]:
-        return self.get_fetch_state(source_id=source_id)
-
     def update_fetch_state(
         self,
         *,
@@ -242,23 +239,6 @@ class SourceRepo:
         source.last_checked_at = last_checked_at
         source.last_status_code = last_status_code
         self.session.flush()
-
-    def update_source_fetch_state(
-        self,
-        source_id: int,
-        *,
-        etag: str | None,
-        last_modified: str | None,
-        last_checked_at: datetime,
-        last_status_code: int | None,
-    ) -> None:
-        self.update_fetch_state(
-            source_id=source_id,
-            etag=etag,
-            last_modified=last_modified,
-            last_checked_at=last_checked_at,
-            last_status_code=last_status_code,
-        )
 
     @staticmethod
     def _read_object_value(
@@ -480,39 +460,6 @@ class ArticleRepo:
         self.session.add(article)
         self.session.flush()
         return article, True
-
-    def add_alias(
-        self,
-        *,
-        article_id: int,
-        source_id: int,
-        url: str,
-        discovered_at: datetime | None = None,
-    ) -> ArticleAlias:
-        alias = ArticleAlias(
-            article_id=article_id,
-            source_id=source_id,
-            url=url,
-            discovered_at=discovered_at or datetime.now(UTC),
-        )
-        self.session.add(alias)
-        self.session.flush()
-        return alias
-
-    def merge_alias(
-        self,
-        *,
-        existing_article_id: int,
-        source_id: int,
-        url: str,
-        discovered_at: datetime | None = None,
-    ) -> ArticleAlias:
-        return self.add_alias(
-            article_id=existing_article_id,
-            source_id=source_id,
-            url=url,
-            discovered_at=discovered_at,
-        )
 
     def query_top(
         self,

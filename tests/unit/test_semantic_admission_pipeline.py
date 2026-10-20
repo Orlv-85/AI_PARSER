@@ -2,7 +2,6 @@ import json
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from logging import getLogger
-from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -14,8 +13,9 @@ from app.config.sources import SourceConfig
 from app.core.canonicalize import canonical_url_hash
 from app.core.jev import JevRelevanceScorer
 from app.core.models import Article
-from app.core.pipeline import HtmlLinkFetchResult, run_fetch_cycle
-from app.ingest.html import fetch_html_article
+from app.core.pipeline import PENDING_REPLAY_LIMIT, run_fetch_cycle
+from app.ingest.html import HtmlListPageResult, fetch_html_article
+from app.ingest.rss import RssFetchResult, _with_rss_metadata
 from app.storage.admission import PAUSED_MESSAGE, set_collection_paused
 from app.storage.models_sql import (
     AdmissionDecision,
@@ -96,18 +96,20 @@ class Scenario:  # pylint: disable=too-many-instance-attributes
         assert len(sources) == 1, "Enabled admission must stop before fetching later sources"
         idx, config, *_ = sources[0]
         self.fetches.append(config.id)
-        if self.not_modified:
-            result = SimpleNamespace(not_modified=True, status_code=304, items=[])
-        elif self.source_type == "two_stage_html":
-            result = HtmlLinkFetchResult(
-                links=[str(item.url) for item in self.items],
-                status_code=200, etag="new-etag", last_modified="new-modified",
+        status, etag, modified = (
+            (304, None, None) if self.not_modified else (200, "new-etag", "new-modified"))
+        items = [] if self.not_modified else self.items
+        result: object
+        if self.source_type == "two_stage_html":
+            result = HtmlListPageResult(
+                links=[str(item.url) for item in items], not_modified=self.not_modified,
+                status_code=status, etag=etag, last_modified=modified,
             )
         else:
-            result = SimpleNamespace(
-                items=self.items, status_code=200,
-                etag="new-etag", last_modified="new-modified",
-            )
+            result = _with_rss_metadata(items, RssFetchResult(
+                items=items, not_modified=self.not_modified, status_code=status, etag=etag,
+                last_modified=modified,
+            ))
         return {idx: result}, 0
 
     def fetch_body(self, *, url, **_kwargs):
@@ -164,7 +166,7 @@ def test_oversized_journal_input_stays_pending_without_pausing_other_articles(
 
 
 @pytest.mark.parametrize("batch", [False, True])
-@pytest.mark.parametrize("source_type", ["rss", "legacy_html", "two_stage_html"])
+@pytest.mark.parametrize("source_type", ["rss", "two_stage_html"])
 def test_admission_and_cache_all_ingestion_paths(monkeypatch, tmp_path, batch, source_type):
     scenario = Scenario(tmp_path, monkeypatch, source_type, batch)
     scenario.items[0].published_at = None
@@ -185,7 +187,7 @@ def test_admission_and_cache_all_ingestion_paths(monkeypatch, tmp_path, batch, s
 
 
 @pytest.mark.parametrize("batch", [False, True])
-@pytest.mark.parametrize("source_type", ["rss", "legacy_html", "two_stage_html"])
+@pytest.mark.parametrize("source_type", ["rss", "two_stage_html"])
 @pytest.mark.parametrize("not_modified", [False, True])
 def test_outage_preserves_verified_and_replays_after_list_rotation(
     monkeypatch, tmp_path, batch, source_type, not_modified,
@@ -462,16 +464,16 @@ def test_pending_replay_is_bounded_by_list_pending_limit(monkeypatch, tmp_path):
         url=f"https://example.com/story-{i}",
         published_at=datetime(2026, 10, 4, 12, tzinfo=UTC),
         summary=f"Study {i}", content=f"AI is central in research {i}.",
-    ) for i in range(1, 53)]
+    ) for i in range(1, PENDING_REPLAY_LIMIT + 3)]
     scenario.fail_at = 1
     assert scenario.run().screening_paused == 1
     pending = [r for r in scenario.rows(AdmissionDecision) if r.provider_status == "pending"]
-    assert len(pending) == 52
+    assert len(pending) == PENDING_REPLAY_LIMIT + 2
     scenario.fail_at = None
     scenario.items = []
     scenario.not_modified = True
-    assert scenario.run().new == 50
-    assert len(scenario.requests) == 1 + 50
+    assert scenario.run().new == PENDING_REPLAY_LIMIT
+    assert len(scenario.requests) == 1 + PENDING_REPLAY_LIMIT
     pending = [r for r in scenario.rows(AdmissionDecision) if r.provider_status == "pending"]
     assert len(pending) == 2
     assert scenario.run().new == 2
@@ -514,5 +516,52 @@ def test_admission_coverage_attempt_records_fetch_and_persist_failures(
     assert result.errors == 1 and result.new == 0
     attempts = scenario.rows(WeeklyCoverageAttempt)
     assert [row.outcome for row in attempts] == [f"{failure}_failure"]
-    if failure == "persist":
-        assert attempts[0].complete is False
+    assert attempts[0].complete is (failure == "fetch")
+
+
+@pytest.mark.parametrize("daily", [False, True])
+def test_cycle_cache_hit_after_rolled_back_assessment_keeps_notice(monkeypatch, tmp_path, daily):
+    scenario = Scenario(tmp_path, monkeypatch, "rss", False)
+    scenario.settings.daily_enrichment_enabled = daily
+    story = scenario.items[0]
+    copies = {"s1": story, "s2": story.model_copy(update={"url": "https://other.example/story"})}
+    scenario.configs.append(SourceConfig(id="s2", name="s2", type="rss",
+                                         url="https://other.example/feed"))
+
+    def collect(*, enabled_sources, **_kwargs):
+        idx, config, *_ = enabled_sources[0]
+        items = [copies[config.id]]
+        return {idx: _with_rss_metadata(items, RssFetchResult(
+            items=items, not_modified=False, status_code=200, etag=None, last_modified=None,
+        ))}, 0
+
+    @contextmanager
+    def scorer(*_args):
+        def respond(request):
+            scenario.requests.append(json.loads(request.content))
+            return httpx.Response(200, json={"answers": {
+                "ai_relevant": {"noul": 0.9},
+                "admission": {"choice": "accepted_ai_editorial", "confidence": 0.9},
+            }})
+
+        with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+            yield JevRelevanceScorer(client, "jev-1.13.0", getLogger("semantic-test"),
+                                     semantic_admission_enabled=True,
+                                     daily_enrichment_enabled=daily)
+
+    monkeypatch.setattr("app.core.pipeline._collect_fetched_items", collect)
+    monkeypatch.setattr("app.core.pipeline.jev_relevance_scorer", scorer)
+    with scenario.sessions() as session:
+        set_collection_paused(session)
+        session.execute(text(
+            "CREATE TRIGGER fail_first BEFORE INSERT ON articles "
+            f"WHEN NEW.url = '{story.url}' BEGIN SELECT RAISE(ABORT, 'test rollback'); END"
+        ))
+        session.commit()
+
+    result = scenario.run()
+
+    # s1's fresh assessment rolled back with s1; s2 reused it from the in-cycle cache.
+    assert (result.errors, result.new, result.screening_paused) == (1, 1, 0)
+    assert len(scenario.requests) == 1
+    assert scenario.rows(CollectionStatus)[0].paused

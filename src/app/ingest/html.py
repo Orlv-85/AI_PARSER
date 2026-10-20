@@ -1,6 +1,6 @@
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from importlib import import_module
 from typing import Any, Literal, cast
 from urllib.parse import urljoin
@@ -173,22 +173,6 @@ def extract_article_text(html_content: str, url: str, strategy: str | None = Non
     return None
 
 
-def publication_date_evidence(article_html: str) -> datetime | None:
-    tree = lxml_html.fromstring(article_html)
-    candidates = tree.xpath(
-        '//meta[@property="article:published_time" or @itemprop="datePublished" '
-        'or @name="datePublished"]/@content | //time[@itemprop="datePublished"]/@datetime'
-    )
-    for value in candidates:
-        try:
-            parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-            if parsed.tzinfo is not None:
-                return parsed.astimezone(UTC)
-        except ValueError:
-            continue
-    return None
-
-
 def _build_html_article(
     *, source: SourceConfig, url: str, article_html: str,
     on_exclusion: Callable[[str], None] | None = None,
@@ -344,54 +328,3 @@ def fetch_html_article(
         source=source, url=url, article_html=article_html, on_exclusion=on_exclusion,
     )
 
-
-def fetch_html(
-    source: SourceConfig,
-    timeout_seconds: float = 15.0,
-    fetcher: Fetcher | None = None,
-) -> list[Article]:
-    if source.type != "html" or source.html is None:
-        return []
-
-    if fetcher is None:
-        with httpx.Client(timeout=timeout_seconds, follow_redirects=True) as client:
-            list_response = client.get(str(source.url))
-            list_response.raise_for_status()
-            links = extract_links_from_html(
-                html_content=list_response.text,
-                base_url=str(source.url),
-                list_selector=source.html.list_selector,
-                link_selector=source.html.link_selector,
-            )
-            fetched_items: list[Article] = []
-            for link in links:
-                try:
-                    response = client.get(link)
-                    response.raise_for_status()
-                    article = _build_html_article(
-                        source=source,
-                        url=link,
-                        article_html=response.text,
-                    )
-                except Exception:
-                    continue
-                if article is not None:
-                    fetched_items.append(article)
-            return fetched_items
-
-    links = fetch_html_links(source, timeout_seconds=timeout_seconds, fetcher=fetcher)
-    items: list[Article] = []
-    for link in links:
-        try:
-            article = fetch_html_article(
-                source=source,
-                url=link,
-                timeout_seconds=timeout_seconds,
-                fetcher=fetcher,
-            )
-        except Exception:
-            # Fail-soft: keep processing remaining links.
-            continue
-        if article is not None:
-            items.append(article)
-    return items

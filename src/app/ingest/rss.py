@@ -43,7 +43,7 @@ class RssItemList(list[Article]):
     coverage_complete: bool = True
 
 
-def _with_rss_metadata(items: list[Article], result: RssFetchResult) -> list[Article]:
+def _with_rss_metadata(items: list[Article], result: RssFetchResult) -> RssItemList:
     wrapped = RssItemList(items)
     wrapped.not_modified = result.not_modified
     wrapped.status_code = result.status_code
@@ -212,7 +212,7 @@ def fetch_rss(
     *,
     if_none_match: str | None = None,
     if_modified_since: str | None = None,
-) -> list[Article]:
+) -> RssItemList:
     result = fetch_rss_with_metadata(
         source_key=source_key,
         url=url,

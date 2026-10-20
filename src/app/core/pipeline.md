@@ -69,10 +69,11 @@ function. Each rule lists the tests that check it.
   `test_replay_and_fresh_fetch_share_source_savepoint`.
 
 **Conditional fetch**
-- RSS: when `fetch_conditional_rss_enabled` and the source repo keeps fetch state, the stored
-  `etag` / `last_modified` are sent as `If-None-Match` / `If-Modified-Since`. A 304 is a successful
+- RSS: when `fetch_conditional_rss_enabled`, the stored `etag` / `last_modified` are sent as
+  `If-None-Match` / `If-Modified-Since`. A 304 is a successful
   no-op: no items are processed, the source counts in `not_modified_sources`. The response
-  validators and status are stored after each response (200 or 304). Tests:
+  validators and status are stored after each response (200 or 304), also when
+  `fetch_conditional_rss_enabled` is off (then they are stored but not sent). Tests:
   `test_run_fetch_cycle_rss_304_uses_stored_validators_and_persists_fetch_state`,
   `test_run_fetch_cycle_rss_200_persists_validators_and_processes_items`,
   `test_run_fetch_cycle_uses_rss_validators_and_handles_not_modified`,
@@ -117,11 +118,11 @@ function. Each rule lists the tests that check it.
   Tests: `test_landing_classification_uses_body_and_preserves_article_evidence`,
   `test_positive_html_evidence_survives_pipeline_commerce_check`.
 - The filter runs before any article download, text extraction, model call and weekly observation,
-  on every path: RSS entries, linked RSS pages, two-stage HTML, legacy HTML, and again in the
-  pipeline (`_item_exclusion_reason`: URL rules for pages already checked, text rules otherwise).
+  on every path: RSS entries, linked RSS pages, two-stage HTML, and again in the pipeline
+  (`_item_exclusion_reason`: URL rules for pages already checked, text rules otherwise).
   Tests: `test_rss_filters_before_fulltext_and_keeps_undated_news`,
   `test_all_pipeline_item_paths_filter_before_models_and_preserve_dedupe`,
-  `test_two_stage_filters_before_limit_and_model_call`, `test_legacy_html_fetcher_path_filters_before_download`,
+  `test_two_stage_filters_before_limit_and_model_call`, `test_html_fetch_cycle_filters_before_download`,
   `test_rss_linked_landing_is_removed_before_text_extraction`.
 - A missing date is never a reason to exclude. Tests: `test_rss_filters_before_fulltext_and_keeps_undated_news`,
   `test_admission_and_cache_all_ingestion_paths`.
@@ -150,10 +151,10 @@ function. Each rule lists the tests that check it.
 **HTML (two-stage)**
 - Stage 1, list page: links by the source's list/link selectors (`html_link_parser`: selectolax
   when installed, else lxml), excluded URLs removed, then capped at `html_max_links_per_source`
-  (the cap marks coverage incomplete), then checked against stored canonical hashes (one batch
-  query when the repo offers `existing_canonical_hashes`). Tests:
+  (the cap marks coverage incomplete), then checked against stored canonical hashes in one batch
+  query (`existing_canonical_hashes`). Tests:
   `test_run_fetch_cycle_html_two_stage_skips_known_links_and_respects_max_links`,
-  `test_run_fetch_cycle_html_two_stage_uses_batch_known_hash_precheck_when_available`,
+  `test_run_fetch_cycle_html_two_stage_checks_known_links_in_one_query`,
   `test_two_stage_filters_before_limit_and_model_call`,
   `test_extract_links_from_html_prefers_selectolax_in_auto_mode_when_available`,
   `test_extract_links_from_html_falls_back_to_lxml_when_selectolax_unavailable`,
@@ -164,7 +165,7 @@ function. Each rule lists the tests that check it.
   `test_run_fetch_cycle_html_two_stage_stops_after_known_streak`.
 - A failed or unparsable article page skips that link only and marks coverage incomplete. Tests:
   `test_process_html_links_two_stage_covers_non_batch_edge_paths`, `test_html_article_failure_retains_retry_and_continues`,
-  `test_fetch_html_uses_fetcher_and_fail_soft`,
+  `test_html_fetch_cycle_skips_failed_article_only`,
   `test_failed_or_unparsable_html_article_marks_coverage_incomplete`.
 - Article page: title is the first `h1` text without script, style and template text, else the
   URL; content by the source `extraction_strategy` (default: trafilatura, then readability).
@@ -222,7 +223,8 @@ function. Each rule lists the tests that check it.
   `test_rank_score_combines_signal_weights`, `test_freshness_and_rank_edge_cases`,
   `test_ingestion_persists_jev_score_or_heuristic_on_failure`.
 - Daily enrichment rubric (`daily_enrichment_enabled` with admission): the assessment is recorded
-  in `enrichment_provenance` (`RUBRIC_VERSION`); a confident Comparison answer sets `material_type`.
+  in `enrichment_provenance` (`RUBRIC_VERSION`); a Comparison answer with confidence at least
+  `COMPARISON_MIN_CONFIDENCE` sets `material_type`.
   Tests: `test_ordinary_ingestion_uses_rubric_journal_and_reusable_admission`,
   `test_confident_comparison_answer_sets_material_type`.
 
@@ -249,7 +251,7 @@ function. Each rule lists the tests that check it.
   `test_outage_preserves_verified_and_replays_after_list_rotation`.
 - An input above the journal bound (`JevInputTooLarge`) is unresolved and stays pending; it does not
   pause the run. Tests: `test_oversized_journal_input_stays_pending_without_pausing_other_articles`.
-- Before a source is fetched, its pending candidates (at most the `list_pending` limit) are
+- Before a source is fetched, its pending candidates (at most `PENDING_REPLAY_LIMIT`) are
   replayed in the same savepoint as the fresh fetch: stored bodies are screened again, HTML link
   placeholders are downloaded again. This works after a 304 or a list rotation. Tests:
   `test_outage_preserves_verified_and_replays_after_list_rotation`, `test_replay_and_fresh_fetch_share_source_savepoint`,
@@ -260,9 +262,11 @@ function. Each rule lists the tests that check it.
   `test_html_article_failure_retains_retry_and_continues`, `test_confirmed_html_exclusion_settles_before_304`.
 - The notice (`collection_status`, `PAUSED_MESSAGE`) is durable. It is cleared only by a run that
   ends unpaused after at least one fresh (not cached) successful assessment; empty, 304, cache-only
-  and rolled-back runs keep it. Tests: `test_cache_only_retry_does_not_claim_provider_recovery`,
+  and rolled-back runs keep it. An answer reused from the in-cycle cache of `JevRelevanceScorer` is
+  not fresh, in every mode. Tests: `test_cache_only_retry_does_not_claim_provider_recovery`,
   `test_source_rollback_does_not_clear_prior_notice`, `test_outage_preserves_verified_and_replays_after_list_rotation`,
-  `test_public_collection_status_exposes_persisted_pause`.
+  `test_public_collection_status_exposes_persisted_pause`,
+  `test_cycle_cache_hit_after_rolled_back_assessment_keeps_notice`.
 
 **Weekly hooks**
 - Every eligible item is recorded as a raw weekly observation before admission
@@ -271,13 +275,16 @@ function. Each rule lists the tests that check it.
   RSS records known items too (before the known-hash check). Tests:
   `test_rss_records_known_items_as_weekly_observations`.
 - One coverage attempt per source per run (`record_attempt`): `fetch_failure`, `persist_failure`,
-  `parser_failure` (coverage incomplete), `not_modified`, `success` or `empty`; complete only when
-  coverage is complete, acquisition did not stop and HTML did not stop early. An admission rejection
-  does not change it. Tests: `test_outage_preserves_verified_and_replays_after_list_rotation`,
+  `parser_failure` (the source coverage is incomplete), `not_modified`, `success` or `empty`;
+  complete only when coverage is complete, acquisition did not stop and HTML did not stop early. A
+  `fetch_failure` is recorded as complete. An admission rejection does not change it. Tests: `test_outage_preserves_verified_and_replays_after_list_rotation`,
   `test_ambiguity_cached_category_independent_and_policy_invalidates`,
   `test_confirmed_html_exclusion_settles_before_304`,
   `test_coverage_attempt_records_fetch_persist_and_parser_failures`,
   `test_admission_coverage_attempt_records_fetch_and_persist_failures`.
+- An undated item marks the source coverage incomplete: RSS when a feed item has no published date
+  (an updated-only date counts as none), HTML when a downloaded article page gives no publication
+  evidence. Tests: `test_undated_item_marks_coverage_incomplete`.
 - On a Monday (UTC) the run publishes the weekly report of the previous Monday-Sunday week: enqueue
   in v2 (`weekly_v2_enabled`), else the legacy report; a failure is only logged. Tests:
   `test_run_fetch_cycle_publishes_previous_monday_sunday_weekly_report_on_monday`,
@@ -380,10 +387,10 @@ web update (thread or process)               web/service.py: UpdateRunService
 | `storage/admission.py` | `admission_decisions` ledger (pending, settle, decision) and `collection_status` notice | no |
 | `ingest/fetcher.py` | `Fetcher`: pooled client, per-source interval, retries, conditional headers | no |
 | `ingest/rss.py` | Feed parsing, `fetch_rss_with_metadata`, optional linked full text | no |
-| `ingest/html.py` | List links (lxml or selectolax), article page build, legacy one-stage `fetch_html` | no |
+| `ingest/html.py` | List links (lxml or selectolax), `HtmlListPageResult`, article page build | no |
 | `ingest/page_filter.py` | Non-news rules: URL, text, page schema; `MANAGED_LINK_SELECTORS` | yes |
 | `ingest/date_evidence.py` | Date candidates and resolution (`DATE_EVIDENCE_VERSION`) | yes |
-| `core/jev.py` (not covered) | `JevRelevanceScorer`: one Jev request per text, in-cycle cache, stop after failure | no |
+| `core/jev.py` (not covered) | `jev_state` (bounded text sent to Jev); `JevRelevanceScorer`: one Jev request per text, in-cycle cache, stop after failure | no |
 | `storage/repos.py` (not covered) | `SourceRepo` (fetch state), `ArticleRepo` (known hashes, insert, batch upsert) | no |
 | `storage/weekly.py` (not covered) | `register_source`, `record_observation`, `record_attempt` | no |
 
@@ -420,7 +427,7 @@ web update (thread or process)               web/service.py: UpdateRunService
 | Keyword relevance | `AI_KEYWORDS`, `STOP_WORDS` in `core/scoring.py` | only used with admission off |
 | Rank weights, half-life | `rank_score`, `freshness_score` in `core/scoring.py` | no rescoring of stored rows |
 | Admission choices | `decision_from_assessment` in `core/admission.py` and the admission question in `core/jev.py` | bump policy or prompt version |
-| Evidence bound sent to Jev | `bounded_evidence` in `core/admission.py` | `_jev_state` in `core/pipeline.py` and `JevRelevanceScorer.classify` repeat it |
+| Evidence bound sent to Jev | `jev_state` and `TITLE_LIMIT` / `SUMMARY_LIMIT` / `CONTENT_LIMIT` in `core/jev.py` (used by `bounded_evidence`, `JevRelevanceScorer.state`, the daily provenance hash) | changes cache keys: bump the prompt version; `reenrich_pilot.source_state`, `weekly_input`, `weekly_frozen` repeat the daily text; test `test_bounded_jev_text_is_pinned_per_mode` |
 | Pause notice text | `PAUSED_MESSAGE` in `storage/admission.py` | public API and admin status show it |
 | Date evidence | `ingest/date_evidence.py` | bump `DATE_EVIDENCE_VERSION` |
 
@@ -432,7 +439,10 @@ Per rule: see Behavior and Invariants. Files: `tests/unit/test_pipeline_runtime.
 `test_non_news_filter.py`, `test_publication_semantics.py`, `test_ingest_rss_additional.py`,
 `test_ingest_html_additional.py`, `test_fetcher.py`, `test_canonicalize.py`, `test_scoring.py`,
 `test_jev.py`, `test_article_evidence_cache.py` (date evidence), `tests/integration/test_pipeline.py`.
-Tests never call a network or provider (`httpx.MockTransport`, fake fetchers). Many runtime tests
-replace module attributes of `core/pipeline.py` (fetch functions, repos, `SessionLocal`) with fakes;
-the code detects some of these replacements (`_DEFAULT_FETCH_HTML` and siblings), so a refactor
-that changes imports must keep those tests meaningful.
+Tests never call a network or provider (`httpx.MockTransport`, fake `Fetcher.request`, fake fetch
+functions). Runtime tests replace module attributes of `core/pipeline.py` (fetch functions, repos,
+`SessionLocal`) with fakes of the real interfaces and run with real `Settings`; a fake must offer
+every method and field the real object offers (fetch fakes return `RssItemList` or
+`HtmlListPageResult`). Weekly hooks run only with a real SQLAlchemy `Session`
+(`isinstance` checks in `run_fetch_cycle` and `_record_weekly_observation`), so runtime tests with a
+fake session do not record weekly rows; SQLite tests do.

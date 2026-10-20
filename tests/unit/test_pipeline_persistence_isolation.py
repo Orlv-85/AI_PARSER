@@ -12,10 +12,21 @@ from app.config.settings import Settings
 from app.config.sources import SourceConfig
 from app.core.jev import JevAssessment
 from app.core.models import Article
-from app.core.pipeline import HtmlLinkFetchResult, run_fetch_cycle
+from app.core.pipeline import run_fetch_cycle
+from app.ingest.html import HtmlListPageResult
+from app.ingest.rss import RssFetchResult, RssItemList, _with_rss_metadata
 from app.storage.models_sql import Article as StoredArticle
 from app.storage.models_sql import Base, Source, WeeklyCoverageAttempt
 from app.storage.repos import ArticleRepo
+
+
+def _rss_items(
+    items: list[Article], *, etag: str | None = None, coverage_complete: bool = True,
+) -> RssItemList:
+    return _with_rss_metadata(items, RssFetchResult(
+        items=items, not_modified=False, status_code=200, etag=etag, last_modified=None,
+        coverage_complete=coverage_complete,
+    ))
 
 
 @pytest.mark.parametrize("batch", [False, True])
@@ -56,11 +67,11 @@ def test_source_savepoint_recovers_after_database_error(
         for index, config in enumerate(configs):
             items = articles[config.id]
             if source_type == "html":
-                results[index] = HtmlLinkFetchResult(
+                results[index] = HtmlListPageResult(
                     links=[str(item.url) for item in items], etag="new-validator",
                 )
             else:
-                results[index] = SimpleNamespace(items=items, etag="new-validator")
+                results[index] = _rss_items(items, etag="new-validator")
         return results, 0
 
     def fetch_article(*, source, url, **_kwargs):
@@ -218,7 +229,7 @@ def _html_configs(*keys: str) -> list[SourceConfig]:
 def _html_links(links_by_source: dict[str, list[str]]):
     def collect(*, enabled_sources, **_kwargs):
         return {
-            index: HtmlLinkFetchResult(links=links_by_source[config.id])
+            index: HtmlListPageResult(links=links_by_source[config.id])
             for index, config, *_ in enabled_sources
         }, 0
     return collect
@@ -294,8 +305,8 @@ def test_coverage_attempt_records_fetch_persist_and_parser_failures(monkeypatch,
         results = {}
         for index, config, *_ in enabled_sources:
             if config.id in items:
-                results[index] = SimpleNamespace(
-                    items=items[config.id], coverage_complete=config.id != "parser",
+                results[index] = _rss_items(
+                    items[config.id], coverage_complete=config.id != "parser",
                 )
         return results, 1
 
@@ -316,8 +327,54 @@ def test_coverage_attempt_records_fetch_persist_and_parser_failures(monkeypatch,
         "persist": "persist_failure", "parser": "parser_failure",
     }
     assert attempts["ok"][1] is True
+    assert attempts["fetch"][1] is True
     assert attempts["persist"][1] is False
     assert attempts["parser"][1] is False
+
+
+def test_undated_item_marks_coverage_incomplete(monkeypatch, tmp_path):
+    configs = [
+        SourceConfig(id=key, name=key, type="rss", url=f"https://example.com/{key}.xml")
+        for key in ("rss_dated", "rss_undated", "rss_updated_only")
+    ] + _html_configs("html_dated", "html_undated")
+    rss_items = {
+        "rss_dated": Article(source_key="rss_dated", title="AI update",
+                             url="https://example.com/rss_dated/1", published_at=NOW),
+        "rss_undated": Article(source_key="rss_undated", title="AI update",
+                               url="https://example.com/rss_undated/1", published_at=None),
+        "rss_updated_only": Article(
+            source_key="rss_updated_only", title="AI update",
+            url="https://example.com/rss_updated_only/1", published_at=None,
+            publication_evidence_at=NOW, publication_date_kind="updated",
+        ),
+    }
+
+    def collect(*, enabled_sources, **_kwargs):
+        return {
+            index: _rss_items([rss_items[config.id]]) if config.type == "rss"
+            else HtmlListPageResult(links=[f"https://example.com/{config.id}/story-1"])
+            for index, config, *_ in enabled_sources
+        }, 0
+
+    def fetch_article(*, source, url, **kwargs):
+        if source.id == "html_undated":
+            return Article(source_key=source.id, title="AI update", url=url, published_at=None,
+                           content="AI is central.")
+        return _dated_article(source=source, url=url, **kwargs)
+
+    sessions = _sqlite_run(monkeypatch, tmp_path, configs, collect=collect,
+                           fetch_article=fetch_article)
+
+    summary = run_fetch_cycle(settings=_settings(), logger=getLogger("coverage"))
+
+    assert (summary.errors, summary.new) == (0, 5)
+    assert _attempts(sessions) == {
+        "rss_dated": ("success", True),
+        "rss_undated": ("parser_failure", False),
+        "rss_updated_only": ("parser_failure", False),
+        "html_dated": ("success", True),
+        "html_undated": ("parser_failure", False),
+    }
 
 
 def test_two_urls_of_one_story_become_two_articles(monkeypatch, tmp_path):
@@ -330,7 +387,7 @@ def test_two_urls_of_one_story_become_two_articles(monkeypatch, tmp_path):
     ]
     sessions = _sqlite_run(
         monkeypatch, tmp_path, configs,
-        collect=lambda **_kwargs: ({0: SimpleNamespace(items=items)}, 0),
+        collect=lambda **_kwargs: ({0: _rss_items(items)}, 0),
     )
 
     first = run_fetch_cycle(settings=_settings(), logger=getLogger("identity"))
@@ -366,7 +423,7 @@ def test_per_row_duplicate_updates_scores_and_category_only(monkeypatch, tmp_pat
     monkeypatch.setattr("app.core.pipeline.jev_relevance_scorer", scorer)
     sessions = _sqlite_run(
         monkeypatch, tmp_path, configs,
-        collect=lambda **_kwargs: ({0: SimpleNamespace(items=batch["items"])}, 0),
+        collect=lambda **_kwargs: ({0: _rss_items(batch["items"])}, 0),
     )
     settings = _settings(article_batch_upsert_enabled=False)
 
@@ -410,3 +467,32 @@ def test_error_outside_source_loop_aborts_without_commit(monkeypatch, tmp_path, 
     with sessions() as session:
         assert not list(session.scalars(select(Source)))
         assert not list(session.scalars(select(WeeklyCoverageAttempt)))
+
+
+def test_html_fetch_cycle_skips_failed_article_only(monkeypatch, tmp_path):
+    base = "https://example.com/site"
+    pages = {
+        base: '<main><a href="/site/news-1">one</a><a href="/site/news-2">two</a>'
+              '<a href="/site/news-3">three</a></main>',
+        f"{base}/news-1": "<html><body><h1>Headline</h1><p>content</p></body></html>",
+        f"{base}/news-3": "<html><body><p>no h1</p></body></html>",
+    }
+
+    def request(_self, *, source_id, url, **_kwargs):
+        assert source_id == "site"
+        if url not in pages:
+            raise RuntimeError("fetch_failed")
+        return httpx.Response(200, text=pages[url], request=httpx.Request("GET", url))
+
+    monkeypatch.setattr("app.ingest.fetcher.Fetcher.request", request)
+    monkeypatch.setattr("app.ingest.html.extract_article_text", lambda **_kwargs: "parsed")
+    sessions = _sqlite_run(monkeypatch, tmp_path, _html_configs("site"))
+
+    summary = run_fetch_cycle(settings=_settings(), logger=getLogger("html-failure"))
+
+    assert (summary.errors, summary.new) == (0, 2)
+    with sessions() as session:
+        assert sorted(session.scalars(select(StoredArticle.title))) == [
+            "Headline", f"{base}/news-3",
+        ]
+    assert _attempts(sessions) == {"site": ("parser_failure", False)}

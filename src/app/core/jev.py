@@ -37,6 +37,21 @@ def _probability(value: object) -> float:
     return float(value)
 
 
+TITLE_LIMIT = 1024
+SUMMARY_LIMIT = 4000
+CONTENT_LIMIT = 16000
+
+
+def jev_state(article: object, *, with_summary: bool = True) -> str:
+    """Bounded article text sent to Jev as `state` (the daily rubric leaves out the summary)."""
+    title = str(getattr(article, "title", "") or "")[:TITLE_LIMIT]
+    content = str(getattr(article, "content", "") or "")[:CONTENT_LIMIT]
+    if not with_summary:
+        return f"Title: {title}\nContent: {content}"
+    summary = str(getattr(article, "summary", "") or "")[:SUMMARY_LIMIT]
+    return f"Title: {title}\nSummary: {summary}\nContent: {content}"
+
+
 class JevInputTooLarge(ValueError):
     """Source evidence exceeds the local request bound before provider dispatch."""
 
@@ -117,15 +132,13 @@ class JevRelevanceScorer:  # pylint: disable=too-many-instance-attributes
             }
         return questions
 
+    def state(self, article: object) -> str:
+        """The text classify sends for this article; also its key in the in-cycle cache."""
+        return jev_state(article, with_summary=not self.daily_enrichment_enabled)
+
     def classify(self, article: Article) -> JevAssessment | None:
         self.input_held = False
-        state = (
-            f"Title: {article.title[:1024]}\n"
-            f"Summary: {(article.summary or '')[:4000]}\n"
-            f"Content: {(article.content or '')[:16000]}"
-        )
-        if self.daily_enrichment_enabled:
-            state = f"Title: {article.title[:1024]}\nContent: {(article.content or '')[:16000]}"
+        state = self.state(article)
         if self.failed:
             return None
         if state in self.cache:
