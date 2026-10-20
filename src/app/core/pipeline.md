@@ -223,7 +223,8 @@ function. Each rule lists the tests that check it.
   `test_rank_score_combines_signal_weights`, `test_freshness_and_rank_edge_cases`,
   `test_ingestion_persists_jev_score_or_heuristic_on_failure`.
 - Daily enrichment rubric (`daily_enrichment_enabled` with admission): the assessment is recorded
-  in `enrichment_provenance` (`RUBRIC_VERSION`); a confident Comparison answer sets `material_type`.
+  in `enrichment_provenance` (`RUBRIC_VERSION`); a Comparison answer with confidence at least
+  `COMPARISON_MIN_CONFIDENCE` sets `material_type`.
   Tests: `test_ordinary_ingestion_uses_rubric_journal_and_reusable_admission`,
   `test_confident_comparison_answer_sets_material_type`.
 
@@ -250,7 +251,7 @@ function. Each rule lists the tests that check it.
   `test_outage_preserves_verified_and_replays_after_list_rotation`.
 - An input above the journal bound (`JevInputTooLarge`) is unresolved and stays pending; it does not
   pause the run. Tests: `test_oversized_journal_input_stays_pending_without_pausing_other_articles`.
-- Before a source is fetched, its pending candidates (at most the `list_pending` limit) are
+- Before a source is fetched, its pending candidates (at most `PENDING_REPLAY_LIMIT`) are
   replayed in the same savepoint as the fresh fetch: stored bodies are screened again, HTML link
   placeholders are downloaded again. This works after a 304 or a list rotation. Tests:
   `test_outage_preserves_verified_and_replays_after_list_rotation`, `test_replay_and_fresh_fetch_share_source_savepoint`,

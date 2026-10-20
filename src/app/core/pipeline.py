@@ -56,6 +56,11 @@ from app.storage.admission import (
 from app.storage.repos import ArticleRepo, SourceRepo, WeeklyAnalyticsRepo
 from app.storage.weekly import WeeklyStore, record_attempt, record_observation, register_source
 
+# Pending admission candidates replayed per source before its fresh fetch.
+PENDING_REPLAY_LIMIT = 50
+# A daily-rubric Comparison answer sets material_type from this confidence on.
+COMPARISON_MIN_CONFIDENCE = 0.7
+
 # (source order, config, sources.id, stored fetch state)
 EnabledSource = tuple[int, SourceConfig, int, dict[str, object | None]]
 type FetchResult = RssItemList | HtmlListPageResult
@@ -230,7 +235,7 @@ def _build_article_row(
         row["category"] = assessment.category
         row["category_confidence"] = assessment.category_confidence
     if assessment is not None and assessment.comparison_choice == "Comparison":
-        if (assessment.comparison_confidence or 0) >= 0.7:
+        if (assessment.comparison_confidence or 0) >= COMPARISON_MIN_CONFIDENCE:
             row["material_type"] = "Comparison"
     if assessment is not None and assessment.comparison_choice is not None:
         # Same text the daily rubric sent; daily enrichment re-checks it before reuse.
@@ -382,7 +387,7 @@ def _replay_pending_for_source(  # pylint: disable=too-many-branches
     relevance_scorer: JevRelevanceScorer | None, admission_state: AdmissionState,
     metrics: SourceMetrics,
 ) -> int:
-    pending = list_pending(session, source_id=db_source_id, limit=50)
+    pending = list_pending(session, source_id=db_source_id, limit=PENDING_REPLAY_LIMIT)
     bodies: list[tuple[Any, CoreArticle]] = []
     links: list[Any] = []
     for entry in pending:

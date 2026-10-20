@@ -13,7 +13,7 @@ from app.config.sources import SourceConfig
 from app.core.canonicalize import canonical_url_hash
 from app.core.jev import JevRelevanceScorer
 from app.core.models import Article
-from app.core.pipeline import run_fetch_cycle
+from app.core.pipeline import PENDING_REPLAY_LIMIT, run_fetch_cycle
 from app.ingest.html import HtmlListPageResult, fetch_html_article
 from app.ingest.rss import RssFetchResult, _with_rss_metadata
 from app.storage.admission import PAUSED_MESSAGE, set_collection_paused
@@ -464,16 +464,16 @@ def test_pending_replay_is_bounded_by_list_pending_limit(monkeypatch, tmp_path):
         url=f"https://example.com/story-{i}",
         published_at=datetime(2026, 10, 4, 12, tzinfo=UTC),
         summary=f"Study {i}", content=f"AI is central in research {i}.",
-    ) for i in range(1, 53)]
+    ) for i in range(1, PENDING_REPLAY_LIMIT + 3)]
     scenario.fail_at = 1
     assert scenario.run().screening_paused == 1
     pending = [r for r in scenario.rows(AdmissionDecision) if r.provider_status == "pending"]
-    assert len(pending) == 52
+    assert len(pending) == PENDING_REPLAY_LIMIT + 2
     scenario.fail_at = None
     scenario.items = []
     scenario.not_modified = True
-    assert scenario.run().new == 50
-    assert len(scenario.requests) == 1 + 50
+    assert scenario.run().new == PENDING_REPLAY_LIMIT
+    assert len(scenario.requests) == 1 + PENDING_REPLAY_LIMIT
     pending = [r for r in scenario.rows(AdmissionDecision) if r.provider_status == "pending"]
     assert len(pending) == 2
     assert scenario.run().new == 2
