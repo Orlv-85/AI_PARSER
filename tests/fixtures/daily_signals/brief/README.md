@@ -1,7 +1,7 @@
 # Daily Signals Brief fixtures (007)
 
 Copied on 2026-10-19 from the Phase A dry-run (`tmp/007-brief-dryrun/` of the planning worktree,
-see `.specify/specs/007-daily-signals-brief/dry-run.md`). JSON re-encoded as ASCII (`\uXXXX`
+see `specs/007-daily-signals-brief/dry-run.md`). JSON re-encoded as ASCII (`\uXXXX`
 escapes); the content is unchanged.
 
 - `sig-2026-10-12.json` .. `sig-2026-10-18.json`: production `GET /api/news/daily-signals?date=`

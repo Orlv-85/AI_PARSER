@@ -1,7 +1,7 @@
 # Daily AI Signals fixtures
 
 `signals_2026-10-12.json` .. `signals_2026-10-16.json` are copied from the Phase A dry-run
-(`tmp/daily-signals-dryrun/fixtures/`, see `.specify/specs/006-daily-ai-signals/dry-run.md`).
+(`tmp/daily-signals-dryrun/fixtures/`, see `specs/006-daily-ai-signals/dry-run.md`).
 
 - Origin: the public digests of each day joined to the local SQLite articles; `article_id` is the local
   SQLite id at the time of the dry-run.

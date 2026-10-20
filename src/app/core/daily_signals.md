@@ -9,8 +9,8 @@ covers:
 # Daily AI Signals - code map
 
 Technical reference for 006 (signals) and 007 (brief). Operator commands, cost, rollback:
-`docs/daily-signals.md`. Contracts: `.specify/specs/006-daily-ai-signals/`,
-`.specify/specs/007-daily-signals-brief/`. Update this file in the same change as the code.
+`docs/daily-signals.md`. Contracts: `specs/006-daily-ai-signals/`,
+`specs/007-daily-signals-brief/`. Update this file in the same change as the code.
 
 ## Flow
 

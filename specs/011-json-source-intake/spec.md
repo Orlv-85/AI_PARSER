@@ -1,6 +1,6 @@
 # JSON source intake with automatic review
 
-Extends `.specify/specs/003-source-onboarding-management/spec.md`.
+Extends `specs/003-source-onboarding-management/spec.md`.
 
 ## Problem and outcome
 
