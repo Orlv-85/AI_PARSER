@@ -872,7 +872,7 @@ def test_run_fetch_cycle_html_two_stage_skips_known_links_before_article_fetch_f
     assert summary.skipped_known_html_links == 1
 
 
-def test_run_fetch_cycle_html_two_stage_uses_batch_known_hash_precheck_when_available(
+def test_run_fetch_cycle_html_two_stage_checks_known_links_in_one_query(
     monkeypatch,
 ) -> None:
     articles = _articles("html_two_stage_batch", title="Fetched item", content="content")

@@ -69,8 +69,8 @@ function. Each rule lists the tests that check it.
   `test_replay_and_fresh_fetch_share_source_savepoint`.
 
 **Conditional fetch**
-- RSS: when `fetch_conditional_rss_enabled` and the source repo keeps fetch state, the stored
-  `etag` / `last_modified` are sent as `If-None-Match` / `If-Modified-Since`. A 304 is a successful
+- RSS: when `fetch_conditional_rss_enabled`, the stored `etag` / `last_modified` are sent as
+  `If-None-Match` / `If-Modified-Since`. A 304 is a successful
   no-op: no items are processed, the source counts in `not_modified_sources`. The response
   validators and status are stored after each response (200 or 304), also when
   `fetch_conditional_rss_enabled` is off (then they are stored but not sent). Tests:
@@ -151,10 +151,10 @@ function. Each rule lists the tests that check it.
 **HTML (two-stage)**
 - Stage 1, list page: links by the source's list/link selectors (`html_link_parser`: selectolax
   when installed, else lxml), excluded URLs removed, then capped at `html_max_links_per_source`
-  (the cap marks coverage incomplete), then checked against stored canonical hashes (one batch
-  query when the repo offers `existing_canonical_hashes`). Tests:
+  (the cap marks coverage incomplete), then checked against stored canonical hashes in one batch
+  query (`existing_canonical_hashes`). Tests:
   `test_run_fetch_cycle_html_two_stage_skips_known_links_and_respects_max_links`,
-  `test_run_fetch_cycle_html_two_stage_uses_batch_known_hash_precheck_when_available`,
+  `test_run_fetch_cycle_html_two_stage_checks_known_links_in_one_query`,
   `test_two_stage_filters_before_limit_and_model_call`,
   `test_extract_links_from_html_prefers_selectolax_in_auto_mode_when_available`,
   `test_extract_links_from_html_falls_back_to_lxml_when_selectolax_unavailable`,
@@ -438,5 +438,7 @@ Per rule: see Behavior and Invariants. Files: `tests/unit/test_pipeline_runtime.
 `test_jev.py`, `test_article_evidence_cache.py` (date evidence), `tests/integration/test_pipeline.py`.
 Tests never call a network or provider (`httpx.MockTransport`, fake `Fetcher.request`, fake fetch
 functions). Runtime tests replace module attributes of `core/pipeline.py` (fetch functions, repos,
-`SessionLocal`) with fakes of the real interfaces and run with real `Settings`; the production code
-has no branch for fakes, so a fake must offer what the real object offers.
+`SessionLocal`) with fakes of the real interfaces and run with real `Settings`; a fake must offer
+every method the real object offers. Weekly hooks run only with a real SQLAlchemy `Session`
+(`isinstance` checks in `run_fetch_cycle` and `_record_weekly_observation`), so runtime tests with a
+fake session do not record weekly rows; SQLite tests do.

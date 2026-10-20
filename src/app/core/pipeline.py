@@ -56,6 +56,9 @@ from app.storage.admission import (
 from app.storage.repos import ArticleRepo, SourceRepo, WeeklyAnalyticsRepo
 from app.storage.weekly import WeeklyStore, record_attempt, record_observation, register_source
 
+# (source order, config, sources.id, stored fetch state)
+EnabledSource = tuple[int, SourceConfig, int, dict[str, object | None]]
+
 
 @dataclass(frozen=True)
 class FetchSummary:  # pylint: disable=too-many-instance-attributes
@@ -307,7 +310,7 @@ def _screen_candidate(
     was_cached = state in relevance_scorer.cache
     assessment = relevance_scorer.classify(item)
     if assessment is None:
-        if getattr(relevance_scorer, "input_held", False):
+        if relevance_scorer.input_held:
             admission_state.unresolved += 1
             return ("unresolved", None)
         admission_state.paused = True
@@ -360,8 +363,7 @@ def _settle_placeholders(
 
 
 def _clear_source_validators(source_repo: SourceRepo, db_source_id: int) -> None:
-    _source_repo_update_fetch_state(
-        source_repo,
+    source_repo.update_fetch_state(
         source_id=db_source_id,
         etag=None,
         last_modified=None,
@@ -500,11 +502,6 @@ def _assessment_from_cached(cached: object) -> JevAssessment | None:
         return None
 
 
-def _html_link_parser_setting(settings: Settings) -> str | None:
-    parser = getattr(settings, "html_link_parser", "auto")
-    return parser if isinstance(parser, str) else "auto"
-
-
 def _log_source_metrics(
     *,
     logger: Logger,
@@ -554,11 +551,7 @@ def _managed_source_to_config(source: object) -> SourceConfig:
     return SourceConfig.model_validate(payload)
 
 
-def _stored_validators(
-    fetch_state: dict[str, object | None] | None,
-) -> tuple[str | None, str | None]:
-    if fetch_state is None:
-        return None, None
+def _stored_validators(fetch_state: dict[str, object | None]) -> tuple[str | None, str | None]:
     etag = fetch_state.get("etag")
     last_modified = fetch_state.get("last_modified")
     return (
@@ -571,30 +564,25 @@ def _fetch_source_items(
     *,
     config: SourceConfig,
     db_source_id: int,
-    fetch_state: dict[str, object | None] | None,
-    enable_fetch_state: bool,
+    fetch_state: dict[str, object | None],
     settings: Settings,
     logger: Logger,
     run_id: str,
     full_text_semaphore: BoundedSemaphore | None,
 ) -> list[CoreArticle] | HtmlListPageResult:
     del db_source_id
-    if config.type == "rss":
-        conditional = enable_fetch_state and bool(
-            getattr(settings, "fetch_conditional_rss_enabled", True))
-    else:
-        conditional = enable_fetch_state and bool(
-            getattr(settings, "fetch_conditional_html_list_enabled", False))
+    conditional = (
+        settings.fetch_conditional_rss_enabled if config.type == "rss"
+        else settings.fetch_conditional_html_list_enabled
+    )
     if_none_match, if_modified_since = (
         _stored_validators(fetch_state) if conditional else (None, None))
     fetcher = Fetcher(
         timeout_seconds=settings.request_timeout_seconds,
         max_retries=settings.max_retries,
         per_source_min_interval_seconds=settings.per_source_min_interval_seconds,
-        http_max_connections=getattr(settings, "fetch_http_max_connections", 20),
-        http_max_keepalive_connections=getattr(
-            settings, "fetch_http_max_keepalive_connections", 10
-        ),
+        http_max_connections=settings.fetch_http_max_connections,
+        http_max_keepalive_connections=settings.fetch_http_max_keepalive_connections,
     )
     try:
         logger.info(
@@ -623,7 +611,7 @@ def _fetch_source_items(
                 config,
                 settings.request_timeout_seconds,
                 fetcher=fetcher,
-                link_parser=_html_link_parser_setting(settings),
+                link_parser=settings.html_link_parser,
                 if_none_match=if_none_match,
                 if_modified_since=if_modified_since,
             )
@@ -631,7 +619,7 @@ def _fetch_source_items(
             config,
             settings.request_timeout_seconds,
             fetcher=fetcher,
-            link_parser=_html_link_parser_setting(settings),
+            link_parser=settings.html_link_parser,
         ))
     finally:
         fetcher.close()
@@ -661,13 +649,10 @@ def _log_source_fetch_error(
 
 
 def _profiled_source_groups(
-    enabled_sources: list[tuple[int, SourceConfig, int, dict[str, object | None] | None, bool]],
-    settings: Settings,
-) -> list[list[tuple[int, SourceConfig, int, dict[str, object | None] | None, bool]]]:
-    profile = str(getattr(settings, "fetch_execution_profile", "balanced") or "balanced")
-    if profile not in {"balanced", "rss_fast", "html_heavy"}:
-        profile = "balanced"
-    if profile == "balanced":
+    enabled_sources: list[EnabledSource], settings: Settings,
+) -> list[list[EnabledSource]]:
+    profile = settings.fetch_execution_profile
+    if profile not in {"rss_fast", "html_heavy"}:
         return [enabled_sources]
 
     rss_sources = [entry for entry in enabled_sources if entry[1].type == "rss"]
@@ -676,31 +661,25 @@ def _profiled_source_groups(
     return [group for group in groups if group]
 
 
-def _source_group_max_workers(
-    group: list[tuple[int, SourceConfig, int, dict[str, object | None] | None, bool]],
-    settings: Settings,
-) -> int:
-    base_limit = int(settings.concurrency_limit)
-    max_workers = int(max(1, min(base_limit, len(group))))
+def _source_group_max_workers(group: list[EnabledSource], settings: Settings) -> int:
+    max_workers: int = max(1, min(settings.concurrency_limit, len(group)))
     if not group:
         return max_workers
     source_type = group[0][1].type
     if any(entry[1].type != source_type for entry in group):
         return max_workers
-    if source_type == "rss":
-        type_limit = getattr(settings, "fetch_rss_concurrency_limit", None)
-    elif source_type == "html":
-        type_limit = getattr(settings, "fetch_html_concurrency_limit", None)
-    else:
-        type_limit = None
-    if isinstance(type_limit, int) and type_limit > 0:
-        max_workers = int(min(max_workers, type_limit))
-    return int(max_workers)
+    type_limit = (
+        settings.fetch_rss_concurrency_limit if source_type == "rss"
+        else settings.fetch_html_concurrency_limit
+    )
+    if type_limit is not None and type_limit > 0:
+        max_workers = min(max_workers, type_limit)
+    return max_workers
 
 
 def _collect_fetched_items(
     *,
-    enabled_sources: list[tuple[int, SourceConfig, int, dict[str, object | None] | None, bool]],
+    enabled_sources: list[EnabledSource],
     settings: Settings,
     logger: Logger,
     run_id: str,
@@ -720,13 +699,12 @@ def _collect_fetched_items(
                     config=config,
                     db_source_id=db_source_id,
                     fetch_state=fetch_state,
-                    enable_fetch_state=enable_fetch_state,
                     settings=settings,
                     logger=logger,
                     run_id=run_id,
                     full_text_semaphore=full_text_semaphore,
                 ): (idx, config, db_source_id)
-                for idx, config, db_source_id, fetch_state, enable_fetch_state in group
+                for idx, config, db_source_id, fetch_state in group
             }
             for future in as_completed(futures):
                 idx, config, _db_source_id = futures[future]
@@ -736,52 +714,6 @@ def _collect_fetched_items(
                     error_count += 1
                     _log_source_fetch_error(logger=logger, run_id=run_id, config=config, exc=exc)
     return fetched_by_index, error_count
-
-
-def _source_repo_get_fetch_state(
-    source_repo: SourceRepo,
-    *,
-    source_id: int,
-) -> tuple[dict[str, object | None] | None, bool]:
-    getter = getattr(source_repo, "get_fetch_state", None)
-    if callable(getter):
-        return getter(source_id=source_id), True
-    getter = getattr(source_repo, "get_source_fetch_state", None)
-    if callable(getter):
-        return getter(source_id), True
-    return None, False
-
-
-def _source_repo_update_fetch_state(
-    source_repo: SourceRepo,
-    *,
-    source_id: int,
-    etag: str | None,
-    last_modified: str | None,
-    last_status_code: int | None,
-    last_checked_at: datetime,
-) -> bool:
-    updater = getattr(source_repo, "update_fetch_state", None)
-    if callable(updater):
-        updater(
-            source_id=source_id,
-            etag=etag,
-            last_modified=last_modified,
-            last_status_code=last_status_code,
-            last_checked_at=last_checked_at,
-        )
-        return True
-    updater = getattr(source_repo, "update_source_fetch_state", None)
-    if callable(updater):
-        updater(
-            source_id,
-            etag=etag,
-            last_modified=last_modified,
-            last_status_code=last_status_code,
-            last_checked_at=last_checked_at,
-        )
-        return True
-    return False
 
 
 def _fetch_result_items(result: object) -> list:
@@ -794,28 +726,12 @@ def _fetch_result_items(result: object) -> list:
 
 
 def _upsert_article_rows(
-    *,
-    article_repo: ArticleRepo,
-    rows: list[dict[str, object]],
-    prefer_batch: bool,
+    *, article_repo: ArticleRepo, rows: list[dict[str, object]],
 ) -> tuple[int, int]:
     if not rows:
         return 0, 0
-
-    batch_upsert = getattr(article_repo, "upsert_articles_batch", None)
-    if prefer_batch and callable(batch_upsert):
-        batch_result = batch_upsert(rows)
-        return int(batch_result[0]), int(batch_result[1])
-
-    new_count = 0
-    duplicate_count = 0
-    for row in rows:
-        _, is_new = article_repo.insert_article(**row)
-        if is_new:
-            new_count += 1
-        else:
-            duplicate_count += 1
-    return new_count, duplicate_count
+    counts: tuple[int, int] = article_repo.upsert_articles_batch(cast(list[dict[str, Any]], rows))
+    return counts
 
 
 def _weekly_report_date_to_publish(today: date) -> date | None:
@@ -829,14 +745,14 @@ def _publish_weekly_analytics_if_due(
     session: object,
     logger: Logger,
     run_id: str,
-    settings: Settings | None = None,
+    settings: Settings,
 ) -> None:
     report_date = _weekly_report_date_to_publish(datetime.now(UTC).date())
     if report_date is None:
         return
 
     try:
-        if settings is not None and settings.weekly_v2_enabled:
+        if settings.weekly_v2_enabled:
             WeeklyStore(cast(Any, session)).enqueue(report_date, settings)
         else:
             WeeklyAnalyticsRepo(cast(Any, session)).save_weekly_report(report_date=report_date)
@@ -880,21 +796,13 @@ def _process_html_links_two_stage(
     early_stop_hit = False
     fetched_articles = 0
     html_known_streak = 0
-    html_known_streak_stop = int(getattr(settings, "html_known_streak_stop", 0) or 0)
-    html_max_links_per_source = getattr(settings, "html_max_links_per_source", None)
-    batch_mode = bool(getattr(settings, "article_batch_upsert_enabled", False))
+    html_known_streak_stop = settings.html_known_streak_stop
+    html_max_links_per_source = settings.html_max_links_per_source
+    batch_mode = settings.article_batch_upsert_enabled
     admission_enabled = admission_state is not None and admission_state.enabled
-    exists_by_canonical_hash = getattr(article_repo, "exists_by_canonical_hash", None)
-    exists_by_canonical_hash_fn = (
-        exists_by_canonical_hash if callable(exists_by_canonical_hash) else None
-    )
-    existing_canonical_hashes = getattr(article_repo, "existing_canonical_hashes", None)
-    existing_canonical_hashes_fn = (
-        existing_canonical_hashes if callable(existing_canonical_hashes) else None
-    )
     links = [link for link in links if url_exclusion_reason(str(link)) is None]
     capped_links = links
-    if isinstance(html_max_links_per_source, int) and html_max_links_per_source >= 0:
+    if html_max_links_per_source is not None and html_max_links_per_source >= 0:
         capped_links = links[:html_max_links_per_source]
         if len(capped_links) < len(links) and quality_flags is not None:
             quality_flags.append("truncated")
@@ -902,30 +810,21 @@ def _process_html_links_two_stage(
         (str(link), canonicalize_url(str(link)), canonical_url_hash(str(link)))
         for link in capped_links
     ]
-    known_hashes: set[str] = set()
-    if existing_canonical_hashes_fn is not None:
-        known_hashes = existing_canonical_hashes_fn([h for _, _, h in canonical_by_link])
+    known_hashes = article_repo.existing_canonical_hashes([h for _, _, h in canonical_by_link])
     queued_rows: list[dict[str, object]] = []
     fetcher = Fetcher(
         timeout_seconds=settings.request_timeout_seconds,
         max_retries=settings.max_retries,
         per_source_min_interval_seconds=settings.per_source_min_interval_seconds,
-        http_max_connections=getattr(settings, "fetch_http_max_connections", 20),
-        http_max_keepalive_connections=getattr(
-            settings, "fetch_http_max_keepalive_connections", 10
-        ),
+        http_max_connections=settings.fetch_http_max_connections,
+        http_max_keepalive_connections=settings.fetch_http_max_keepalive_connections,
     )
 
     try:
         if admission_enabled:
             for link, _canonical, canonical_hash in canonical_by_link:
-                is_known = False
-                if existing_canonical_hashes_fn is not None:
-                    is_known = canonical_hash in known_hashes
-                elif exists_by_canonical_hash_fn is not None:
-                    is_known = exists_by_canonical_hash_fn(canonical_hash)
                 ph_key = _html_placeholder_key(settings, canonical_hash)
-                if is_known:
+                if canonical_hash in known_hashes:
                     settle_pending(article_repo.session, key=ph_key)
                     continue
                 upsert_pending(
@@ -941,12 +840,7 @@ def _process_html_links_two_stage(
 
         for link, canonical, canonical_hash in canonical_by_link:
             ph_key = _html_placeholder_key(settings, canonical_hash) if admission_enabled else ""
-            is_known = False
-            if existing_canonical_hashes_fn is not None:
-                is_known = canonical_hash in known_hashes
-            elif exists_by_canonical_hash_fn is not None:
-                is_known = exists_by_canonical_hash_fn(canonical_hash)
-            if is_known:
+            if canonical_hash in known_hashes:
                 duplicate_count += 1
                 skipped_known_items += 1
                 if admission_enabled:
@@ -1059,13 +953,11 @@ def _process_html_links_two_stage(
                     new_count += 1
                 else:
                     duplicate_count += 1
-            if existing_canonical_hashes_fn is not None or batch_mode:
-                known_hashes.add(canonical_hash)
+            known_hashes.add(canonical_hash)
         if batch_mode:
             batch_new, batch_duplicates = _upsert_article_rows(
                 article_repo=article_repo,
                 rows=queued_rows,
-                prefer_batch=True,
             )
             new_count += batch_new
             duplicate_count += batch_duplicates
@@ -1088,8 +980,7 @@ def _persist_fetch_state_if_present(
     ) or bool(getattr(result, "not_modified", False))
     if not has_metadata:
         return
-    _source_repo_update_fetch_state(
-        source_repo,
+    source_repo.update_fetch_state(
         source_id=db_source_id,
         etag=etag if isinstance(etag, str) else None,
         last_modified=last_modified if isinstance(last_modified, str) else None,
@@ -1099,9 +990,8 @@ def _persist_fetch_state_if_present(
 
 
 def _record_weekly_observation(article_repo: ArticleRepo, source_id: int, item: Any) -> None:
-    session = getattr(article_repo, "session", None)
-    if isinstance(session, Session):
-        record_observation(session, source_id, item)
+    if isinstance(article_repo.session, Session):
+        record_observation(article_repo.session, source_id, item)
 
 
 def _item_exclusion_reason(item: Any) -> str | None:
@@ -1128,20 +1018,11 @@ def _process_fetched_source_items(
     skipped_known_items = 0
     early_stop_hit = False
     rss_known_streak = 0
-    rss_known_streak_stop = int(getattr(settings, "rss_known_streak_stop", 0) or 0)
-    batch_mode = bool(getattr(settings, "article_batch_upsert_enabled", False))
+    rss_known_streak_stop = settings.rss_known_streak_stop
+    batch_mode = settings.article_batch_upsert_enabled
     admission_enabled = admission_state is not None and admission_state.enabled
-    exists_by_canonical_hash = getattr(article_repo, "exists_by_canonical_hash", None)
-    exists_by_canonical_hash_fn = (
-        exists_by_canonical_hash if callable(exists_by_canonical_hash) else None
-    )
-    use_rss_early_stop = (
-        config.type == "rss" and rss_known_streak_stop > 0
-        and exists_by_canonical_hash_fn is not None
-    )
-    use_known_skip = exists_by_canonical_hash_fn is not None and (
-        admission_enabled or use_rss_early_stop
-    )
+    use_rss_early_stop = config.type == "rss" and rss_known_streak_stop > 0
+    use_known_skip = admission_enabled or use_rss_early_stop
     queued_rows_by_hash: dict[str, dict[str, object]] = {}
     accepted_items = []
     for item in items:
@@ -1159,9 +1040,8 @@ def _process_fetched_source_items(
         for item in items:
             identity_url = getattr(item, "ingestion_canonical_url", None) or str(item.url)
             canonical_hash = canonical_url_hash(identity_url)
-            if use_known_skip and exists_by_canonical_hash_fn is not None:
-                if exists_by_canonical_hash_fn(canonical_hash):
-                    continue
+            if use_known_skip and article_repo.exists_by_canonical_hash(canonical_hash):
+                continue
             evidence = bounded_evidence(item)
             ev_hash = evidence_hash(evidence)
             key = admission_cache_key(
@@ -1186,10 +1066,7 @@ def _process_fetched_source_items(
         identity_url = getattr(item, "ingestion_canonical_url", None) or str(item.url)
         canonical = canonicalize_url(identity_url)
         canonical_hash = canonical_url_hash(identity_url)
-        is_known = False
-        if use_known_skip and exists_by_canonical_hash_fn is not None:
-            is_known = exists_by_canonical_hash_fn(canonical_hash)
-        if is_known:
+        if use_known_skip and article_repo.exists_by_canonical_hash(canonical_hash):
             duplicate_count += 1
             skipped_known_items += 1
             if use_rss_early_stop:
@@ -1255,7 +1132,6 @@ def _process_fetched_source_items(
         batch_new, batch_duplicates = _upsert_article_rows(
             article_repo=article_repo,
             rows=list(queued_rows_by_hash.values()),
-            prefer_batch=True,
         )
         new_count += batch_new
         duplicate_count += batch_duplicates
@@ -1347,15 +1223,11 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
         and settings.rss_full_text_concurrency_limit > 0
         else None
     )
-    admission_state = AdmissionState(
-        enabled=bool(getattr(settings, "semantic_admission_enabled", False))
-    )
+    admission_state = AdmissionState(enabled=settings.semantic_admission_enabled)
     with SessionLocal() as session, jev_relevance_scorer(settings, logger) as relevance_scorer:
         source_repo = SourceRepo(session)
         article_repo = ArticleRepo(session)
-        enabled_sources: list[
-            tuple[int, SourceConfig, int, dict[str, object | None] | None, bool]
-        ] = []
+        enabled_sources: list[EnabledSource] = []
         configured_source_keys: set[str] = set()
         weekly_versions: dict[int, str] = {}
 
@@ -1364,35 +1236,25 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
             db_source = source_repo.upsert_source(config)
             if not config.enabled:
                 continue
-            fetch_state, supports_fetch_state = _source_repo_get_fetch_state(
-                source_repo,
-                source_id=db_source.id,
-            )
-            enabled_sources.append(
-                (idx, config, db_source.id, fetch_state, bool(supports_fetch_state))
-            )
+            enabled_sources.append((
+                idx, config, db_source.id, source_repo.get_fetch_state(source_id=db_source.id),
+            ))
 
-        list_enabled_sources = getattr(source_repo, "list_enabled_sources", None)
-        if callable(list_enabled_sources):
-            next_index = len(configs)
-            for source in list_enabled_sources():
-                source_model = cast(Any, source)
-                source_key = str(source_model.source_key)
-                if source_key in configured_source_keys:
-                    continue
-                config = _managed_source_to_config(source_model)
-                source_id = int(source_model.id)
-                fetch_state, supports_fetch_state = _source_repo_get_fetch_state(
-                    source_repo,
-                    source_id=source_id,
-                )
-                enabled_sources.append(
-                    (next_index, config, source_id, fetch_state, bool(supports_fetch_state))
-                )
-                next_index += 1
+        next_index = len(configs)
+        for source in source_repo.list_enabled_sources():
+            source_model = cast(Any, source)
+            source_key = str(source_model.source_key)
+            if source_key in configured_source_keys:
+                continue
+            config = _managed_source_to_config(source_model)
+            source_id = int(source_model.id)
+            enabled_sources.append((
+                next_index, config, source_id, source_repo.get_fetch_state(source_id=source_id),
+            ))
+            next_index += 1
 
         if isinstance(session, Session):
-            for _, config, source_id, _, _ in enabled_sources:
+            for _, config, source_id, _ in enabled_sources:
                 weekly_versions[source_id] = register_source(
                     session, source_id, config, settings, datetime.now(UTC)
                 )
@@ -1428,7 +1290,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
         run_semantic_rejected = 0
         run_semantic_unresolved = 0
         run_semantic_cache_hits = 0
-        for idx, config, db_source_id, fetch_state, enable_fetch_state in enabled_sources:
+        for idx, config, db_source_id, fetch_state in enabled_sources:
             if admission_state.paused:
                 break
             source_metrics = SourceMetrics(source_id=config.id, source_type=config.type)
@@ -1450,9 +1312,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                         )
                         source_metrics.replay_items += replay_count
                         if not admission_state.paused:
-                            one_source = [
-                                (idx, config, db_source_id, fetch_state, enable_fetch_state)
-                            ]
+                            one_source = [(idx, config, db_source_id, fetch_state)]
                             fetched, errors = _collect_fetched_items(
                                 enabled_sources=one_source,
                                 settings=settings,
@@ -1589,7 +1449,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                 logger=logger,
                 run_id=run_id,
                 metrics=source_metrics,
-                enabled=bool(getattr(settings, "fetch_emit_source_metrics", True)),
+                enabled=settings.fetch_emit_source_metrics,
             )
             if admission_state.paused:
                 break

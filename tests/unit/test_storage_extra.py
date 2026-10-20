@@ -649,8 +649,8 @@ def test_source_repo_fetch_state_round_trip() -> None:
         )
     )
 
-    get_fetch_state = source_repo.get_source_fetch_state
-    update_fetch_state = source_repo.update_source_fetch_state
+    get_fetch_state = source_repo.get_fetch_state
+    update_fetch_state = source_repo.update_fetch_state
 
     initial = get_fetch_state(source_id=source.id)
     assert initial == {
