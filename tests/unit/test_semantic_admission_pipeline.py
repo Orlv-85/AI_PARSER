@@ -517,3 +517,51 @@ def test_admission_coverage_attempt_records_fetch_and_persist_failures(
     attempts = scenario.rows(WeeklyCoverageAttempt)
     assert [row.outcome for row in attempts] == [f"{failure}_failure"]
     assert attempts[0].complete is (failure == "fetch")
+
+
+@pytest.mark.parametrize("daily", [False, True])
+def test_cycle_cache_hit_after_rolled_back_assessment_keeps_notice(monkeypatch, tmp_path, daily):
+    scenario = Scenario(tmp_path, monkeypatch, "rss", False)
+    scenario.settings.daily_enrichment_enabled = daily
+    story = scenario.items[0]
+    copies = {"s1": story, "s2": story.model_copy(update={"url": "https://other.example/story"})}
+    scenario.configs.append(SourceConfig(id="s2", name="s2", type="rss",
+                                         url="https://other.example/feed"))
+
+    def collect(*, enabled_sources, **_kwargs):
+        idx, config, *_ = enabled_sources[0]
+        items = [copies[config.id]]
+        return {idx: _with_rss_metadata(items, RssFetchResult(
+            items=items, not_modified=False, status_code=200, etag=None, last_modified=None,
+        ))}, 0
+
+    @contextmanager
+    def scorer(*_args):
+        def respond(request):
+            scenario.requests.append(json.loads(request.content))
+            return httpx.Response(200, json={"answers": {
+                "ai_relevant": {"noul": 0.9},
+                "admission": {"choice": "accepted_ai_editorial", "confidence": 0.9},
+            }})
+
+        with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+            yield JevRelevanceScorer(client, "jev-1.13.0", getLogger("semantic-test"),
+                                     semantic_admission_enabled=True,
+                                     daily_enrichment_enabled=daily)
+
+    monkeypatch.setattr("app.core.pipeline._collect_fetched_items", collect)
+    monkeypatch.setattr("app.core.pipeline.jev_relevance_scorer", scorer)
+    with scenario.sessions() as session:
+        set_collection_paused(session)
+        session.execute(text(
+            "CREATE TRIGGER fail_first BEFORE INSERT ON articles "
+            f"WHEN NEW.url = '{story.url}' BEGIN SELECT RAISE(ABORT, 'test rollback'); END"
+        ))
+        session.commit()
+
+    result = scenario.run()
+
+    # s1's fresh assessment rolled back with s1; s2 reused it from the in-cycle cache.
+    assert (result.errors, result.new, result.screening_paused) == (1, 1, 0)
+    assert len(scenario.requests) == 1
+    assert scenario.rows(CollectionStatus)[0].paused

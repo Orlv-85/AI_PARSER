@@ -257,7 +257,7 @@ def _pinned_article(**update) -> Article:
 
 
 def _sent_state(article: Article, *, admission: bool, daily: bool) -> str:
-    states = []
+    states: list[str] = []
 
     def respond(request):
         states.append(json.loads(request.content)["state"])

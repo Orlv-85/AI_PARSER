@@ -26,7 +26,7 @@ from app.core.admission import (
 from app.core.canonicalize import canonical_url_hash, canonicalize_url
 from app.core.categories import READABLE_CATEGORIES
 from app.core.daily_rubric import RUBRIC_VERSION
-from app.core.jev import JevAssessment, JevRelevanceScorer, jev_relevance_scorer
+from app.core.jev import JevAssessment, JevRelevanceScorer, jev_relevance_scorer, jev_state
 from app.core.models import Article as CoreArticle
 from app.core.scoring import ai_relevance_score, freshness_score, rank_score
 from app.ingest.fetcher import Fetcher
@@ -177,14 +177,6 @@ def _assessment_payload(assessment: JevAssessment) -> dict[str, object]:
     }
 
 
-def _jev_state(item: object) -> str:
-    return (
-        f"Title: {str(getattr(item, 'title', '') or '')[:1024]}\n"
-        f"Summary: {str(getattr(item, 'summary', '') or '')[:4000]}\n"
-        f"Content: {str(getattr(item, 'content', '') or '')[:16000]}"
-    )
-
-
 def _build_article_row(
     *, item: object, config: SourceConfig, db_source_id: int, canonical: str,
     canonical_hash: str, assessment: JevAssessment | None, admission_enabled: bool,
@@ -241,8 +233,8 @@ def _build_article_row(
         if (assessment.comparison_confidence or 0) >= 0.7:
             row["material_type"] = "Comparison"
     if assessment is not None and assessment.comparison_choice is not None:
-        state = (f"Title: {str(row['title'])[:1024]}\n"
-                 f"Content: {str(row['content'] or '')[:16000]}")
+        # Same text the daily rubric sent; daily enrichment re-checks it before reuse.
+        state = jev_state(item, with_summary=False)
         source_hash = sha256(json.dumps(state, ensure_ascii=True).encode()).hexdigest()
         row["enrichment_provenance"] = json.dumps({
             "rubric": RUBRIC_VERSION, "admission_source_hash": source_hash,
@@ -307,8 +299,7 @@ def _screen_candidate(
         if logger:
             logger.error("semantic_paused", {"reason": "provider_missing"})
         return ("paused", None)
-    state = _jev_state(item)
-    was_cached = state in relevance_scorer.cache
+    was_cached = relevance_scorer.state(item) in relevance_scorer.cache
     assessment = relevance_scorer.classify(item)
     if assessment is None:
         if relevance_scorer.input_held:

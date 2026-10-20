@@ -261,9 +261,11 @@ function. Each rule lists the tests that check it.
   `test_html_article_failure_retains_retry_and_continues`, `test_confirmed_html_exclusion_settles_before_304`.
 - The notice (`collection_status`, `PAUSED_MESSAGE`) is durable. It is cleared only by a run that
   ends unpaused after at least one fresh (not cached) successful assessment; empty, 304, cache-only
-  and rolled-back runs keep it. Tests: `test_cache_only_retry_does_not_claim_provider_recovery`,
+  and rolled-back runs keep it. An answer reused from the in-cycle cache of `JevRelevanceScorer` is
+  not fresh, in every mode. Tests: `test_cache_only_retry_does_not_claim_provider_recovery`,
   `test_source_rollback_does_not_clear_prior_notice`, `test_outage_preserves_verified_and_replays_after_list_rotation`,
-  `test_public_collection_status_exposes_persisted_pause`.
+  `test_public_collection_status_exposes_persisted_pause`,
+  `test_cycle_cache_hit_after_rolled_back_assessment_keeps_notice`.
 
 **Weekly hooks**
 - Every eligible item is recorded as a raw weekly observation before admission
@@ -387,7 +389,7 @@ web update (thread or process)               web/service.py: UpdateRunService
 | `ingest/html.py` | List links (lxml or selectolax), `HtmlListPageResult`, article page build | no |
 | `ingest/page_filter.py` | Non-news rules: URL, text, page schema; `MANAGED_LINK_SELECTORS` | yes |
 | `ingest/date_evidence.py` | Date candidates and resolution (`DATE_EVIDENCE_VERSION`) | yes |
-| `core/jev.py` (not covered) | `JevRelevanceScorer`: one Jev request per text, in-cycle cache, stop after failure | no |
+| `core/jev.py` (not covered) | `jev_state` (bounded text sent to Jev); `JevRelevanceScorer`: one Jev request per text, in-cycle cache, stop after failure | no |
 | `storage/repos.py` (not covered) | `SourceRepo` (fetch state), `ArticleRepo` (known hashes, insert, batch upsert) | no |
 | `storage/weekly.py` (not covered) | `register_source`, `record_observation`, `record_attempt` | no |
 
@@ -424,7 +426,7 @@ web update (thread or process)               web/service.py: UpdateRunService
 | Keyword relevance | `AI_KEYWORDS`, `STOP_WORDS` in `core/scoring.py` | only used with admission off |
 | Rank weights, half-life | `rank_score`, `freshness_score` in `core/scoring.py` | no rescoring of stored rows |
 | Admission choices | `decision_from_assessment` in `core/admission.py` and the admission question in `core/jev.py` | bump policy or prompt version |
-| Evidence bound sent to Jev | `bounded_evidence` in `core/admission.py` | `_jev_state` in `core/pipeline.py` and `JevRelevanceScorer.classify` repeat it |
+| Evidence bound sent to Jev | `jev_state` and `TITLE_LIMIT` / `SUMMARY_LIMIT` / `CONTENT_LIMIT` in `core/jev.py` (used by `bounded_evidence`, `JevRelevanceScorer.state`, the daily provenance hash) | changes cache keys: bump the prompt version; `reenrich_pilot.source_state`, `weekly_input`, `weekly_frozen` repeat the daily text; test `test_bounded_jev_text_is_pinned_per_mode` |
 | Pause notice text | `PAUSED_MESSAGE` in `storage/admission.py` | public API and admin status show it |
 | Date evidence | `ingest/date_evidence.py` | bump `DATE_EVIDENCE_VERSION` |
 

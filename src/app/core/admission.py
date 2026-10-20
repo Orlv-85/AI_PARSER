@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from typing import cast
 
-from app.core.jev import JevAssessment
+from app.core.jev import JevAssessment, jev_state
 
 ACCEPTED = "accepted_ai_editorial"
 NON_AI = "non_ai"
@@ -34,10 +35,8 @@ def decision_from_assessment(assessment: JevAssessment) -> AdmissionDecision | N
 
 
 def bounded_evidence(article: object) -> str:
-    title = str(getattr(article, "title", "") or "")[:1024]
-    summary = str(getattr(article, "summary", "") or "")[:4000]
-    content = str(getattr(article, "content", "") or "")[:16000]
-    return "Title: " + title + "\nSummary: " + summary + "\nContent: " + content
+    """Evidence of the admission cache key: the full bounded text, summary included."""
+    return cast(str, jev_state(article))
 
 
 def evidence_hash(evidence: str) -> str:
