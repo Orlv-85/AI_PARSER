@@ -140,8 +140,8 @@ that check it.
   `brief: null` or an unavailable state, never a 500. Tests: `test_missing_snapshot_is_unavailable`,
   `test_corrupt_payload_is_unavailable_with_note`, `test_signals_read_error_keeps_page`,
   `test_page_200_with_a_corrupt_brief_row`, `test_trend_without_expected_value_and_any_render_error_keep_page`.
-- Signals never write the digest, articles or weekly tables. Tests: `test_digest_api_unchanged`
-  (API only; no test checks the tables).
+- Signals write only their own tables; the digest, articles, weekly and every other table stay
+  unchanged by a paid run with briefs and a full recompute. Tests: `test_signals_write_only_their_own_tables`.
 - `--max-usd` is the total for a run: extraction first, briefs get the remainder, at most
   `BRIEF_MAX_USD_PER_DAY` per target day. Tests: `test_max_usd_is_the_run_total`.
 - A brief failure never changes the extraction `state`, its results or the snapshots.
