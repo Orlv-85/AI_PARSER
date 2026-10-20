@@ -475,3 +475,28 @@ def test_max_usd_is_the_run_total(session, tmp_path, monkeypatch):
     assert capped["brief"]["days"] == {"2026-10-15": "ok", "2026-10-16": "skipped:cap_reached"}
     assert capped["run"]["usd"] + capped["brief"]["run"]["usd"] <= 0.50
     assert capped["brief"]["run"]["usd"] == pytest.approx((3000 * 1.32 + 500 * 3.96) / 1e6)
+
+
+SIGNAL_TABLES = frozenset({"article_signals", "daily_signal_scope", "signal_mentions",
+                           "ai_entities", "ai_entity_overrides", "daily_signal_reports",
+                           "daily_signal_briefs"})
+
+
+def other_tables(session):
+    # Every table signals does not own, including tables added later.
+    return {table.name: sorted(map(tuple, session.execute(select(table)).all()), key=repr)
+            for table in Base.metadata.sorted_tables if table.name not in SIGNAL_TABLES}
+
+
+def test_signals_write_only_their_own_tables(session, tmp_path):
+    seed(session, date(2026, 10, 15))
+    seed(session)
+    before = other_tables(session)
+    assert before["articles"] and before["news_digest_items"]
+    fake = Both()
+    report = paid(session, tmp_path, fake, backfill_days=2)
+    assert report["state"] == "ok" and fake.briefs
+    run(session, tmp_path, fake, recompute_only=True, recompute_all=True)
+    session.expire_all()
+    assert session.scalar(select(DailySignalReport.report_date).limit(1)) is not None
+    assert other_tables(session) == before
