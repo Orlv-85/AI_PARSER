@@ -283,7 +283,7 @@ function. Each rule lists the tests that check it.
 | Decision | Why |
 | --- | --- |
 | Conditional requests; 304 is a successful no-op | repeated polling of unchanged sources was the largest avoidable cost (002 US2) |
-| Conditional HTML list fetch off by default | why: unknown (002 lists it as optional, FR-004 "SHOULD") |
+| Conditional HTML list fetch off by default | optional last rollout slice; risky optimizations stay behind flags with conservative defaults (002 plan); decided 2026-10-20 (agent): keep off, two-stage dedup already skips known links, a 304 saves only one list request |
 | Two-stage HTML: dedup before article download | article download and extraction dominated run time on HTML sources (002 US3) |
 | Known-streak early stop for RSS and HTML | skip reprocessing of known items; risk of missing a late new link accepted (002 risks) |
 | Batch upsert behind a flag, off by default | fewer DB round trips; enabled only after the network changes proved stable (002 rollout) |
@@ -295,19 +295,19 @@ function. Each rule lists the tests that check it.
 | Exact path segments, not substrings; dates never decide eligibility | article slugs contain words like "about"; undated news must stay (same record) |
 | `MANAGED_LINK_SELECTORS` in code | DB-managed sources do not persist CSS options (same record) |
 | Publication date only from evidence; unknown stays unknown | the fallback to discovery time created fake publication bursts (same record) |
-| Canonical URL hash is the only identity; no similarity dedup or aliases | why: unknown (001 FR-4 planned simhash and aliases) |
-| Weights of `rank_score`, half-life of `freshness_score` | weights from 001 FR-5; why of the values: unknown |
-| Scores computed once at ingestion | why: unknown |
+| Canonical URL hash is the only identity; no similarity dedup or aliases | decided 2026-10-20 (agent): stories are grouped at read time (006 FR-005, `simhash64`), which needs one row per publisher; admission and its cache are keyed by the canonical hash |
+| Weights of `rank_score`, half-life of `freshness_score` | values from 001 FR-5, no reason stated; decided 2026-10-20 (agent): keep, recency first for a news list, no labeled data to tune them |
+| Scores computed once at ingestion | decided 2026-10-20 (agent): one stored, indexed sort key (`ix_articles_rank_score_desc`), old rows never rewritten; stored freshness reflects ingestion delay, not current age |
 | Admission is opt-in; local default off, production on | legacy behavior stays when off (admission spec); production enabled by owner decision (activation record) |
-| Screening outage pauses collection, no keyword fallback | an outage is "screening unavailable", not an article decision (admission spec); why no fallback: unknown |
+| Screening outage pauses collection, no keyword fallback | an outage is "screening unavailable", not an article decision (admission spec); a keyword score must not pass for a semantic check, the ledger replays instead (admission prompt 2026-10-10, `docs/archive/`) |
 | Durable pending ledger, replayed before the fresh fetch | unchecked candidates must not be lost; after a 304 or list rotation the feed no longer shows them (`docs/configuration.md`) |
 | Cache rejects and unresolved by evidence, model, policy, prompt | the same candidate is not paid for again while nothing changed (admission spec) |
 | Notice clears only after a fresh successful assessment | a cache-only or empty run does not prove the provider works (admission spec) |
 | Oversized input held as unresolved, no pause | one oversized article must not stop collection (commit 01bc4c2) |
 | Weekly observations before the admission gate | weekly coverage describes raw acquisition, independent of admission (admission spec) |
-| Jev failure without admission: keyword fallback, no more calls in the cycle | why: unknown |
-| RSS full text off in `scripts/auto_update_once.sh`, on in `scripts/run_daily_fetch_job.sh` | why: unknown |
-| Weekly report trigger inside the fetch run | why: unknown |
+| Jev failure without admission: keyword fallback, no more calls in the cycle | Jev only scores and never discards, keyword scoring stays the default (PR #5); decided 2026-10-20 (agent): stopping avoids a `jev_timeout_seconds` wait per item while the provider is down |
+| RSS full text off in `scripts/auto_update_once.sh`, on in `scripts/run_daily_fetch_job.sh` | the 30-minute cron helper cuts load (commit 07dd008); the daily job feeds grounded daily summaries checked against the full RSS source text (PR #17) |
+| Weekly report trigger inside the fetch run | decided 2026-10-20 (agent): the fetch runs daily, so the Monday report needs no scheduler of its own; v2 only enqueues, ingestion must not wait for providers (010 trend-spec FR-18); a failure is only logged |
 
 ## Invariants
 
