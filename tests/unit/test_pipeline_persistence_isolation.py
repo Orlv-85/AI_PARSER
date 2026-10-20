@@ -316,8 +316,54 @@ def test_coverage_attempt_records_fetch_persist_and_parser_failures(monkeypatch,
         "persist": "persist_failure", "parser": "parser_failure",
     }
     assert attempts["ok"][1] is True
+    assert attempts["fetch"][1] is True
     assert attempts["persist"][1] is False
     assert attempts["parser"][1] is False
+
+
+def test_undated_item_marks_coverage_incomplete(monkeypatch, tmp_path):
+    configs = [
+        SourceConfig(id=key, name=key, type="rss", url=f"https://example.com/{key}.xml")
+        for key in ("rss_dated", "rss_undated", "rss_updated_only")
+    ] + _html_configs("html_dated", "html_undated")
+    rss_items = {
+        "rss_dated": Article(source_key="rss_dated", title="AI update",
+                             url="https://example.com/rss_dated/1", published_at=NOW),
+        "rss_undated": Article(source_key="rss_undated", title="AI update",
+                               url="https://example.com/rss_undated/1", published_at=None),
+        "rss_updated_only": Article(
+            source_key="rss_updated_only", title="AI update",
+            url="https://example.com/rss_updated_only/1", published_at=None,
+            publication_evidence_at=NOW, publication_date_kind="updated",
+        ),
+    }
+
+    def collect(*, enabled_sources, **_kwargs):
+        return {
+            index: SimpleNamespace(items=[rss_items[config.id]]) if config.type == "rss"
+            else HtmlLinkFetchResult(links=[f"https://example.com/{config.id}/story-1"])
+            for index, config, *_ in enabled_sources
+        }, 0
+
+    def fetch_article(*, source, url, **kwargs):
+        if source.id == "html_undated":
+            return Article(source_key=source.id, title="AI update", url=url, published_at=None,
+                           content="AI is central.")
+        return _dated_article(source=source, url=url, **kwargs)
+
+    sessions = _sqlite_run(monkeypatch, tmp_path, configs, collect=collect,
+                           fetch_article=fetch_article)
+
+    summary = run_fetch_cycle(settings=_settings(), logger=getLogger("coverage"))
+
+    assert (summary.errors, summary.new) == (0, 5)
+    assert _attempts(sessions) == {
+        "rss_dated": ("success", True),
+        "rss_undated": ("parser_failure", False),
+        "rss_updated_only": ("parser_failure", False),
+        "html_dated": ("success", True),
+        "html_undated": ("parser_failure", False),
+    }
 
 
 def test_two_urls_of_one_story_become_two_articles(monkeypatch, tmp_path):

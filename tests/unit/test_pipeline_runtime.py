@@ -8,6 +8,7 @@ from app.config.settings import Settings
 from app.config.sources import SourceConfig
 from app.core.models import Article
 from app.core.pipeline import _managed_source_to_config, run_fetch_cycle
+from app.ingest.rss import RssFetchResult, _with_rss_metadata
 
 
 class _Logger:
@@ -2544,6 +2545,7 @@ def test_run_fetch_cycle_rss_conditional_disabled_sends_no_validators(monkeypatc
     configs = [SourceConfig(id="rss_stateful", name="RSS Stateful", type="rss",
                             url="https://example.com/stateful.xml")]
     rss_calls: list[tuple[object, object]] = []
+    stored: list[dict[str, object]] = []
 
     class _StatefulSourceRepo(_SourceRepo):
         def get_fetch_state(self, *, source_id: int):
@@ -2551,12 +2553,15 @@ def test_run_fetch_cycle_rss_conditional_disabled_sends_no_validators(monkeypatc
             return {"etag": '"etag-old"', "last_modified": "Sun, 22 Feb 2026 10:00:00 GMT",
                     "last_status_code": 200, "last_checked_at": None}
 
-        def update_fetch_state(self, **_kwargs) -> None:
-            pass
+        def update_fetch_state(self, **kwargs) -> None:
+            stored.append(kwargs)
 
     def _fake_fetch_rss(*_args, **kwargs):
         rss_calls.append((kwargs.get("if_none_match"), kwargs.get("if_modified_since")))
-        return []
+        return _with_rss_metadata([], RssFetchResult(
+            items=[], not_modified=False, status_code=200, etag='"etag-new"',
+            last_modified="Mon, 23 Feb 2026 10:00:00 GMT",
+        ))
 
     def _unexpected_fetch_rss_with_metadata(*_args, **_kwargs):
         raise AssertionError("conditional RSS path must not be used when disabled")
@@ -2589,3 +2594,6 @@ def test_run_fetch_cycle_rss_conditional_disabled_sends_no_validators(monkeypatc
 
     assert summary.errors == 0
     assert rss_calls == [(None, None)]
+    assert [(row["etag"], row["last_modified"], row["last_status_code"]) for row in stored] == [
+        ('"etag-new"', "Mon, 23 Feb 2026 10:00:00 GMT", 200),
+    ]

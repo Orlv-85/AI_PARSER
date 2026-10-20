@@ -72,7 +72,8 @@ function. Each rule lists the tests that check it.
 - RSS: when `fetch_conditional_rss_enabled` and the source repo keeps fetch state, the stored
   `etag` / `last_modified` are sent as `If-None-Match` / `If-Modified-Since`. A 304 is a successful
   no-op: no items are processed, the source counts in `not_modified_sources`. The response
-  validators and status are stored after each response (200 or 304). Tests:
+  validators and status are stored after each response (200 or 304), also when
+  `fetch_conditional_rss_enabled` is off (then they are stored but not sent). Tests:
   `test_run_fetch_cycle_rss_304_uses_stored_validators_and_persists_fetch_state`,
   `test_run_fetch_cycle_rss_200_persists_validators_and_processes_items`,
   `test_run_fetch_cycle_uses_rss_validators_and_handles_not_modified`,
@@ -271,13 +272,16 @@ function. Each rule lists the tests that check it.
   RSS records known items too (before the known-hash check). Tests:
   `test_rss_records_known_items_as_weekly_observations`.
 - One coverage attempt per source per run (`record_attempt`): `fetch_failure`, `persist_failure`,
-  `parser_failure` (coverage incomplete), `not_modified`, `success` or `empty`; complete only when
-  coverage is complete, acquisition did not stop and HTML did not stop early. An admission rejection
-  does not change it. Tests: `test_outage_preserves_verified_and_replays_after_list_rotation`,
+  `parser_failure` (the source coverage is incomplete), `not_modified`, `success` or `empty`;
+  complete only when coverage is complete, acquisition did not stop and HTML did not stop early. A
+  `fetch_failure` is recorded as complete. An admission rejection does not change it. Tests: `test_outage_preserves_verified_and_replays_after_list_rotation`,
   `test_ambiguity_cached_category_independent_and_policy_invalidates`,
   `test_confirmed_html_exclusion_settles_before_304`,
   `test_coverage_attempt_records_fetch_persist_and_parser_failures`,
   `test_admission_coverage_attempt_records_fetch_and_persist_failures`.
+- An undated item marks the source coverage incomplete: RSS when a feed item has no published date
+  (an updated-only date counts as none), HTML when a downloaded article page gives no publication
+  evidence. Tests: `test_undated_item_marks_coverage_incomplete`.
 - On a Monday (UTC) the run publishes the weekly report of the previous Monday-Sunday week: enqueue
   in v2 (`weekly_v2_enabled`), else the legacy report; a failure is only logged. Tests:
   `test_run_fetch_cycle_publishes_previous_monday_sunday_weekly_report_on_monday`,

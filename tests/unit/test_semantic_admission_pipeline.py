@@ -514,5 +514,4 @@ def test_admission_coverage_attempt_records_fetch_and_persist_failures(
     assert result.errors == 1 and result.new == 0
     attempts = scenario.rows(WeeklyCoverageAttempt)
     assert [row.outcome for row in attempts] == [f"{failure}_failure"]
-    if failure == "persist":
-        assert attempts[0].complete is False
+    assert attempts[0].complete is (failure == "fetch")
