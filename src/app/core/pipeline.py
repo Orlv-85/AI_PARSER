@@ -346,14 +346,6 @@ def _html_placeholder_key(settings: Settings, canonical_hash: str) -> str:
     ))
 
 
-def _settle_placeholders(
-    session: Session, *, current_key: str, old_key: str | None = None,
-) -> None:
-    settle_pending(session, key=current_key)
-    if old_key and old_key != current_key:
-        settle_pending(session, key=old_key)
-
-
 def _clear_source_validators(source_repo: SourceRepo, db_source_id: int) -> None:
     source_repo.update_fetch_state(
         source_id=db_source_id,
@@ -770,8 +762,6 @@ def _process_html_links_two_stage(
     relevance_scorer: JevRelevanceScorer | None = None,
     quality_flags: list[str] | None = None,
     admission_state: AdmissionState | None = None,
-    placeholder_key: str | None = None,
-    placeholder_hash: str | None = None,
 ) -> tuple[int, int, int, int, bool]:
     new_count = 0
     duplicate_count = 0
@@ -793,7 +783,12 @@ def _process_html_links_two_stage(
         (str(link), canonicalize_url(str(link)), canonical_url_hash(str(link)))
         for link in capped_links
     ]
+    # Stored hashes; the article loop adds each hash it stores, so in-run repeats count as known.
     known_hashes = article_repo.existing_canonical_hashes([h for _, _, h in canonical_by_link])
+    placeholder_keys = {
+        canonical_hash: _html_placeholder_key(settings, canonical_hash)
+        for _, _, canonical_hash in canonical_by_link
+    } if admission_enabled else {}
     queued_rows: list[dict[str, object]] = []
     fetcher = Fetcher(
         timeout_seconds=settings.request_timeout_seconds,
@@ -806,13 +801,12 @@ def _process_html_links_two_stage(
     try:
         if admission_enabled:
             for link, _canonical, canonical_hash in canonical_by_link:
-                ph_key = _html_placeholder_key(settings, canonical_hash)
                 if canonical_hash in known_hashes:
-                    settle_pending(article_repo.session, key=ph_key)
+                    settle_pending(article_repo.session, key=placeholder_keys[canonical_hash])
                     continue
                 upsert_pending(
                     article_repo.session,
-                    key=ph_key,
+                    key=placeholder_keys[canonical_hash],
                     url_canonical_hash=canonical_hash,
                     source_id=db_source_id,
                     payload={"kind": "html_link", "url": link},
@@ -822,16 +816,12 @@ def _process_html_links_two_stage(
                 )
 
         for link, canonical, canonical_hash in canonical_by_link:
-            ph_key = _html_placeholder_key(settings, canonical_hash) if admission_enabled else ""
+            ph_key = placeholder_keys.get(canonical_hash, "")
             if canonical_hash in known_hashes:
                 duplicate_count += 1
                 skipped_known_items += 1
                 if admission_enabled:
-                    _settle_placeholders(
-                        article_repo.session,
-                        current_key=ph_key,
-                        old_key=placeholder_key if placeholder_hash == canonical_hash else None,
-                    )
+                    settle_pending(article_repo.session, key=ph_key)
                 html_known_streak += 1
                 if 0 < html_known_streak_stop <= html_known_streak:
                     early_stop_hit = True
@@ -857,10 +847,7 @@ def _process_html_links_two_stage(
                 continue
             if item is None:
                 if exclusions:
-                    _settle_placeholders(
-                        article_repo.session, current_key=ph_key,
-                        old_key=placeholder_key if placeholder_hash == canonical_hash else None,
-                    )
+                    settle_pending(article_repo.session, key=ph_key)
                     continue
                 if quality_flags is not None:
                     quality_flags.append("parser_failure")
@@ -869,11 +856,7 @@ def _process_html_links_two_stage(
             if reason:
                 log_exclusion(str(item.url), reason)
                 if admission_enabled:
-                    _settle_placeholders(
-                        article_repo.session,
-                        current_key=ph_key,
-                        old_key=placeholder_key if placeholder_hash == canonical_hash else None,
-                    )
+                    settle_pending(article_repo.session, key=ph_key)
                 continue
             fetched_articles += 1
             _record_weekly_observation(article_repo, db_source_id, item)
@@ -894,24 +877,12 @@ def _process_html_links_two_stage(
                     canonical_hash=canonical_hash,
                     canonical_url=canonical,
                 )
+                # Screened: the body (or its decision) now holds the candidate, not the link.
+                settle_pending(article_repo.session, key=ph_key)
                 if action == "paused":
-                    _settle_placeholders(
-                        article_repo.session, current_key=ph_key,
-                        old_key=placeholder_key if placeholder_hash == canonical_hash else None,
-                    )
                     break
                 if action != "accept":
-                    _settle_placeholders(
-                        article_repo.session,
-                        current_key=ph_key,
-                        old_key=placeholder_key if placeholder_hash == canonical_hash else None,
-                    )
                     continue
-                _settle_placeholders(
-                    article_repo.session,
-                    current_key=ph_key,
-                    old_key=placeholder_key if placeholder_hash == canonical_hash else None,
-                )
             else:
                 assessment = (
                     relevance_scorer.classify(item) if relevance_scorer is not None else None
