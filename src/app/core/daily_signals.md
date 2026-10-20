@@ -18,68 +18,103 @@ how it got here. Operator commands, cost, rollback: `docs/daily-signals.md`.
 
 ## Behavior
 
+```mermaid
+flowchart LR
+  digest["Published digest of D"] --> scope["Scope: articles of D"]
+  scope --> extract["Extraction: one paid call per article, cached"]
+  extract --> evidence["Evidence: mentions with quotes"]
+  evidence --> entities["Entities: reconciliation + overrides"]
+  entities --> snapshot["Snapshot of D: New, Top stories, Spikes or Rising, Cooling, chips"]
+  snapshot --> brief["Brief of D: paid runs only"]
+  snapshot --> page["API and page /: stored data only"]
+  brief --> page
+```
+
+Rules name their limits; the numbers live in the code: fields of `Thresholds` in
+`daily_signals_compute.py`, constants of the extract and brief modules. Each rule lists the tests
+that check it.
+
 **Scope and days**
-- Only articles of the published digest of D count: digest items matched to articles by exact URL,
-  then by canonical URL hash.
-- A day is published when a digest row exists (it may have 0 items), missing otherwise; missing days
-  never count as zero attention. Complete: no items, or at least 90% of digest items extracted.
-- Digests before `AINEWS_DAILY_SIGNALS_COMPARABLE_FROM` (2026-10-10) are history only: they feed
-  "first seen" but get no snapshot.
-- Status of a day: `unavailable` (no snapshot, 0 items or nothing extracted), `partial` (day not
-  complete), `building_history` (a section still waits for history), `ready`.
+- Only articles of the published digest of D count, matched by URL, then by canonical URL hash.
+  Tests: `test_membership_exact_canonical_and_unmatched`.
+- A day with a digest row is published even with 0 items; a missing day never counts as zero
+  attention. A day is complete when at least `complete_ratio` of its items are extracted.
+  Tests: `test_missing_and_empty_days`, `test_observed_empty_days_count_as_zero_but_zero_volume_is_unusable`.
+- Days before `AINEWS_DAILY_SIGNALS_COMPARABLE_FROM` are history only: they feed "first seen", get
+  no snapshot. Tests: `test_kind_by_comparable_from`.
+- Day status: `unavailable`, `partial`, `building_history`, `ready`. Tests: `test_status_precedence`.
 
 **Extraction and entities**
-- One provider call per in-scope article: named entities with type, vendor, role and an "is new"
-  judgment with a source quote, the main event type and a novelty flag. Names and quotes must occur in
-  the article text; a quote that dates the release before the article clears "new". Cached per
-  article, content hash and version.
-- Input kinds (`input` in the extraction provenance): `full` (content of at least 300 characters),
-  `title_summary` (title and RSS summary without HTML, at most 1,500 characters), `title_only`. A
-  title-only article usually yields no entities but still counts as processed for day coverage.
-- Every mention is stored as evidence that survives article retention. Entities are derived from all
-  evidence by deterministic reconciliation plus operator overrides. Entities with conflicting vendors
-  (`needs_review`) are excluded from New, Rising and spikes.
+- One provider call per in-scope article, cached by content hash and `EXTRACTION_VERSION`.
+  Tests: `test_one_call_per_article_then_cached`, `test_cache_by_content_hash_and_failures`.
+- Names and quotes must occur in the article text; a quote that dates the release before the
+  article clears "new" (`is_retrospective`). Tests: `test_entity_shape_and_grounding`,
+  `test_retrospective_quote_clears_is_new`.
+- Short content falls back to title and RSS summary (`input_kind`); a title-only article still
+  counts as processed. Tests: `test_short_content_falls_back_to_title_and_summary`,
+  `test_history_article_without_body_uses_summary_and_records_input_kind`.
+- Mentions are evidence that survives article retention; entities are a pure function of evidence
+  and operator overrides (`reconcile`). Tests: `test_reconcile_is_permutation_invariant`,
+  `test_prune_keeps_evidence_and_first_seen_then_purge`, `test_first_seen_independent_of_insertion_order`.
+- Entities with conflicting vendors (`needs_review`) never enter New, Rising or spikes.
+  Tests: `test_person_other_and_question_entities_never_new`, `test_question_entities_excluded_from_trends`.
 
-**Sections**
-- **New**: an entity first seen in our corpus on D that an article of D presents as newly announced.
-  Confirmed (at least 2 publishers) first with "N outlets", then single-source items muted with
-  "via <publisher>"; 8 items, early items ordered by type: model, hardware, benchmark, dataset,
-  technique, company, product, policy. Each item has one line (at most 140 characters, no provider
-  call): the first digest-summary sentence of its articles that names it and has a launch or "is a"
-  verb; a naming sentence when the novelty quote has fewer than 8 words; else the quote in quotation
-  marks. "History: N complete days." while fewer than 30 complete days precede D.
-- **Not New**: people and "other"; packaging variants of a known model (sizes, quantization,
-  instruct/base); a name that does not look like a name (needs an uppercase letter or digit, or one
-  hyphen/dot-joined token); a name already in an earlier published digest item; a name the digest
-  text frames as not yet released (preview, beta, waitlist, coming soon and similar). A single
-  common-word name is refused lexically only when its vendor appears in the same item. A new named
-  version and a GA release after a preview are New. Refused items stay in the stored snapshot as
-  `new_suppressed`, not in the API response.
-- `variant of X` only for a specific earlier entity of the same type, never a family word (GPT,
-  Claude, Gemini, Llama and similar).
-- **Top stories**: clusters of articles about one event with at least 2 publishers, at most 5.
-- **Rising / Cooling**: last 7 days against the previous 7 with a volume-adjusted expectation; needs
-  two windows of at least 6 complete days each. Cooling only then, collapsed by default.
-- **Spikes** (until Rising is usable): D's count against the mean of at least 3 complete trailing days
-  with at least 10 digest items. A spike that duplicates a shown item (top story with at least half of
-  its articles, a New item, an earlier spike of that company) folds into it as "spike: <names>"; a
-  company spike with no story holding 2 of its articles is dropped. Kept spikes show the label of D's
-  main story. Folded and dropped spikes are kept in the snapshot as `spikes_folded`; an empty card is
-  hidden and its note moves to the status line.
-- **Event chips**: stories per hard event type (`HARD_EVENTS`), the rest as "+N more"; display only.
+**New**
+- New: first seen in our corpus on D and presented as newly announced by an article of D (primary
+  mention with `is_new` and a quote). Tests: `test_new_needs_primary_and_is_new_in_one_article`.
+- Confirmed items (`confirmed_publishers`) first, then single-source ones in `EARLY_TYPE_ORDER`; at
+  most `new_max`; a history note while fewer than `history_note_days` complete days precede D.
+  Tests: `test_us1_confirmed_early_alias_and_history_note`, `test_cp1_new_ordering_early_models_before_products`.
+- Not New: people and "other"; packaging variants of a known model (`PACKAGING`); names that do not
+  look like names (`proper_name`); names already in an earlier published digest item
+  (`LexicalHistory`). An earlier text that frames the name as not yet released (`NOT_RELEASED`)
+  does not count, so a GA after a preview stays New. A single common-word name is refused this way
+  only when its vendor appears in the same item. Refused items stay in the snapshot as
+  `new_suppressed`. Tests: `test_packaging_variant_of_known_model_not_new`,
+  `test_generic_lowercase_feature_names_are_not_new`, `test_new_suppressed_by_title_or_summary_history`,
+  `test_lexical_hit_in_not_yet_released_text_is_ignored`, `test_parenthetical_prerelease_does_not_suppress_ga`,
+  `test_single_token_needs_the_vendor_name_in_the_same_item`.
+- Each item has one line without a provider call (`one_liner`): a digest-summary sentence that names
+  it with a launch or "is a" verb, else the novelty quote; at most `one_liner_max` characters.
+  Tests: `test_one_liner_rules`, `test_one_liners_of_the_40_dry_run_items`.
+- `variant of X` only for a specific earlier entity (`specific_variant`), never a family word
+  (`FAMILY_STOPWORDS`). Tests: `test_variant_of_only_for_a_specific_earlier_entity`.
+
+**Other sections**
+- Top stories: clusters of one event with at least `top_min_publishers`, at most `top_max`.
+  Tests: `test_us2_one_story_per_event_and_ordering`, `test_fixture_stories`.
+- Rising and Cooling: last 7 days against the previous 7 with a volume-adjusted expectation; both
+  windows need `window_min_complete` complete days. Cooling only then, collapsed by default.
+  Tests: `test_rising_and_cooling_with_usable_windows`, `test_windows_need_six_complete_days_and_comparable_range`.
+- Spikes, until Rising is usable: D against the mean of complete trailing days. A spike that
+  duplicates a shown item folds into it; a company spike without a story is dropped; kept spikes
+  show the label of D's main story. Folded and dropped ones stay in the snapshot as `spikes_folded`.
+  Tests: `test_spikes_from_complete_trailing_days`, `test_spikes_fold_into_story_by_entity_label_and_vendor`,
+  `test_spike_reason_line`,
+  `test_org_spike_folds_into_new_item_or_earlier_spike_by_vendor`,
+  `test_diffuse_company_spike_dropped_and_reason_is_largest_story`.
+- Event chips: stories per hard event type (`HARD_EVENTS`), the rest as "+N more"; display only.
+  Tests: `test_top_stories_events_and_status`, `test_d3_one_liners_spike_tags_chips_and_hidden_spikes`.
+- Quiet day (fewer than `quiet_items` items or no multi-publisher story): a template opening line
+  with the counts, then only the cards that have items. Tests: `test_quiet_flag_thresholds_and_methodology`,
+  `test_quiet_day_render`.
 
 **Brief**
-- After the snapshots a paid run writes "In brief" for each target day: one call with the snapshot of
-  D and the digest summaries of the referenced articles (at most 12,000 bytes; quiet day: every
-  digest item, max 30). 3-5 sentences, 1-2 on a quiet day, each with numbered source links and the
-  note "Written by AI from the linked articles; check the sources."
-- Quiet day (fewer than 20 digest items or no multi-publisher story): an app-written opening line
-  with the counts, then the brief, chips and only the cards that have items.
-- The answer is checked mechanically: known article ids, an exact 5-40 word quote from a cited
-  article, numbers and capitalized names present in the cited text, one sentence per story. An
-  invalid answer gets one recovery attempt, then the day is stored `invalid` and shows no brief.
+- A paid run writes one brief per target day from the snapshot and the digest summaries of D
+  (`brief_packet`, bounded by `PACKET_MAX_BYTES`; on a quiet day the digest items, at most
+  `QUIET_ARTICLES_MAX`). Tests: `test_packet_shrinks_summaries_to_the_byte_cap`,
+  `test_quiet_packet_takes_at_most_30_digest_items_and_digest_publisher`.
+- The answer is checked mechanically (`parse_brief`): known article ids, an exact quote, numbers and
+  names present in the cited text, one sentence per story, 3-5 sentences (1-2 on a quiet day).
+  Shown with numbered source links and an AI note. Tests: `test_sentence_codes`,
+  `test_answer_level_codes`, `test_grounding_allowances`, `test_brief_rendered_escaped_with_http_links_and_ai_note`.
+- An invalid answer gets one recovery attempt, then the day is stored `invalid` and shows no brief.
+  Tests: `test_invalid_answer_recovers_or_is_stored_invalid`, `test_invalid_or_unreadable_brief_is_null`.
+- A brief is keyed by `input_hash`: the same input is never paid twice, a changed snapshot is
+  regenerated on the next paid run. Tests: `test_one_day_brief_then_cached_then_regenerated`,
+  `test_input_hash_changes_with_packet_version_and_model`.
 - Target days: the run's days with a usable snapshot, plus D-1 in a one-day run when D-1 has no
-  current `ok` brief.
+  current `ok` brief. Tests: `test_backfill_range_and_one_day_catch_up`.
 
 ## Decisions
 
@@ -101,15 +136,20 @@ how it got here. Operator commands, cost, rollback: `docs/daily-signals.md`.
 
 ## Invariants
 
-- Page loads and the API never call a provider; a missing or unreadable snapshot/brief gives
-  `brief: null` or an unavailable state, never a 500.
-- The digest, articles and weekly tables are never written by signals.
+- Page loads and the API never call a provider; a missing or unreadable snapshot or brief gives
+  `brief: null` or an unavailable state, never a 500. Tests: `test_missing_snapshot_is_unavailable`,
+  `test_corrupt_payload_is_unavailable_with_note`, `test_signals_read_error_keeps_page`,
+  `test_page_200_with_a_corrupt_brief_row`, `test_trend_without_expected_value_and_any_render_error_keep_page`.
+- Signals never write the digest, articles or weekly tables. Tests: `test_digest_api_unchanged`
+  (API only; no test checks the tables).
 - `--max-usd` is the total for a run: extraction first, briefs get the remainder, at most
-  `BRIEF_MAX_USD_PER_DAY` per target day.
+  `BRIEF_MAX_USD_PER_DAY` per target day. Tests: `test_max_usd_is_the_run_total`.
 - A brief failure never changes the extraction `state`, its results or the snapshots.
+  Tests: `test_brief_failure_never_breaks_the_run`, `test_ledger_stop_skips_briefs_and_keeps_extraction`.
 - Server and client renderers produce the same markup; change both together.
-- Brief text is validated mechanically (ids, exact quote, numbers, capitalized names, one sentence
-  per story); meaning is not checked.
+  Tests: `test_client_renderer_matches_server_classes` (shared classes, texts and `HARD_EVENTS`;
+  the full markup is not compared).
+- Brief text is validated mechanically; meaning is not checked.
 
 # Code map
 
@@ -189,8 +229,8 @@ twice; a row with the same hash is reused even when `invalid`.
 
 ## Tests
 
-`tests/unit/test_daily_signals_*.py` (extract, entities, overrides, compute, brief, repo, migration,
-ledger, run), `test_cli_daily_signals.py`, `test_web_daily_signals_api.py`, `test_web_public_digest.py`;
-brief fixtures in `tests/fixtures/daily_signals/brief/`. Tests never call a provider
+Per rule: see Behavior and Invariants. Files: `tests/unit/test_daily_signals_*.py`,
+`test_cli_daily_signals.py`, `test_web_daily_signals_api.py`, `test_web_public_digest.py`; brief
+fixtures in `tests/fixtures/daily_signals/brief/`. Tests never call a provider
 (`httpx.MockTransport`). PostgreSQL integration runs only with `AINEWS_TEST_POSTGRES_URL` (see
 `docs/troubleshooting.md`).
