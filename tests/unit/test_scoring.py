@@ -1,5 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from app.core.models import Article
 from app.core.scoring import ai_relevance_score, freshness_score, rank_score
 
@@ -29,9 +31,8 @@ def test_freshness_decay_uses_half_life() -> None:
 
 
 def test_rank_score_combines_signal_weights() -> None:
-    score = rank_score(relevance=0.8, freshness=0.9, source_weight=0.7, alias_count=3)
-    assert 0.0 <= score <= 1.0
-    assert score > 0.8
+    score = rank_score(relevance=0.8, freshness=0.9, source_weight=0.7)
+    assert score == pytest.approx(0.6 * 0.9 + 0.3 * 0.8 + 0.1 * 0.7)
 
 
 def test_ai_keyword_uses_word_boundary() -> None:

@@ -1,5 +1,4 @@
 import re
-from dataclasses import dataclass
 from hashlib import sha1
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
@@ -42,21 +41,3 @@ def simhash64(value: str) -> int:
 def hamming_distance(left: int, right: int) -> int:
     return (left ^ right).bit_count()
 
-
-@dataclass(frozen=True)
-class DedupCandidate:
-    article_id: int
-    simhash: int
-
-
-def find_duplicate(
-    *,
-    content: str,
-    candidates: list[DedupCandidate],
-    threshold: int = 6,
-) -> int | None:
-    content_hash = simhash64(content)
-    for candidate in candidates:
-        if hamming_distance(content_hash, candidate.simhash) <= threshold:
-            return candidate.article_id
-    return None

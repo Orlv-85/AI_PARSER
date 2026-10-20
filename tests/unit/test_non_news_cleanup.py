@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.config.sources import SourceConfig
 from app.core.canonicalize import canonical_url_hash, canonicalize_url
-from app.storage.models_sql import Base
+from app.storage.models_sql import ArticleAlias, Base
 from app.storage.non_news_cleanup import (
     EXPORT_TABLES,
     build_cleanup_plan,
@@ -37,7 +37,8 @@ def test_dry_run_dependencies_and_restore_roundtrip(tmp_path) -> None:
                                              url_canonical_hash=canonical_url_hash(url),
                                              published_at=datetime.now(UTC), content=content)
             if path == "about":
-                repo.add_alias(article_id=article.id, source_id=source.id, url=url)
+                session.add(ArticleAlias(article_id=article.id, source_id=source.id, url=url,
+                                         discovered_at=datetime.now(UTC)))
         session.commit()
     export = json.loads(json.dumps(export_database(database_url), default=str))
     # Frozen payloads refer to articles by URL, prefixed ID or canonical hash.

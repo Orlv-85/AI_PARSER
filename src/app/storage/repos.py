@@ -481,39 +481,6 @@ class ArticleRepo:
         self.session.flush()
         return article, True
 
-    def add_alias(
-        self,
-        *,
-        article_id: int,
-        source_id: int,
-        url: str,
-        discovered_at: datetime | None = None,
-    ) -> ArticleAlias:
-        alias = ArticleAlias(
-            article_id=article_id,
-            source_id=source_id,
-            url=url,
-            discovered_at=discovered_at or datetime.now(UTC),
-        )
-        self.session.add(alias)
-        self.session.flush()
-        return alias
-
-    def merge_alias(
-        self,
-        *,
-        existing_article_id: int,
-        source_id: int,
-        url: str,
-        discovered_at: datetime | None = None,
-    ) -> ArticleAlias:
-        return self.add_alias(
-            article_id=existing_article_id,
-            source_id=source_id,
-            url=url,
-            discovered_at=discovered_at,
-        )
-
     def query_top(
         self,
         *,

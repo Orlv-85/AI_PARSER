@@ -1,6 +1,6 @@
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from importlib import import_module
 from typing import Any, Literal, cast
 from urllib.parse import urljoin
@@ -170,22 +170,6 @@ def extract_article_text(html_content: str, url: str, strategy: str | None = Non
         cleaned = lxml_html.fromstring(summary).text_content().strip()
         if cleaned:
             return cast(str, cleaned)
-    return None
-
-
-def publication_date_evidence(article_html: str) -> datetime | None:
-    tree = lxml_html.fromstring(article_html)
-    candidates = tree.xpath(
-        '//meta[@property="article:published_time" or @itemprop="datePublished" '
-        'or @name="datePublished"]/@content | //time[@itemprop="datePublished"]/@datetime'
-    )
-    for value in candidates:
-        try:
-            parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-            if parsed.tzinfo is not None:
-                return parsed.astimezone(UTC)
-        except ValueError:
-            continue
     return None
 
 

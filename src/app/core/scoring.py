@@ -87,16 +87,13 @@ def rank_score(
     relevance: float,
     freshness: float,
     source_weight: float,
-    alias_count: int = 0,
 ) -> float:
     bounded_relevance = min(max(relevance, 0.0), 1.0)
     bounded_freshness = min(max(freshness, 0.0), 1.0)
     bounded_source_weight = min(max(source_weight, 0.0), 1.0)
-    alias_bonus = min(alias_count, 10) * 0.01
     return min(
         1.0,
         0.6 * bounded_freshness
         + 0.3 * bounded_relevance
-        + 0.1 * bounded_source_weight
-        + alias_bonus,
+        + 0.1 * bounded_source_weight,
     )

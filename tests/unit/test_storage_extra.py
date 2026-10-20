@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config.sources import SourceConfig
 from app.storage import db
-from app.storage.models_sql import Base, Source
+from app.storage.models_sql import ArticleAlias, Base, Source
 from app.storage.repos import ArticleRepo, SourceRepo
 
 
@@ -128,15 +128,6 @@ def test_source_repo_and_article_repo_paths() -> None:
     )
     assert is_new_again is False
     assert same.id == article.id
-
-    alias = article_repo.add_alias(article_id=article.id, source_id=source.id, url="https://alt")
-    alias2 = article_repo.merge_alias(
-        existing_article_id=article.id,
-        source_id=source.id,
-        url="https://alt2",
-    )
-    assert alias.article_id == article.id
-    assert alias2.url == "https://alt2"
 
     old_time = now - timedelta(days=10)
     article_repo.insert_article(
@@ -513,11 +504,12 @@ def test_prune_older_than_and_count() -> None:
         url_canonical_hash="pr2",
         published_at=now - timedelta(days=150),
     )
-    article_repo.add_alias(
+    session.add(ArticleAlias(
         article_id=old.id,
         source_id=source.id,
         url="https://example.com/old-prune/alias",
-    )
+        discovered_at=now,
+    ))
     session.commit()
 
     assert article_repo.count_older_than(older_than_days=100) == 1

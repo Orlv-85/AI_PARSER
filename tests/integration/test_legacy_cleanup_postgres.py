@@ -22,7 +22,7 @@ from app.storage.legacy_cleanup import (
     read_tables,
     restore_cleanup,
 )
-from app.storage.models_sql import Base
+from app.storage.models_sql import ArticleAlias, Base
 from app.storage.repos import ArticleRepo, SourceRepo
 
 URL = os.getenv("AINEWS_TEST_POSTGRES_URL")
@@ -44,8 +44,9 @@ def cleanup_database():
             source_id=source.id, title="About us", url="https://example.com/about",
             url_canonical="https://example.com/about", url_canonical_hash="h" * 64,
             published_at=datetime.now(UTC), content="Our company mission " * 30)
-        ArticleRepo(session).add_alias(article_id=article.id, source_id=source.id,
-                                       url="https://example.com/about-us")
+        session.add(ArticleAlias(article_id=article.id, source_id=source.id,
+                                 url="https://example.com/about-us",
+                                 discovered_at=datetime.now(UTC)))
         upsert_pending(session, key="older-pending", url_canonical_hash="h" * 64,
                        source_id=source.id, payload={"kind": "html_link", "url": article.url},
                        evidence_hash="", policy_version="old", model="jev-1.13.0")

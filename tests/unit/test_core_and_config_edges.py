@@ -52,10 +52,10 @@ def test_freshness_and_rank_edge_cases() -> None:
     assert freshness_score(naive, now=now, half_life_hours=0.1) == 1.0
     assert 0.0 < freshness_score(now, half_life_hours=24.0) <= 1.0
 
-    score = rank_score(relevance=2.0, freshness=-1.0, source_weight=5.0, alias_count=99)
-    assert score == 0.5
+    score = rank_score(relevance=2.0, freshness=-1.0, source_weight=5.0)
+    assert score == pytest.approx(0.4)
 
-    zeroed = rank_score(relevance=-1.0, freshness=-1.0, source_weight=-1.0, alias_count=0)
+    zeroed = rank_score(relevance=-1.0, freshness=-1.0, source_weight=-1.0)
     assert zeroed == 0.0
 
 
