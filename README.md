@@ -42,7 +42,7 @@ For an existing database, run `./venv1/bin/alembic upgrade head` first.
 Index of all docs: [docs/README.md](docs/README.md). Code docs live next to the code:
 
 - [System overview](src/app/README.md) - packages, entry points, list of code docs.
-- [Daily AI Signals code map](src/app/core/daily_signals.md) - flow, modules, tables, versions, where to change what.
+- [Daily AI Signals](src/app/core/daily_signals.md) - behavior, decisions, invariants, code map.
 
 General:
 
@@ -51,7 +51,7 @@ General:
 - [CLI usage](docs/cli.md) - web onboarding, fetch/cron, rollout knobs, search, MCP server, prune.
 - [Weekly attention analytics v2](docs/weekly-analytics.md) - worker, budgets, audit export, rollback.
 - [Article re-enrichment](docs/article-reenrichment.md) - implementation and operator guide.
-- [Daily AI Signals](docs/daily-signals.md) - signals block on `/`, methodology, operator commands, costs, rollback.
+- [Daily AI Signals operator guide](docs/daily-signals.md) - operator commands, costs, rollback.
 - [Troubleshooting](docs/troubleshooting.md) - known failures (flaky tests, local env) with causes and fixes.
 
 ## Publishing digests over HTTP (operators)

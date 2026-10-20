@@ -51,12 +51,27 @@ When working in this repo, optimize for small, testable changes that preserve ex
 
 ## Feature Docs Next To Code
 
-- Each feature has a dry technical doc next to its main module: `<main_module>.md` (example:
-  `src/app/core/daily_signals.md`). Content: flow, modules, tables, versions, invariants, where to
-  change what, tests. Operator guides stay in `docs/`.
-- Header: `<!-- code-doc` / `module: <path>` / `covers:` / `  - <glob>` / `-->`. The main module's
-  docstring names the doc. Register it in `docs/README.md`, `README.md` and `src/app/README.md`.
-- Update the doc in the same change as behavior, structure or names. New features ship with it.
+Markdown in `src/` is source, not documentation (Carson Gross, "Markdown in /src",
+https://htmx.org/essays/markdown-in-src/): the feature doc holds the intended current behavior, and
+code and tests follow it.
+
+- Each feature has a doc next to its main module: `<main_module>.md` (example:
+  `src/app/core/daily_signals.md`). The main module's docstring names it.
+- Sections, short and dry:
+  - Behavior - what the feature does and guarantees now;
+  - Decisions - decision and why, one or two lines each, no history;
+  - Invariants;
+  - Code map - flow, modules, tables, versions, where to change what;
+  - Tests.
+  Operator commands stay in `docs/`; do not repeat Behavior there.
+- Order of work: a behavior change starts in the doc. A feature plan edits the doc before the code;
+  code and tests are derived from it; the doc ends up matching the code in the same change.
+- `specs/<NNN>/` is the process (proposal, plan, tasks, records). When a feature ships, its lasting
+  intent moves into the doc; the spec stays as history and is not kept current.
+- Human curated: an agent drafts or edits a doc only within its task, the owner reviews it; no bulk
+  generation of docs. Older features get a doc when they are next changed.
+- Header: `<!-- code-doc` / `module: <path>` / `covers:` / `  - <glob>` / `-->`. Register the doc in
+  `docs/README.md`, `README.md` and `src/app/README.md`.
 - Checked by `scripts/check_code_docs.py`: pytest fails on stale names in a doc; CI fails when covered
   files change without the doc (opt out: commit line `Docs-Skip: <reason>`).
 
