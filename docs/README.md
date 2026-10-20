@@ -41,4 +41,5 @@ Dated records (`prompt-<task>-<date>.md`, `*-review-*`, `*-results-*`, `*-report
 - [archive/2026-10/](archive/2026-10/) - re-enrichment, semantic admission, cleanups, audits;
   [archive/2026-10-10-12/](archive/2026-10-10-12/README.md) - session materials of Oct 10-12.
 
-Feature specs live in `specs/` (one root); `.specify/` holds only Spec Kit tooling.
+Feature specs live in `specs/` (one root); `.specify/` holds the Spec Kit templates (format of new
+specs) and Codex-era tooling kept for history.
