@@ -41,6 +41,17 @@ When working in this repo, optimize for small, testable changes that preserve ex
 - Do not edit unrelated files just because they are nearby.
 - Do not overwrite user changes in a dirty worktree.
 
+## Owner And Questions
+
+- The owner takes part minimally: design questions and doc reviews go to another session or model,
+  not to the owner.
+- Never settle an open question silently. When a question comes up (design choice, missing reason,
+  doubtful or dead code, a change of what readers see or what is paid), always notify the owner in
+  the reply: one line per question, how it was settled (found with source / decided by the agent)
+  or, if it needs the owner, a yes/no question with a recommendation.
+- Only product questions (what readers see) and money questions (paid calls, budgets) wait for the
+  owner's answer; everything else is decided by the agent and reported.
+
 ## Code Changes
 
 - Use `apply_patch` for manual file edits.
@@ -70,8 +81,10 @@ code and tests follow it.
   code and tests are derived from it; the doc ends up matching the code in the same change.
 - `specs/<NNN>/` is the process (proposal, plan, tasks, records). When a feature ships, its lasting
   intent moves into the doc; the spec stays as history and is not kept current.
-- Human curated: an agent drafts or edits a doc only within its task, the owner reviews it; no bulk
-  generation of docs. Older features get a doc when they are next changed.
+- Curated, not generated: an agent drafts or edits a doc only within its task, and a different
+  session or model reviews it; no bulk generation of docs. Older features get a doc when they are
+  next changed. A "why" that no source states is written as "decided <date> (agent): <reason>",
+  never as history, and the owner is notified (see "Owner And Questions").
 - Header: `<!-- code-doc` / `module: <path>` / `covers:` / `  - <glob>` / `-->`. Register the doc in
   `docs/README.md`, `README.md` and `src/app/README.md`.
 - Checked by `scripts/check_code_docs.py`: pytest fails on stale names in a doc (code names in
