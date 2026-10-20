@@ -1,64 +1,60 @@
 {
   "title": "Coordinator state for the next session",
   "created": "2026-10-20",
+  "updated": "2026-10-20 (after PR #62)",
   "role": "Coordinator: plans, writes prompts for other sessions, reviews their PRs, merges. Does not write feature code itself.",
   "owner_rules": [
     "Owner writes Russian, takes part minimally (AGENTS.md 'Owner And Questions'); design questions go to another session or model.",
-    "Always tell the owner about open questions: one line each, settled how, or a yes/no question with a recommendation.",
+    "Always tell the owner about open questions: one line each, settled how, or a yes/no question with a recommendation; explain a product question in plain words (what readers see), not in code terms.",
     "Coordinator may merge docs and test PRs itself after review and green CI.",
     "Code-behavior PRs: merge only with the owner's yes.",
     "Tags v0.1.NNN trigger deploy: only on the owner's request. Do not watch the deploy unless asked.",
     "Prod (ssh ai-news) is read-only; any write needs the owner's yes.",
     "Work in git worktrees from origin/master; no git writes in the main folder. venv1 is editable on the main folder: in a worktree run checks with PYTHONPATH=src ../AI_PARSER/venv1/bin/...",
-    "Docs-only PRs skip the full gate (say so in the PR). Merge with gh pr merge --merge."
+    "Docs-only PRs skip the full gate (say so in the PR). Merge with gh pr merge --merge.",
+    "Independent tasks may run in parallel sessions; give the owner the exact launch line for each."
   ],
   "state": {
-    "master": "1f05f8c (PR #58)",
-    "last_tag": "v0.1.108 (b2461df); later merges #52-#58 are docs and tests only",
-    "open_prs": "none",
-    "code_docs": ["src/app/core/daily_signals.md (reference format)", "src/app/core/pipeline.md (ingestion, written before refactoring)"],
+    "master": "23f753f (PR #62)",
+    "last_tag": "v0.1.108 (b2461df); not deployed since: #60 (Fetcher close, /admin sorted by date) and #62 (pipeline refactor, was_cached fix) change code; the rest is docs and tests",
+    "open_prs": "this docs PR only",
+    "code_docs": ["src/app/core/daily_signals.md (reference format)", "src/app/core/pipeline.md (ingestion; every rule has a test since PR #61)"],
     "spec_format": "Spec Kit templates in .specify/templates/; .specify/scripts, .codex/prompts/speckit.* and constitution.md are history"
   },
   "decided_2026_10_20": [
     "rank_score is a legacy sort key; no read-time freshness (pipeline.md Decisions, PR #58).",
-    "Weekly v2 keep-or-delete is decided only when weekly work starts."
+    "Weekly v2 keep-or-delete is decided only when weekly work starts.",
+    "Owner yes: close the Fetcher, /admin defaults to sort by date (PR #60); API default sort stays rank.",
+    "Owner yes: keep the was_cached fix (daily enrichment: the pause notice no longer clears on an in-cycle cache hit) and merge PR #62."
+  ],
+  "done_2026_10_20": [
+    "P1 tests for the 14 untested pipeline rules: PR #61.",
+    "P2 small fixes: PR #60.",
+    "P3 pipeline refactor: PR #62 (src -622/+188).",
+    "P4 docs/cli.md AUTO_UPDATE default: this docs PR.",
+    "Digest 2026-10-19: daily_signal_reports and daily_signal_briefs have 10-19 (checked on prod, read-only)."
   ],
   "next": [
     {
-      "id": "P1",
-      "title": "Tests for pipeline rules marked 'no test' in src/app/core/pipeline.md",
-      "how": "Separate session, tests only, no code change; update the doc's Tests lines. Coordinator reviews and merges.",
-      "status": "todo, first"
+      "id": "R1",
+      "title": "Release v0.1.109 with #60 and #62",
+      "status": "only on the owner's request"
     },
     {
-      "id": "P2",
-      "title": "Small behavior fixes",
+      "id": "F1",
+      "title": "Pipeline findings left out of P3 (behavior changes, need a decision first)",
       "items": [
-        "Close the Fetcher created in _fetch_source_items (with Fetcher(...)); today it leaks connections.",
-        "Admin news list (/admin): default sort by date instead of rank."
+        "'fetched' counts different things per path (PR #62 description).",
+        "No source_fetch_finished log line for a failed fetch with admission off.",
+        "FetchSummary.source_count counts all sources after a pause.",
+        "fetch_failure is recorded as complete coverage (weekly; decide with weekly work).",
+        "Daily Jev text still repeated in reenrich_pilot.py, weekly_input.py, weekly_frozen.py; getattr(settings) in jev_relevance_scorer."
       ],
-      "status": "waiting for the owner's yes (asked 2026-10-20, recommended yes)"
-    },
-    {
-      "id": "P3",
-      "title": "Refactor pipeline.py without behavior change, after P1",
-      "items": [
-        "Remove dead code listed in PR #54 report.",
-        "One builder for the text sent to Jev.",
-        "was_cached check, test-only branches, duck typing.",
-        "pipeline.md must match the code in the same PR (CI checks it)."
-      ],
-      "how": "Separate session with a prompt file in docs/; coordinator reviews; needs the owner's yes to merge.",
-      "status": "todo"
-    },
-    {
-      "id": "P4",
-      "title": "docs/cli.md says AUTO_UPDATE is off by default, scripts/deploy_prod.sh defaults AUTO_UPDATE_ENABLED=1",
-      "status": "todo, docs fix"
+      "status": "backlog; none is a product or money question so far"
     }
   ],
   "carried_unverified": [
-    "From docs/prompt-coordinator-handoff-2026-10-20.md (older coordinator): digest 2026-10-19 republish check, Rising/Cooling check on / after 2026-10-23, DeepSeek bill vs ledger. Verify before acting.",
+    "From docs/archive/2026-10/prompt-coordinator-handoff-2026-10-20.md (older coordinator): Rising/Cooling check on / after 2026-10-23, DeepSeek bill vs ledger. Verify before acting.",
     "Backlog: docs/backlog/backlog-todo.json (B1 off-site backups first)."
   ]
 }

@@ -69,7 +69,7 @@ Example `crontab` entry (adjust paths/venv as needed):
 Notes:
 - The script writes logs to stdout/stderr (cron-compatible).
 - Overlapping cron runs are not ideal (extra fetch work/load). Article deduplication prevents duplicate rows, but prefer schedules that avoid overlap.
-- `scripts/deploy_prod.sh` can install/update a managed cron entry automatically on the server (default disabled) using Docker Compose + `10/4`, with RSS full-text extraction disabled by default for cron (`AUTO_UPDATE_RSS_EXTRACT_FULL_TEXT=0`).
+- `scripts/deploy_prod.sh` schedules the daily fetch on the server (`AUTO_UPDATE_ENABLED=1` by default; `0` disables it). With the default `AINEWS_DAILY_SCHEDULER=systemd` the fetch runs from the `ai-news-daily-fetch.timer` systemd timer (`scripts/install_daily_timers.sh`) and the managed cron block is removed; with `AINEWS_DAILY_SCHEDULER=cron` it installs a managed cron entry (`AUTO_UPDATE_CRON_SCHEDULE`, default `0 1 * * *`) using Docker Compose + `10/4`, with RSS full-text extraction disabled by default for cron (`AUTO_UPDATE_RSS_EXTRACT_FULL_TEXT=0`).
 - Deploy-time cron knobs: `AUTO_UPDATE_ENABLED`, `AUTO_UPDATE_CRON_SCHEDULE`, `AUTO_UPDATE_LOG_PATH`, `AUTO_UPDATE_CONCURRENCY_LIMIT`, `AUTO_UPDATE_FULLTEXT_CONCURRENCY_LIMIT`, `AUTO_UPDATE_RSS_EXTRACT_FULL_TEXT`.
 
 ## Fetch optimization rollout (recommended for production)
