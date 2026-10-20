@@ -2,7 +2,6 @@ import json
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from logging import getLogger
-from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -16,6 +15,7 @@ from app.core.jev import JevRelevanceScorer
 from app.core.models import Article
 from app.core.pipeline import run_fetch_cycle
 from app.ingest.html import HtmlListPageResult, fetch_html_article
+from app.ingest.rss import RssFetchResult, _with_rss_metadata
 from app.storage.admission import PAUSED_MESSAGE, set_collection_paused
 from app.storage.models_sql import (
     AdmissionDecision,
@@ -96,18 +96,20 @@ class Scenario:  # pylint: disable=too-many-instance-attributes
         assert len(sources) == 1, "Enabled admission must stop before fetching later sources"
         idx, config, *_ = sources[0]
         self.fetches.append(config.id)
-        if self.not_modified:
-            result = SimpleNamespace(not_modified=True, status_code=304, items=[])
-        elif self.source_type == "two_stage_html":
+        status, etag, modified = (
+            (304, None, None) if self.not_modified else (200, "new-etag", "new-modified"))
+        items = [] if self.not_modified else self.items
+        result: object
+        if self.source_type == "two_stage_html":
             result = HtmlListPageResult(
-                links=[str(item.url) for item in self.items],
-                status_code=200, etag="new-etag", last_modified="new-modified",
+                links=[str(item.url) for item in items], not_modified=self.not_modified,
+                status_code=status, etag=etag, last_modified=modified,
             )
         else:
-            result = SimpleNamespace(
-                items=self.items, status_code=200,
-                etag="new-etag", last_modified="new-modified",
-            )
+            result = _with_rss_metadata(items, RssFetchResult(
+                items=items, not_modified=self.not_modified, status_code=status, etag=etag,
+                last_modified=modified,
+            ))
         return {idx: result}, 0
 
     def fetch_body(self, *, url, **_kwargs):

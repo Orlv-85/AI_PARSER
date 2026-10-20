@@ -192,7 +192,7 @@ def _inline_fetches(monkeypatch) -> tuple[list[str], list[int]]:
 
     def fetch(*, config, **_kwargs):
         order.append(config.id)
-        return []
+        return _rss_result([]) if config.type == "rss" else HtmlListPageResult(links=[])
 
     monkeypatch.setattr("app.core.pipeline._fetch_source_items", fetch)
     monkeypatch.setattr("app.core.pipeline.ThreadPoolExecutor", _Executor)
@@ -273,8 +273,8 @@ def test_run_fetch_cycle_counts_new_duplicates_and_errors(monkeypatch) -> None:
     def fetch_rss(source_key: str, *_args, **_kwargs):
         if source_key == "rss_fail":
             raise RuntimeError("boom")
-        return [_item(source_key, "https://example.com/rss-item", "RSS Item",
-                      summary="sum", content="content")]
+        return _rss_result([_item(source_key, "https://example.com/rss-item", "RSS Item",
+                                  summary="sum", content="content")])
 
     summary = _run(
         monkeypatch, configs, article_repo=_FirstNewArticleRepo, session=session,
@@ -334,7 +334,7 @@ def test_run_fetch_cycle_includes_db_enabled_sources_without_sources_yaml_edits(
 
     def fetch_rss(source_key: str, *_args, **_kwargs):
         fetched_source_keys.append(source_key)
-        return [_item(source_key, "https://example.com/managed-item", "Managed Item")]
+        return _rss_result([_item(source_key, "https://example.com/managed-item", "Managed Item")])
 
     summary = _run(monkeypatch, [], source_repo=_DbOnlySourceRepo, fetch_rss=fetch_rss)
 
@@ -421,7 +421,7 @@ def test_run_fetch_cycle_stops_rss_processing_after_known_streak(monkeypatch) ->
 
     summary = _run(
         monkeypatch, [_rss("rss_feed")], settings=_settings(rss_known_streak_stop=2),
-        article_repo=_KnownArticleRepo, fetch_rss=lambda *_args, **_kwargs: rss_items,
+        article_repo=_KnownArticleRepo, fetch_rss=lambda *_args, **_kwargs: _rss_result(rss_items),
     )
     repo = _KnownArticleRepo.last
 
@@ -452,7 +452,7 @@ def test_run_fetch_cycle_rss_known_streak_stop_does_not_apply_to_html(monkeypatc
     summary = _run(
         monkeypatch, [_rss("rss_feed"), _html("html_feed")],
         settings=_settings(rss_known_streak_stop=2, html_known_streak_stop=0),
-        article_repo=_KnownArticleRepo, fetch_rss=lambda *_args, **_kwargs: rss_items,
+        article_repo=_KnownArticleRepo, fetch_rss=lambda *_args, **_kwargs: _rss_result(rss_items),
         fetch_html_links=html_links, fetch_html_article=html_articles,
     )
     repo = _KnownArticleRepo.last
@@ -480,7 +480,7 @@ def test_run_fetch_cycle_resets_rss_known_streak_on_new_item(monkeypatch) -> Non
 
     summary = _run(
         monkeypatch, [_rss("rss_feed")], settings=_settings(rss_known_streak_stop=2),
-        article_repo=_KnownArticleRepo, fetch_rss=lambda *_args, **_kwargs: rss_items,
+        article_repo=_KnownArticleRepo, fetch_rss=lambda *_args, **_kwargs: _rss_result(rss_items),
     )
     repo = _KnownArticleRepo.last
 
@@ -578,7 +578,8 @@ def test_run_fetch_cycle_rss_200_persists_validators_and_processes_items(monkeyp
 
 
 def _rss_result(
-    items: list[Article], status_code: int, *, etag: str, last_modified: str,
+    items: list[Article], status_code: int = 200, *, etag: str | None = None,
+    last_modified: str | None = None,
 ) -> list[Article]:
     wrapped: list[Article] = _with_rss_metadata(items, RssFetchResult(
         items=items, not_modified=status_code == 304, status_code=status_code, etag=etag,
@@ -911,7 +912,7 @@ def test_run_fetch_cycle_uses_batch_article_upsert_when_enabled(monkeypatch) -> 
 
     summary = _run(
         monkeypatch, [_rss("rss_batch")], settings=_settings(article_batch_upsert_enabled=True),
-        article_repo=_BatchArticleRepo, fetch_rss=lambda *_args, **_kwargs: rss_items,
+        article_repo=_BatchArticleRepo, fetch_rss=lambda *_args, **_kwargs: _rss_result(rss_items),
     )
 
     assert _BatchArticleRepo.last.batches == [
@@ -938,7 +939,7 @@ def test_run_fetch_cycle_batch_upsert_does_not_advance_rss_known_streak_for_in_r
     summary = _run(
         monkeypatch, [_rss("rss_batch_streak")],
         settings=_settings(rss_known_streak_stop=1, article_batch_upsert_enabled=True),
-        article_repo=_BatchArticleRepo, fetch_rss=lambda *_args, **_kwargs: rss_items,
+        article_repo=_BatchArticleRepo, fetch_rss=lambda *_args, **_kwargs: _rss_result(rss_items),
     )
     repo = _BatchArticleRepo.last
 
@@ -975,7 +976,7 @@ def test_run_fetch_cycle_publishes_previous_monday_sunday_weekly_report_on_monda
     summary = _run(
         monkeypatch, [_rss("rss_weekly_publish")], session=session,
         datetime=_FrozenDateTime, WeeklyAnalyticsRepo=_WeeklyAnalyticsRepo,
-        fetch_rss=lambda *_args, **_kwargs: [],
+        fetch_rss=lambda *_args, **_kwargs: _rss_result([]),
     )
 
     assert summary.fetched == 0

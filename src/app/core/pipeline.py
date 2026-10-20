@@ -42,7 +42,7 @@ from app.ingest.page_filter import (
     text_exclusion_reason,
     url_exclusion_reason,
 )
-from app.ingest.rss import fetch_rss
+from app.ingest.rss import RssItemList, fetch_rss
 from app.storage import SessionLocal, create_all
 from app.storage.admission import (
     clear_collection_paused,
@@ -58,6 +58,7 @@ from app.storage.weekly import WeeklyStore, record_attempt, record_observation, 
 
 # (source order, config, sources.id, stored fetch state)
 EnabledSource = tuple[int, SourceConfig, int, dict[str, object | None]]
+type FetchResult = RssItemList | HtmlListPageResult
 
 
 @dataclass(frozen=True)
@@ -569,7 +570,7 @@ def _fetch_source_items(
     logger: Logger,
     run_id: str,
     full_text_semaphore: BoundedSemaphore | None,
-) -> list[CoreArticle] | HtmlListPageResult:
+) -> FetchResult:
     del db_source_id
     conditional = (
         settings.fetch_conditional_rss_enabled if config.type == "rss"
@@ -684,8 +685,8 @@ def _collect_fetched_items(
     logger: Logger,
     run_id: str,
     full_text_semaphore: BoundedSemaphore | None,
-) -> tuple[dict[int, object], int]:
-    fetched_by_index: dict[int, object] = {}
+) -> tuple[dict[int, FetchResult], int]:
+    fetched_by_index: dict[int, FetchResult] = {}
     error_count = 0
     if not enabled_sources:
         return fetched_by_index, error_count
@@ -714,15 +715,6 @@ def _collect_fetched_items(
                     error_count += 1
                     _log_source_fetch_error(logger=logger, run_id=run_id, config=config, exc=exc)
     return fetched_by_index, error_count
-
-
-def _fetch_result_items(result: object) -> list:
-    items = getattr(result, "items", None)
-    if isinstance(items, list):
-        return items
-    if isinstance(result, list):
-        return result
-    return []
 
 
 def _upsert_article_rows(
@@ -970,21 +962,18 @@ def _persist_fetch_state_if_present(
     *,
     source_repo: SourceRepo,
     db_source_id: int,
-    result: object,
+    result: FetchResult,
 ) -> None:
-    etag = getattr(result, "etag", None)
-    last_modified = getattr(result, "last_modified", None)
-    status_code = getattr(result, "status_code", None)
     has_metadata = any(
-        value is not None for value in (etag, last_modified, status_code)
-    ) or bool(getattr(result, "not_modified", False))
+        value is not None for value in (result.etag, result.last_modified, result.status_code)
+    ) or result.not_modified
     if not has_metadata:
         return
     source_repo.update_fetch_state(
         source_id=db_source_id,
-        etag=etag if isinstance(etag, str) else None,
-        last_modified=last_modified if isinstance(last_modified, str) else None,
-        last_status_code=int(status_code) if status_code is not None else None,
+        etag=result.etag,
+        last_modified=result.last_modified,
+        last_status_code=result.status_code,
         last_checked_at=datetime.now(UTC),
     )
 
@@ -1141,7 +1130,7 @@ def _process_fetched_source_items(
 
 def _process_source_result(
     *,
-    fetch_result: object,
+    fetch_result: FetchResult,
     config: SourceConfig,
     db_source_id: int,
     source_repo: SourceRepo,
@@ -1151,13 +1140,12 @@ def _process_source_result(
     relevance_scorer: JevRelevanceScorer | None = None,
     admission_state: AdmissionState | None = None,
 ) -> None:
-    metrics.coverage_complete = bool(getattr(fetch_result, "coverage_complete", True))
     _persist_fetch_state_if_present(
         source_repo=source_repo,
         db_source_id=db_source_id,
         result=fetch_result,
     )
-    if bool(getattr(fetch_result, "not_modified", False)):
+    if fetch_result.not_modified:
         metrics.not_modified = True
         return
 
@@ -1180,13 +1168,13 @@ def _process_source_result(
             admission_state=admission_state,
         )
         metrics.acquisition_stopped = bool(admission_state and admission_state.paused)
-        metrics.coverage_complete = metrics.coverage_complete and not quality_flags
+        metrics.coverage_complete = not quality_flags
         return
 
-    items = _fetch_result_items(fetch_result)
-    if any(item.published_at is None or getattr(item, "publication_date_kind", "published")
-           != "published" for item in items):
-        metrics.coverage_complete = False
+    items = fetch_result
+    metrics.coverage_complete = fetch_result.coverage_complete and not any(
+        item.published_at is None or item.publication_date_kind != "published" for item in items
+    )
     metrics.fetched_items = len(items)
     (
         metrics.new_items,
@@ -1276,7 +1264,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                 screening_paused=1,
             )
 
-        fetched_by_index: dict[int, object] = {}
+        fetched_by_index: dict[int, FetchResult] = {}
         if not admission_state.enabled:
             fetched_by_index, fetch_errors = _collect_fetched_items(
                 enabled_sources=enabled_sources,
@@ -1295,7 +1283,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                 break
             source_metrics = SourceMetrics(source_id=config.id, source_type=config.type)
             snapshot = _admission_snapshot(admission_state)
-            fetch_result: object | None = None
+            fetch_result: FetchResult | None = None
             fetch_failed = False
             try:
                 if admission_state.enabled:

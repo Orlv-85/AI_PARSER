@@ -439,6 +439,7 @@ Per rule: see Behavior and Invariants. Files: `tests/unit/test_pipeline_runtime.
 Tests never call a network or provider (`httpx.MockTransport`, fake `Fetcher.request`, fake fetch
 functions). Runtime tests replace module attributes of `core/pipeline.py` (fetch functions, repos,
 `SessionLocal`) with fakes of the real interfaces and run with real `Settings`; a fake must offer
-every method the real object offers. Weekly hooks run only with a real SQLAlchemy `Session`
+every method and field the real object offers (fetch fakes return `RssItemList` or
+`HtmlListPageResult`). Weekly hooks run only with a real SQLAlchemy `Session`
 (`isinstance` checks in `run_fetch_cycle` and `_record_weekly_observation`), so runtime tests with a
 fake session do not record weekly rows; SQLite tests do.

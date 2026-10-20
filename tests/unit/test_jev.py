@@ -1,7 +1,6 @@
 import json
 from datetime import UTC, datetime
 from logging import getLogger
-from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -16,6 +15,7 @@ from app.core.models import Article
 from app.core.pipeline import run_fetch_cycle
 from app.core.scoring import ai_relevance_score
 from app.ingest.html import HtmlListPageResult
+from app.ingest.rss import RssFetchResult, _with_rss_metadata
 from app.storage.models_sql import Article as StoredArticle
 from app.storage.models_sql import Base
 
@@ -171,7 +171,9 @@ def test_ingestion_persists_jev_score_or_heuristic_on_failure(
     articles = [_article(), _article(2)]
     result = (
         HtmlListPageResult(links=[str(item.url) for item in articles])
-        if source_type == "html" else SimpleNamespace(items=articles)
+        if source_type == "html" else _with_rss_metadata(articles, RssFetchResult(
+            items=articles, not_modified=False, status_code=200, etag=None, last_modified=None,
+        ))
     )
     requests = []
     clients = []

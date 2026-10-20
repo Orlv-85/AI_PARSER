@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from app.config.settings import get_settings
 from app.config.sources import SourceConfig
 from app.core.models import Article
+from app.ingest.rss import RssFetchResult, _with_rss_metadata
 from app.storage.models_sql import Base
 from app.web.app import create_app
 
@@ -30,7 +31,7 @@ def test_api_e2e_update_and_read_news(monkeypatch, tmp_path) -> None:
     )
 
     def _fake_fetch_rss(_source_key: str, *_args, **_kwargs):
-        return [
+        items = [
             Article(
                 source_key="e2e_rss",
                 title="E2E AI Update",
@@ -40,6 +41,9 @@ def test_api_e2e_update_and_read_news(monkeypatch, tmp_path) -> None:
                 content="E2E content",
             )
         ]
+        return _with_rss_metadata(items, RssFetchResult(
+            items=items, not_modified=False, status_code=200, etag=None, last_modified=None,
+        ))
 
     monkeypatch.setattr("app.core.pipeline.fetch_rss", _fake_fetch_rss)
     monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: [source_config])

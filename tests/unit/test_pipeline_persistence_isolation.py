@@ -14,9 +14,19 @@ from app.core.jev import JevAssessment
 from app.core.models import Article
 from app.core.pipeline import run_fetch_cycle
 from app.ingest.html import HtmlListPageResult
+from app.ingest.rss import RssFetchResult, RssItemList, _with_rss_metadata
 from app.storage.models_sql import Article as StoredArticle
 from app.storage.models_sql import Base, Source, WeeklyCoverageAttempt
 from app.storage.repos import ArticleRepo
+
+
+def _rss_items(
+    items: list[Article], *, etag: str | None = None, coverage_complete: bool = True,
+) -> RssItemList:
+    return _with_rss_metadata(items, RssFetchResult(
+        items=items, not_modified=False, status_code=200, etag=etag, last_modified=None,
+        coverage_complete=coverage_complete,
+    ))
 
 
 @pytest.mark.parametrize("batch", [False, True])
@@ -61,7 +71,7 @@ def test_source_savepoint_recovers_after_database_error(
                     links=[str(item.url) for item in items], etag="new-validator",
                 )
             else:
-                results[index] = SimpleNamespace(items=items, etag="new-validator")
+                results[index] = _rss_items(items, etag="new-validator")
         return results, 0
 
     def fetch_article(*, source, url, **_kwargs):
@@ -295,8 +305,8 @@ def test_coverage_attempt_records_fetch_persist_and_parser_failures(monkeypatch,
         results = {}
         for index, config, *_ in enabled_sources:
             if config.id in items:
-                results[index] = SimpleNamespace(
-                    items=items[config.id], coverage_complete=config.id != "parser",
+                results[index] = _rss_items(
+                    items[config.id], coverage_complete=config.id != "parser",
                 )
         return results, 1
 
@@ -341,7 +351,7 @@ def test_undated_item_marks_coverage_incomplete(monkeypatch, tmp_path):
 
     def collect(*, enabled_sources, **_kwargs):
         return {
-            index: SimpleNamespace(items=[rss_items[config.id]]) if config.type == "rss"
+            index: _rss_items([rss_items[config.id]]) if config.type == "rss"
             else HtmlListPageResult(links=[f"https://example.com/{config.id}/story-1"])
             for index, config, *_ in enabled_sources
         }, 0
@@ -377,7 +387,7 @@ def test_two_urls_of_one_story_become_two_articles(monkeypatch, tmp_path):
     ]
     sessions = _sqlite_run(
         monkeypatch, tmp_path, configs,
-        collect=lambda **_kwargs: ({0: SimpleNamespace(items=items)}, 0),
+        collect=lambda **_kwargs: ({0: _rss_items(items)}, 0),
     )
 
     first = run_fetch_cycle(settings=_settings(), logger=getLogger("identity"))
@@ -413,7 +423,7 @@ def test_per_row_duplicate_updates_scores_and_category_only(monkeypatch, tmp_pat
     monkeypatch.setattr("app.core.pipeline.jev_relevance_scorer", scorer)
     sessions = _sqlite_run(
         monkeypatch, tmp_path, configs,
-        collect=lambda **_kwargs: ({0: SimpleNamespace(items=batch["items"])}, 0),
+        collect=lambda **_kwargs: ({0: _rss_items(batch["items"])}, 0),
     )
     settings = _settings(article_batch_upsert_enabled=False)
 

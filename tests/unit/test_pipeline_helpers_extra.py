@@ -11,7 +11,6 @@ from app.config.settings import Settings
 from app.config.sources import SourceConfig
 from app.core.models import Article
 from app.core.pipeline import (
-    _fetch_result_items,
     _fetch_source_items,
     _persist_fetch_state_if_present,
     _process_html_links_two_stage,
@@ -296,7 +295,6 @@ def test_profile_helpers_and_misc_pipeline_helpers() -> None:
         [(0, rss_config, 1, NO_VALIDATORS)] * 3, _settings(fetch_rss_concurrency_limit=2),
     ) == 2
 
-    assert _fetch_result_items(object()) == []
     assert _upsert_article_rows(article_repo=SimpleNamespace(), rows=[]) == (0, 0)  # type: ignore[arg-type]
 
 
