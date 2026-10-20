@@ -49,14 +49,16 @@ function. Each rule lists the tests that check it.
   `test_managed_source_to_config_adds_empty_html_payload_for_html_sources`,
   `test_managed_source_selector_is_targeted`.
 - Every enabled source is fetched on every run; `fetch_interval_minutes` does not skip a source (it
-  only sets the expected attempts of weekly coverage). Tests: none.
+  only sets the expected attempts of weekly coverage). Tests:
+  `test_run_fetch_cycle_fetches_every_enabled_source_regardless_of_interval`.
 - Admission off: all sources are fetched first, in a thread pool of at most `concurrency_limit`
   workers, grouped by `fetch_execution_profile` (`balanced`: one group; `rss_fast`: RSS group
   first; `html_heavy`: HTML group first; unknown value: `balanced`) with per-type caps
   `fetch_rss_concurrency_limit` / `fetch_html_concurrency_limit`; results are then processed one
   source at a time in source order. Tests: `test_run_fetch_cycle_rss_fast_profile_fetches_rss_before_html`,
   `test_run_fetch_cycle_execution_profile_applies_per_type_concurrency_caps`,
-  `test_profile_helpers_and_misc_pipeline_helpers` (`html_heavy` order: no test).
+  `test_profile_helpers_and_misc_pipeline_helpers`,
+  `test_run_fetch_cycle_html_heavy_profile_fetches_html_before_rss`.
 - Admission on: sources are fetched one at a time, each after its pending replay, so a pause stops
   before the next source is fetched. Tests: `test_outage_preserves_verified_and_replays_after_list_rotation`.
 - A source that fails to fetch is logged (`source_fetch_failed`), counted in `errors` and skipped.
@@ -77,7 +79,8 @@ function. Each rule lists the tests that check it.
   `test_run_fetch_cycle_default_rss_path_persists_304_metadata_from_wrapper`,
   `test_run_fetch_cycle_persists_rss_fetch_state_metadata_for_200`,
   `test_fetch_rss_with_metadata_304_skips_parse_and_reports_not_modified`,
-  `test_request_returns_304_not_modified_response_distinctly` (setting off: no test).
+  `test_request_returns_304_not_modified_response_distinctly`,
+  `test_run_fetch_cycle_rss_conditional_disabled_sends_no_validators`.
 - HTML list pages: the same, only when `fetch_conditional_html_list_enabled` (off by default); with
   it off, no validators are sent or stored. Tests: `test_run_fetch_cycle_html_304_uses_validators_and_skips_processing`,
   `test_run_fetch_cycle_html_conditional_disabled_uses_normal_two_stage_path`,
@@ -125,7 +128,8 @@ function. Each rule lists the tests that check it.
   date; an updated date goes to `modified_at` and leaves the publication unknown. Tests:
   `test_parse_rss_skips_invalid_and_separates_updated_parsed`, `test_atom_updated_only_does_not_become_publication`,
   `test_parse_rss_maps_entries_to_article_model`.
-- A skipped entry or a malformed feed marks the source coverage incomplete (weekly). Tests: none.
+- A skipped entry or a malformed feed marks the source coverage incomplete (weekly). Tests:
+  `test_rss_skipped_entry_or_malformed_feed_marks_coverage_incomplete`.
 - Full text (`rss_extract_full_text`): only the first `rss_full_text_max_items_per_source` items,
   at most `rss_full_text_concurrency_limit` at once across sources. A linked page identified as
   non-news removes the item; any other failure keeps the item without content. Tests:
@@ -149,15 +153,16 @@ function. Each rule lists the tests that check it.
   `test_run_fetch_cycle_html_two_stage_uses_batch_known_hash_precheck_when_available`,
   `test_two_stage_filters_before_limit_and_model_call`,
   `test_extract_links_from_html_prefers_selectolax_in_auto_mode_when_available`,
-  `test_extract_links_from_html_falls_back_to_lxml_when_selectolax_unavailable` (coverage flag of
-  the cap: no test).
+  `test_extract_links_from_html_falls_back_to_lxml_when_selectolax_unavailable`,
+  `test_html_link_cap_marks_coverage_incomplete`.
 - Stage 2: only unknown links are downloaded; processing stops after `html_known_streak_stop`
   known links in a row. Known links count as duplicates and in `skipped_known_html_links`. Tests:
   `test_run_fetch_cycle_html_two_stage_skips_known_links_before_article_fetch_future`,
   `test_run_fetch_cycle_html_two_stage_stops_after_known_streak`.
 - A failed or unparsable article page skips that link only and marks coverage incomplete. Tests:
   `test_process_html_links_two_stage_covers_non_batch_edge_paths`, `test_html_article_failure_retains_retry_and_continues`,
-  `test_fetch_html_uses_fetcher_and_fail_soft` (coverage flag: no test).
+  `test_fetch_html_uses_fetcher_and_fail_soft`,
+  `test_failed_or_unparsable_html_article_marks_coverage_incomplete`.
 - Article page: title is the first `h1` text without script, style and template text, else the
   URL; content by the source `extraction_strategy` (default: trafilatura, then readability).
   Tests: `test_html_title_excludes_embedded_styles_scripts_and_templates`, `test_html_empty_heading_uses_url`,
@@ -178,7 +183,8 @@ function. Each rule lists the tests that check it.
 - On the row (`_build_article_row`): unknown or conflicting evidence stores `published_at` empty,
   `publication_status` `unknown` / `conflict` and a zero freshness; the evidence goes to
   `date_provenance`. Tests: `test_unknown_or_conflicting_publication_has_zero_freshness`.
-- Day-precision evidence without a time sets `publication_day` instead of `published_at`. Tests: none.
+- Day-precision evidence without a time sets `publication_day` instead of `published_at`. Tests:
+  `test_day_precision_evidence_sets_publication_day_not_published_at`.
 
 **Identity and duplicates**
 - An article is identified by its canonical URL hash (`canonicalize_url`: lowercase scheme and
@@ -189,10 +195,10 @@ function. Each rule lists the tests that check it.
   `test_canonical_hash_is_stable_for_equivalent_urls`, `test_canonical_aliases_share_decision`,
   `test_redirect_identity_survives_pending_body_replay`.
 - Ingestion has no similarity dedup and records no aliases: two URLs of one story are two articles.
-  Tests: none.
+  Tests: `test_two_urls_of_one_story_become_two_articles`.
 - A duplicate that reaches persistence updates the stored scores and (when given) category; title,
-  URL, text and dates stay. Tests: `test_upsert_articles_batch_counts_new_and_duplicates_and_updates_existing`
-  (batch mode; per-row mode: no test).
+  URL, text and dates stay. Tests: `test_upsert_articles_batch_counts_new_and_duplicates_and_updates_existing`,
+  `test_per_row_duplicate_updates_scores_and_category_only`.
 - `article_batch_upsert_enabled`: rows of one source are upserted in one statement; otherwise one
   insert per row. Counters are the same in both modes. Tests: `test_run_fetch_cycle_uses_batch_article_upsert_when_enabled`,
   `test_process_html_links_two_stage_batch_mode`, `test_source_savepoint_recovers_after_database_error`,
@@ -214,8 +220,8 @@ function. Each rule lists the tests that check it.
   `test_ingestion_persists_jev_score_or_heuristic_on_failure`.
 - Daily enrichment rubric (`daily_enrichment_enabled` with admission): the assessment is recorded
   in `enrichment_provenance` (`RUBRIC_VERSION`); a confident Comparison answer sets `material_type`.
-  Tests: `test_ordinary_ingestion_uses_rubric_journal_and_reusable_admission` (`material_type`:
-  no test).
+  Tests: `test_ordinary_ingestion_uses_rubric_journal_and_reusable_admission`,
+  `test_confident_comparison_answer_sets_material_type`.
 
 **Semantic admission** (`semantic_admission_enabled`, requires Jev)
 - Without a Jev scorer (disabled or no key) the run fetches nothing, sets the pause notice and
@@ -244,7 +250,8 @@ function. Each rule lists the tests that check it.
   replayed in the same savepoint as the fresh fetch: stored bodies are screened again, HTML link
   placeholders are downloaded again. This works after a 304 or a list rotation. Tests:
   `test_outage_preserves_verified_and_replays_after_list_rotation`, `test_replay_and_fresh_fetch_share_source_savepoint`,
-  `test_redirect_identity_survives_pending_body_replay` (the limit: no test).
+  `test_redirect_identity_survives_pending_body_replay`,
+  `test_pending_replay_is_bounded_by_list_pending_limit`.
 - HTML: each unknown link gets a pending placeholder before download; an exclusion, a decision or a
   known hash settles it; a temporary download or parse failure keeps it pending. Tests:
   `test_html_article_failure_retains_retry_and_continues`, `test_confirmed_html_exclusion_settles_before_304`.
@@ -258,13 +265,16 @@ function. Each rule lists the tests that check it.
 - Every eligible item is recorded as a raw weekly observation before admission
   (`record_observation`), rejected ones included; HTML records only downloaded articles. Tests:
   `test_admission_and_cache_all_ingestion_paths`, `test_outage_preserves_verified_and_replays_after_list_rotation`.
-  RSS records known items too (before the known-hash check): no test.
+  RSS records known items too (before the known-hash check). Tests:
+  `test_rss_records_known_items_as_weekly_observations`.
 - One coverage attempt per source per run (`record_attempt`): `fetch_failure`, `persist_failure`,
   `parser_failure` (coverage incomplete), `not_modified`, `success` or `empty`; complete only when
   coverage is complete, acquisition did not stop and HTML did not stop early. An admission rejection
   does not change it. Tests: `test_outage_preserves_verified_and_replays_after_list_rotation`,
   `test_ambiguity_cached_category_independent_and_policy_invalidates`,
-  `test_confirmed_html_exclusion_settles_before_304` (failure outcomes: no test).
+  `test_confirmed_html_exclusion_settles_before_304`,
+  `test_coverage_attempt_records_fetch_persist_and_parser_failures`,
+  `test_admission_coverage_attempt_records_fetch_and_persist_failures`.
 - On a Monday (UTC) the run publishes the weekly report of the previous Monday-Sunday week: enqueue
   in v2 (`weekly_v2_enabled`), else the legacy report; a failure is only logged. Tests:
   `test_run_fetch_cycle_publishes_previous_monday_sunday_weekly_report_on_monday`,
@@ -315,7 +325,7 @@ function. Each rule lists the tests that check it.
 - One source's failure never aborts the run; its writes roll back to its savepoint; the run commits
   once at the end. Tests: `test_source_savepoint_recovers_after_database_error`,
   `test_replay_and_fresh_fetch_share_source_savepoint`. An error outside the source loop (sources
-  file, schema) aborts the run without a commit: no test.
+  file, schema) aborts the run without a commit. Tests: `test_error_outside_source_loop_aborts_without_commit`.
 - At most one article per canonical URL hash; repeated runs add no rows. Tests:
   `test_ingest_persist_query_pipeline_is_deterministic`, `test_source_savepoint_recovers_after_database_error`,
   `test_all_pipeline_item_paths_filter_before_models_and_preserve_dedupe`.

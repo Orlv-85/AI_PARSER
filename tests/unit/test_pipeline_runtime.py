@@ -2433,3 +2433,159 @@ def test_run_fetch_cycle_publishes_previous_monday_sunday_weekly_report_on_monda
     assert summary.duplicates == 0
     assert summary.errors == 0
     assert publish_calls == [date(2026, 3, 8)]
+
+
+def test_run_fetch_cycle_html_heavy_profile_fetches_html_before_rss(monkeypatch) -> None:
+    order: list[str] = []
+    configs = [
+        SourceConfig(id="rss_first", name="RSS First", type="rss",
+                     url="https://example.com/rss-first.xml"),
+        SourceConfig(id="html_first", name="HTML First", type="html",
+                     url="https://example.com/html-first", html={"link_selector": "a"}),
+        SourceConfig(id="rss_second", name="RSS Second", type="rss",
+                     url="https://example.com/rss-second.xml"),
+        SourceConfig(id="html_second", name="HTML Second", type="html",
+                     url="https://example.com/html-second", html={"link_selector": "a"}),
+    ]
+
+    class _ImmediateFuture:
+        def __init__(self, result):
+            self._result = result
+
+        def result(self):
+            return self._result
+
+    class _ImmediateExecutor:
+        def __init__(self, *, max_workers: int) -> None:
+            self.max_workers = max_workers
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> Literal[False]:
+            return False
+
+        def submit(self, fn, **kwargs):
+            return _ImmediateFuture(fn(**kwargs))
+
+    def _fake_fetch_source_items(*, config, **_kwargs):
+        order.append(config.id)
+        return []
+
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.pipeline.SessionLocal", _Session)
+    monkeypatch.setattr("app.core.pipeline.SourceRepo", _SourceRepo)
+    monkeypatch.setattr("app.core.pipeline.ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr("app.core.pipeline._fetch_source_items", _fake_fetch_source_items)
+    monkeypatch.setattr("app.core.pipeline.ThreadPoolExecutor", _ImmediateExecutor)
+    monkeypatch.setattr("app.core.pipeline.as_completed", list)
+
+    settings = SimpleNamespace(
+        sources_path="sources.yaml",
+        concurrency_limit=1,
+        rss_full_text_concurrency_limit=None,
+        fetch_execution_profile="html_heavy",
+        fetch_emit_source_metrics=False,
+    )
+
+    summary = run_fetch_cycle(settings=settings, logger=_Logger())
+
+    assert summary.errors == 0
+    assert order == ["html_first", "html_second", "rss_first", "rss_second"]
+
+
+def test_run_fetch_cycle_fetches_every_enabled_source_regardless_of_interval(
+    monkeypatch,
+) -> None:
+    fetched: list[str] = []
+    configs = [
+        SourceConfig(id=f"rss_{minutes}", name=f"RSS {minutes}", type="rss",
+                     url=f"https://example.com/rss-{minutes}.xml",
+                     fetch_interval_minutes=minutes)
+        for minutes in (60, 1440)
+    ]
+
+    class _CheckedJustNowSourceRepo(_SourceRepo):
+        def get_fetch_state(self, *, source_id: int):
+            del source_id
+            return {"etag": None, "last_modified": None, "last_status_code": 200,
+                    "last_checked_at": datetime.now(UTC)}
+
+        def update_fetch_state(self, **_kwargs) -> None:
+            pass
+
+    def _fake_fetch_source_items(*, config, **_kwargs):
+        fetched.append(config.id)
+        return []
+
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.pipeline.SessionLocal", _Session)
+    monkeypatch.setattr("app.core.pipeline.SourceRepo", _CheckedJustNowSourceRepo)
+    monkeypatch.setattr("app.core.pipeline.ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr("app.core.pipeline._fetch_source_items", _fake_fetch_source_items)
+
+    settings = SimpleNamespace(
+        sources_path="sources.yaml",
+        concurrency_limit=1,
+        rss_full_text_concurrency_limit=None,
+        fetch_emit_source_metrics=False,
+    )
+
+    first = run_fetch_cycle(settings=settings, logger=_Logger())
+    second = run_fetch_cycle(settings=settings, logger=_Logger())
+
+    assert first.source_count == second.source_count == 2
+    assert sorted(fetched) == ["rss_1440", "rss_1440", "rss_60", "rss_60"]
+
+
+def test_run_fetch_cycle_rss_conditional_disabled_sends_no_validators(monkeypatch) -> None:
+    configs = [SourceConfig(id="rss_stateful", name="RSS Stateful", type="rss",
+                            url="https://example.com/stateful.xml")]
+    rss_calls: list[tuple[object, object]] = []
+
+    class _StatefulSourceRepo(_SourceRepo):
+        def get_fetch_state(self, *, source_id: int):
+            del source_id
+            return {"etag": '"etag-old"', "last_modified": "Sun, 22 Feb 2026 10:00:00 GMT",
+                    "last_status_code": 200, "last_checked_at": None}
+
+        def update_fetch_state(self, **_kwargs) -> None:
+            pass
+
+    def _fake_fetch_rss(*_args, **kwargs):
+        rss_calls.append((kwargs.get("if_none_match"), kwargs.get("if_modified_since")))
+        return []
+
+    def _unexpected_fetch_rss_with_metadata(*_args, **_kwargs):
+        raise AssertionError("conditional RSS path must not be used when disabled")
+
+    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.pipeline.SessionLocal", _Session)
+    monkeypatch.setattr("app.core.pipeline.SourceRepo", _StatefulSourceRepo)
+    monkeypatch.setattr("app.core.pipeline.ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr("app.core.pipeline.fetch_rss", _fake_fetch_rss)
+    monkeypatch.setattr(
+        "app.core.pipeline.fetch_rss_with_metadata", _unexpected_fetch_rss_with_metadata,
+    )
+
+    settings = SimpleNamespace(
+        sources_path="sources.yaml",
+        request_timeout_seconds=1.0,
+        max_retries=0,
+        concurrency_limit=1,
+        per_source_min_interval_seconds=0.0,
+        rss_extract_full_text=False,
+        rss_full_text_max_items_per_source=0,
+        rss_full_text_concurrency_limit=None,
+        rss_known_streak_stop=0,
+        fetch_conditional_rss_enabled=False,
+        fetch_emit_source_metrics=False,
+    )
+
+    summary = run_fetch_cycle(settings=settings, logger=_Logger())
+
+    assert summary.errors == 0
+    assert rss_calls == [(None, None)]
