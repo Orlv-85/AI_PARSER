@@ -96,10 +96,13 @@ function. Each rule lists the tests that check it.
   (`fetch_http_max_connections`, `fetch_http_max_keepalive_connections`), waits
   `per_source_min_interval_seconds` between requests to one source, retries request errors and
   HTTP errors up to `max_retries` with exponential backoff, and raises a `fetch_failed` error after
-  the last attempt. Tests: `test_request_retries_and_returns_response`,
+  the last attempt. The `Fetcher` is closed when the source fetch ends and when the HTML article
+  stage ends, on success and on error. Tests: `test_request_retries_and_returns_response`,
   `test_request_retries_5xx_and_preserves_conditional_headers`,
   `test_request_raises_runtime_error_with_json_payload`, `test_respect_rate_limit_sleeps_until_allowed`,
-  `test_request_reuses_single_client_across_multiple_calls`, `test_request_builds_client_with_limits_when_configured`.
+  `test_request_reuses_single_client_across_multiple_calls`, `test_request_builds_client_with_limits_when_configured`,
+  `test_fetch_source_items_closes_fetcher_after_success_and_error`,
+  `test_process_html_links_two_stage_closes_fetcher_when_placeholder_loop_raises`.
 
 **Page eligibility (non-news filter)**
 - Pages are excluded by exact path rules, never by substrings of a slug (`url_exclusion_reason`):
@@ -308,7 +311,7 @@ function. Each rule lists the tests that check it.
 | Canonical URL hash is the only identity; no similarity dedup or aliases | decided 2026-10-20 (agent): stories are grouped at read time (006 FR-005, `simhash64`), which needs one row per publisher; admission and its cache are keyed by the canonical hash |
 | Weights of `rank_score`, half-life of `freshness_score` | values from 001 FR-5, no reason stated; decided 2026-10-20 (agent): keep, recency first for a news list, no labeled data to tune them |
 | Scores computed once at ingestion | decided 2026-10-20 (agent): one stored, indexed sort key (`ix_articles_rank_score_desc`), old rows never rewritten; stored freshness reflects ingestion delay, not current age |
-| `rank_score` is a legacy sort key, not a selection signal; no read-time freshness | decided 2026-10-20 (agent): with admission on, stored rows are Jev-accepted and fetched fresh, so rank barely separates them; the public digest and signals do not read it (selection is Jev and the digest model), only the admin list sort, API/CLI/MCP top and legacy weekly do; kept for backward compatibility |
+| `rank_score` is a legacy sort key, not a selection signal; no read-time freshness | decided 2026-10-20 (agent): with admission on, stored rows are Jev-accepted and fetched fresh, so rank barely separates them; the public digest and signals do not read it (selection is Jev and the digest model), only the "Rank" option of the admin list (which defaults to publication date), the API default sort, API/CLI/MCP top and legacy weekly do; kept for backward compatibility |
 | Admission is opt-in; local default off, production on | legacy behavior stays when off (admission spec); production enabled by owner decision (activation record) |
 | Screening outage pauses collection, no keyword fallback | an outage is "screening unavailable", not an article decision (admission spec); a keyword score must not pass for a semantic check, the ledger replays instead (admission prompt 2026-10-10, `docs/archive/`) |
 | Durable pending ledger, replayed before the fresh fetch | unchecked candidates must not be lost; after a 304 or list rotation the feed no longer shows them (`docs/configuration.md`) |

@@ -4,6 +4,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
+import pytest
+
 import app.core.pipeline as pipeline_module
 from app.config.sources import SourceConfig
 from app.core.models import Article
@@ -245,6 +247,95 @@ def test_fetch_source_items_html_two_stage_default_nonconditional_path(monkeypat
     assert captured
     assert captured[0]["if_none_match"] is None
     assert captured[0]["if_modified_since"] is None
+
+
+class _SpyFetcher:
+    instances: list[_SpyFetcher] = []
+
+    def __init__(self, **kwargs) -> None:
+        self.kwargs = kwargs
+        self.closed = False
+        _SpyFetcher.instances.append(self)
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def test_fetch_source_items_closes_fetcher_after_success_and_error(monkeypatch) -> None:
+    _SpyFetcher.instances = []
+    monkeypatch.setattr("app.core.pipeline.Fetcher", _SpyFetcher)
+    seen_fetchers: list[object] = []
+
+    def _fetch_html_ok(*_args, fetcher, **_kwargs):
+        seen_fetchers.append(fetcher)
+        assert not fetcher.closed
+        return ["item"]
+
+    def _fetch_html_fails(*_args, fetcher, **_kwargs):
+        seen_fetchers.append(fetcher)
+        raise RuntimeError("fetch_failed")
+
+    def _fetch(run_id: str):
+        return _fetch_source_items(
+            config=_html_source(),
+            db_source_id=1,
+            fetch_state=None,
+            enable_fetch_state=False,
+            settings=_settings(),
+            logger=_Logger(),
+            run_id=run_id,
+            full_text_semaphore=None,
+        )
+
+    monkeypatch.setattr("app.core.pipeline.fetch_html", _fetch_html_ok)
+    assert _fetch("run-ok") == ["item"]
+
+    monkeypatch.setattr("app.core.pipeline.fetch_html", _fetch_html_fails)
+    with pytest.raises(RuntimeError, match="fetch_failed"):
+        _fetch("run-error")
+
+    assert seen_fetchers == _SpyFetcher.instances
+    assert [fetcher.closed for fetcher in _SpyFetcher.instances] == [True, True]
+
+
+def test_process_html_links_two_stage_closes_fetcher_when_placeholder_loop_raises(
+    monkeypatch,
+) -> None:
+    _SpyFetcher.instances = []
+    monkeypatch.setattr("app.core.pipeline.Fetcher", _SpyFetcher)
+
+    def _upsert_pending_fails(*_args, **_kwargs):
+        raise RuntimeError("placeholder write failed")
+
+    def _fetch_html_article_unexpected(**_kwargs):
+        raise AssertionError("article stage must not run")
+
+    monkeypatch.setattr("app.core.pipeline.upsert_pending", _upsert_pending_fails)
+    monkeypatch.setattr("app.core.pipeline.fetch_html_article", _fetch_html_article_unexpected)
+
+    class _Repo:
+        session = object()
+
+        @staticmethod
+        def existing_canonical_hashes(_hashes):
+            return set()
+
+    with pytest.raises(RuntimeError, match="placeholder write failed"):
+        _process_html_links_two_stage(
+            links=["https://example.com/news/new"],
+            config=_html_source(),
+            db_source_id=1,
+            article_repo=_Repo(),
+            settings=_settings(
+                jev_model="model",
+                semantic_admission_policy_version="policy",
+                semantic_admission_prompt_version="prompt",
+            ),
+            admission_state=pipeline_module.AdmissionState(enabled=True),
+        )
+
+    assert len(_SpyFetcher.instances) == 1
+    assert _SpyFetcher.instances[0].closed is True
 
 
 def test_profile_helpers_and_misc_pipeline_helpers() -> None:
