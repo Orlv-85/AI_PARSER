@@ -93,6 +93,19 @@ the Troubleshooting section of `README.md`.
       "cause": "The app never enables SQLite foreign keys, so ON DELETE CASCADE does not remove article_signals and daily_signal_scope rows of a deleted article, and SQLite reuses the highest rowid. Rows keyed by article_id alone were inherited by the new article.",
       "fix": "Key scope, extraction rows, coverage, observations and evidence writes by (article_id, url_canonical_hash); both tables store url_canonical_hash and a stale row is ignored or taken over and reset. The global SQLite pragma stays unchanged. Commit a1a91bd (F9).",
       "verification": "test_reused_article_id_without_fk_enforcement_inherits_nothing (no FK pragma) fails on 8f30549 and passes after the fix; full suite with PostgreSQL green."
+    },
+    {
+      "id": "daily-digest-dropped-provider-connection",
+      "date": "2026-10-20",
+      "area": "daily publication (daily-publish)",
+      "symptom": "Nightly digest ends `failed_preserved_previous` with reason `provider_outage_unknown_billing`; daily-signals does not run; a plain rerun of scripts/run_daily_digest_job.sh stops at once with `unknown_or_failed_previous_call_requires_review`.",
+      "evidence": [
+        "data/daily-enrichment/2026-10-19/journal.sqlite3: one deepseek call state=failed, error_type=ReadError, reserved 2026-10-20 02:00:50 UTC",
+        "logs/daily-digest.log report for 2026-10-19"
+      ],
+      "cause": "An httpx transport error (connection dropped while reading the answer) leaves a call whose billing is unknown. The daily journal had no transport_review_reason, so the call was never retried and every later dispatch was blocked.",
+      "fix": "src/app/core/daily_enrichment.py passes TRANSPORT_REVIEW_REASON and TRANSPORT_RETRY_DELAYS=(60, 300) to PilotJournal: the reservation is kept and the request is retried after 1 and 5 minutes in the same run. After the third failure the day fails with `Reviewed transport attempts exhausted`. Journals from before the fix resume through the same path (the failed row is reviewed automatically).",
+      "verification": "tests/unit/test_daily_enrichment.py::test_dropped_connection_is_retried_after_one_then_five_minutes and ::test_transport_retries_exhausted_fails_day_without_more_dispatch; 2026-10-19 was published on 2026-10-20 by reviewing the row and running publish_day with the same reason."
     }
   ]
 }

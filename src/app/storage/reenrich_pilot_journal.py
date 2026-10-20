@@ -61,13 +61,18 @@ def is_overload(status_code, data):
 
 class PilotJournal:
     def __init__(self, path, identity, caps, *, key_function=request_key,
-                 reservation_function=reservation, transport_review_reason=None):
+                 reservation_function=reservation, transport_review_reason=None,
+                 transport_retry_delays=(0,)):
         if set(caps) != {"total", "jev", "deepseek"}:
             raise ValueError("All three caps required")
+        if not transport_retry_delays:
+            raise ValueError("At least one transport retry delay required")
         self.caps = {k: microdollars(v) for k, v in caps.items()}
         self.key_function = key_function
         self.reservation_function = reservation_function
         self.transport_review_reason = transport_review_reason
+        # One reviewed retry per delay; each attempt keeps its own conservative reservation.
+        self.transport_retry_delays = tuple(transport_retry_delays)
         if self.caps["jev"] + self.caps["deepseek"] > self.caps["total"]:
             raise ValueError("Provider caps exceed total cap")
         fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
@@ -152,14 +157,15 @@ class PilotJournal:
             raise
 
     def _attempt(self, request):
-        key = request
+        """Return (key, saved, attempt, parent) of the first unresolved attempt in the chain."""
+        key, attempt, parent = request, 1, None
         while True:
             saved = self.db.execute("SELECT state,response,actual FROM calls WHERE key=?",
                                     (key,)).fetchone()
             if not saved or saved[0] == "response":
-                return key, saved
+                return key, saved, attempt, parent
             if saved[0] == "failed" and self._release_unbilled_transient(key):
-                return key, None
+                return key, None, attempt, parent
             if self.transport_review_reason and saved[0] == "failed":
                 if self.review_transport_failure(key, self.transport_review_reason):
                     saved = ("reviewed_transport", saved[1], saved[2])
@@ -167,11 +173,14 @@ class PilotJournal:
                 raise PilotStopped("unknown_or_failed_previous_call_requires_review")
             if not self.db.execute("SELECT 1 FROM reviews WHERE key=?", (key,)).fetchone():
                 raise PilotStopped("transport_review_provenance_missing")
-            if key != request:
+            if attempt > len(self.transport_retry_delays):
                 raise ValueError("Reviewed transport attempts exhausted; result unresolved")
-            second = self.db.execute("SELECT attempt_key FROM request_attempts WHERE request_key=?",
-                                     (request,)).fetchone()
-            key = second[0] if second else fingerprint({"request_key": request, "attempt": 2})
+            # request_attempts links each attempt to the next one (request -> 2 -> 3).
+            following = self.db.execute("SELECT attempt_key FROM request_attempts "
+                                        "WHERE request_key=?", (key,)).fetchone()
+            attempt, parent = attempt + 1, key
+            key = following[0] if following else fingerprint(
+                {"request_key": request, "attempt": attempt})
 
     def _release_unbilled_transient(self, key):
         """Drop a recorded overload answer without usage so a resume may redispatch."""
@@ -271,7 +280,7 @@ class PilotJournal:
 
     def call(self, provider, body, client, secret, *, before_dispatch=None):
         request = self.key_function(provider, body)
-        key, saved = self._attempt(request)
+        key, saved, attempt, parent = self._attempt(request)
         amount = self.reservation_function(provider, body)
         if saved:
             if saved[0] != "response" or saved[2] is None:
@@ -284,7 +293,9 @@ class PilotJournal:
             return received["body"]
         if before_dispatch:
             before_dispatch()
-        self.reserve(key, provider, amount, parent_key=request if key != request else None)
+        if attempt > 1 and self.transport_retry_delays[attempt - 2]:
+            time.sleep(self.transport_retry_delays[attempt - 2])
+        self.reserve(key, provider, amount, parent_key=parent)
         try:
             for delay in (*TRANSIENT_RETRY_DELAYS, None):
                 response = client.post(ENDPOINTS[provider], json=body,

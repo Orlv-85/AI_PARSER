@@ -119,3 +119,34 @@ def test_reviewed_reservations_still_count_against_cumulative_cap(tmp_path):
             journal.call("jev", {"task": "one"}, client, "test")
     assert len(requests) == 1 and journal.report()["total_committed_usd"] == 0.0001
     journal.close()
+
+
+def test_configured_delays_extend_the_attempt_chain_and_survive_restart(tmp_path, monkeypatch):
+    sleeps = []
+    monkeypatch.setattr("app.storage.reenrich_pilot_journal.time.sleep", sleeps.append)
+    path = tmp_path / "journal"
+
+    def open_journal():
+        return PilotJournal(path, "daily", {"total": "0.002", "jev": "0.001",
+                                            "deepseek": "0.001"},
+                            reservation_function=lambda *args: 100,
+                            transport_review_reason="accepted", transport_retry_delays=(60, 300))
+
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        if len(requests) < 3:
+            raise httpx.ReadError("network disconnected", request=request)
+        return httpx.Response(200, json={"usage": {"input_tokens": 10}})
+
+    journal = open_journal()
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        journal.call("jev", {"task": "one"}, client, "test")
+        journal.close()
+        journal = open_journal()
+        journal.call("jev", {"task": "one"}, client, "test")
+    assert len(requests) == 3 and sleeps == [60, 300]
+    assert journal.db.execute("SELECT count(*) FROM request_attempts").fetchone()[0] == 2
+    assert journal.report()["total_committed_usd"] == 0.000201
+    journal.close()
