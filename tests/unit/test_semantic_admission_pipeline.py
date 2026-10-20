@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
+from app.core.canonicalize import canonical_url_hash
 from app.core.jev import JevRelevanceScorer
 from app.core.models import Article
 from app.core.pipeline import HtmlLinkFetchResult, run_fetch_cycle
@@ -418,3 +419,100 @@ def test_replay_and_fresh_fetch_share_source_savepoint(monkeypatch, tmp_path):
     assert scenario.rows(CollectionStatus)[0].paused
     source = scenario.rows(Source)[0]
     assert source.etag is None and source.last_modified is None
+
+
+def test_confident_comparison_answer_sets_material_type(monkeypatch, tmp_path):
+    scenario = Scenario(tmp_path, monkeypatch, "rss", False)
+    scenario.settings.daily_enrichment_enabled = True
+    comparisons = dict(zip(
+        (item.title for item in scenario.items),
+        [("Comparison", 0.9), ("Comparison", 0.5), ("NotComparison", 0.95)],
+        strict=True,
+    ))
+
+    @contextmanager
+    def scorer(*_args):
+        def respond(request):
+            title = json.loads(request.content)["state"].splitlines()[0][7:]
+            choice, confidence = comparisons[title]
+            return httpx.Response(200, json={"answers": {
+                "ai_relevant": {"noul": 0.9},
+                "admission": {"choice": "accepted_ai_editorial", "confidence": 0.9},
+                "category": {"choice": "AI Coding", "confidence": 0.9},
+                "comparison": {"choice": choice, "confidence": confidence}}})
+
+        with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+            yield JevRelevanceScorer(client, "jev-1.13.0", getLogger("semantic-test"),
+                semantic_admission_enabled=True, daily_enrichment_enabled=True)
+
+    monkeypatch.setattr("app.core.pipeline.jev_relevance_scorer", scorer)
+    assert scenario.run().new == 3
+    material = {row.title: row.material_type for row in scenario.rows(StoredArticle)}
+    assert material == {
+        scenario.items[0].title: "Comparison",
+        scenario.items[1].title: None,
+        scenario.items[2].title: None,
+    }
+
+
+def test_pending_replay_is_bounded_by_list_pending_limit(monkeypatch, tmp_path):
+    scenario = Scenario(tmp_path, monkeypatch, "rss", False)
+    scenario.items = [Article(
+        source_key="s1", title=f"AI research release {i}",
+        url=f"https://example.com/story-{i}",
+        published_at=datetime(2026, 10, 4, 12, tzinfo=UTC),
+        summary=f"Study {i}", content=f"AI is central in research {i}.",
+    ) for i in range(1, 53)]
+    scenario.fail_at = 1
+    assert scenario.run().screening_paused == 1
+    pending = [r for r in scenario.rows(AdmissionDecision) if r.provider_status == "pending"]
+    assert len(pending) == 52
+    scenario.fail_at = None
+    scenario.items = []
+    scenario.not_modified = True
+    assert scenario.run().new == 50
+    assert len(scenario.requests) == 1 + 50
+    pending = [r for r in scenario.rows(AdmissionDecision) if r.provider_status == "pending"]
+    assert len(pending) == 2
+    assert scenario.run().new == 2
+    assert not [r for r in scenario.rows(AdmissionDecision) if r.provider_status == "pending"]
+
+
+def test_rss_records_known_items_as_weekly_observations(monkeypatch, tmp_path):
+    scenario = Scenario(tmp_path, monkeypatch, "rss", False)
+    known = scenario.items[0]
+    with scenario.sessions() as session:
+        session.add(StoredArticle(
+            title=known.title, url=str(known.url), url_canonical=str(known.url),
+            url_canonical_hash=canonical_url_hash(str(known.url)),
+            published_at=known.published_at, ai_relevance_score=0.9,
+            freshness_score=0.5, rank_score=0.7,
+        ))
+        session.commit()
+    result = scenario.run()
+    assert (result.new, result.duplicates) == (2, 1)
+    assert len(scenario.requests) == 2
+    observed = {row.canonical_hash for row in scenario.rows(WeeklyInputObservation)}
+    assert observed == {canonical_url_hash(str(item.url)) for item in scenario.items}
+
+
+@pytest.mark.parametrize("failure", ["fetch", "persist"])
+def test_admission_coverage_attempt_records_fetch_and_persist_failures(
+    monkeypatch, tmp_path, failure,
+):
+    scenario = Scenario(tmp_path, monkeypatch, "rss", False)
+    if failure == "fetch":
+        monkeypatch.setattr(
+            "app.core.pipeline._collect_fetched_items", lambda **_kwargs: ({}, 1),
+        )
+    else:
+        with scenario.sessions() as session:
+            session.execute(text("CREATE TRIGGER fail_article BEFORE INSERT ON articles "
+                                 "BEGIN SELECT RAISE(ABORT, 'test rollback'); END"))
+            session.commit()
+    result = scenario.run()
+    assert result.errors == 1 and result.new == 0
+    attempts = scenario.rows(WeeklyCoverageAttempt)
+    assert [row.outcome for row in attempts] == [f"{failure}_failure"]
+    if failure == "persist":
+        assert attempts[0].complete is False
