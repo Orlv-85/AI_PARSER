@@ -1,3 +1,4 @@
+import hashlib
 import json
 from datetime import UTC, datetime
 from logging import getLogger
@@ -9,15 +10,18 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
+from app.core.admission import bounded_evidence, evidence_hash
 from app.core.categories import CATEGORY_CRITERIA
-from app.core.jev import JevRelevanceScorer, jev_relevance_scorer
+from app.core.jev import JevAssessment, JevRelevanceScorer, jev_relevance_scorer
 from app.core.models import Article
-from app.core.pipeline import run_fetch_cycle
+from app.core.pipeline import _build_article_row, run_fetch_cycle
+from app.core.reenrich_pilot import source_state
 from app.core.scoring import ai_relevance_score
 from app.ingest.html import HtmlListPageResult
 from app.ingest.rss import RssFetchResult, _with_rss_metadata
 from app.storage.models_sql import Article as StoredArticle
 from app.storage.models_sql import Base
+from app.storage.weekly import fingerprint
 
 
 def _article(index: int = 1) -> Article:
@@ -232,3 +236,73 @@ def test_ingestion_persists_jev_score_or_heuristic_on_failure(
     assert repeated.new == 0
     assert repeated.duplicates == 2
     assert not requests
+
+
+# Bounded text sent to Jev, pinned byte for byte (sha256 of the UTF-8 text) per mode.
+PINNED_ARTICLE = {
+    "title": "AI été " * 150,
+    "summary": "Summary line. " * 300,
+    "content": "Contenu étendu. " * 1100,
+}
+PINNED_TEXT = {
+    "admission": "1d5da0677f4673412268c107ea26c5bebb1a0e9c961b04a1122372d7c014b236",
+    "daily_enrichment": "d9dab80771cb3908a45b5094fce3a4de5fbc7866652f22bfcacca685a9085bea",
+    "plain": "1d5da0677f4673412268c107ea26c5bebb1a0e9c961b04a1122372d7c014b236",
+    "admission_empty": "73358b694ace7d401bc6f09c3f381a9cadf964c985785ff927cfa0f210d3ba93",
+}
+
+
+def _pinned_article(**update) -> Article:
+    return _article().model_copy(update={**PINNED_ARTICLE, **update})
+
+
+def _sent_state(article: Article, *, admission: bool, daily: bool) -> str:
+    states = []
+
+    def respond(request):
+        states.append(json.loads(request.content)["state"])
+        return httpx.Response(200, json={"answers": {
+            "ai_relevant": {"noul": 0.9},
+            "admission": {"choice": "accepted_ai_editorial", "confidence": 0.9},
+        }})
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+        JevRelevanceScorer(
+            client, "jev-1.13.0", getLogger("jev-test"), semantic_admission_enabled=admission,
+            daily_enrichment_enabled=daily,
+        ).classify(article)
+    assert len(states) == 1
+    return states[0]
+
+
+def _sha(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+@pytest.mark.parametrize("mode", ["admission", "daily_enrichment", "plain", "admission_empty"])
+def test_bounded_jev_text_is_pinned_per_mode(mode) -> None:
+    article = (_pinned_article(summary=None, content=None) if mode == "admission_empty"
+               else _pinned_article())
+    if mode.startswith("admission"):
+        sent = _sent_state(article, admission=True, daily=False)
+        # The admission cache key hashes the same text that is sent.
+        assert bounded_evidence(article) == sent
+        assert evidence_hash(bounded_evidence(article)) == _sha(sent)
+    elif mode == "daily_enrichment":
+        sent = _sent_state(article, admission=True, daily=True)
+        # Evidence for the cache key keeps the summary in every mode.
+        assert _sha(bounded_evidence(article)) == PINNED_TEXT["admission"]
+        row = _build_article_row(
+            item=article, config=SourceConfig(id="test", name="Test", type="rss",
+                                              url="https://example.com/feed"),
+            db_source_id=1, canonical="c", canonical_hash="h", admission_enabled=True,
+            assessment=JevAssessment(0.9, None, None, "accepted_ai_editorial", 0.9,
+                                     "NotComparison", 0.9),
+        )
+        assert row is not None
+        provenance = json.loads(str(row["enrichment_provenance"]))
+        assert provenance["admission_source_hash"] == fingerprint(sent)
+        assert sent == source_state({"title": article.title, "content": article.content})
+    else:
+        sent = _sent_state(article, admission=False, daily=False)
+    assert _sha(sent) == PINNED_TEXT[mode]
