@@ -130,8 +130,14 @@ Codex multi-agent scripts (`scripts/run_multiagent.sh` and related; not in activ
 
 ## Specs
 
-All specs live in `specs/<NNN>-<name>/` (`ls specs/`). Before a behavior change, read the matching
-`spec.md` and keep the implementation aligned unless the user explicitly wants to diverge.
+All specs live in `specs/<NNN>-<name>/` (`ls specs/`). A spec is the working document of a feature
+in progress; once the feature ships it is history and is not kept current.
+
+- Before a behavior change, read the feature's code doc ("Feature Docs Next To Code"): it is the
+  current behavior. Keep the implementation aligned with it unless the user explicitly wants to diverge.
+- Read `spec.md` / `plan.md` for a feature in progress, or for a shipped feature that has no code
+  doc yet. In the latter case check its claims against the code: status lines ("Draft") of old specs
+  were never updated.
 
 ## Response Expectations
 
