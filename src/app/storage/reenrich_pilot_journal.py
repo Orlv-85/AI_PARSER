@@ -5,34 +5,25 @@ import os
 import sqlite3
 import time
 from collections import Counter
-from decimal import Decimal
 
 import httpx
 
 from app.core.daily.reenrich_pilot import (
     DEEPSEEK_MODEL,
     ENDPOINTS,
-    PRICES,
     parse_summary,
     request_key,
     reservation,
 )
-from app.storage.legacy_cleanup import encoded, fingerprint
+from app.core.provider_costs import PRICES, is_overload, microdollars
+from app.storage.journal_files import encoded, fingerprint
 
 # Overload/rate-limit answers without usage are not billed; retry them in place.
-TRANSIENT_STATUS = {429, 500, 502, 503, 504}
 TRANSIENT_RETRY_DELAYS = (15, 60, 180)
 
 
 class PilotStopped(RuntimeError):
     """No further paid requests may be dispatched."""
-
-
-def microdollars(value):
-    amount = Decimal(str(value))
-    if not amount.is_finite() or amount <= 0 or amount * 1000000 != int(amount * 1000000):
-        raise ValueError("Invalid dollar cap")
-    return int(amount * 1000000)
 
 
 def priced_usage(provider, data):
@@ -52,11 +43,6 @@ def _json_or_none(response):
         return response.json()
     except ValueError:
         return None
-
-
-def is_overload(status_code, data):
-    """An explicit error-only overload answer; anything else keeps unknown billing."""
-    return status_code in TRANSIENT_STATUS and isinstance(data, dict) and set(data) == {"error"}
 
 
 class PilotJournal:

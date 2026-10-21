@@ -17,7 +17,6 @@ from app.core.daily.reenrich_pilot import (
     DEEPSEEK_MODEL,
     JEV_MODEL,
     PILOT_VERSION,
-    PRICES,
     SUMMARY_QUOTE_REPAIR_VERSION,
     SUMMARY_RECOVERY_VERSION,
     SUMMARY_VERSION,
@@ -30,8 +29,9 @@ from app.core.daily.reenrich_pilot import (
     reservation,
     summary_request,
 )
+from app.core.provider_costs import PRICES
 from app.storage.article_evidence_cache import url_key
-from app.storage.legacy_cleanup import fingerprint, private_write
+from app.storage.journal_files import fingerprint, private_write
 from app.storage.reenrich_pilot_journal import PilotJournal, PilotStopped
 
 

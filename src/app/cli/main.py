@@ -17,6 +17,7 @@ from app.core.daily.signals import (
     run_signals,
 )
 from app.core.ingestion.pipeline import run_fetch_cycle
+from app.core.provider_costs import microdollars
 from app.core.sources.onboarding import import_source_candidates, run_source_validation_batch
 from app.core.weekly.audit import audit
 from app.core.weekly.worker import drain
@@ -25,7 +26,6 @@ from app.storage import SessionLocal, create_all
 from app.storage.article_repo import ArticleRepo
 from app.storage.daily_signals import DailySignalRepo, OverrideConflict
 from app.storage.models_sql import AIEntityOverride
-from app.storage.reenrich_pilot_journal import microdollars
 from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
 from app.storage.weekly import WeeklyStore
 

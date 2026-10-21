@@ -10,8 +10,8 @@ Production jobs: `scripts/run_daily_fetch_job.sh`, `scripts/run_daily_digest_job
 | `cli/` | Typer commands: sources, fetch, serve, top, search, prune, daily-publish, daily-signals (+ entities), weekly-analytics, source candidates |
 | `config/` | `settings.py` (env `AINEWS_*`), `sources.py` (`sources.yaml` loader) |
 | `ingest/` | RSS/HTML fetching, page filtering, date evidence |
-| `core/` | Domain logic. Shared: `models.py`, `categories.py`, `canonicalize.py`, `jev.py`. Packages: `ingestion/` (pipeline, admission, scoring, dedup, legacy cleanup policy), `daily/` (digest enrichment, rubric, re-enrichment pilot, daily signals), `weekly/` (weekly analytics), `sources/` (source onboarding and review) |
-| `storage/` | SQLAlchemy models (`models_sql.py`), repositories, Alembic migrations, ledgers and journals |
+| `core/` | Domain logic. Shared: `models.py`, `categories.py`, `canonicalize.py`, `jev.py`, `provider_costs.py` (paid provider prices, dollar caps). Packages: `ingestion/` (pipeline, admission, scoring, dedup, legacy cleanup policy), `daily/` (digest enrichment, rubric, re-enrichment pilot, daily signals), `weekly/` (weekly analytics), `sources/` (source onboarding and review) |
+| `storage/` | SQLAlchemy models (`models_sql.py`), repositories, Alembic migrations, ledgers and journals; `journal_files.py` (canonical JSON, fingerprint, private atomic writes) |
 | `web/` | FastAPI app, API models (`web/models.py`), HTML templates |
 | `observability/` | Logging setup |
 

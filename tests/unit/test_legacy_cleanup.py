@@ -8,10 +8,10 @@ import pytest
 from app.core.ingestion.legacy_cleanup import cleanup_verdict
 from app.core.jev import JevAssessment
 from app.storage.cleanup_journal import CleanupJournal, CleanupStopped
+from app.storage.journal_files import fingerprint
 from app.storage.legacy_cleanup import (
     build_manifest,
     cache_key,
-    fingerprint,
     known_article_fk,
     verify_manifest,
 )

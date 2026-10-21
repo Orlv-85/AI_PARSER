@@ -18,12 +18,8 @@ from app.storage.article_evidence_cache import (
     make_http_client,
     validate_source_url,
 )
-from app.storage.legacy_cleanup import (
-    dependencies,
-    fingerprint,
-    normalize_snapshot,
-    private_write,
-)
+from app.storage.journal_files import fingerprint, private_write
+from app.storage.legacy_cleanup import dependencies, normalize_snapshot
 
 
 def prepare(args):

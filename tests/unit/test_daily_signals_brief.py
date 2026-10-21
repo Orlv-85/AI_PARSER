@@ -17,7 +17,7 @@ from app.core.daily.signals_brief import (
     parse_brief,
     request_body,
 )
-from app.storage.legacy_cleanup import encoded, fingerprint
+from app.storage.journal_files import encoded, fingerprint
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "daily_signals" / "brief"
 PRO = "deepseek-v4-pro"

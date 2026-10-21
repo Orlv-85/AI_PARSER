@@ -20,7 +20,7 @@ from app.core.daily.reenrich_pilot import (
     topic_request,
 )
 from app.core.jev import JevRelevanceScorer
-from app.storage.legacy_cleanup import fingerprint
+from app.storage.journal_files import fingerprint
 from app.storage.reenrich_pilot_journal import PilotJournal, PilotStopped
 
 ROW = {"url": "https://example.com/article/ai", "title": "Synthetic AI release",

@@ -20,7 +20,7 @@ from app.core.daily.signals_entities import (
     vendor_tokens,
 )
 from app.core.ingestion.dedup import hamming_distance, simhash64
-from app.storage.legacy_cleanup import fingerprint
+from app.storage.journal_files import fingerprint
 
 METHODOLOGY_VERSION = "daily-signals-3"
 EVENT_LABELS = {

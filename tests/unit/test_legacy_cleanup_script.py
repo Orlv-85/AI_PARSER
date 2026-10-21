@@ -5,7 +5,8 @@ from types import SimpleNamespace
 
 import httpx
 
-from app.storage.legacy_cleanup import build_manifest, encoded
+from app.storage.journal_files import encoded
+from app.storage.legacy_cleanup import build_manifest
 from app.storage.non_news_cleanup import EXPORT_TABLES
 
 

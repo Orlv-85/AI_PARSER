@@ -30,7 +30,7 @@ from app.core.daily.rubric import QUESTIONS, RUBRIC_VERSION
 from app.core.jev import JevInputTooLarge, _probability
 from app.storage.article_evidence_cache import PageCache, SourcePageDownloader, make_http_client
 from app.storage.digest_repo import NewsDigestRepo
-from app.storage.legacy_cleanup import encoded, fingerprint, private_write
+from app.storage.journal_files import encoded, fingerprint, private_write
 from app.storage.models_sql import Article
 from app.storage.reenrich_pilot_journal import PilotJournal, PilotStopped
 

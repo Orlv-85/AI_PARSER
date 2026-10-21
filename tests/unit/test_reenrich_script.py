@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.storage.article_evidence_cache import PageCache, private_bytes
-from app.storage.legacy_cleanup import encoded, fingerprint
+from app.storage.journal_files import encoded, fingerprint
 from app.storage.non_news_cleanup import EXPORT_TABLES
 
 

@@ -14,16 +14,14 @@ from sqlalchemy import create_engine, insert, text
 from app.config.settings import Settings
 from app.core.ingestion.legacy_cleanup import MAX_NON_AI_RELEVANCE, MIN_REJECT_CONFIDENCE
 from app.storage.cleanup_journal import CleanupJournal, CleanupStopped
+from app.storage.journal_files import encoded, fingerprint, private_write
 from app.storage.legacy_cleanup import (
-    _typed,
     apply_cleanup,
     build_manifest,
-    encoded,
-    fingerprint,
     normalize_snapshot,
-    private_write,
     read_tables,
     restore_cleanup,
+    typed_row,
     verify_manifest,
 )
 from app.storage.models_sql import Base
@@ -122,7 +120,7 @@ def rehearse(args):
         for table in Base.metadata.sorted_tables:
             rows = snapshot['tables'].get(table.name, [])
             for row in rows:
-                connection.execute(insert(table).values(_typed(table.name, row)))
+                connection.execute(insert(table).values(typed_row(table.name, row)))
             if rows and 'id' in table.c and table.c.id.autoincrement is True:
                 connection.execute(text(f"SELECT setval(pg_get_serial_sequence('{table.name}', "
                                         "'id'), (SELECT MAX(id) FROM " + table.name + "))"))
@@ -137,7 +135,7 @@ def rehearse(args):
                  url_canonical='https://cleanup-rehearsal.invalid/new',
                  url_canonical_hash='f' * 64)
     with engine.begin() as connection:
-        probe_id = connection.execute(insert(table).values(_typed('articles', probe))
+        probe_id = connection.execute(insert(table).values(typed_row('articles', probe))
                                       .returning(table.c.id)).scalar_one()
     restore_cleanup(engine, backup)
     with engine.connect() as connection:

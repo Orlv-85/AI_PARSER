@@ -59,7 +59,6 @@ are unchanged.
 | `src/app/core/daily/reenrich_pilot.py` | Versioned JEV questions, conservative decisions and quote-grounded summary parsing |
 | `src/app/storage/reenrich_pilot_journal.py` | Durable provider responses, spend reservations, usage and controlled recovery |
 | `scripts/reenrich_pilot.py` | Frozen mixed pilot, response reuse and aggregate reporting |
-| `src/app/storage/reenrich_apply.py` | Manifest verification, transactional updates/deletions and targeted restore |
 
 Download and pilot commands are documented in
 [the source-cache guide](article-source-cache.md) and
@@ -85,18 +84,13 @@ running this application version. Existing rows start as `legacy_unverified`.
 Downgrade refuses existing null publication timestamps instead of fabricating
 dates to satisfy the previous non-null constraint.
 
-`apply_reenrichment(engine, manifest, backup_path)` verifies manifest hashes,
-article identities and conservative deletion evidence. It locks dependency
-tables, compares live row/dependency fingerprints, skips concurrent drift and
-saves a private targeted backup before mutation. Updates, exact-ID deletions,
-alias removal and assessment ledger inserts share a transaction. A matching
-backup supports idempotent apply; conflicting state is refused.
-
-`restore_reenrichment(engine, backup)` restores only affected rows and assessment
-keys. It refuses conflicting current rows/ledger records, restores articles
-before aliases and leaves unrelated post-snapshot rows intact. Keep the full
-database backup as well as targeted receipts. Rehearse apply and restore on an
-isolated PostgreSQL database before changing production data.
+The one-time apply and targeted restore (`src/app/storage/reenrich_apply.py`) ran
+once, on 2026-10-11 (see the outcome report), and was removed on 2026-10-21: nothing
+called it after that run. To roll back that run, restore the module's last version
+from git history (`git log --diff-filter=D -- src/app/storage/reenrich_apply.py`)
+and use it with the targeted backup in
+`/opt/ai-news/backups/reenrich-final-20261011/`, and rehearse on an isolated
+PostgreSQL database first.
 
 Copied digest/weekly URLs, text and frozen snapshots are not rewritten by article
 cleanup. Retention remains 800 days, with the existing 5 GiB size threshold and

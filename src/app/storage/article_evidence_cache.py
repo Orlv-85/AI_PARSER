@@ -21,7 +21,7 @@ from app.ingest.date_evidence import extract_date_evidence
 from app.ingest.fetcher import DEFAULT_USER_AGENT
 from app.ingest.html import extract_article_text
 from app.ingest.page_filter import url_exclusion_reason
-from app.storage.legacy_cleanup import fingerprint, private_write
+from app.storage.journal_files import fingerprint, private_write
 
 CACHE_VERSION = "article-source-cache-1"
 EXTRACTION_VERSION = "article-source-extraction-1"
