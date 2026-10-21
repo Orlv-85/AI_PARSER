@@ -161,6 +161,7 @@ def test_expired_session_on_protected_api_returns_401(monkeypatch, tmp_path) -> 
         subject="operator",
         now=datetime(2020, 1, 1, 0, 0, tzinfo=UTC),
     )
+    client.cookies.clear()
     client.cookies.set("ainews_session", expired_token)
 
     response = client.get("/api/news")
@@ -180,6 +181,7 @@ def test_tampered_session_token_is_denied(monkeypatch, tmp_path) -> None:
     token = client.cookies.get("ainews_session")
     assert token is not None
     replacement = "A" if token[-1] != "A" else "B"
+    client.cookies.clear()
     client.cookies.set("ainews_session", f"{token[:-1]}{replacement}")
 
     response = client.get("/api/news")
@@ -219,10 +221,12 @@ def test_second_login_immediately_invalidates_previous_session_token(monkeypatch
     assert second_token is not None
     assert second_token != first_token
 
+    client.cookies.clear()
     client.cookies.set("ainews_session", first_token)
     old_token_response = client.get("/api/news")
     assert old_token_response.status_code == 401
 
+    client.cookies.clear()
     client.cookies.set("ainews_session", second_token)
     new_token_response = client.get("/api/news")
     assert new_token_response.status_code == 200

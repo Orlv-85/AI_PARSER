@@ -126,10 +126,12 @@ def test_e2e_second_login_immediately_invalidates_previous_session_token(
     assert second_token is not None
     assert second_token != first_token
 
+    client.cookies.clear()
     client.cookies.set("ainews_session", first_token)
     old_token_response = client.get("/api/news")
     assert old_token_response.status_code == 401
 
+    client.cookies.clear()
     client.cookies.set("ainews_session", second_token)
     new_token_response = client.get("/api/news")
     assert new_token_response.status_code == 200

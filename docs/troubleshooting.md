@@ -116,6 +116,16 @@ the Troubleshooting section of `README.md`.
       "cause": "Under this config every name imported from `app.*` is Any, and warn_return_any flags returning it from a function with a typed return.",
       "fix": "Follow the existing idiom: `cast(str, ...)` (see `_html_placeholder_key` in src/app/core/pipeline.py) or assign to a typed local (`counts: tuple[int, int] = ...; return counts`). Do not add `# type: ignore`.",
       "verification": "make lint passes after the cast or typed local (branch refactor/pipeline-cleanup-20261020)."
+    },
+    {
+      "id": "testclient-cookie-override-httpx2",
+      "date": "2026-10-21",
+      "area": "tests (auth, Starlette TestClient)",
+      "symptom": "In CI only, tests/unit/test_auth_stage1.py::test_tampered_session_token_is_denied, ::test_second_login_immediately_invalidates_previous_session_token and tests/e2e/test_auth_e2e.py::test_e2e_second_login_immediately_invalidates_previous_session_token fail with `assert 200 == 401`; they pass locally. Master failed the same way on a rerun, so the PR under test was not the cause.",
+      "evidence": ["CI installed httpx2/httpcore2 2.16.0 (2.15.1 the day before); they are not pinned and come in through mcp", "Starlette 1.9 TestClient uses httpx2 when it is installed", "with httpx2 2.16 the login cookie is stored for domain testserver.local, and client.cookies.set(name, value) adds a second cookie with an empty domain; the request carries `s=OLD; s=VALID` and the server reads the valid one"],
+      "cause": "Test client cookie jar behavior, not the auth code: the test did not replace the session cookie, it added one. Browsers replace a cookie of the same name, domain and path.",
+      "fix": "Call client.cookies.clear() before client.cookies.set(...) when a test presents a chosen token.",
+      "verification": "The auth tests pass with httpx2 2.15.1 and 2.16.0 (local venv from build/requirements-dev.txt)."
     }
   ]
 }
