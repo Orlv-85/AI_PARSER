@@ -9,7 +9,7 @@ import logging
 from collections import Counter
 from pathlib import Path
 
-from app.core.legacy_cleanup import article_evidence_hash
+from app.core.ingestion.legacy_cleanup import article_evidence_hash
 from app.ingest.date_evidence import date_candidate, resolve_dates
 from app.storage.article_evidence_cache import (
     CACHE_VERSION,

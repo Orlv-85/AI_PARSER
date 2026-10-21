@@ -10,9 +10,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.config.settings import Settings
-from app.core.weekly_analytics import DEFAULT_THRESHOLDS, Observation, _metrics, calculate, windows
-from app.core.weekly_enrichment import WeeklyEnricher
-from app.core.weekly_frozen import (
+from app.core.weekly.analytics import DEFAULT_THRESHOLDS, Observation, _metrics, calculate, windows
+from app.core.weekly.enrichment import WeeklyEnricher
+from app.core.weekly.frozen import (
     FILES,
     compatible_assignments,
     file_hash,
@@ -24,7 +24,7 @@ from app.core.weekly_frozen import (
     run,
     verified_input,
 )
-from app.core.weekly_input import publication, source_fingerprint
+from app.core.weekly.input import publication, source_fingerprint
 from app.storage.models_sql import Article, Base, WeeklyInputObservation
 from app.storage.weekly import WeeklyStore, encoded
 from app.web.models import WeeklyAnalyticsResponse
@@ -246,9 +246,9 @@ def test_frozen_runner_resumes_budget_and_publishes_without_models(tmp_path, mon
             "usage": {"input_tokens": 100}})
 
     client_type = httpx.Client
-    monkeypatch.setattr("app.core.weekly_frozen.httpx.Client", lambda **_: client_type(
+    monkeypatch.setattr("app.core.weekly.frozen.httpx.Client", lambda **_: client_type(
         transport=httpx.MockTransport(handler)))
-    monkeypatch.setattr("app.core.weekly_worker.explain", lambda *args: False)
+    monkeypatch.setattr("app.core.weekly.worker.explain", lambda *args: False)
     first = run(root, config)
     assert first["status"] == "retry" and len(requests) == 1
     assert run(root, config)["status"] == "retry" and len(requests) == 2
@@ -298,15 +298,15 @@ def test_narrative_revision_preserves_calculation_resumes_and_publishes_without_
         return httpx.Response(200, json={"answers": answers, "usage": {"input_tokens": 100}})
 
     client_type = httpx.Client
-    monkeypatch.setattr("app.core.weekly_frozen.httpx.Client", lambda **_: client_type(
+    monkeypatch.setattr("app.core.weekly.frozen.httpx.Client", lambda **_: client_type(
         transport=httpx.MockTransport(handler)))
-    monkeypatch.setattr("app.core.weekly_worker.explain", lambda *args: False)
+    monkeypatch.setattr("app.core.weekly.worker.explain", lambda *args: False)
     assert run(parent, config)["status"] == "complete"
     original = json.loads((parent / "candidate.json").read_text())
     parent_bytes = {p.name: p.read_bytes() for p in parent.iterdir() if p.is_file()}
     prepare_narrative_revision(parent, root, file_hash(parent / "candidate.json"),
                                ["coding-agents"], config)
-    monkeypatch.setattr("app.core.weekly_frozen.build_snapshot", lambda *args: pytest.fail(
+    monkeypatch.setattr("app.core.weekly.frozen.build_snapshot", lambda *args: pytest.fail(
         "Must not recompute admission/classification/events/metrics"))
     count = len(requests)
     assert run(root, config)["status"] == "complete"
@@ -347,7 +347,7 @@ def test_unknown_billing_blocks_resume_and_is_not_semantic_rejection(tmp_path, m
         raise httpx.ReadTimeout("unknown billing", request=request)
 
     client_type = httpx.Client
-    monkeypatch.setattr("app.core.weekly_frozen.httpx.Client", lambda **_: client_type(
+    monkeypatch.setattr("app.core.weekly.frozen.httpx.Client", lambda **_: client_type(
         transport=httpx.MockTransport(handler)))
     assert run(root, config)["status"] == "retry"
     resumed = run(root, config)
@@ -365,7 +365,7 @@ def test_cumulative_money_cap_stops_before_dispatch(tmp_path, monkeypatch):
     prepare(inputs, root, expected, caps, config)
     requests = []
     client_type = httpx.Client
-    monkeypatch.setattr("app.core.weekly_frozen.httpx.Client", lambda **_: client_type(
+    monkeypatch.setattr("app.core.weekly.frozen.httpx.Client", lambda **_: client_type(
         transport=httpx.MockTransport(requests.append)))
     assert run(root, config)["status"] == "retry" and not requests
     assert run(root, config)["usage"]["total_committed_usd"] == 0
@@ -413,7 +413,7 @@ def test_source_admission_cache_survives_taxonomy_changes(tmp_path):
 
 
 def test_recovery_preserves_input_and_cumulative_unknown_expense(tmp_path, monkeypatch):
-    from app.core.weekly_frozen import recover  # pylint: disable=import-outside-toplevel
+    from app.core.weekly.frozen import recover  # pylint: disable=import-outside-toplevel
 
     inputs = tmp_path / "input"
     expected = write_input(inputs)
@@ -431,9 +431,9 @@ def test_recovery_preserves_input_and_cumulative_unknown_expense(tmp_path, monke
             "usage": {"input_tokens": 100}})
 
     client_type = httpx.Client
-    monkeypatch.setattr("app.core.weekly_frozen.httpx.Client", lambda **_: client_type(
+    monkeypatch.setattr("app.core.weekly.frozen.httpx.Client", lambda **_: client_type(
         transport=httpx.MockTransport(handler)))
-    monkeypatch.setattr("app.core.weekly_worker.explain", lambda *args: False)
+    monkeypatch.setattr("app.core.weekly.worker.explain", lambda *args: False)
     first = run(old_root, config)
     hashes = {name: file_hash(old_root / name) for name in ("frozen.json", "journal.sqlite3",
                                                           "weekly.sqlite")}

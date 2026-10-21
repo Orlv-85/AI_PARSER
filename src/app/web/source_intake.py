@@ -9,8 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config.settings import Settings
-from app.core.source_onboarding import normalize_candidate_url
-from app.core.source_review import (
+from app.core.sources.onboarding import normalize_candidate_url
+from app.core.sources.review import (
     SourceReviewer,
     evidence_fingerprint,
     probe_source,

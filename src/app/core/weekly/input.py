@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from email.utils import parsedate_to_datetime
 from types import SimpleNamespace
 
-from app.core.admission import bounded_evidence, evidence_hash
+from app.core.ingestion.admission import bounded_evidence, evidence_hash
 from app.ingest.date_evidence import date_candidate, resolve_dates
 
 

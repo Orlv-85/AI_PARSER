@@ -7,7 +7,7 @@ what is cooling, and how many events of each type happened. Everything is comput
 page loads never call a provider.
 
 How it works (scope, sections, New rules, spikes, brief, day states) and why: the feature doc next to
-the code, `src/app/core/daily_signals.md`. This guide is for operators only.
+the code, `src/app/core/daily/signals.md`. This guide is for operators only.
 
 ## Running it
 

@@ -3,7 +3,8 @@ from datetime import date
 
 import pytest
 
-from app.core.daily_signals_extract import (
+from app.core.daily.reenrich_pilot import DEEPSEEK_MODEL
+from app.core.daily.signals_extract import (
     EXTRACTION_VERSION,
     MAX_INPUT_BYTES,
     SYSTEM_PROMPT,
@@ -17,7 +18,6 @@ from app.core.daily_signals_extract import (
     signals_request_key,
     source_text,
 )
-from app.core.reenrich_pilot import DEEPSEEK_MODEL
 from app.storage.legacy_cleanup import encoded
 
 PUBLISHED = date(2026, 10, 14)

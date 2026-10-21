@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from app.core import daily_signals_brief as brief
-from app.core.daily_signals_brief import (
+from app.core.daily import signals_brief as brief
+from app.core.daily.signals_brief import (
     BRIEF_PROMPT,
     BRIEF_VERSION,
     BriefInvalid,

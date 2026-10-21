@@ -5,7 +5,7 @@ The client re-renders the same structure in digest.html (`renderSignals`) on dat
 import re
 from html import escape
 
-from app.core.daily_signals_brief import HARD_EVENTS
+from app.core.daily.signals_brief import HARD_EVENTS
 from app.web.models import (
     DailySignalBrief,
     DailySignalEntityItem,

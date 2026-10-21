@@ -68,7 +68,7 @@ https://htmx.org/essays/markdown-in-src/): the feature doc holds the intended cu
 code and tests follow it.
 
 - Each feature has a doc next to its main module: `<main_module>.md` (example:
-  `src/app/core/daily_signals.md`). The main module's docstring names it.
+  `src/app/core/daily/signals.md`). The main module's docstring names it.
 - Sections, short and dry:
   - Behavior - what the feature does and guarantees now: rules, not numbers (name the constant);
     a Mermaid diagram of the flow; each rule names the tests that check it (`Tests: ...`), and a

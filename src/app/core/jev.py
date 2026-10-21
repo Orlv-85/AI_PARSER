@@ -11,7 +11,7 @@ import httpx
 
 from app.config.settings import Settings
 from app.core.categories import CATEGORY_CRITERIA
-from app.core.daily_rubric import QUESTIONS
+from app.core.daily.rubric import QUESTIONS
 from app.core.models import Article
 
 

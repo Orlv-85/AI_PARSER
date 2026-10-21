@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.core import source_onboarding
+from app.core.sources import onboarding as source_onboarding
 from app.storage.models_sql import Base, Source
 
 

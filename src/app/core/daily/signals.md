@@ -1,7 +1,7 @@
 <!-- code-doc
-module: src/app/core/daily_signals.py
+module: src/app/core/daily/signals.py
 covers:
-  - src/app/core/daily_signals*.py
+  - src/app/core/daily/signals*.py
   - src/app/storage/daily_signals*.py
   - src/app/storage/migrations/versions/*daily_signal*.py
   - src/app/web/signals_view.py
@@ -31,7 +31,7 @@ flowchart LR
 ```
 
 Rules name their limits; the numbers live in the code: fields of `Thresholds` in
-`daily_signals_compute.py`, constants of the extract and brief modules. Each rule lists the tests
+`signals_compute.py`, constants of the extract and brief modules. Each rule lists the tests
 that check it.
 
 **Scope and days**
@@ -158,7 +158,7 @@ that check it.
 ```text
 scripts/run_daily_digest_job.sh (02:00 UTC, after the digest)
   -> ai-news daily-signals                       src/app/cli/main.py: daily_signals
-  -> run_signals                                 core/daily_signals.py
+  -> run_signals                                 core/daily/signals.py
        _gate                    flag AINEWS_DAILY_SIGNALS_ENABLED + DS key; else state disabled/missing_provider_key
        repo.replace_membership  digest items of D -> articles (exact URL, then canonical hash)
        _extract_days            one DeepSeek call per in-scope article, via SignalsLedger
@@ -175,11 +175,11 @@ GET /?date=D                                     web/signals_view.py: render_sig
 
 | File | Role | Pure |
 | --- | --- | --- |
-| `core/daily_signals.py` | Run orchestration, brief step, operator entity commands (`merge_entities`, `alias_entity`) | no |
-| `core/daily_signals_extract.py` | Extraction prompt, request body, answer validation (`EXTRACTION_VERSION`) | yes |
-| `core/daily_signals_entities.py` | Deterministic entity identity: keys, vendor classes, reconciliation, overrides | yes |
-| `core/daily_signals_compute.py` | Snapshot of one day (`compute_snapshot`, `Thresholds`, `one_liner`, folding, quiet flag) | yes |
-| `core/daily_signals_brief.py` | Brief packet, prompt, request body, validation rules 1-9, O1 review marker | yes |
+| `core/daily/signals.py` | Run orchestration, brief step, operator entity commands (`merge_entities`, `alias_entity`) | no |
+| `core/daily/signals_extract.py` | Extraction prompt, request body, answer validation (`EXTRACTION_VERSION`) | yes |
+| `core/daily/signals_entities.py` | Deterministic entity identity: keys, vendor classes, reconciliation, overrides | yes |
+| `core/daily/signals_compute.py` | Snapshot of one day (`compute_snapshot`, `Thresholds`, `one_liner`, folding, quiet flag) | yes |
+| `core/daily/signals_brief.py` | Brief packet, prompt, request body, validation rules 1-9, O1 review marker | yes |
 | `storage/daily_signals.py` | `DailySignalRepo`: membership, extractions, evidence, entities, overrides, snapshots, briefs | no |
 | `storage/daily_signals_ledger.py` | `SignalsLedger`: private SQLite of physical POSTs, replay, per-run caps, per-model prices | no |
 | `web/signals_view.py` | Server HTML of the block; `quiet_line`, chips, D3 New list | yes |
@@ -205,9 +205,9 @@ Ledger and run reports live in `data/daily-signals/` (not in the database).
 
 | Constant | File | Bump when | After deploy |
 | --- | --- | --- | --- |
-| `EXTRACTION_VERSION` | `daily_signals_extract.py` | prompt or validation of extraction changes | paid re-extraction (backfill) |
-| `METHODOLOGY_VERSION` | `daily_signals_compute.py` | thresholds or snapshot rules change | `--recompute-only --recompute-all` ($0) |
-| `BRIEF_VERSION` | `daily_signals_brief.py` | brief prompt, packet or validation changes | brief backfill (paid) |
+| `EXTRACTION_VERSION` | `signals_extract.py` | prompt or validation of extraction changes | paid re-extraction (backfill) |
+| `METHODOLOGY_VERSION` | `signals_compute.py` | thresholds or snapshot rules change | `--recompute-only --recompute-all` ($0) |
+| `BRIEF_VERSION` | `signals_brief.py` | brief prompt, packet or validation changes | brief backfill (paid) |
 
 The brief `input_hash` covers packet, `BRIEF_VERSION` and model: an unchanged input is never paid
 twice; a row with the same hash is reused even when `invalid`.
@@ -216,14 +216,14 @@ twice; a row with the same hash is reused even when `invalid`.
 
 | Change | Place | Also |
 | --- | --- | --- |
-| New/Top/Spike/Rising thresholds | `Thresholds` in `daily_signals_compute.py` | bump `METHODOLOGY_VERSION` |
-| Family words for `variant of` | `FAMILY_STOPWORDS` in `daily_signals_compute.py` | methodology bump |
-| Hard event types (chips, brief order) | `HARD_EVENTS` in `daily_signals_brief.py` | view uses the same tuple |
-| Review marker (O1) | `REVIEW_TITLE`, `REVIEW_SHARE` in `daily_signals_brief.py` | `BRIEF_VERSION` bump |
-| Brief prompt / rules | `BRIEF_PROMPT`, `parse_brief` in `daily_signals_brief.py` | `BRIEF_VERSION` bump, fixtures |
+| New/Top/Spike/Rising thresholds | `Thresholds` in `signals_compute.py` | bump `METHODOLOGY_VERSION` |
+| Family words for `variant of` | `FAMILY_STOPWORDS` in `signals_compute.py` | methodology bump |
+| Hard event types (chips, brief order) | `HARD_EVENTS` in `signals_brief.py` | view uses the same tuple |
+| Review marker (O1) | `REVIEW_TITLE`, `REVIEW_SHARE` in `signals_brief.py` | `BRIEF_VERSION` bump |
+| Brief prompt / rules | `BRIEF_PROMPT`, `parse_brief` in `signals_brief.py` | `BRIEF_VERSION` bump, fixtures |
 | Brief model / prices | setting `daily_signals_brief_model`; `BRIEF_PRICES` | unknown model -> `brief_model_unpriced`, no call |
-| Extraction prompt | `daily_signals_extract.py` | `EXTRACTION_VERSION` bump (paid) |
-| Entity merge rules | `daily_signals_entities.py` | operator overrides for single cases |
+| Extraction prompt | `signals_extract.py` | `EXTRACTION_VERSION` bump (paid) |
+| Entity merge rules | `signals_entities.py` | operator overrides for single cases |
 | Block markup | `signals_view.py` and `renderSignals` in `digest.html` | both |
 | API fields | `web/models.py` | optional fields only |
 

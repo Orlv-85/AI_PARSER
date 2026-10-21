@@ -10,8 +10,8 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import Settings, get_settings
-from app.core.source_onboarding import import_source_candidates
-from app.core.source_review import SourceProbe
+from app.core.sources.onboarding import import_source_candidates
+from app.core.sources.review import SourceProbe
 from app.storage.models_sql import Base, Source, SourceCandidate
 from app.storage.repos import SourceCandidateRepo, SourceImportBatchRepo
 from app.web import source_intake

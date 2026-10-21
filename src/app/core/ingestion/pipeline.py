@@ -17,18 +17,18 @@ from sqlalchemy.orm import Session
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig, load_sources
-from app.core.admission import (
+from app.core.canonicalize import canonical_url_hash, canonicalize_url
+from app.core.categories import READABLE_CATEGORIES
+from app.core.daily.rubric import RUBRIC_VERSION
+from app.core.ingestion.admission import (
     admission_cache_key,
     bounded_evidence,
     decision_from_assessment,
     evidence_hash,
 )
-from app.core.canonicalize import canonical_url_hash, canonicalize_url
-from app.core.categories import READABLE_CATEGORIES
-from app.core.daily_rubric import RUBRIC_VERSION
+from app.core.ingestion.scoring import ai_relevance_score, freshness_score, rank_score
 from app.core.jev import JevAssessment, JevRelevanceScorer, jev_relevance_scorer, jev_state
 from app.core.models import Article as CoreArticle
-from app.core.scoring import ai_relevance_score, freshness_score, rank_score
 from app.ingest.fetcher import Fetcher
 from app.ingest.html import (
     HtmlListPageResult,

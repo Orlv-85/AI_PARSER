@@ -56,7 +56,7 @@ are unchanged.
 | `src/app/ingest/date_evidence.py` | Literal date parsing, precision, timezone and conflict resolution |
 | `src/app/storage/article_evidence_cache.py` | Private page cache, redirect/robots checks, per-host pacing and extraction quality |
 | `scripts/reenrich_articles.py` | Freeze URLs, download/resume, verify artifacts and audit saved date proof |
-| `src/app/core/reenrich_pilot.py` | Versioned JEV questions, conservative decisions and quote-grounded summary parsing |
+| `src/app/core/daily/reenrich_pilot.py` | Versioned JEV questions, conservative decisions and quote-grounded summary parsing |
 | `src/app/storage/reenrich_pilot_journal.py` | Durable provider responses, spend reservations, usage and controlled recovery |
 | `scripts/reenrich_pilot.py` | Frozen mixed pilot, response reuse and aggregate reporting |
 | `src/app/storage/reenrich_apply.py` | Manifest verification, transactional updates/deletions and targeted restore |

@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 
 from app.core.jev import _probability
-from app.core.weekly_enrichment import WeeklyEnricher
+from app.core.weekly.enrichment import WeeklyEnricher
 from app.storage.weekly import encoded
 
 INSTRUCTION = (

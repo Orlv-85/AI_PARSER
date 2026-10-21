@@ -20,12 +20,12 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from app.config.settings import Settings
-from app.core.admission import bounded_evidence, evidence_hash
-from app.core.weekly_analytics import windows
-from app.core.weekly_enrichment import BudgetExhausted, WeeklyEnricher
-from app.core.weekly_input import instant, parsed, source_fingerprint
-from app.core.weekly_narrative import explain
-from app.core.weekly_worker import build_snapshot
+from app.core.ingestion.admission import bounded_evidence, evidence_hash
+from app.core.weekly.analytics import windows
+from app.core.weekly.enrichment import BudgetExhausted, WeeklyEnricher
+from app.core.weekly.input import instant, parsed, source_fingerprint
+from app.core.weekly.narrative import explain
+from app.core.weekly.worker import build_snapshot
 from app.storage.legacy_cleanup import fingerprint as journal_fingerprint
 from app.storage.legacy_cleanup import private_write
 from app.storage.models_sql import Base, WeeklyJob, WeeklySnapshot
@@ -39,10 +39,10 @@ FILES = ("snapshot.json", "selection-manifest-v4.json", "source-evidence.json",
 
 
 def code_hashes() -> dict:
-    app_root = Path(__file__).resolve().parents[1]
-    names = ("core/weekly_frozen.py", "core/weekly_input.py", "core/weekly_analytics.py",
-             "core/weekly_enrichment.py", "core/weekly_worker.py", "core/weekly_topics.py",
-             "core/weekly_narrative.py", "storage/weekly.py",
+    app_root = Path(__file__).resolve().parents[2]
+    names = ("core/weekly/frozen.py", "core/weekly/input.py", "core/weekly/analytics.py",
+             "core/weekly/enrichment.py", "core/weekly/worker.py", "core/weekly/topics.py",
+             "core/weekly/narrative.py", "storage/weekly.py",
              "storage/reenrich_pilot_journal.py", "web/models.py")
     return {name: file_hash(app_root / name) for name in names}
 

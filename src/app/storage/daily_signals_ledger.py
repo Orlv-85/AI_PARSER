@@ -17,7 +17,7 @@ from typing import Any, cast
 
 import httpx
 
-from app.core.reenrich_pilot import ENDPOINTS, PRICES
+from app.core.daily.reenrich_pilot import ENDPOINTS, PRICES
 from app.storage.legacy_cleanup import encoded
 from app.storage.reenrich_pilot_journal import is_overload
 

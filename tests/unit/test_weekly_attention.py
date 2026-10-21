@@ -3,7 +3,7 @@ from datetime import UTC, date, datetime, timedelta, timezone
 
 import pytest
 
-from app.core.weekly_analytics import Coverage, Observation, calculate, windows
+from app.core.weekly.analytics import Coverage, Observation, calculate, windows
 
 REPORT_DATE = date(2026, 10, 4)
 NOW = datetime(2026, 10, 5, tzinfo=UTC)

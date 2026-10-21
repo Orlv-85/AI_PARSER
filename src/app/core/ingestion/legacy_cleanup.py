@@ -4,7 +4,7 @@ from math import isfinite
 from types import SimpleNamespace
 from typing import Any
 
-from app.core.admission import bounded_evidence, decision_from_assessment, evidence_hash
+from app.core.ingestion.admission import bounded_evidence, decision_from_assessment, evidence_hash
 from app.core.jev import JevAssessment
 from app.ingest.page_filter import text_exclusion_reason
 

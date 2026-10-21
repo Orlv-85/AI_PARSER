@@ -5,7 +5,7 @@ from logging import getLogger
 import httpx
 import pytest
 
-from app.core.admission import admission_cache_key, decision_from_assessment
+from app.core.ingestion.admission import admission_cache_key, decision_from_assessment
 from app.core.jev import JevAssessment, JevRelevanceScorer
 from app.core.models import Article
 

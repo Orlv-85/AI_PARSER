@@ -9,9 +9,9 @@ from typing import Any
 import httpx
 
 from app.config.settings import Settings
-from app.core.weekly_analytics import Observation, Thresholds, calculate
-from app.core.weekly_enrichment import BudgetExhausted, WeeklyEnricher, clean_text
-from app.core.weekly_narrative import explain
+from app.core.weekly.analytics import Observation, Thresholds, calculate
+from app.core.weekly.enrichment import BudgetExhausted, WeeklyEnricher, clean_text
+from app.core.weekly.narrative import explain
 from app.storage.models_sql import WeeklyJob
 from app.storage.weekly import WeeklyStore, fingerprint, hydrate_coverage
 from app.web.models import WeeklyAnalyticsResponse

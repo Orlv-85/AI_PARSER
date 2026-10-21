@@ -10,7 +10,7 @@ from typer.testing import CliRunner
 from app.cli import main as cli_main
 from app.config.settings import Settings
 from app.core.canonicalize import canonical_url_hash
-from app.core.daily_signals_extract import ExtractedEntity, Extraction
+from app.core.daily.signals_extract import ExtractedEntity, Extraction
 from app.storage.daily_signals import DailySignalRepo
 from app.storage.models_sql import AIEntity, AIEntityOverride, Article, Base, DailySignalReport
 from app.storage.repos import NewsDigestRepo

@@ -7,8 +7,8 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from app.core.canonicalize import canonical_url_hash
-from app.core.daily_signals import EntityCommandError, alias_entity, merge_entities
-from app.core.daily_signals_extract import ExtractedEntity, Extraction
+from app.core.daily.signals import EntityCommandError, alias_entity, merge_entities
+from app.core.daily.signals_extract import ExtractedEntity, Extraction
 from app.storage.daily_signals import DailySignalRepo, OverrideConflict
 from app.storage.models_sql import AIEntity, Article, Base, SignalMention
 from app.storage.repos import NewsDigestRepo

@@ -10,8 +10,8 @@ from typing import Any, cast
 from sqlalchemy.orm import Session
 
 from app.config.settings import get_settings
-from app.core.pipeline import run_fetch_cycle
-from app.core.source_onboarding import review_source_candidate
+from app.core.ingestion.pipeline import run_fetch_cycle
+from app.core.sources.onboarding import review_source_candidate
 from app.observability import setup_json_logging
 from app.storage import SessionLocal
 from app.storage.admission import PAUSED_MESSAGE, read_collection_status

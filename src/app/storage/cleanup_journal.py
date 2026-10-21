@@ -12,8 +12,8 @@ from typing import Any
 
 import httpx
 
+from app.core.ingestion.legacy_cleanup import cleanup_verdict
 from app.core.jev import JevRelevanceScorer
-from app.core.legacy_cleanup import cleanup_verdict
 from app.storage.legacy_cleanup import encoded, fingerprint
 
 INPUT_PRICE_PER_MILLION = 0.042

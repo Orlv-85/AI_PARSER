@@ -1,13 +1,13 @@
 from types import SimpleNamespace
 
-from app.core import source_onboarding
+from app.core.sources import onboarding as source_onboarding
 
 
 def _require_api(name: str):
     assert hasattr(
         source_onboarding,
         name,
-    ), f"Phase 2 validation API missing: app.core.source_onboarding.{name}"
+    ), f"Phase 2 validation API missing: app.core.sources.onboarding.{name}"
     return getattr(source_onboarding, name)
 
 

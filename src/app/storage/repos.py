@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.config.settings import get_settings
 from app.config.sources import SourceConfig
 from app.core.categories import CATEGORY_ORDER
-from app.core.weekly_analytics import SECTION_STATES, empty_section
+from app.core.weekly.analytics import SECTION_STATES, empty_section
 from app.storage.models_sql import (
     Article,
     ArticleAlias,
@@ -35,7 +35,7 @@ from app.storage.models_sql import (
 from app.storage.weekly import WeeklyStore
 
 if TYPE_CHECKING:
-    from app.core.source_onboarding import CandidateOverlapGroup
+    from app.core.sources.onboarding import CandidateOverlapGroup
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -1494,7 +1494,7 @@ class SourceCandidateRepo:
         batch_id: int | None = None,
         candidate_ids: list[int] | None = None,
     ) -> list[CandidateOverlapGroup]:
-        from app.core.source_onboarding import (  # pylint: disable=import-outside-toplevel
+        from app.core.sources.onboarding import (  # pylint: disable=import-outside-toplevel
             group_candidate_overlaps,
         )
 

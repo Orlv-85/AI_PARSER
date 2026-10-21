@@ -7,10 +7,10 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from app.config.settings import Settings
-from app.core.weekly_analytics import DEFAULT_THRESHOLDS
-from app.core.weekly_enrichment import WeeklyEnricher
-from app.core.weekly_topics import TAXONOMY_VERSION, topic_registry
-from app.core.weekly_worker import build_snapshot, drain
+from app.core.weekly.analytics import DEFAULT_THRESHOLDS
+from app.core.weekly.enrichment import WeeklyEnricher
+from app.core.weekly.topics import TAXONOMY_VERSION, topic_registry
+from app.core.weekly.worker import build_snapshot, drain
 from app.storage.models_sql import Base, WeeklyJob, WeeklyTopicVersion
 from app.storage.weekly import WeeklyStore, encoded
 
@@ -95,7 +95,7 @@ def test_worker_budget_resumption_reuses_same_frozen_input(tmp_path, monkeypatch
                                                              "confidence": 0.95}}})
 
     real_client = httpx.Client
-    monkeypatch.setattr("app.core.weekly_worker.httpx.Client", lambda **_: real_client(
+    monkeypatch.setattr("app.core.weekly.worker.httpx.Client", lambda **_: real_client(
         transport=httpx.MockTransport(handler)))
     with Session(engine) as session:
         session.add(WeeklyJob(id="job", report_date=date(2026, 10, 4), methodology_version="v2",

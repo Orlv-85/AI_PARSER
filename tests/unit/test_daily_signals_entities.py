@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from app.core.daily_signals_entities import (
+from app.core.daily.signals_entities import (
     Mention,
     Override,
     VendorClasses,

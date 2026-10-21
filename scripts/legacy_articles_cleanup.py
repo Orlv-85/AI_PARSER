@@ -12,7 +12,7 @@ import httpx
 from sqlalchemy import create_engine, insert, text
 
 from app.config.settings import Settings
-from app.core.legacy_cleanup import MAX_NON_AI_RELEVANCE, MIN_REJECT_CONFIDENCE
+from app.core.ingestion.legacy_cleanup import MAX_NON_AI_RELEVANCE, MIN_REJECT_CONFIDENCE
 from app.storage.cleanup_journal import CleanupJournal, CleanupStopped
 from app.storage.legacy_cleanup import (
     _typed,

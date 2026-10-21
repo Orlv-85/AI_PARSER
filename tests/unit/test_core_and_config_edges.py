@@ -6,11 +6,11 @@ import pytest
 
 from app.config import sources as sources_config
 from app.config.sources import SourceConfig, bootstrap_sources_into_db, load_sources
-from app.core import scoring
 from app.core.canonicalize import canonicalize_url
-from app.core.dedup import simhash64
+from app.core.ingestion import scoring
+from app.core.ingestion.dedup import simhash64
+from app.core.ingestion.scoring import ai_relevance_score, freshness_score, rank_score
 from app.core.models import Article
-from app.core.scoring import ai_relevance_score, freshness_score, rank_score
 
 
 def test_load_sources_empty_file_returns_empty_list(tmp_path) -> None:

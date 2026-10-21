@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from app.core import source_onboarding
+from app.core.sources import onboarding as source_onboarding
 
 
 def _require_overlap_api():
@@ -9,7 +9,7 @@ def _require_overlap_api():
         "group_candidate_overlaps",
     ), (
         "Phase 2 overlap grouping API missing: "
-        "app.core.source_onboarding.group_candidate_overlaps"
+        "app.core.sources.onboarding.group_candidate_overlaps"
     )
     return source_onboarding.group_candidate_overlaps
 

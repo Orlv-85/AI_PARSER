@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.core import source_onboarding
+from app.core.sources import onboarding as source_onboarding
 
 
 def _fixture_text() -> str:
@@ -23,7 +23,7 @@ def _require_batch_rule_api():
         "classify_candidate_batch",
     ), (
         "Phase 5 batch classification API missing: "
-        "app.core.source_onboarding.classify_candidate_batch"
+        "app.core.sources.onboarding.classify_candidate_batch"
     )
     return source_onboarding.classify_candidate_batch
 

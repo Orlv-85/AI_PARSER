@@ -1,9 +1,9 @@
 <!-- code-doc
-module: src/app/core/pipeline.py
+module: src/app/core/ingestion/pipeline.py
 covers:
-  - src/app/core/pipeline.py
-  - src/app/core/admission.py
-  - src/app/core/scoring.py
+  - src/app/core/ingestion/pipeline.py
+  - src/app/core/ingestion/admission.py
+  - src/app/core/ingestion/scoring.py
   - src/app/core/canonicalize.py
   - src/app/storage/admission.py
   - src/app/ingest/*.py
@@ -357,7 +357,7 @@ function. Each rule lists the tests that check it.
 ai-news fetch --once                         cli/main.py: fetch
   scripts/run_daily_fetch_job.sh (01:00 UTC timer), scripts/auto_update_once.sh (cron helper)
 web update (thread or process)               web/service.py: UpdateRunService
-  -> run_fetch_cycle                         core/pipeline.py
+  -> run_fetch_cycle                         core/ingestion/pipeline.py
        load_sources + upsert_source          sources.yaml -> sources; + list_enabled_sources (DB only)
        register_source                       weekly source version per source
        jev_relevance_scorer                  core/jev.py; None + admission -> pause, return
@@ -380,9 +380,9 @@ web update (thread or process)               web/service.py: UpdateRunService
 
 | File | Role | Pure |
 | --- | --- | --- |
-| `core/pipeline.py` | Run orchestration, fetch dispatch, per-source processing, admission flow, row building | no |
-| `core/admission.py` | Admission choice mapping, `bounded_evidence`, `evidence_hash`, `admission_cache_key` | yes |
-| `core/scoring.py` | `ai_relevance_score`, `freshness_score`, `rank_score` | yes |
+| `core/ingestion/pipeline.py` | Run orchestration, fetch dispatch, per-source processing, admission flow, row building | no |
+| `core/ingestion/admission.py` | Admission choice mapping, `bounded_evidence`, `evidence_hash`, `admission_cache_key` | yes |
+| `core/ingestion/scoring.py` | `ai_relevance_score`, `freshness_score`, `rank_score` | yes |
 | `core/canonicalize.py` | `canonicalize_url`, `canonical_url_hash` (also used by signals, weekly, cleanup) | yes |
 | `storage/admission.py` | `admission_decisions` ledger (pending, settle, decision) and `collection_status` notice | no |
 | `ingest/fetcher.py` | `Fetcher`: pooled client, per-source interval, retries, conditional headers | no |
@@ -411,7 +411,7 @@ web update (thread or process)               web/service.py: UpdateRunService
 | `semantic_admission_policy_version`, `semantic_admission_prompt_version` | part of the admission cache key | admission policy or Jev admission prompt changes; old decisions stop applying |
 | `jev_model` | part of the admission cache key | model change re-screens candidates |
 | `DATE_EVIDENCE_VERSION` | stored in date provenance | date evidence rules change |
-| `RUBRIC_VERSION` | stored in enrichment provenance | daily rubric changes (`core/daily_rubric.py`) |
+| `RUBRIC_VERSION` | stored in enrichment provenance | daily rubric changes (`core/daily/rubric.py`) |
 | `semantic_admission_enabled`, `jev_enabled` | admission gate; Jev scoring | production enables both (deploy policy) |
 | `rss_known_streak_stop`, `html_known_streak_stop`, `html_max_links_per_source` | early stop (0: off) and link cap (unset or negative: no cap) | rollback levers (002) |
 | `fetch_conditional_rss_enabled`, `fetch_conditional_html_list_enabled` | conditional fetch | rollback levers (002) |
@@ -424,10 +424,10 @@ web update (thread or process)               web/service.py: UpdateRunService
 | Non-news URL/page rules | `ingest/page_filter.py` | tests in `test_non_news_filter.py` |
 | Selector of a DB-managed HTML source | `MANAGED_LINK_SELECTORS` in `ingest/page_filter.py` | YAML sources use `sources.yaml` |
 | Tracking parameters | `TRACKING_PARAMS` in `core/canonicalize.py` | changes identity of new URLs only |
-| Keyword relevance | `AI_KEYWORDS`, `STOP_WORDS` in `core/scoring.py` | only used with admission off |
-| Rank weights, half-life | `rank_score`, `freshness_score` in `core/scoring.py` | no rescoring of stored rows |
-| Admission choices | `decision_from_assessment` in `core/admission.py` and the admission question in `core/jev.py` | bump policy or prompt version |
-| Evidence bound sent to Jev | `jev_state` and `TITLE_LIMIT` / `SUMMARY_LIMIT` / `CONTENT_LIMIT` in `core/jev.py` (used by `bounded_evidence`, `JevRelevanceScorer.state`, the daily provenance hash) | changes cache keys: bump the prompt version; `reenrich_pilot.source_state`, `weekly_input`, `weekly_frozen` repeat the daily text; test `test_bounded_jev_text_is_pinned_per_mode` |
+| Keyword relevance | `AI_KEYWORDS`, `STOP_WORDS` in `core/ingestion/scoring.py` | only used with admission off |
+| Rank weights, half-life | `rank_score`, `freshness_score` in `core/ingestion/scoring.py` | no rescoring of stored rows |
+| Admission choices | `decision_from_assessment` in `core/ingestion/admission.py` and the admission question in `core/jev.py` | bump policy or prompt version |
+| Evidence bound sent to Jev | `jev_state` and `TITLE_LIMIT` / `SUMMARY_LIMIT` / `CONTENT_LIMIT` in `core/jev.py` (used by `bounded_evidence`, `JevRelevanceScorer.state`, the daily provenance hash) | changes cache keys: bump the prompt version; `reenrich_pilot.source_state`, `core/weekly/input.py`, `core/weekly/frozen.py` repeat the daily text; test `test_bounded_jev_text_is_pinned_per_mode` |
 | Pause notice text | `PAUSED_MESSAGE` in `storage/admission.py` | public API and admin status show it |
 | Date evidence | `ingest/date_evidence.py` | bump `DATE_EVIDENCE_VERSION` |
 
@@ -440,7 +440,7 @@ Per rule: see Behavior and Invariants. Files: `tests/unit/test_pipeline_runtime.
 `test_ingest_html_additional.py`, `test_fetcher.py`, `test_canonicalize.py`, `test_scoring.py`,
 `test_jev.py`, `test_article_evidence_cache.py` (date evidence), `tests/integration/test_pipeline.py`.
 Tests never call a network or provider (`httpx.MockTransport`, fake `Fetcher.request`, fake fetch
-functions). Runtime tests replace module attributes of `core/pipeline.py` (fetch functions, repos,
+functions). Runtime tests replace module attributes of `core/ingestion/pipeline.py` (fetch functions, repos,
 `SessionLocal`) with fakes of the real interfaces and run with real `Settings`; a fake must offer
 every method and field the real object offers (fetch fakes return `RssItemList` or
 `HtmlListPageResult`). Weekly hooks run only with a real SQLAlchemy `Session`
