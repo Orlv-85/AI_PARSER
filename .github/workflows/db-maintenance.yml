@@ -9,21 +9,23 @@ jobs:
   maintenance:
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@v5
+
       - name: Validate deploy config
         run: |
           test -n "${{ vars.DEPLOY_HOST }}"
           test -n "${{ vars.DEPLOY_USER }}"
           test -n "${{ secrets.SERVER_PASSWORD }}"
 
-      - name: Install sshpass
+      - name: Install sshpass, age, rclone
         run: |
           sudo apt-get update
-          sudo apt-get install -y sshpass
+          sudo apt-get install -y sshpass age rclone
 
       - name: Trust server host key
         run: |
           mkdir -p ~/.ssh
-          for i in 1 2 3; do
+          for _ in 1 2 3; do
             ssh-keyscan -T 5 -H "${{ vars.DEPLOY_HOST }}" >> ~/.ssh/known_hosts && break
             sleep 2
           done
@@ -37,3 +39,23 @@ jobs:
           SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
         run: |
           sshpass -p "${SERVER_PASSWORD}" ssh -o StrictHostKeyChecking=accept-new "${DEPLOY_USER}@${DEPLOY_HOST}" "cd '${DEPLOY_APP_DIR}' && RETENTION_DAYS='${RETENTION_DAYS}' ./scripts/db_maintenance.sh && ./scripts/db_backup.sh"
+
+      - name: Upload backup off-site
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_APP_DIR: ${{ vars.DEPLOY_APP_DIR || '/opt/ai-news' }}
+          SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
+          OFFSITE_B2_BUCKET: ${{ vars.OFFSITE_B2_BUCKET }}
+          BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+          OFFSITE_B2_KEY_ID: ${{ secrets.OFFSITE_B2_KEY_ID }}
+          OFFSITE_B2_APPLICATION_KEY: ${{ secrets.OFFSITE_B2_APPLICATION_KEY }}
+        # Runs after the server backup, so missing off-site config never skips the backup itself.
+        run: |
+          test -n "${OFFSITE_B2_BUCKET}" && test -n "${BACKUP_AGE_RECIPIENT}"
+          test -n "${OFFSITE_B2_KEY_ID}" && test -n "${OFFSITE_B2_APPLICATION_KEY}"
+          remote_file="$(sshpass -p "${SERVER_PASSWORD}" ssh "${DEPLOY_USER}@${DEPLOY_HOST}" "ls -1t '${DEPLOY_APP_DIR}'/backups/postgres_*.sql.gz | head -n 1")"
+          test -n "${remote_file}"
+          sshpass -p "${SERVER_PASSWORD}" scp "${DEPLOY_USER}@${DEPLOY_HOST}:${remote_file}" "${RUNNER_TEMP}/"
+          ./scripts/db_offsite_upload.sh "${RUNNER_TEMP}/$(basename "${remote_file}")"
+          rm -f "${RUNNER_TEMP}"/postgres_*.sql.gz
