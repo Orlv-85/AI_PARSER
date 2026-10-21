@@ -230,8 +230,8 @@ check it.
   `test_upload_api_returns_immediately_health_and_progress_remain_available`,
   `test_editing_a_candidate_invalidates_its_model_review`.
 - Reject: status `rejected`, note = reason. A rejected candidate is not fetched (003, US3): when
-  the candidate was `approved`, its own source (`approved_source_id`) is disabled; a duplicate's
-  copied source id is never touched. Tests:
+  the candidate was `approved`, its own source (`approved_source_id`) is disabled. A duplicate
+  never owns its target's source. Tests:
   `test_source_onboarding_reject_and_mark_duplicate_actions_capture_review_decisions`,
   `test_review_source_candidate_guard_and_fallback_paths`,
   `test_review_source_candidate_reject_disables_approved_managed_source`.
@@ -242,14 +242,18 @@ check it.
   `test_source_onboarding_review_helper_guards_and_edit_inference`,
   `test_source_onboarding_service_disable_requires_approved_source_id`.
 - Mark duplicate (any status): the target must exist and differ; status `duplicate`, link to the
-  target. A candidate acts only on a source it approved itself: the duplicate gets no
-  `approved_source_id` of the target's. Code differs (onboarding.py:200, see PR #75 review): the
-  target's `approved_source_id` is copied (an approved candidate's own id is overwritten), so
-  disabling the duplicate (the admin page offers Disable) disables the target's source, and an API
-  approve of the duplicate rewrites the target's source URL. Tests:
+  target. The candidate keeps its own `approved_source_id` and never takes the target's. Approve on
+  a duplicate is refused with HTTP 400 and the standard `{"detail": ...}` domain-error response.
+  Disable on a duplicate without its own approved source is refused by the existing
+  `Only approved candidates with a managed source can be disabled` guard; the target's source
+  stays enabled. Tests:
   `test_review_source_candidate_mark_duplicate_sets_duplicate_relationship`,
+  `test_review_source_candidate_mark_duplicate_keeps_draft_source_unowned`,
+  `test_review_source_candidate_mark_duplicate_preserves_approved_source_id`,
+  `test_review_source_candidate_disable_duplicate_keeps_target_enabled`,
+  `test_source_onboarding_approve_action_rejects_duplicate_without_mutating_target_source`,
   `test_review_source_candidate_rejects_invalid_duplicate_targets`,
-  `test_source_onboarding_review_routes_reject_malformed_inputs_cleanly`; the copied id: no test.
+  `test_source_onboarding_review_routes_reject_malformed_inputs_cleanly`.
 - Edit (not for `approved`): a new URL is normalized again and must be unique; a type must be
   `rss`, `html` or `unknown`, else it is inferred from a new URL. Any change of URL, raw input or
   type resets validation to `pending` (clears details, error, detected type, time), so an earlier

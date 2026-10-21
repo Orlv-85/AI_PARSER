@@ -1,5 +1,6 @@
 # pylint: disable=protected-access
 
+import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
@@ -125,6 +126,148 @@ def test_review_source_candidate_mark_duplicate_sets_duplicate_relationship() ->
         stored = candidate_repo.get_candidate(duplicate.id)
         assert stored is not None
         assert stored.duplicate_of_candidate_id == primary.id
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_review_source_candidate_mark_duplicate_keeps_draft_source_unowned() -> None:
+    session, engine = _build_session()
+    try:
+        candidate_repo = SourceCandidateRepo(session)
+        source_repo = SourceRepo(session)
+        primary = _create_candidate(
+            session,
+            normalized_url="https://example.com/blog",
+            candidate_type="html",
+            validation_status="validated",
+        )
+        approved_primary = review_source_candidate(
+            candidate_id=primary.id,
+            action="approve",
+            candidate_repo=candidate_repo,
+            managed_source_repo=source_repo,
+        )
+        duplicate = _create_candidate(
+            session,
+            normalized_url="https://example.com/tag/ai",
+            candidate_type="html",
+            validation_status="validated",
+        )
+
+        updated = review_source_candidate(
+            candidate_id=duplicate.id,
+            action="mark_duplicate",
+            duplicate_of_candidate_id=primary.id,
+            candidate_repo=candidate_repo,
+            managed_source_repo=source_repo,
+        )
+
+        assert approved_primary.approved_source_id is not None
+        assert updated.status == "duplicate"
+        assert updated.approved_source_id is None
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_review_source_candidate_mark_duplicate_preserves_approved_source_id() -> None:
+    session, engine = _build_session()
+    try:
+        candidate_repo = SourceCandidateRepo(session)
+        source_repo = SourceRepo(session)
+        primary = _create_candidate(
+            session,
+            normalized_url="https://example.com/blog",
+            candidate_type="html",
+            validation_status="validated",
+        )
+        duplicate = _create_candidate(
+            session,
+            normalized_url="https://example.com/tag/ai",
+            candidate_type="html",
+            validation_status="validated",
+        )
+        approved_primary = review_source_candidate(
+            candidate_id=primary.id,
+            action="approve",
+            candidate_repo=candidate_repo,
+            managed_source_repo=source_repo,
+        )
+        approved_duplicate = review_source_candidate(
+            candidate_id=duplicate.id,
+            action="approve",
+            candidate_repo=candidate_repo,
+            managed_source_repo=source_repo,
+        )
+        primary_source_id = approved_primary.approved_source_id
+        duplicate_source_id = approved_duplicate.approved_source_id
+        assert primary_source_id is not None
+        assert duplicate_source_id is not None
+        assert primary_source_id != duplicate_source_id
+
+        updated = review_source_candidate(
+            candidate_id=duplicate.id,
+            action="mark_duplicate",
+            duplicate_of_candidate_id=primary.id,
+            candidate_repo=candidate_repo,
+            managed_source_repo=source_repo,
+        )
+
+        assert updated.status == "duplicate"
+        assert updated.approved_source_id == duplicate_source_id
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_review_source_candidate_disable_duplicate_keeps_target_enabled() -> None:
+    session, engine = _build_session()
+    try:
+        candidate_repo = SourceCandidateRepo(session)
+        source_repo = SourceRepo(session)
+        primary = _create_candidate(
+            session,
+            normalized_url="https://example.com/feed.xml",
+            candidate_type="rss",
+            validation_status="validated",
+        )
+        duplicate = _create_candidate(
+            session,
+            normalized_url="https://example.com/tag/ai",
+            candidate_type="html",
+            validation_status="validated",
+        )
+        approved_primary = review_source_candidate(
+            candidate_id=primary.id,
+            action="approve",
+            candidate_repo=candidate_repo,
+            managed_source_repo=source_repo,
+        )
+        source_id = approved_primary.approved_source_id
+        assert source_id is not None
+        review_source_candidate(
+            candidate_id=duplicate.id,
+            action="mark_duplicate",
+            duplicate_of_candidate_id=primary.id,
+            candidate_repo=candidate_repo,
+            managed_source_repo=source_repo,
+        )
+
+        with pytest.raises(
+            ValueError,
+            match="Only approved candidates with a managed source can be disabled",
+        ):
+            review_source_candidate(
+                candidate_id=duplicate.id,
+                action="disable",
+                candidate_repo=candidate_repo,
+                managed_source_repo=source_repo,
+            )
+
+        stored_source = session.get(Source, source_id)
+        assert stored_source is not None
+        assert stored_source.enabled is True
     finally:
         session.close()
         engine.dispose()

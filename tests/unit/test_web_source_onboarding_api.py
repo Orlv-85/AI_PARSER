@@ -9,7 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config.settings import get_settings
-from app.storage.models_sql import Base
+from app.storage.models_sql import Base, Source
 from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
 from app.storage.source_repo import SourceRepo
 from app.web.app import create_app
@@ -225,6 +225,51 @@ def test_source_onboarding_approve_action_rejects_non_validated_candidates(
 
     assert response.status_code == 400
     assert "validated" in response.json()["detail"].lower()
+
+
+def test_source_onboarding_approve_action_rejects_duplicate_without_mutating_target_source(
+    monkeypatch, tmp_path
+) -> None:
+    client = _build_client(monkeypatch, tmp_path)
+    primary_id = _seed_candidate(
+        normalized_url="https://example.com/original-feed.xml",
+        candidate_type="rss",
+    )
+    primary_approve = client.post(f"/api/source-onboarding/candidates/{primary_id}/approve")
+    assert primary_approve.status_code == 200
+    source_id = primary_approve.json()["approved_source_id"]
+
+    session, engine = _build_session()
+    try:
+        source = session.get(Source, source_id)
+        assert source is not None
+        original_source = (source.url, source.type, source.name, source.enabled)
+    finally:
+        session.close()
+        engine.dispose()
+
+    duplicate_id = _seed_candidate(
+        normalized_url="https://example.com/duplicate-topic",
+        candidate_type="html",
+    )
+    marked = client.post(
+        f"/api/source-onboarding/candidates/{duplicate_id}/mark-duplicate",
+        json={"duplicate_of_candidate_id": primary_id},
+    )
+    assert marked.status_code == 200
+
+    response = client.post(f"/api/source-onboarding/candidates/{duplicate_id}/approve")
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Duplicate candidates cannot be approved"}
+    session, engine = _build_session()
+    try:
+        source = session.get(Source, source_id)
+        assert source is not None
+        assert (source.url, source.type, source.name, source.enabled) == original_source
+    finally:
+        session.close()
+        engine.dispose()
 
 
 def test_source_onboarding_approve_action_creates_enabled_managed_source(
