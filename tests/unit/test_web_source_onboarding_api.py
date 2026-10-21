@@ -1,8 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor
-from importlib import import_module
 from threading import Event
 from typing import Any, cast
 
+from fastapi.routing import iter_route_contexts
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
@@ -13,6 +13,7 @@ from app.storage.models_sql import Base
 from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
 from app.storage.source_repo import SourceRepo
 from app.web.app import create_app
+from app.web.routes import sources as sources_routes
 
 
 def _build_client(monkeypatch, tmp_path) -> TestClient:
@@ -84,8 +85,8 @@ def test_source_onboarding_review_routes_are_registered(monkeypatch, tmp_path) -
     fastapi_app = cast(Any, client.app)
     routes = {
         (route.path, frozenset(route.methods))
-        for route in fastapi_app.routes
-        if hasattr(route, "path") and hasattr(route, "methods")
+        for route in iter_route_contexts(fastapi_app.routes)
+        if route.path is not None and route.methods is not None
     }
 
     expected_routes = {
@@ -350,12 +351,11 @@ def test_source_onboarding_import_route_returns_503_when_storage_is_unavailable(
     monkeypatch, tmp_path
 ) -> None:
     client = _build_client(monkeypatch, tmp_path)
-    web_app_module = import_module("app.web.app")
 
     def _raise_db_error(**_kwargs):
         raise SQLAlchemyError("db unavailable")
 
-    monkeypatch.setattr(web_app_module, "import_source_candidates", _raise_db_error)
+    monkeypatch.setattr(sources_routes, "import_source_candidates", _raise_db_error)
 
     response = client.post(
         "/api/source-onboarding/import",
@@ -406,7 +406,6 @@ def test_source_onboarding_validate_route_accepts_candidate_ids_only(
     monkeypatch, tmp_path
 ) -> None:
     client = _build_client(monkeypatch, tmp_path)
-    web_app_module = import_module("app.web.app")
     captured: dict[str, object] = {}
 
     def _run_source_validation_batch(**kwargs):
@@ -431,7 +430,7 @@ def test_source_onboarding_validate_route_accepts_candidate_ids_only(
             )
         ]
 
-    monkeypatch.setattr(web_app_module, "run_source_validation_batch", _run_source_validation_batch)
+    monkeypatch.setattr(sources_routes, "run_source_validation_batch", _run_source_validation_batch)
 
     response = client.post(
         "/api/source-onboarding/validate",
@@ -460,7 +459,6 @@ def test_source_onboarding_validation_keeps_health_endpoint_responsive(
     monkeypatch, tmp_path
 ) -> None:
     client = _build_client(monkeypatch, tmp_path)
-    web_app_module = import_module("app.web.app")
     validation_started = Event()
     release_validation = Event()
 
@@ -469,7 +467,7 @@ def test_source_onboarding_validation_keeps_health_endpoint_responsive(
         assert release_validation.wait(timeout=10)
         return []
 
-    monkeypatch.setattr(web_app_module, "run_source_validation_batch", _blocking_validation)
+    monkeypatch.setattr(sources_routes, "run_source_validation_batch", _blocking_validation)
 
     with client, ThreadPoolExecutor(max_workers=2) as executor:
         validation = executor.submit(
@@ -489,12 +487,11 @@ def test_source_onboarding_validate_route_returns_503_when_storage_is_unavailabl
     monkeypatch, tmp_path
 ) -> None:
     client = _build_client(monkeypatch, tmp_path)
-    web_app_module = import_module("app.web.app")
 
     def _raise_db_error(**_kwargs):
         raise SQLAlchemyError("db unavailable")
 
-    monkeypatch.setattr(web_app_module, "run_source_validation_batch", _raise_db_error)
+    monkeypatch.setattr(sources_routes, "run_source_validation_batch", _raise_db_error)
 
     response = client.post("/api/source-onboarding/validate", json={"batch_id": 1})
 
@@ -506,12 +503,11 @@ def test_source_onboarding_overlaps_and_listing_return_503_on_storage_errors(
     monkeypatch, tmp_path
 ) -> None:
     client = _build_client(monkeypatch, tmp_path)
-    web_app_module = import_module("app.web.app")
 
     def _raise_db_error(**_kwargs):
         raise SQLAlchemyError("db unavailable")
 
-    monkeypatch.setattr(web_app_module, "review_candidate_overlaps", _raise_db_error)
+    monkeypatch.setattr(sources_routes, "review_candidate_overlaps", _raise_db_error)
     overlaps = client.get("/api/source-onboarding/overlaps", params={"batch_id": 1})
     assert overlaps.status_code == 503
     assert overlaps.json()["detail"] == "News storage is unavailable"
@@ -526,7 +522,7 @@ def test_source_onboarding_overlaps_and_listing_return_503_on_storage_errors(
         def get_batch_summary(self, _batch_id: int):
             raise SQLAlchemyError("db unavailable")
 
-    monkeypatch.setattr(web_app_module, "SourceOnboardingService", _BrokenService)
+    monkeypatch.setattr(sources_routes, "SourceOnboardingService", _BrokenService)
 
     listed = client.get("/api/source-onboarding/candidates", params={"batch_id": 1})
     assert listed.status_code == 503
@@ -541,7 +537,6 @@ def test_source_onboarding_review_routes_return_503_on_storage_errors(
     monkeypatch, tmp_path
 ) -> None:
     client = _build_client(monkeypatch, tmp_path)
-    web_app_module = import_module("app.web.app")
 
     class _BrokenService:
         def __init__(self, _session) -> None:
@@ -570,7 +565,7 @@ def test_source_onboarding_review_routes_return_503_on_storage_errors(
         def edit_candidate(self, _candidate_id: int, **_kwargs):
             raise SQLAlchemyError("db unavailable")
 
-    monkeypatch.setattr(web_app_module, "SourceOnboardingService", _BrokenService)
+    monkeypatch.setattr(sources_routes, "SourceOnboardingService", _BrokenService)
 
     approve = client.post("/api/source-onboarding/candidates/1/approve")
     assert approve.status_code == 503
@@ -603,7 +598,6 @@ def test_source_onboarding_disable_and_reject_routes_return_400_on_domain_errors
     monkeypatch, tmp_path
 ) -> None:
     client = _build_client(monkeypatch, tmp_path)
-    web_app_module = import_module("app.web.app")
 
     class _DomainErrorService:
         def __init__(self, _session) -> None:
@@ -616,7 +610,7 @@ def test_source_onboarding_disable_and_reject_routes_return_400_on_domain_errors
             _ = reason
             raise ValueError("candidate already rejected")
 
-    monkeypatch.setattr(web_app_module, "SourceOnboardingService", _DomainErrorService)
+    monkeypatch.setattr(sources_routes, "SourceOnboardingService", _DomainErrorService)
 
     disable = client.post("/api/source-onboarding/candidates/1/disable")
     assert disable.status_code == 400

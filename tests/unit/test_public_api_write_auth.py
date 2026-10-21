@@ -3,7 +3,7 @@ from importlib import import_module
 
 import pytest
 from fastapi import FastAPI
-from fastapi.routing import APIRoute
+from fastapi.routing import APIRoute, iter_route_contexts
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from sqlalchemy import create_engine
@@ -148,7 +148,8 @@ def test_every_non_get_api_route_requires_auth(monkeypatch, tmp_path) -> None:
     assert isinstance(app, FastAPI)
     checked: list[tuple[str, str]] = []
 
-    for route in app.routes:
+    for context in iter_route_contexts(app.routes):
+        route = context.original_route
         if not isinstance(route, APIRoute) or not route.path.startswith("/api/"):
             continue
         if route.path in _AUTH_ROUTES:

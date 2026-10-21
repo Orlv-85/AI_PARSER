@@ -166,7 +166,7 @@ scripts/run_daily_digest_job.sh (02:00 UTC, after the digest)
        _briefs                  one brief call per target day (paid runs only), via a second ledger run
   -> JSON run report (stdout + data/daily-signals/runs/<run_id>.json)
 
-GET /api/news/daily-signals?date=D               web/app.py: _read_daily_signals (DB reads only)
+GET /api/news/daily-signals?date=D               web/routes/common.py: _read_daily_signals (DB reads only)
 GET /?date=D                                     web/signals_view.py: render_signals (server)
                                                  web/digest.html: renderSignals (client, same markup)
 ```

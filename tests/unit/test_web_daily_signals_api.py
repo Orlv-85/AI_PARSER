@@ -113,7 +113,9 @@ def test_storage_error_is_503(client, monkeypatch):
     def broken():
         raise SQLAlchemyError("down")
 
+    # SessionLocal is read when the app is built, so the patched one needs a new app.
     monkeypatch.setattr(web, "SessionLocal", broken)
+    http = TestClient(create_app())
     assert http.get("/api/news/daily-signals?date=2026-10-16").status_code == 503
 
 

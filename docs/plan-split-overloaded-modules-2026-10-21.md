@@ -4,6 +4,8 @@ Status: proposal, no code. Review it in another session before anyone splits a f
 the `core/` regrouping (same PR as this file). Line counts are from that branch.
 
 Step 1 done (2026-10-21): `storage/repos.py` split, branch `refactor/split-storage-repos-20261021`.
+Step 3 done (2026-10-21): `web/app.py` split into `web/routes/`, branch
+`refactor/split-web-app-20261021`.
 
 ## Method
 

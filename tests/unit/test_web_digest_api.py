@@ -11,6 +11,8 @@ from sqlalchemy.orm import sessionmaker
 from app.config.settings import get_settings
 from app.storage.models_sql import Article, Base, FetchRun, Source
 from app.web.app import create_app
+from app.web.routes import news as news_routes
+from app.web.routes import pages as pages_routes
 
 
 @pytest.mark.parametrize("include_content", [False, True])
@@ -53,7 +55,7 @@ def test_news_links_filters_to_requested_date_and_returns_article_metadata(
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(web_app_module, "ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr(news_routes, "ArticleRepo", _ArticleRepo)
 
     client = TestClient(create_app())
 
@@ -292,8 +294,7 @@ def test_news_stats_page_renders_public_shell(monkeypatch, tmp_path) -> None:
         def now(cls, tz=None):
             return cls(2026, 5, 2, 9, 0, tzinfo=tz or UTC)
 
-    web_app_module = import_module("app.web.app")
-    monkeypatch.setattr(web_app_module, "datetime", _FrozenDateTime)
+    monkeypatch.setattr(pages_routes, "datetime", _FrozenDateTime)
 
     client = TestClient(create_app())
 
