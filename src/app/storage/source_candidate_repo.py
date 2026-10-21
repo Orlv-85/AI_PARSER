@@ -8,27 +8,12 @@ from sqlalchemy.orm import Session
 from app.storage.models_sql import SourceCandidate, SourceImportBatch
 
 if TYPE_CHECKING:
-    from app.core.sources.onboarding import CandidateOverlapGroup
+    from app.core.sources.candidates import CandidateOverlapGroup
 
 
 class SourceImportBatchRepo:
     def __init__(self, session: Session) -> None:
         self.session = session
-
-    def create_import_batch(
-        self,
-        *,
-        raw_text: str,
-        parsed_count: int = 0,
-        accepted_count: int = 0,
-        rejected_count: int = 0,
-    ) -> SourceImportBatch:
-        return self.create_batch(
-            raw_text=raw_text,
-            parsed_count=parsed_count,
-            accepted_count=accepted_count,
-            rejected_count=rejected_count,
-        )
 
     def create_batch(
         self,
@@ -122,14 +107,6 @@ class SourceCandidateRepo:
                 accepted_count += 1
         return rows, accepted_count
 
-    def insert_normalized_draft_candidates(
-        self,
-        *,
-        batch_id: int | None,
-        candidates: list[object],
-    ) -> tuple[list[SourceCandidate], int]:
-        return self.create_draft_candidates(batch_id=batch_id, candidates=candidates)
-
     @staticmethod
     def _read_candidate_value(
         candidate_data: object,
@@ -197,30 +174,6 @@ class SourceCandidateRepo:
         self.session.flush()
         return candidate
 
-    def update_candidate(
-        self,
-        *,
-        candidate_id: int,
-        raw_input: str | None = None,
-        normalized_url: str | None = None,
-        candidate_type: str | None = None,
-    ) -> SourceCandidate:
-        candidate = self.get_candidate(candidate_id)
-        if candidate is None:
-            raise ValueError(f"source candidate not found: {candidate_id}")
-
-        if normalized_url is not None and normalized_url != candidate.normalized_url:
-            existing = self.find_by_normalized_url(normalized_url)
-            if existing is not None and existing.id != candidate_id:
-                raise ValueError("normalized URL already exists for another candidate")
-            candidate.normalized_url = normalized_url
-        if raw_input is not None:
-            candidate.raw_input = raw_input
-        if candidate_type is not None:
-            candidate.candidate_type = candidate_type
-        self.session.flush()
-        return candidate
-
     def save_review_update(self, candidate: object) -> SourceCandidate:
         candidate_id = int(self._read_candidate_value(candidate, "id"))
         stored = self.get_candidate(candidate_id)
@@ -254,7 +207,7 @@ class SourceCandidateRepo:
         batch_id: int | None = None,
         candidate_ids: list[int] | None = None,
     ) -> list[CandidateOverlapGroup]:
-        from app.core.sources.onboarding import (  # pylint: disable=import-outside-toplevel
+        from app.core.sources.candidates import (  # pylint: disable=import-outside-toplevel
             group_candidate_overlaps,
         )
 

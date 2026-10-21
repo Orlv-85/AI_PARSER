@@ -83,31 +83,14 @@ def test_candidate_repo_helpers_cover_missing_values_and_optional_serialization(
     )
 
 
-def test_batch_alias_and_noop_candidate_updates_cover_remaining_repo_edges() -> None:
+def test_list_candidates_empty_candidate_ids_include_all_candidates() -> None:
     session = _session()
-    batch_repo = SourceImportBatchRepo(session)
-    candidate_repo = SourceCandidateRepo(session)
-
-    batch = batch_repo.create_import_batch(
-        raw_text="https://example.com/a",
-        parsed_count=1,
-        accepted_count=1,
-        rejected_count=0,
-    )
-    candidate, _ = candidate_repo.create_draft_candidate(
-        batch_id=batch.id,
+    repo = SourceCandidateRepo(session)
+    candidate, _ = repo.create_draft_candidate(
         raw_input="https://example.com/a",
         normalized_url="https://example.com/a",
-        candidate_type="rss",
     )
 
-    listed = candidate_repo.list_candidates(batch_id=None, candidate_ids=[])
+    listed = repo.list_candidates(batch_id=None, candidate_ids=[])
+
     assert [row.id for row in listed] == [candidate.id]
-
-    updated = candidate_repo.update_candidate(
-        candidate_id=candidate.id,
-        normalized_url="https://example.com/a",
-    )
-    assert updated.normalized_url == "https://example.com/a"
-    assert updated.raw_input == "https://example.com/a"
-    assert updated.candidate_type == "rss"

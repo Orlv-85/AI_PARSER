@@ -18,7 +18,8 @@ from app.core.daily.signals import (
 )
 from app.core.ingestion.pipeline import run_fetch_cycle
 from app.core.provider_costs import microdollars
-from app.core.sources.onboarding import import_source_candidates, run_source_validation_batch
+from app.core.sources.onboarding import import_source_candidates
+from app.core.sources.validation import run_source_validation_batch
 from app.core.weekly.audit import audit
 from app.core.weekly.worker import drain
 from app.observability import setup_json_logging

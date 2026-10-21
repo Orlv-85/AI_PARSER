@@ -2,6 +2,7 @@
 module: src/app/core/sources/onboarding.py
 covers:
   - src/app/core/sources/*.py
+  - src/app/web/source_onboarding.py
   - src/app/storage/source_candidate_repo.py
   - src/app/web/routes/sources.py
   - src/app/web/source_intake.py
@@ -101,11 +102,6 @@ check it.
   (`review_candidate_overlaps`). Tests: `test_review_candidate_overlaps_filters_non_group_results`,
   `test_find_overlap_groups_and_summarize_batch_cover_review_helpers`,
   `test_source_onboarding_overlaps_and_listing_return_503_on_storage_errors`.
-- `classify_candidate_batch` (no caller in `src/`) lists rejected URLs (`search_wrapper`,
-  `invalid_url`, `duplicate_url`), flagged ones (`topic_page`; `broad_media_page` for short InfoQ
-  paths, `_is_broad_media_candidate`) and the overlap groups of a pasted batch. Tests:
-  `test_classify_candidate_batch_rejects_search_wrappers_and_flags_broad_candidates`,
-  `test_classify_candidate_batch_groups_same_vendor_overlaps_for_review`.
 
 **Validation** (deterministic; API, CLI, helper; no model)
 - `run_source_validation`: a candidate of type `unknown` gets the inferred type. RSS
@@ -115,7 +111,7 @@ check it.
   and no list selector (links in `nav`/`footer` and URLs excluded by ingestion are skipped); at
   least one link: `validated` with `link_count` and a few `sample_links`, none: `warning`. Any page
   with one such link passes; the 003 plan asks for article links scored for quality (code differs:
-  `_extract_links_with_ingest`, onboarding.py:979, see PR #75 review). Another type: `failed`. Tests:
+  `_extract_links_with_ingest`, validation.py:183, see PR #75 review). Another type: `failed`. Tests:
   `test_validate_rss_candidate_marks_candidate_valid_when_feed_has_entries`,
   `test_validate_rss_candidate_fails_when_feed_has_no_entries`,
   `test_validate_html_candidate_marks_candidate_valid_when_article_links_are_extractable`,
@@ -247,7 +243,7 @@ check it.
   `test_source_onboarding_service_disable_requires_approved_source_id`.
 - Mark duplicate (any status): the target must exist and differ; status `duplicate`, link to the
   target. A candidate acts only on a source it approved itself: the duplicate gets no
-  `approved_source_id` of the target's. Code differs (onboarding.py:702, see PR #75 review): the
+  `approved_source_id` of the target's. Code differs (onboarding.py:200, see PR #75 review): the
   target's `approved_source_id` is copied (an approved candidate's own id is overwritten), so
   disabling the duplicate (the admin page offers Disable) disables the target's source, and an API
   approve of the duplicate rewrites the target's source URL. Tests:
@@ -278,6 +274,7 @@ check it.
   `test_source_onboarding_batch_summary_route_returns_aggregate_counts`,
   `test_source_onboarding_batch_summary_route_returns_not_found_for_missing_batch`,
   `test_list_candidates_filters_by_ids_status_and_validation_status`,
+  `test_list_candidates_empty_candidate_ids_include_all_candidates`,
   `test_find_overlap_groups_and_summarize_batch_cover_review_helpers`,
   `test_source_onboarding_service_first_batch_id_returns_first_candidate_batch_id`,
   `test_review_batch_outcomes_command_reports_deterministic_summary`.
@@ -297,7 +294,7 @@ check it.
   by key: id, name, type, url, enabled, interval, weight, and empty `parser_options` for HTML; the
   output is deterministic and loads with `load_sources`. Only the helper `db-export` writes it.
   Tests: `test_export_approved_sources_yaml_is_deterministic_and_round_trips_html_sources`,
-  `test_export_snapshot_and_html_serialization_helpers`.
+  `test_export_approved_sources_yaml_serializes_html_sources`.
 
 **Access**
 - Every `/api/source-onboarding/*` route and the admin page need an admin session when auth is on.
@@ -363,7 +360,7 @@ admin page (web/index.html)                          ai-news import-candidates /
        probe_source, SourceReviewer, evidence_fingerprint   core/sources/review.py
   POST .../batches/{id}/approve-ready -> approve_ready
   POST .../candidates/{id}/approve|reject|disable|mark-duplicate, PATCH .../candidates/{id}
-       SourceOnboardingService (web/service.py) -> review_source_candidate
+       SourceOnboardingService (web/source_onboarding.py) -> review_source_candidate
        approve -> SourceRepo.create_from_candidate   storage/source_repo.py
   POST /api/source-onboarding/validate               run_source_validation_batch
   GET .../candidates, .../summary, .../overlaps, .../latest, .../check-status
@@ -375,44 +372,17 @@ scripts/sources_onboarding_helper.py db-bootstrap | db-review | db-validate | db
 
 | File | Role |
 | --- | --- |
-| `core/sources/onboarding.py` | URL parsing, overlap groups, deterministic validation, import, review actions, YAML export (split planned, below) |
+| `core/sources/candidates.py` | Pure URL extraction, normalization, parsing and overlap grouping; owns `NormalizedSourceCandidate` and `CandidateOverlapGroup` |
+| `core/sources/validation.py` | `ValidationResult`, deterministic RSS/HTML validation, ingestion fetch adapters and validation persistence |
+| `core/sources/onboarding.py` | `SourceImportResult`, database import, overlap review, candidate review actions and YAML export |
 | `core/sources/review.py` | Check probe (`probe_source`), evidence brief, `SourceReviewer` (Jev, DeepSeek), `evidence_fingerprint` |
 | `web/source_intake.py` | `SourceIntakeService`: check job, registry and same-host checks, cache, `approve_ready` |
+| `web/source_onboarding.py` | `SourceOnboardingService`: candidate lists, summaries and review actions returning web models |
 | `web/routes/sources.py` | 14 `/api/source-onboarding/*` routes |
-| `web/service.py` (not covered, shared) | `SourceOnboardingService`: list, summary and review actions over `review_source_candidate`; planned to move out |
+| `web/service.py` (not covered, shared) | `UpdateRunService` |
 | `storage/source_candidate_repo.py` | `SourceImportBatchRepo`, `SourceCandidateRepo` (drafts, filters, validation result, review save, summary) |
 | `storage/source_repo.py` (not covered) | `SourceRepo.create_from_candidate`, `disable_source` |
 | `scripts/sources_onboarding_helper.py` | `db-*` commands over the DB registry; `lint`, `probe`, `suggest-patch`, `apply-suggested`, `fetch-check` for `sources.yaml` selectors |
-
-### Planned split of `core/sources/onboarding.py`
-
-Section 2 of `docs/plan-split-overloaded-modules-2026-10-21.md`.
-
-| Goes to | Today's names |
-| --- | --- |
-| candidates.py (no DB, no network) | `NormalizedSourceCandidate`, `CandidateOverlapGroup`, `BatchRejectedCandidate`, `BatchFlaggedCandidate`, `BatchCandidateReview`; `extract_candidate_urls`, `_json_source_records`, `normalize_candidate_url`, `parse_source_candidates`, `classify_candidate_batch`, `group_candidate_overlaps`; helpers `_normalize_candidate_type`, `_extract_plain_urls`, `_strip_trailing_punctuation`, `_is_search_wrapper`, `_is_search_wrapper_url`, `_default_port`, `_infer_candidate_type`, `_candidate_value`, `_normalized_path`, `_path_segments`, `_overlap_reason`, `_is_strict_path_prefix`, `_is_topic_path`, `_is_root_family_path`, `_batch_flag_reason`, `_is_broad_media_candidate`, `_batch_output_url`, `_prefer_reason`, `_pick_preferred_candidate`; the regex and reason constants |
-| validation.py | `ValidationResult`, `validate_rss_candidate`, `validate_html_candidate`, `run_source_validation`, `run_source_validation_batch`, `_fetch_feed_with_ingest`, `_fetch_html_with_ingest`, `_extract_links_with_ingest`, `_extract_feed_entries`, `_format_validation_error` |
-| `onboarding.py` (stays) | `SourceImportResult`, `import_source_candidates`, `review_candidate_overlaps`, `review_source_candidate`, `export_approved_sources_yaml`, `write_approved_sources_yaml_snapshot`, `_approve_candidate`, `_reject_candidate`, `_disable_candidate`, `_mark_duplicate_candidate`, `_edit_candidate`, `_lookup_candidate`, `_serialize_approved_source`, `_find_by_normalized_url`, `_candidate_int_value` |
-
-Patch targets and quoted names that change (checked 2026-10-21; the plan text differs in two places):
-
-| Where | Target | After the split |
-| --- | --- | --- |
-| `test_source_validation.py` | `source_onboarding.SourceCandidateRepo`, 5x | 4x read by `run_source_validation` -> validation.py; 1x (`test_review_candidate_overlaps_filters_non_group_results`) stays in `onboarding.py` |
-| `test_source_validation.py` | `source_onboarding.run_source_validation` | validation.py (read by `run_source_validation_batch`) |
-| `test_source_onboarding_edges.py` | `Fetcher`, `fetch_rss_with_metadata`, `extract_links_from_html` | validation.py |
-| `test_source_candidate_repo.py` | string `app.core.sources.onboarding.group_candidate_overlaps` | the module that `SourceCandidateRepo.find_overlap_groups` imports lazily (in `storage/source_candidate_repo.py`, not `storage/repos.py`) |
-| `test_source_onboarding_dedupe.py`, `test_source_onboarding_batch_rules.py`, `test_source_validation.py`, `tests/integration/test_source_validation_flow.py` | `hasattr(source_onboarding, ...)` and message strings for `group_candidate_overlaps`, `classify_candidate_batch`, `run_source_validation` and others | point at the new module or keep re-exports |
-| `test_source_onboarding_service.py` | string `app.web.service.review_source_candidate` | the module `SourceOnboardingService` moves to |
-| `test_web_source_onboarding_api.py` | `sources_routes.import_source_candidates`, `run_source_validation_batch`, `review_candidate_overlaps`, `SourceOnboardingService` | unchanged while the routes import these names directly |
-
-No caller outside tests: `classify_candidate_batch`, `write_approved_sources_yaml_snapshot`,
-`SourceImportBatchRepo.create_import_batch`, `SourceCandidateRepo.update_candidate`,
-`insert_normalized_draft_candidates`; the split decides whether to keep them.
-
-Importers: `src/` 6 (`core/sources/review.py`, `web/service.py`, `web/routes/sources.py`,
-`web/source_intake.py`, `cli/main.py`, `storage/source_candidate_repo.py`), scripts 1, tests 10.
-
 ### Tables
 
 | Table | Written here |
@@ -436,7 +406,7 @@ Importers: `src/` 6 (`core/sources/review.py`, `web/service.py`, `web/routes/sou
 ## Tests
 
 Per rule: see Behavior and Invariants. Files: `tests/unit/test_source_onboarding_parser.py`,
-`test_source_onboarding_dedupe.py`, `test_source_onboarding_batch_rules.py`,
+`test_source_onboarding_dedupe.py`,
 `test_source_onboarding_edges.py`, `test_source_validation.py`, `test_source_onboarding_service.py`,
 `test_source_candidate_repo.py`, `test_source_candidate_repo_edges.py`, `test_source_repo_edges.py`,
 `test_sources_export.py`, `test_source_intake.py`, `test_source_review.py`,
@@ -444,4 +414,3 @@ Per rule: see Behavior and Invariants. Files: `tests/unit/test_source_onboarding
 `test_web_route_table.py`, `test_cli_main.py`, `tests/integration/test_source_validation_flow.py`.
 Tests never call a network or provider: validation takes fake fetch functions, the probe and
 reviewer use `httpx.MockTransport`, the check patches `probe_source` and `SourceReviewer.review`.
-Batch fixture: `tests/fixtures/source_batches/qa_ai_sources.txt`.
