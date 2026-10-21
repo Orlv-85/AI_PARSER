@@ -152,6 +152,8 @@ def _approve_candidate(
     managed_source_repo: object,
     review_note: str | None,
 ) -> None:
+    if _candidate_value(candidate, "status", default="draft") == "duplicate":
+        raise ValueError("Duplicate candidates cannot be approved")
     if _candidate_value(candidate, "validation_status", default="pending") != "validated":
         raise ValueError("Only validated candidates can be approved")
     create_from_candidate = getattr(managed_source_repo, "create_from_candidate", None)
@@ -171,7 +173,6 @@ def _reject_candidate(
     managed_source_repo: object,
     review_note: str | None,
 ) -> None:
-    # Only an approved candidate owns its source; a duplicate carries the target's id.
     approved_source_id = _candidate_int_value(candidate, "approved_source_id")
     if candidate.status == "approved" and approved_source_id is not None:
         disable_source = getattr(managed_source_repo, "disable_source", None)
@@ -215,7 +216,6 @@ def _mark_duplicate_candidate(
         raise ValueError(f"source candidate not found: {duplicate_of_candidate_id}")
     candidate.status = "duplicate"
     candidate.duplicate_of_candidate_id = duplicate_of_candidate_id
-    candidate.approved_source_id = getattr(duplicate_candidate, "approved_source_id", None)
     candidate.review_note = review_note
 
 def _edit_candidate(
