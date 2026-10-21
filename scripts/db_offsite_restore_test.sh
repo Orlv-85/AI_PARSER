@@ -81,7 +81,7 @@ if [ -n "$PROD_SSH" ]; then
   echo "Restored vs prod now (table restored prod):"
   LC_ALL=C sort -o "${workdir}/restored_counts.txt" "${workdir}/restored_counts.txt"
   LC_ALL=C sort -o "${workdir}/prod_counts.txt" "${workdir}/prod_counts.txt"
-  LC_ALL=C join "${workdir}/restored_counts.txt" "${workdir}/prod_counts.txt" -a 1 -a 2 -e missing -o 0,1.2,2.2 \
+  LC_ALL=C join -a 1 -a 2 -e missing -o 0,1.2,2.2 "${workdir}/restored_counts.txt" "${workdir}/prod_counts.txt" \
     | awk '{flag = ($2 == "missing" || $3 == "missing" || $2 + 0 > $3 + 0) ? "  <-- check" : ""; print $0 flag}'
 fi
 

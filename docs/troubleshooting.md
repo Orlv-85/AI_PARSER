@@ -136,6 +136,16 @@ the Troubleshooting section of `README.md`.
       "cause": "On bucket and object stores a prefix with no objects is not a directory, so rclone reports it as not found instead of an empty list.",
       "fix": "List the bucket root recursively and filter: `rclone lsf -R --files-only <remote> --include \"/monthly/postgres_<YYYYMM>*\"`.",
       "verification": "Container test: first upload writes daily/ and monthly/, a second upload of the same month writes only daily/."
+    },
+    {
+      "id": "macos-join-options-after-files",
+      "date": "2026-10-21",
+      "area": "scripts/db_offsite_restore_test.sh",
+      "symptom": "Restore test on macOS restores fine, then prints `usage: join [-a fileno | -v fileno ] ...` at the prod comparison.",
+      "evidence": ["First real restore test from B2 on the owner's Mac, 2026-10-21"],
+      "cause": "BSD join (macOS) stops option parsing at the first file name; GNU join accepts options after the files.",
+      "fix": "Put all join options before the two file names.",
+      "verification": "Rerun on macOS: per-table restored vs prod counts printed, all 29 tables equal."
     }
   ]
 }
