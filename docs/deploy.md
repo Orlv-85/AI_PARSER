@@ -59,14 +59,12 @@ Repository Variables:
 - `AINEWS_AUTH_ENABLED` (optional, default `true`)
 - `AINEWS_AUTH_SESSION_TTL_SECONDS` (optional, default `3600`)
 - `AINEWS_AUTH_COOKIE_SECURE` (optional, default `true`)
-- `AINEWS_MCP_AUTH_ENABLED` (optional, default `false`)
 
 Repository Secrets:
 - `DS_API_KEY` (DeepSeek key, required for digest generation)
 - `SERVER_PASSWORD`
 - `AINEWS_AUTH_PASSWORD_HASH`
 - `AINEWS_AUTH_SECRET`
-- `AINEWS_MCP_AUTH_TOKEN` (required if `AINEWS_MCP_AUTH_ENABLED=true`)
 - `AINEWS_PUBLISH_API_TOKEN` (optional; bearer token for machine POSTs of
   digests/weekly reports, at least 32 characters, `openssl rand -hex 32`.
   Empty or missing disables bearer auth, so only admin sessions can publish)
@@ -178,7 +176,6 @@ Create repository variables/secrets:
 - `SERVER_PASSWORD` (repo secret)
 - `AINEWS_AUTH_PASSWORD_HASH` (repo secret)
 - `AINEWS_AUTH_SECRET` (repo secret)
-- `AINEWS_MCP_AUTH_TOKEN` (repo secret, required only when MCP auth enabled)
 
 Notes:
 - Deploy workflow authenticates by server password (`SERVER_PASSWORD`) via `sshpass`.

@@ -142,38 +142,17 @@ def test_settings_validation_rejects_non_positive_ttl() -> None:
         )
 
 
-def test_settings_validation_rejects_missing_mcp_auth_material_when_enabled() -> None:
-    with pytest.raises(ValidationError, match="missing required mcp auth settings"):
-        Settings(
-            mcp_auth_enabled=True,
-            _env_file=None,
-        )
+def test_settings_ignore_removed_mcp_auth_keys(monkeypatch, tmp_path) -> None:
+    # A production .env or environment may still carry the keys of the removed MCP server.
+    env_file = tmp_path / ".env"
+    env_file.write_text("AINEWS_MCP_AUTH_ENABLED=true\nAINEWS_MCP_AUTH_TOKEN=short\n")
+    monkeypatch.setenv("AINEWS_MCP_AUTH_ENABLED", "true")
+    monkeypatch.setenv("AINEWS_MCP_AUTH_TOKEN", "short")
 
+    settings = Settings(_env_file=env_file)
 
-def test_settings_validation_rejects_short_mcp_auth_token_when_enabled() -> None:
-    with pytest.raises(ValidationError, match="at least 16 characters long"):
-        Settings(
-            mcp_auth_enabled=True,
-            mcp_auth_token="short-token",
-            _env_file=None,
-        )
-
-
-def test_settings_allow_mcp_without_token_when_auth_disabled() -> None:
-    settings = Settings(
-        mcp_auth_enabled=False,
-        _env_file=None,
-    )
-    assert settings is not None
-
-
-def test_settings_allow_mcp_with_valid_token_when_enabled() -> None:
-    settings = Settings(
-        mcp_auth_enabled=True,
-        mcp_auth_token="0123456789abcdef",
-        _env_file=None,
-    )
-    assert settings.mcp_auth_enabled is True
+    assert not hasattr(settings, "mcp_auth_enabled")
+    assert not hasattr(settings, "mcp_auth_token")
 
 
 def test_daily_signals_defaults_and_env(monkeypatch) -> None:

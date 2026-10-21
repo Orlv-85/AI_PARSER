@@ -18,7 +18,7 @@ Specs in `specs/` are the history of how a feature got there.
 | --- | --- |
 | [deploy.md](deploy.md) | Docker, CI/CD, server setup, daily jobs, maintenance, systemd |
 | [configuration.md](configuration.md) | Environment variables, Jev admission, `sources.yaml` |
-| [cli.md](cli.md) | CLI commands, fetch/cron, search, MCP server, prune |
+| [cli.md](cli.md) | CLI commands, fetch/cron, search, prune |
 | [troubleshooting.md](troubleshooting.md) | Known failures with cause and fix (JSON cases) |
 | [daily-signals.md](daily-signals.md) | Daily AI Signals operator guide: commands, cost, deploy note, rollback |
 | [weekly-analytics.md](weekly-analytics.md) | Weekly attention analytics v2: worker, budgets, rollback |

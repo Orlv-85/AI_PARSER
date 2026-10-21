@@ -86,8 +86,6 @@ class Settings(BaseSettings):
     auth_session_ttl_seconds: int = 3600
     auth_cookie_name: str = "ainews_session"
     auth_cookie_secure: bool = False
-    mcp_auth_enabled: bool = False
-    mcp_auth_token: str | None = None
     publish_api_token: str | None = Field(default=None, repr=False)
 
     @property
@@ -130,19 +128,6 @@ class Settings(BaseSettings):
             raise ValueError("AINEWS_DAILY_SIGNALS_MAX_USD must be a dollar amount") from error
         if not amount.is_finite() or amount <= 0 or amount != amount.quantize(Decimal("0.000001")):
             raise ValueError("AINEWS_DAILY_SIGNALS_MAX_USD must be a dollar amount")
-        return self
-
-    @model_validator(mode="after")
-    def validate_mcp_auth_config(self) -> Settings:
-        if not self.mcp_auth_enabled:
-            return self
-        if not self.mcp_auth_token or not self.mcp_auth_token.strip():
-            raise ValueError(
-                "mcp auth is enabled, missing required mcp auth settings: "
-                "AINEWS_MCP_AUTH_TOKEN"
-            )
-        if len(self.mcp_auth_token.strip()) < 16:
-            raise ValueError("AINEWS_MCP_AUTH_TOKEN must be at least 16 characters long")
         return self
 
     @model_validator(mode="after")
