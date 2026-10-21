@@ -26,18 +26,17 @@ from app.core.sources.onboarding import (
 )
 from app.storage import SessionLocal, create_all
 from app.storage.admission import read_collection_status
+from app.storage.article_repo import ArticleRepo
 from app.storage.daily_signals import DailySignalRepo
+from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import Article, Base, FetchRun, NewsDigestReport
 from app.storage.repos import (
-    ArticleRepo,
-    NewsDigestRepo,
-    SourceCandidateRepo,
-    SourceImportBatchRepo,
     WeeklyAnalyticsItem,
     WeeklyAnalyticsRepo,
     WeeklyAnalyticsReport,
     WeeklyAnalyticsReportIndexEntry,
 )
+from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
 from app.web.auth import SessionSigner, verify_bearer_token, verify_password
 from app.web.models import (
     DailySignalBrief,

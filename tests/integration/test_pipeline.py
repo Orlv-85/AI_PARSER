@@ -10,8 +10,9 @@ from app.core.ingestion.scoring import ai_relevance_score, freshness_score, rank
 from app.core.models import Article
 from app.ingest.html import extract_article_text, extract_links_from_html
 from app.ingest.rss import parse_rss
+from app.storage.article_repo import ArticleRepo
 from app.storage.models_sql import Base
-from app.storage.repos import ArticleRepo, SourceRepo
+from app.storage.source_repo import SourceRepo
 
 
 def _build_test_articles() -> list[Article]:

@@ -23,10 +23,11 @@ from app.core.weekly.worker import drain
 from app.mcp.server import run_mcp_server
 from app.observability import setup_json_logging
 from app.storage import SessionLocal, create_all
+from app.storage.article_repo import ArticleRepo
 from app.storage.daily_signals import DailySignalRepo, OverrideConflict
 from app.storage.models_sql import AIEntityOverride
 from app.storage.reenrich_pilot_journal import microdollars
-from app.storage.repos import ArticleRepo, SourceCandidateRepo, SourceImportBatchRepo
+from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
 from app.storage.weekly import WeeklyStore
 
 app = typer.Typer(help="AI News Collector CLI")

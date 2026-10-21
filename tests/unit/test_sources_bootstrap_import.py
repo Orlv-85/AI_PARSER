@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config import sources as sources_config
 from app.storage.models_sql import Base, Source
-from app.storage.repos import SourceRepo
+from app.storage.source_repo import SourceRepo
 
 
 def _session():

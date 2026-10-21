@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.canonicalize import canonical_url_hash
 from app.core.daily.signals import RunOptions, run_days, run_signals
+from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import (
     Article,
     ArticleSignal,
@@ -21,7 +22,6 @@ from app.storage.models_sql import (
     NewsDigestItem,
     NewsDigestReport,
 )
-from app.storage.repos import NewsDigestRepo
 
 D = date(2026, 10, 16)
 NOW = datetime(2026, 10, 17, 3, tzinfo=UTC)

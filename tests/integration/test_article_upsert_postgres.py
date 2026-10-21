@@ -6,8 +6,8 @@ import pytest
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker
 
+from app.storage.article_repo import ArticleRepo
 from app.storage.models_sql import Article, Base
-from app.storage.repos import ArticleRepo
 
 POSTGRES_TEST_URL = os.getenv("AINEWS_TEST_POSTGRES_URL")
 

@@ -15,10 +15,10 @@ from app.core.daily.rubric import QUESTIONS
 from app.core.ingestion.pipeline import _build_article_row
 from app.core.jev import JevRelevanceScorer
 from app.core.models import Article as CoreArticle
+from app.storage.digest_repo import NewsDigestRepo
 from app.storage.legacy_cleanup import encoded, fingerprint
 from app.storage.models_sql import Article, Base
 from app.storage.reenrich_pilot_journal import PilotJournal
-from app.storage.repos import NewsDigestRepo
 
 TARGET = date(2026, 10, 10)
 SOURCE = "The company says its AI system handles document extraction for hospitals. " * 8

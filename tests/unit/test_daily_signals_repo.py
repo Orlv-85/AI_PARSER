@@ -10,7 +10,9 @@ from sqlalchemy.orm import Session
 from app.core.canonicalize import canonical_url_hash
 from app.core.daily.signals_extract import ExtractedEntity, Extraction
 from app.storage import daily_signals as module
+from app.storage.article_repo import ArticleRepo
 from app.storage.daily_signals import DailySignalRepo, OverrideConflict
+from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import (
     AIEntity,
     Article,
@@ -21,7 +23,6 @@ from app.storage.models_sql import (
     NewsDigestItem,
     SignalMention,
 )
-from app.storage.repos import ArticleRepo, NewsDigestRepo
 
 COMPARABLE_FROM = date(2026, 10, 10)
 D = date(2026, 10, 16)

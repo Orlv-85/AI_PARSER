@@ -17,7 +17,7 @@ from app.core.sources.review import (
     source_http_client,
 )
 from app.storage.models_sql import Source, SourceCandidate, SourceImportBatch
-from app.storage.repos import SourceCandidateRepo
+from app.storage.source_candidate_repo import SourceCandidateRepo
 from app.web.service import SourceOnboardingService
 
 

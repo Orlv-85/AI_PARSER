@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, ValidationError
 from app.config.settings import get_settings
 from app.observability.logging import log_mcp_auth_event
 from app.storage import SessionLocal, create_all
-from app.storage.repos import ArticleRepo
+from app.storage.article_repo import ArticleRepo
 from app.web.models import WebUpdateSettings
 from app.web.service import UpdateRunService
 

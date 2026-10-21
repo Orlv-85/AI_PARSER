@@ -3,7 +3,7 @@ from datetime import UTC, date, datetime
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.storage import models_sql, repos
+from app.storage import digest_repo, models_sql, repos
 
 
 def _session():
@@ -13,7 +13,7 @@ def _session():
 
 
 def _repo(session):
-    return repos.NewsDigestRepo(session)
+    return digest_repo.NewsDigestRepo(session)
 
 
 def _digest_models():

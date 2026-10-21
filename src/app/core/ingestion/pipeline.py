@@ -53,7 +53,9 @@ from app.storage.admission import (
     settle_pending,
     upsert_pending,
 )
-from app.storage.repos import ArticleRepo, SourceRepo, WeeklyAnalyticsRepo
+from app.storage.article_repo import ArticleRepo
+from app.storage.repos import WeeklyAnalyticsRepo
+from app.storage.source_repo import SourceRepo
 from app.storage.weekly import WeeklyStore, record_attempt, record_observation, register_source
 
 # Pending admission candidates replayed per source before its fresh fetch.
