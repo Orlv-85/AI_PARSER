@@ -594,7 +594,11 @@ def review_source_candidate(
             managed_source_repo=managed_source_repo,
             review_note=review_note,
         ),
-        "reject": lambda: _reject_candidate(candidate=candidate, review_note=review_note),
+        "reject": lambda: _reject_candidate(
+            candidate=candidate,
+            managed_source_repo=managed_source_repo,
+            review_note=review_note,
+        ),
         "mark_duplicate": lambda: _mark_duplicate_candidate(
             candidate=candidate,
             candidate_repo=candidate_repo,
@@ -659,7 +663,19 @@ def _approve_candidate(
         candidate.approved_source_id = int(managed_source_id)
 
 
-def _reject_candidate(*, candidate: Any, review_note: str | None) -> None:
+def _reject_candidate(
+    *,
+    candidate: Any,
+    managed_source_repo: object,
+    review_note: str | None,
+) -> None:
+    # Only an approved candidate owns its source; a duplicate carries the target's id.
+    approved_source_id = _candidate_int_value(candidate, "approved_source_id")
+    if candidate.status == "approved" and approved_source_id is not None:
+        disable_source = getattr(managed_source_repo, "disable_source", None)
+        if not callable(disable_source):
+            raise ValueError("managed_source_repo must provide disable_source")
+        disable_source(approved_source_id)
     candidate.status = "rejected"
     candidate.review_note = review_note
 

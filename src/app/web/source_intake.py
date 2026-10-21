@@ -2,7 +2,7 @@ import json
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlsplit, urlunsplit
 
 from sqlalchemy import select
@@ -28,6 +28,13 @@ def _url_key(url: str) -> str:
     return str(urlunsplit(("https", netloc, parts.path, parts.query, "")))
 
 
+def _reusable_review(review: dict[str, Any]) -> bool:
+    # Only successful decisions are reused; a Jev "review" means DeepSeek did not answer.
+    if review.get("provider") == "deepseek":
+        return True
+    return review.get("provider") == "jev" and review.get("decision") in {"ready", "reject"}
+
+
 def review_details(candidate: SourceCandidate) -> dict[str, Any]:
     try:
         details = json.loads(candidate.validation_details or "{}")
@@ -35,6 +42,16 @@ def review_details(candidate: SourceCandidate) -> dict[str, Any]:
         return review if isinstance(review, dict) else {}
     except (ValueError, AttributeError):
         return {}
+
+
+def _reviewed_at(cached: dict[str, Any], validated_at: datetime | None) -> datetime | None:
+    # Reviews saved before reviewed_at existed age from their last save.
+    value: datetime | None
+    try:
+        value = datetime.fromisoformat(str(cached["reviewed_at"]))
+    except (KeyError, ValueError):
+        value = validated_at
+    return value.replace(tzinfo=value.tzinfo or UTC) if value is not None else None
 
 
 class SourceIntakeService:
@@ -143,10 +160,10 @@ class SourceIntakeService:
             brief = probe.brief(str(row["raw_input"]))
             fingerprint = evidence_fingerprint(brief, self.settings)
             cached = row["cached"]
-            checked_at = row["validated_at"]
+            reviewed_at = _reviewed_at(cached, row["validated_at"])
             cache_fresh = (
-                checked_at is not None
-                and checked_at.replace(tzinfo=UTC) > datetime.now(UTC) - timedelta(days=7)
+                reviewed_at is not None
+                and reviewed_at > datetime.now(UTC) - timedelta(days=7)
             )
             final_host = urlsplit(_url_key(probe.url)).hostname
             overlaps += [url for url in existing
@@ -156,10 +173,12 @@ class SourceIntakeService:
                 review = {"decision": "review", "reason": "Same-host source: check overlap",
                           "overlap_urls": overlaps[:5]}
             elif (cache_fresh and cached.get("fingerprint") == fingerprint
-                  and cached.get("provider") in {"jev", "deepseek"}):
-                review = {**cached, "cached": True}
+                  and _reusable_review(cached)):
+                review = {**cached, "cached": True,
+                          "reviewed_at": cast(datetime, reviewed_at).isoformat()}
             else:
-                review = reviewer.review(brief)
+                review = {**reviewer.review(brief),
+                          "reviewed_at": datetime.now(UTC).isoformat()}
             review = {**review, "fingerprint": fingerprint, "evidence": json.loads(brief),
                       "requested_url": candidate_url,
                       "checked_at": datetime.now(UTC).isoformat()}

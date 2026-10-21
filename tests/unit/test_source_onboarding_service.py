@@ -206,6 +206,61 @@ def test_review_source_candidate_disable_turns_off_previously_approved_managed_s
         engine.dispose()
 
 
+def test_review_source_candidate_reject_disables_approved_managed_source() -> None:
+    session, engine = _build_session()
+    try:
+        source_repo = SourceRepo(session)
+        candidate_repo = SourceCandidateRepo(session)
+        primary = _create_candidate(
+            session,
+            normalized_url="https://example.com/feed.xml",
+            candidate_type="rss",
+            validation_status="validated",
+        )
+        duplicate = _create_candidate(
+            session,
+            normalized_url="https://example.com/tag/ai",
+            candidate_type="html",
+            validation_status="validated",
+        )
+        approved = review_source_candidate(
+            candidate_id=primary.id,
+            action="approve",
+            candidate_repo=candidate_repo,
+            managed_source_repo=source_repo,
+        )
+        source_id = approved.approved_source_id
+        review_source_candidate(
+            candidate_id=duplicate.id,
+            action="mark_duplicate",
+            duplicate_of_candidate_id=primary.id,
+            candidate_repo=candidate_repo,
+            managed_source_repo=source_repo,
+        )
+
+        review_source_candidate(
+            candidate_id=duplicate.id,
+            action="reject",
+            candidate_repo=candidate_repo,
+            managed_source_repo=source_repo,
+        )
+        assert session.get(Source, source_id).enabled is True
+
+        rejected = review_source_candidate(
+            candidate_id=primary.id,
+            action="reject",
+            candidate_repo=candidate_repo,
+            managed_source_repo=source_repo,
+            review_note="off-topic",
+        )
+        assert rejected.status == "rejected"
+        assert session.get(Source, source_id).enabled is False
+        assert source_id not in {row.id for row in source_repo.list_enabled_sources()}
+    finally:
+        session.close()
+        engine.dispose()
+
+
 def test_review_source_candidate_rejects_invalid_duplicate_targets() -> None:
     session, engine = _build_session()
     try:
