@@ -1,0 +1,84 @@
+{
+  "title": "Coordinator state for the next session",
+  "created": "2026-10-20",
+  "updated": "2026-10-21 (after v0.1.113)",
+  "role": "Coordinator: plans, writes prompts for other sessions, reviews their PRs, merges. Does not write feature code itself (small test or docs fixes are fine).",
+  "owner_rules": [
+    "Owner writes Russian, takes part minimally (AGENTS.md 'Owner And Questions'); design questions go to another session or are decided by the agent and reported.",
+    "Always tell the owner about open questions: one line each, settled how, or a yes/no question with a recommendation; explain product questions in plain words (what a reader of the site notices).",
+    "Coordinator may merge docs and test PRs itself after review and green CI.",
+    "Code PRs (behavior or move-only refactors): merge only with the owner's yes.",
+    "Tags v0.1.NNN trigger deploy: only on the owner's request. Do not watch the deploy unless asked; a read-only health check after a dependency change is fine.",
+    "Prod (ssh ai-news) is read-only; any write needs the owner's yes.",
+    "Work in git worktrees from origin/master; no git writes in the main folder. venv1 is editable on the main folder: in a worktree run checks with PYTHONPATH=src ../AI_PARSER/venv1/bin/...",
+    "Docs-only PRs skip the full gate (say so in the PR). Merge with gh pr merge --merge.",
+    "Independent tasks may run in parallel sessions; give the owner the exact launch line for each. Prompts live untracked in docs/ while active, then go to docs/archive/2026-10/ in a docs PR.",
+    "zsh: write ${VAR} before ':' in refspecs ($SHA:refs is read as a modifier)."
+  ],
+  "state": {
+    "master": "0d67844 (PR #74)",
+    "prod": "v0.1.113 (0d67844), deployed 2026-10-21, healthy",
+    "open_prs": "none",
+    "code_docs": [
+      "src/app/core/ingestion/pipeline.md (every rule has a test since PR #61)",
+      "src/app/core/daily/signals.md",
+      "src/app/core/sources/onboarding.md (PR #75, reviewed; split not done yet)"
+    ],
+    "layout": "core/ grouped into ingestion/, daily/, weekly/, sources/ (PR #64); storage repos split (PR #67); web/app.py split into web/routes/ (PR #72); MCP server removed (PR #68); finished cleanup tools removed (PR #71)",
+    "backups": "Nightly db-maintenance workflow (GitHub Actions, ~07:00-08:00 UTC) dumps prod, keeps 14 days on the server and uploads an age-encrypted copy to Backblaze B2 (daily/ 30 days, monthly/ 365 days). Restore from B2 tested 2026-10-21 (29 tables match). Private age key is with the owner. Operator guide: docs/deploy.md."
+  },
+  "decided_2026_10_21": [
+    "Owner yes: remove the MCP server (PR #68); deploy workflow lines with AINEWS_MCP_AUTH_* left for a later cleanup.",
+    "Owner yes: off-site backups on Backblaze B2 (no card), owner keeps the age key and a copy of the server .env.",
+    "Owner yes: rejecting an approved source candidate disables its source (PR #76).",
+    "storage/ stays flat (docs/plan-storage-layout-2026-10-21.md); pipeline.py, signals_compute.py, web/service.py, models_sql.py are left unsplit (docs/plan-split-overloaded-modules-2026-10-21.md).",
+    "httpx2 is not pinned; auth tests clear the cookie jar before setting a token (PR #65, troubleshooting case)."
+  ],
+  "next": [
+    {
+      "id": "B1-close",
+      "title": "Close B1/A0 in the backlog after the first scheduled B2 upload (night of 2026-10-22)",
+      "status": "B1 session does it; verify the db-maintenance run of 2026-10-22 has 'Upload backup off-site' green"
+    },
+    {
+      "id": "S2",
+      "title": "Split core/sources/onboarding.py (plan section 2) following core/sources/onboarding.md; move SourceOnboardingService out of web/service.py; drop dead code the review confirmed",
+      "status": "todo, prompt not written yet"
+    },
+    {
+      "id": "R-2310",
+      "title": "2026-10-23: check Rising/Cooling on / (read-only)",
+      "status": "todo"
+    },
+    {
+      "id": "B2",
+      "title": "Weekly and monthly analytics on the 006 data layer (backlog B2), after 2026-10-23; first decide keep-or-delete of weekly v2",
+      "status": "todo, big spec: planner and implementer sessions"
+    },
+    {
+      "id": "F1",
+      "title": "Pipeline findings left out of P3 (behavior changes)",
+      "items": [
+        "'fetched' counts different things per path.",
+        "No source_fetch_finished log line for a failed fetch with admission off.",
+        "FetchSummary.source_count counts all sources after a pause.",
+        "fetch_failure is recorded as complete coverage (decide with weekly work)."
+      ],
+      "status": "backlog"
+    },
+    {
+      "id": "C1",
+      "title": "Small cleanups",
+      "items": [
+        "Remove AINEWS_MCP_AUTH_* from deploy-release.yml, deploy-by-tag.yml, docker-compose.prod.yml and GitHub vars/secrets (production-sensitive, owner yes).",
+        "Rename storage/reenrich_pilot_journal.py (live paid-call journal) together with a core/daily/enrichment.md doc when daily enrichment is next changed.",
+        "Prod: retired-ai-tools.HOvdBe (1 GB) and semantic-admission-enable-*/ (server .env copy) in /opt/ai-news/backups: B1 session asked the owner to delete (recommended yes)."
+      ],
+      "status": "backlog"
+    }
+  ],
+  "carried_unverified": [
+    "Compare the real DeepSeek bill for October with the ledger (owner has the account).",
+    "Backlog: docs/backlog/backlog-todo.json (B2 weekly/monthly next, B3 archive, B4 Jev second opinion, B5-B9 outputs)."
+  ]
+}
