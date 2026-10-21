@@ -35,7 +35,6 @@ For an existing database, run `./venv1/bin/alembic upgrade head` first.
 - Stores data in SQLite via SQLAlchemy and Alembic migrations.
 - Supports PostgreSQL in production with Alembic migrations.
 - Emits structured JSON logs for fetch runs.
-- Exposes MCP tools for agent-driven update and analysis workflows.
 
 ## Documentation
 
@@ -49,7 +48,7 @@ General:
 
 - [Docker and production deploy](docs/deploy.md) - Docker, CI/CD, server setup, daily digest jobs, maintenance, systemd.
 - [Configuration](docs/configuration.md) - environment variables, Jev admission, `sources.yaml` and source management.
-- [CLI usage](docs/cli.md) - web onboarding, fetch/cron, rollout knobs, search, MCP server, prune.
+- [CLI usage](docs/cli.md) - web onboarding, fetch/cron, rollout knobs, search, prune.
 - [Weekly attention analytics v2](docs/weekly-analytics.md) - worker, budgets, audit export, rollback.
 - [Article re-enrichment](docs/article-reenrichment.md) - implementation and operator guide.
 - [Daily AI Signals operator guide](docs/daily-signals.md) - operator commands, costs, rollback.
@@ -101,17 +100,3 @@ See also [docs/troubleshooting.md](docs/troubleshooting.md) for known CI/test fa
   docs next to the code (see `AGENTS.md`).
 - Format of a new spec: `.specify/templates/`.
 - `.specify/memory/constitution.md`: principles of the first version (history, partly outdated).
-
-## Agent Architecture Notes
-
-You do not need a separate repository for the agent that uses MCP.
-
-Recommended setup:
-- Keep parser + MCP server in this project/repo.
-- Run analyst agent as a separate process/client (it connects to MCP and reads prepared article text).
-- Share the same database/storage backend.
-
-Create a separate project for the analyst only if you need:
-- independent release cycle,
-- different runtime/dependency stack,
-- stricter security/isolation boundaries.

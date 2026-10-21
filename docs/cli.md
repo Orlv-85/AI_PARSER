@@ -129,49 +129,6 @@ ai-news top --hours 24 --limit 30
 ai-news search --query "gpt" --days 7
 ```
 
-## Run MCP server (for agent clients)
-
-```bash
-ai-news mcp-serve
-```
-
-MCP authentication configuration:
-- `AINEWS_MCP_AUTH_ENABLED=false` (default, backward-compatible local mode)
-- `AINEWS_MCP_AUTH_ENABLED=true` (enforce token on all MCP tools)
-- `AINEWS_MCP_AUTH_TOKEN=<strong-random-token>` (required when auth is enabled)
-
-Recommended secure startup:
-
-```bash
-export AINEWS_MCP_AUTH_ENABLED=true
-export AINEWS_MCP_AUTH_TOKEN="replace-with-long-random-token"
-ai-news mcp-serve
-```
-
-If auth is enabled and token is missing/blank, startup fails fast.
-
-Available MCP tools:
-- `news.update`
-- `news.update_status`
-- `news.list`
-- `news.get`
-
-When MCP auth is enabled, pass `auth_token` in each tool call:
-- `news.update(..., auth_token="...")`
-- `news.update_status(auth_token="...")`
-- `news.list(..., auth_token="...")`
-- `news.get(article_id=..., auth_token="...")`
-
-Auth audit logging:
-- `mcp_auth_success` and `mcp_auth_failed` events are emitted.
-- Raw tokens are never written to logs.
-
-Typical agent flow:
-1. Call `news.update` (`wait=false` for async or `wait=true` for blocking mode).
-2. Poll `news.update_status` until `finished`/`failed`.
-3. Call `news.list` to get dataset slice.
-4. Call `news.get` for full plain-text article content.
-
 ## Prune old news
 
 ```bash

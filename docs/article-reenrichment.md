@@ -24,7 +24,7 @@ conflicts. Visible time labels are retained for later review rather than guessed
 RSS preserves the original publication and modification literals and avoids
 feedparser's published/updated field aliases.
 
-CLI, MCP and web API responses support unknown timestamps. Web news, export,
+CLI and web API responses support unknown timestamps. Web news, export,
 article detail and link-feed responses expose publication evidence and optional
 enrichment metadata. Existing API fields remain; `published_at` can now be null.
 The news UI shows calendar dates without a fabricated time and labels unknown
