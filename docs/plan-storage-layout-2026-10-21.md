@@ -4,7 +4,7 @@ Status: proposal, no moves yet. Written after the shared helpers were moved out 
 (`storage/journal_files.py`, `core/provider_costs.py`) and the one-off `storage/reenrich_apply.py`
 was removed (same PR).
 
-Done 2026-10-21 (PR "chore: remove the finished one-off cleanup tools"): both cleanups deleted;
+Done 2026-10-21 (PR #71): both cleanups deleted;
 the live reject verdict moved to `core/ingestion/reject_policy.py`, the snapshot helpers used by
 `scripts/reenrich_articles.py` to `storage/article_snapshot.py`; the FK guard was removed.
 
