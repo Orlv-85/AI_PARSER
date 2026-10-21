@@ -1,6 +1,6 @@
 from datetime import date
 
-from app.storage.repos import ArticleRepo
+from app.storage.article_repo import ArticleRepo
 
 
 def test_list_for_agent_delegates_to_list_for_view(monkeypatch) -> None:

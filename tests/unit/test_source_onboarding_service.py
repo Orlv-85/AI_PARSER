@@ -5,7 +5,8 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.sources.onboarding import review_source_candidate
 from app.storage.models_sql import Base, Source
-from app.storage.repos import SourceCandidateRepo, SourceImportBatchRepo, SourceRepo
+from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
+from app.storage.source_repo import SourceRepo
 from app.web.service import SourceOnboardingService
 
 

@@ -12,8 +12,8 @@ from sqlalchemy.orm import sessionmaker
 from app.config.settings import get_settings
 from app.core.daily.signals_brief import HARD_EVENTS
 from app.core.daily.signals_compute import EVENT_LABELS
+from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import Base, DailySignalBrief, DailySignalReport
-from app.storage.repos import NewsDigestRepo
 from app.web.app import create_app
 from app.web.signals_view import AI_NOTE, SINGULAR, event_label
 

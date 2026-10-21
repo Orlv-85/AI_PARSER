@@ -10,8 +10,8 @@ from app.core.canonicalize import canonical_url_hash
 from app.core.daily.signals import EntityCommandError, alias_entity, merge_entities
 from app.core.daily.signals_extract import ExtractedEntity, Extraction
 from app.storage.daily_signals import DailySignalRepo, OverrideConflict
+from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import AIEntity, Article, Base, SignalMention
-from app.storage.repos import NewsDigestRepo
 
 D = date(2026, 10, 16)
 

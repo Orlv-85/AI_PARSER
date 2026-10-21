@@ -391,7 +391,8 @@ web update (thread or process)               web/service.py: UpdateRunService
 | `ingest/page_filter.py` | Non-news rules: URL, text, page schema; `MANAGED_LINK_SELECTORS` | yes |
 | `ingest/date_evidence.py` | Date candidates and resolution (`DATE_EVIDENCE_VERSION`) | yes |
 | `core/jev.py` (not covered) | `jev_state` (bounded text sent to Jev); `JevRelevanceScorer`: one Jev request per text, in-cycle cache, stop after failure | no |
-| `storage/repos.py` (not covered) | `SourceRepo` (fetch state), `ArticleRepo` (known hashes, insert, batch upsert) | no |
+| `storage/source_repo.py` (not covered) | `SourceRepo` (fetch state) | no |
+| `storage/article_repo.py` (not covered) | `ArticleRepo` (known hashes, insert, batch upsert) | no |
 | `storage/weekly.py` (not covered) | `register_source`, `record_observation`, `record_attempt` | no |
 
 ## Tables

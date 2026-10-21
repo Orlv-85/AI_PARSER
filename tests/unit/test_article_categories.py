@@ -10,8 +10,8 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import get_settings
+from app.storage.article_repo import ArticleRepo
 from app.storage.models_sql import Base
-from app.storage.repos import ArticleRepo
 from app.web.app import create_app
 
 

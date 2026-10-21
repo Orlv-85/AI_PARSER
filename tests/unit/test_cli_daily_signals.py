@@ -12,8 +12,8 @@ from app.config.settings import Settings
 from app.core.canonicalize import canonical_url_hash
 from app.core.daily.signals_extract import ExtractedEntity, Extraction
 from app.storage.daily_signals import DailySignalRepo
+from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import AIEntity, AIEntityOverride, Article, Base, DailySignalReport
-from app.storage.repos import NewsDigestRepo
 
 YESTERDAY = datetime.now(UTC).date() - timedelta(days=1)
 runner = CliRunner()

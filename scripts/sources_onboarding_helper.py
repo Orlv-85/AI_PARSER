@@ -606,7 +606,7 @@ def cmd_db_bootstrap(args: argparse.Namespace) -> int:
 
     from app.config.sources import bootstrap_sources_into_db
     from app.storage.models_sql import Base
-    from app.storage.repos import SourceRepo
+    from app.storage.source_repo import SourceRepo
 
     engine = create_engine(args.database_url, future=True)
     session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)

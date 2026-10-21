@@ -3,8 +3,8 @@ from datetime import UTC, datetime
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.storage.article_repo import ArticleRepo
 from app.storage.models_sql import Article, Base
-from app.storage.repos import ArticleRepo
 
 
 def _session():

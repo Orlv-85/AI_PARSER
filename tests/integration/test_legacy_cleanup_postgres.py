@@ -14,6 +14,7 @@ from app.core.ingestion.legacy_cleanup import cleanup_verdict
 from app.core.ingestion.pipeline import AdmissionState, _screen_candidate
 from app.core.jev import JevAssessment
 from app.storage.admission import list_pending, upsert_pending
+from app.storage.article_repo import ArticleRepo
 from app.storage.legacy_cleanup import (
     apply_cleanup,
     build_manifest,
@@ -23,7 +24,7 @@ from app.storage.legacy_cleanup import (
     restore_cleanup,
 )
 from app.storage.models_sql import ArticleAlias, Base
-from app.storage.repos import ArticleRepo, SourceRepo
+from app.storage.source_repo import SourceRepo
 
 URL = os.getenv("AINEWS_TEST_POSTGRES_URL")
 pytestmark = pytest.mark.skipif(not URL, reason="AINEWS_TEST_POSTGRES_URL is not set")

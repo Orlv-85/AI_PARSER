@@ -15,7 +15,8 @@ from app.core.sources.onboarding import review_source_candidate
 from app.observability import setup_json_logging
 from app.storage import SessionLocal
 from app.storage.admission import PAUSED_MESSAGE, read_collection_status
-from app.storage.repos import SourceCandidateRepo, SourceImportBatchRepo, SourceRepo
+from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
+from app.storage.source_repo import SourceRepo
 from app.web.models import (
     SourceOnboardingApproveResponse,
     SourceOnboardingBatchSummary,

@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.storage.models_sql import Base
-from app.storage.repos import SourceCandidateRepo, SourceImportBatchRepo
+from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
 
 
 def _session():

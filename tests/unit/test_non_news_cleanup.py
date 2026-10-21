@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.config.sources import SourceConfig
 from app.core.canonicalize import canonical_url_hash, canonicalize_url
+from app.storage.article_repo import ArticleRepo
 from app.storage.models_sql import ArticleAlias, Base
 from app.storage.non_news_cleanup import (
     EXPORT_TABLES,
@@ -15,7 +16,7 @@ from app.storage.non_news_cleanup import (
     export_database,
     restoration_sql,
 )
-from app.storage.repos import ArticleRepo, SourceRepo
+from app.storage.source_repo import SourceRepo
 
 
 def test_dry_run_dependencies_and_restore_roundtrip(tmp_path) -> None:

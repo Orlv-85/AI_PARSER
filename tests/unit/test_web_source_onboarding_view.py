@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.config.settings import get_settings
 from app.storage.models_sql import Base
-from app.storage.repos import SourceCandidateRepo, SourceImportBatchRepo
+from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
 from app.web import models as web_models
 from app.web.app import create_app
 

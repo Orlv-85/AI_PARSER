@@ -15,7 +15,7 @@ from app.ingest.fetcher import Fetcher
 from app.ingest.html import extract_links_from_html
 from app.ingest.rss import fetch_rss_with_metadata
 from app.storage.models_sql import Source, SourceCandidate, SourceImportBatch
-from app.storage.repos import SourceCandidateRepo, SourceImportBatchRepo
+from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
 
 _MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\((https?://[^\s)]+)\)", re.IGNORECASE)
 _PLAIN_URL_RE = re.compile(r"https?://[^\s<>\])]+", re.IGNORECASE)

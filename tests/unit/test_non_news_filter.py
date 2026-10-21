@@ -23,9 +23,10 @@ from app.ingest.html import (
 )
 from app.ingest.page_filter import html_exclusion_reason, url_exclusion_reason
 from app.ingest.rss import RssFetchResult, fetch_rss, parse_rss
+from app.storage.article_repo import ArticleRepo
 from app.storage.models_sql import Article as StoredArticle
 from app.storage.models_sql import Base
-from app.storage.repos import ArticleRepo, SourceRepo
+from app.storage.source_repo import SourceRepo
 
 BAD_URLS = [
     "https://kobiton.com/about-kobiton",

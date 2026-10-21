@@ -3,6 +3,8 @@
 Status: proposal, no code. Review it in another session before anyone splits a file. Paths are after
 the `core/` regrouping (same PR as this file). Line counts are from that branch.
 
+Step 1 done (2026-10-21): `storage/repos.py` split, branch `refactor/split-storage-repos-20261021`.
+
 ## Method
 
 Every file in `src/app` over ~550 lines, plus files with several `too-many-*` pylint disables, was

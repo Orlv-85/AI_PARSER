@@ -1,4 +1,6 @@
+from app.storage.article_repo import ArticleRepo
 from app.storage.db import SessionLocal, create_all, engine, get_session
+from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import (
     Article,
     ArticleAlias,
@@ -9,7 +11,7 @@ from app.storage.models_sql import (
     NewsDigestReport,
     Source,
 )
-from app.storage.repos import ArticleRepo, NewsDigestRepo, SourceRepo
+from app.storage.source_repo import SourceRepo
 
 __all__ = [
     "Article",

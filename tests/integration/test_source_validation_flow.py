@@ -3,7 +3,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.sources import onboarding as source_onboarding
 from app.storage.models_sql import Base, SourceCandidate
-from app.storage.repos import SourceCandidateRepo
+from app.storage.source_candidate_repo import SourceCandidateRepo
 
 
 def _session():
@@ -25,7 +25,7 @@ def test_run_source_validation_persists_status_and_timestamp_end_to_end() -> Non
         "record_validation_result",
     ), (
         "Phase 2 validation persistence API missing: "
-        "app.storage.repos.SourceCandidateRepo.record_validation_result"
+        "app.storage.source_candidate_repo.SourceCandidateRepo.record_validation_result"
     )
 
     session = _session()

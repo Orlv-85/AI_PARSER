@@ -7,8 +7,9 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config.sources import SourceConfig
 from app.storage import db
+from app.storage.article_repo import ArticleRepo
 from app.storage.models_sql import ArticleAlias, Base, Source
-from app.storage.repos import ArticleRepo, SourceRepo
+from app.storage.source_repo import SourceRepo
 
 
 def _session():

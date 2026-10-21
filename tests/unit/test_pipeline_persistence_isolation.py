@@ -15,9 +15,9 @@ from app.core.jev import JevAssessment
 from app.core.models import Article
 from app.ingest.html import HtmlListPageResult
 from app.ingest.rss import RssFetchResult, RssItemList, _with_rss_metadata
+from app.storage.article_repo import ArticleRepo
 from app.storage.models_sql import Article as StoredArticle
 from app.storage.models_sql import Base, Source, WeeklyCoverageAttempt
-from app.storage.repos import ArticleRepo
 
 
 def _rss_items(

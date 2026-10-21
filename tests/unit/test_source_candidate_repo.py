@@ -4,7 +4,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.storage.models_sql import Base, Source, SourceCandidate
-from app.storage.repos import SourceCandidateRepo, SourceImportBatchRepo, SourceRepo
+from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
+from app.storage.source_repo import SourceRepo
 
 
 def _session():
