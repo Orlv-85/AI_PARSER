@@ -1,7 +1,8 @@
 name: offsite-archive
 
 # One-time, manual: encrypted tar of named entries under backups/ on the server to archive/ in B2.
-# No retention on archive/. Never include files with secrets (for example server.env copies).
+# No retention on archive/. Files with "env" in the name are skipped: copies of .env carry secrets
+# (for example reenrich-final-20261011/env-before, retention-800/server.env).
 on:
   workflow_dispatch:
     inputs:
@@ -62,7 +63,7 @@ jobs:
           done
           archive="${RUNNER_TEMP}/${ARCHIVE_NAME}.tar.gz.age"
           sshpass -p "${SERVER_PASSWORD}" ssh "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            "cd '${DEPLOY_APP_DIR}/backups' && tar -czf - --exclude='*.env' ${quoted}" \
+            "cd '${DEPLOY_APP_DIR}/backups' && tar -czf - --exclude='*env*' ${quoted}" \
             | age -r "${BACKUP_AGE_RECIPIENT}" -o "${archive}"
           rclone copyto "${archive}" "offsite:${OFFSITE_B2_BUCKET}/archive/${ARCHIVE_NAME}.tar.gz.age"
           echo "Uploaded archive/${ARCHIVE_NAME}.tar.gz.age ($(wc -c < "${archive}" | tr -d ' ') bytes)"

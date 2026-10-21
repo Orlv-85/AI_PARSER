@@ -25,13 +25,17 @@ Prompt: `docs/prompt-offsite-backups-2026-10-21.md`.
 | Path | Size | What | Off-site? |
 | --- | --- | --- | --- |
 | `retired-ai-tools.HOvdBe/` | 1023 MB | old pocketpaw venv | No: software, reinstallable |
-| `before_jev_october_20261010T102234Z.sql.gz` | 30 MB | full dump before JEV change | Yes, once (pre-change DB state; the daily copies of that date expire on ~2026-10-25) |
+| `before_jev_october_20261010T102234Z.sql.gz` | 30 MB | full dump before JEV change (plain SQL despite `.gz`) | Yes, once (pre-change DB state; the daily copies of that date expire on ~2026-10-25) |
 | `daily-publication-20261011/` | 23 MB | `full-before-release.dump` + job logs | Yes, once (full dump before release) |
-| `reenrich-final-20261011/` | 312 MB | pre-apply dumps, rollback/apply JSON | Yes, once (rollback data of the re-enrichment run) |
+| `reenrich-final-20261011/` | 312 MB | pre-apply dumps, rollback/apply JSON | Yes, once (rollback data of the re-enrichment run), without `env-before` (copy of server `.env`) |
 | `legacy-jev-20261010T222433Z/` | 177 MB | pre-apply dump, journal, snapshots | Yes, once (rollback data of legacy JEV) |
 | `reenrich-20261010T232951Z/`, `weekly-stage1-20261011/` | 59 + 116 MB | JSON snapshots | Yes, once (cheap; same reason) |
 | `digests_before_jev_*`, `daily-cycle-20261012/` | < 1 MB | digest JSON, logs | Yes, once (tiny) |
 | `semantic-admission-enable-*/server.env` | small | copy of server `.env` with secrets | No: secrets do not leave the server, even encrypted (see open questions) |
+
+Secret check (coordinator, read-only, 2026-10-21): only `reenrich-final-20261011/env-before` and
+`legacy-jev-*/retention-800/server.env` hold secrets; other matches are article text. The archive
+workflow skips every file with `env` in the name.
 
 One-time archive: everything above marked "Yes, once" as one `tar | zstd/gzip | age` object under
 `archive/` (estimate 150-250 MB compressed; JSON compresses well). No retention on `archive/`.

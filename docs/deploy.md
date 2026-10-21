@@ -241,7 +241,9 @@ Nightly maintenance workflow:
   copies unreadable (on-server copies, 14 days, are not affected).
 - One-time archive of other files under `backups/` (pre-change dumps and snapshots): workflow
   `offsite-archive` (manual) with `entries` (names under `backups/`) and `archive_name`; it skips
-  `*.env` files. Never archive copies of `.env`.
+  every file with `env` in the name (copies of `.env`, e.g. `env-before`). Never archive copies of
+  `.env`. Note: `before_jev_october_20261010T102234Z.sql.gz` is plain SQL despite the name; restore
+  it without `gunzip`.
 
 Restore test or real restore from the off-site copy, on the owner's machine (docker, `rclone`,
 `age`; `brew install age rclone`), never on prod:
