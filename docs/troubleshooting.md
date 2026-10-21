@@ -77,8 +77,8 @@ the Troubleshooting section of `README.md`.
       "area": "tests/integration, CI",
       "symptom": "Local ./venv1/bin/pytest is green with '9 skipped', but CI fails in tests/integration/test_legacy_cleanup_postgres.py, e.g. 'ValueError: Unknown article FK dependency: article_signals'.",
       "evidence": ["GitHub Actions run 39145455108 (branch feat/006-daily-ai-signals)"],
-      "cause": "The PostgreSQL integration tests skip unless AINEWS_TEST_POSTGRES_URL is set; CI sets it with a postgres:18-alpine service. Separately, legacy cleanup refuses to run when any table has an unknown FK to articles, so a new table referencing articles must be declared to that guard.",
-      "fix": "Run the suite against a local Postgres like CI: docker run -d --rm --name ainews-pg-test -e POSTGRES_USER=ainews_test -e POSTGRES_PASSWORD=isolated_ci_test -e POSTGRES_DB=ainews_test -p 55432:5432 postgres:18-alpine, then AINEWS_TEST_POSTGRES_URL=postgresql+psycopg://ainews_test:isolated_ci_test@127.0.0.1:55432/ainews_test in the clean-copy run. For a new FK to articles, extend legacy_cleanup.known_article_fk (derived signals tables are accepted only with ON DELETE CASCADE).",
+      "cause": "The PostgreSQL integration tests skip unless AINEWS_TEST_POSTGRES_URL is set; CI sets it with a postgres:18-alpine service. Separately, the legacy cleanup refused to run when any table had an unknown FK to articles (that cleanup and its guard were removed 2026-10-21).",
+      "fix": "Run the suite against a local Postgres like CI: docker run -d --rm --name ainews-pg-test -e POSTGRES_USER=ainews_test -e POSTGRES_PASSWORD=isolated_ci_test -e POSTGRES_DB=ainews_test -p 55432:5432 postgres:18-alpine, then AINEWS_TEST_POSTGRES_URL=postgresql+psycopg://ainews_test:isolated_ci_test@127.0.0.1:55432/ainews_test in the clean-copy run.",
       "verification": "Full suite with the URL set: 1082 passed, 0 skipped."
     },
     {

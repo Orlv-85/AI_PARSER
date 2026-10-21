@@ -4,7 +4,7 @@ import re
 from logging import getLogger
 from math import ceil
 
-from app.core.ingestion.legacy_cleanup import CLEANUP_POLICY, cleanup_verdict
+from app.core.ingestion.reject_policy import CLEANUP_POLICY, cleanup_verdict
 from app.core.jev import JevAssessment, JevInputTooLarge, JevRelevanceScorer, _probability
 from app.core.provider_costs import PRICES
 from app.storage.journal_files import encoded, fingerprint

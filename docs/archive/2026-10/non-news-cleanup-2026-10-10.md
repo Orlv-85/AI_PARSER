@@ -1,5 +1,9 @@
 # Non-news ingestion filter and proposed cleanup
 
+> The tool (`scripts/non_news_cleanup.py`, `storage/non_news_cleanup.py`) was removed on
+> 2026-10-21 in PR "chore: remove the finished one-off cleanup tools". Restore with
+> `git checkout 5323c5a -- scripts/non_news_cleanup.py src/app/storage/non_news_cleanup.py`.
+
 Production was read using SSH and a PostgreSQL `REPEATABLE READ / READ ONLY`
 transaction on 2026-10-10 at 16:30:02 UTC. No collector, model, weekly worker,
 historical run, migration, publication, deletion or deployment was invoked.

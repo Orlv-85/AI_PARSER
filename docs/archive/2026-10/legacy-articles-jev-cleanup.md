@@ -1,5 +1,14 @@
 # Legacy article cleanup with JEV
 
+> Archived 2026-10-21: the cleanup ran on 2026-10-11 and its code (`scripts/legacy_articles_cleanup.py`,
+> `storage/legacy_cleanup.py`, `storage/cleanup_journal.py`, their tests) was removed in PR
+> "chore: remove the finished one-off cleanup tools". The reject verdict lives on in
+> `core/ingestion/reject_policy.py`, the snapshot helpers in `storage/article_snapshot.py`.
+> To restore the tool: `git checkout 5323c5a -- scripts/legacy_articles_cleanup.py
+> src/app/storage/legacy_cleanup.py src/app/storage/cleanup_journal.py src/app/storage/non_news_cleanup.py
+> src/app/core/ingestion/legacy_cleanup.py tests/unit/test_legacy_cleanup.py`
+> (the restored files import each other by their old names).
+
 `scripts/legacy_articles_cleanup.py` evaluates a frozen, consistent database
 snapshot. It sends only saved title (1,024 characters), summary (4,000), and
 content (16,000) to the ordinary `JevRelevanceScorer`, including its unchanged
