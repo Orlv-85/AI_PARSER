@@ -245,6 +245,20 @@ Nightly maintenance workflow:
   `.env`. Note: `before_jev_october_20261010T102234Z.sql.gz` is plain SQL despite the name; restore
   it without `gunzip`.
 
+Account, keys and limits (set up 2026-10-21):
+- Bucket name: GitHub variable `OFFSITE_B2_BUCKET`. Lifecycle rules in the B2 console (Buckets ->
+  bucket -> Lifecycle Settings): `daily/` hide after 30 days, `monthly/` hide after 365 days, both
+  delete 1 day after hiding. Check them: `rclone backend lifecycle <remote>:<bucket>`.
+- Keys: B2 application key in GitHub secrets `OFFSITE_B2_KEY_ID` / `OFFSITE_B2_APPLICATION_KEY`
+  (the owner's local `.env` keeps a copy as `B2-KEY-ID` / `B2-APPLICATION-KEY`). age private key:
+  `~/ai-news-backup.agekey` on the owner's Mac and a copy in the owner's password manager; its
+  public part is the GitHub variable `BACKUP_AGE_RECIPIENT`.
+- Caps (B2 console -> Caps & Alerts) are $0: storage 10 GB, download 1 GB/day; uploads are free.
+  B2 mails the owner at 75% and 100%. At the cap B2 refuses new uploads instead of billing: the
+  nightly run fails (GitHub mails), existing copies stay. Fix: shorten `daily/` / `monthly/` days
+  in the lifecycle rules, or raise the storage cap (B2 storage is ~$0.007/GB-month).
+- Changing retention needs no code change: only the lifecycle rules.
+
 Restore test or real restore from the off-site copy, on the owner's machine (docker, `rclone`,
 `age`; `brew install age rclone`), never on prod:
 
