@@ -34,16 +34,15 @@ Prompt: `docs/prompt-offsite-backups-2026-10-21.md`.
 | `semantic-admission-enable-*/server.env` | small | copy of server `.env` with secrets | No: secrets do not leave the server, even encrypted (see open questions) |
 
 Secret check (coordinator, read-only, 2026-10-21): only `reenrich-final-20261011/env-before` and
-`legacy-jev-*/retention-800/server.env` hold secrets; other matches are article text. The archive
-workflow skips every file with `env` in the name.
+`legacy-jev-*/retention-800/server.env` hold secrets; other matches are article text.
 
-One-time archive: everything above marked "Yes, once" as one `tar | zstd/gzip | age` object under
-`archive/` (estimate 150-250 MB compressed; JSON compresses well). No retention on `archive/`.
+One-time archive: declined by the owner on 2026-10-21 (the pre-change snapshots are not needed);
+not uploaded, no archive workflow.
 
 ## 2. Targets and prices (pricing pages read 2026-10-21)
 
 Volume: 30 daily + 12 monthly = 42 copies x ~50 MB = **~2.1 GB**; at 3x growth (~150 MB/copy)
-**~6.3 GB**; plus the one-time archive (~0.25 GB). Operations: ~5 requests/day.
+**~6.3 GB**. Operations: ~5 requests/day.
 
 | | Cloudflare R2 (Standard) | Backblaze B2 | Hetzner Storage Box BX11 | Pull to owner's Mac |
 | --- | --- | --- | --- | --- |
@@ -110,7 +109,7 @@ send default checksums that some S3-compatible providers reject; rclone handles 
 
 ## 5. Retention off-site
 
-- `daily/`: 30 days; `monthly/`: 12 months (365 days); `archive/`: kept.
+- `daily/`: 30 days; `monthly/`: 12 months (365 days).
 - Enforced by the **provider's lifecycle rules per prefix** (R2: object lifecycle "delete after N
   days"; B2: lifecycle rules per prefix), not by our code: deletion keeps working even if the
   workflow stops, and our script never needs delete rights in normal operation.
@@ -177,4 +176,4 @@ Implementation uses rclone's native `b2` backend (env-only config), not the S3 e
 One PR, not merged: upload step in `db-maintenance.yml` + helper script (`scripts/db_offsite_upload.sh`),
 dump completeness check (fix of the defect in section 1), `docs/deploy.md` operator section (restore
 from off-site), `bash -n`, `actionlint`. Then, each with the owner's yes: first real upload
-(`workflow_dispatch`), one-time `archive/` upload, restore test; result in the PR.
+(`workflow_dispatch`), restore test; result in the PR.

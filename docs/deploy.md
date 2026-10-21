@@ -236,14 +236,9 @@ Nightly maintenance workflow:
 ### Off-site backups (Backblaze B2)
 
 - Bucket `OFFSITE_B2_BUCKET`, private. Retention by the bucket's lifecycle rules, not by our code:
-  `daily/` 30 days, `monthly/` 365 days, `archive/` kept.
+  `daily/` 30 days, `monthly/` 365 days.
 - Objects are `age`-encrypted; only the owner's private key decrypts them. Lost key = off-site
   copies unreadable (on-server copies, 14 days, are not affected).
-- One-time archive of other files under `backups/` (pre-change dumps and snapshots): workflow
-  `offsite-archive` (manual) with `entries` (names under `backups/`) and `archive_name`; it skips
-  every file with `env` in the name (copies of `.env`, e.g. `env-before`). Never archive copies of
-  `.env`. Note: `before_jev_october_20261010T102234Z.sql.gz` is plain SQL despite the name; restore
-  it without `gunzip`.
 
 Account, keys and limits (set up 2026-10-21):
 - Bucket name: GitHub variable `OFFSITE_B2_BUCKET`. Lifecycle rules in the B2 console (Buckets ->
