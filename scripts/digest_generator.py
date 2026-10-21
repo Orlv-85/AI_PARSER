@@ -1334,7 +1334,7 @@ def publish_feed_weekly(
     if os.getenv("AINEWS_WEEKLY_V2_ENABLED", "").lower() in {"1", "true", "yes"}:
         # The v2 adapter uses complete DB observations, never the ranked HTTP feed.
         from app.config.settings import get_settings
-        from app.core.weekly_worker import drain
+        from app.core.weekly.worker import drain
         from app.storage import SessionLocal, create_all
         from app.storage.weekly import WeeklyStore
 

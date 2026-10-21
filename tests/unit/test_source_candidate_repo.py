@@ -309,7 +309,7 @@ def test_find_overlap_groups_and_summarize_batch_cover_review_helpers(monkeypatc
 
     expected_group = SimpleNamespace(candidate_ids=[first.id, second.id], reason="same_host")
     monkeypatch.setattr(
-        "app.core.source_onboarding.group_candidate_overlaps",
+        "app.core.sources.onboarding.group_candidate_overlaps",
         lambda candidates: [expected_group] if len(candidates) == 2 else [],
     )
 

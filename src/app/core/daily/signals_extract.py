@@ -11,8 +11,9 @@ from dataclasses import asdict, dataclass, field
 from datetime import date
 from typing import Any
 
-from app.core.daily_enrichment import digest_title
-from app.core.daily_signals_entities import (
+from app.core.daily.enrichment import digest_title
+from app.core.daily.reenrich_pilot import DEEPSEEK_MODEL
+from app.core.daily.signals_entities import (
     QUOTES,
     is_stopped,
     join,
@@ -22,7 +23,6 @@ from app.core.daily_signals_entities import (
     type_group,
     vendor_tokens,
 )
-from app.core.reenrich_pilot import DEEPSEEK_MODEL
 from app.storage.legacy_cleanup import encoded, fingerprint
 
 EXTRACTION_VERSION = "daily-signals-extract-5"

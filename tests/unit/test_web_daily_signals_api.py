@@ -45,7 +45,7 @@ def client_fixture(monkeypatch, tmp_path):
     monkeypatch.setattr(web, "create_all", lambda: Base.metadata.create_all(bind=engine))
     monkeypatch.setattr(web, "SessionLocal", maker)
     # Provider code must never run on a request.
-    monkeypatch.setattr("app.core.daily_signals.run_signals",
+    monkeypatch.setattr("app.core.daily.signals.run_signals",
                         lambda *a, **k: pytest.fail("run_signals called"))
     monkeypatch.setattr("app.storage.daily_signals_ledger.SignalsLedger.dispatch",
                         lambda *a, **k: pytest.fail("provider call"))

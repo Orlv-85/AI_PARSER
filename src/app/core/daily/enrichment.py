@@ -13,9 +13,7 @@ import httpx
 from sqlalchemy import or_, select
 
 from app.core.categories import REENRICH_TOPIC_ORDER
-from app.core.daily_rubric import QUESTIONS, RUBRIC_VERSION
-from app.core.jev import JevInputTooLarge, _probability
-from app.core.reenrich_pilot import (
+from app.core.daily.reenrich_pilot import (
     DEEPSEEK_MODEL,
     JEV_MODEL,
     SUMMARY_RECOVERY_VERSION,
@@ -28,6 +26,8 @@ from app.core.reenrich_pilot import (
     summary_request,
     topic_request,
 )
+from app.core.daily.rubric import QUESTIONS, RUBRIC_VERSION
+from app.core.jev import JevInputTooLarge, _probability
 from app.storage.article_evidence_cache import PageCache, SourcePageDownloader, make_http_client
 from app.storage.legacy_cleanup import encoded, fingerprint, private_write
 from app.storage.models_sql import Article

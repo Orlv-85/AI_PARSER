@@ -11,7 +11,7 @@ MCP server (`mcp/server.py`). Production jobs: `scripts/run_daily_fetch_job.sh`,
 | `cli/` | Typer commands: sources, fetch, serve, mcp-serve, top, search, prune, daily-publish, daily-signals (+ entities), weekly-analytics, source candidates |
 | `config/` | `settings.py` (env `AINEWS_*`), `sources.py` (`sources.yaml` loader) |
 | `ingest/` | RSS/HTML fetching, page filtering, date evidence |
-| `core/` | Domain logic: pipeline, admission, dedup, scoring, daily digest enrichment, weekly analytics, daily signals |
+| `core/` | Domain logic. Shared: `models.py`, `categories.py`, `canonicalize.py`, `jev.py`. Packages: `ingestion/` (pipeline, admission, scoring, dedup, legacy cleanup policy), `daily/` (digest enrichment, rubric, re-enrichment pilot, daily signals), `weekly/` (weekly analytics), `sources/` (source onboarding and review) |
 | `storage/` | SQLAlchemy models (`models_sql.py`), repositories, Alembic migrations, ledgers and journals |
 | `web/` | FastAPI app, API models (`web/models.py`), HTML templates |
 | `mcp/` | MCP server: news update and status tools for agents |
@@ -24,5 +24,5 @@ Feature docs live next to their main module and are checked by `scripts/check_co
 
 | Feature | Doc |
 | --- | --- |
-| Daily AI Signals (006, 007) | `core/daily_signals.md` |
-| Fetch pipeline (001, 002, admission) | `core/pipeline.md` |
+| Daily AI Signals (006, 007) | `core/daily/signals.md` |
+| Fetch pipeline (001, 002, admission) | `core/ingestion/pipeline.md` |

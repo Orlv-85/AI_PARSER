@@ -10,13 +10,13 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
-from app.core.admission import bounded_evidence, evidence_hash
 from app.core.categories import CATEGORY_CRITERIA
+from app.core.daily.reenrich_pilot import source_state
+from app.core.ingestion.admission import bounded_evidence, evidence_hash
+from app.core.ingestion.pipeline import _build_article_row, run_fetch_cycle
+from app.core.ingestion.scoring import ai_relevance_score
 from app.core.jev import JevAssessment, JevRelevanceScorer, jev_relevance_scorer
 from app.core.models import Article
-from app.core.pipeline import _build_article_row, run_fetch_cycle
-from app.core.reenrich_pilot import source_state
-from app.core.scoring import ai_relevance_score
 from app.ingest.html import HtmlListPageResult
 from app.ingest.rss import RssFetchResult, _with_rss_metadata
 from app.storage.models_sql import Article as StoredArticle
@@ -200,13 +200,13 @@ def test_ingestion_persists_jev_score_or_heuristic_on_failure(
         return next(item for item in articles if str(item.url) == url)
 
     monkeypatch.setattr("app.core.jev.httpx.Client", create_client)
-    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: [config])
-    monkeypatch.setattr("app.core.pipeline.create_all", lambda: None)
-    monkeypatch.setattr("app.core.pipeline.SessionLocal", sessions)
+    monkeypatch.setattr("app.core.ingestion.pipeline.load_sources", lambda _path: [config])
+    monkeypatch.setattr("app.core.ingestion.pipeline.create_all", lambda: None)
+    monkeypatch.setattr("app.core.ingestion.pipeline.SessionLocal", sessions)
     monkeypatch.setattr(
-        "app.core.pipeline._collect_fetched_items", lambda **_kwargs: ({0: result}, 0),
+        "app.core.ingestion.pipeline._collect_fetched_items", lambda **_kwargs: ({0: result}, 0),
     )
-    monkeypatch.setattr("app.core.pipeline.fetch_html_article", fetch_article)
+    monkeypatch.setattr("app.core.ingestion.pipeline.fetch_html_article", fetch_article)
     monkeypatch.delenv("JEV_API_KEY", raising=False)
     monkeypatch.delenv("AINEWS_JEV_API_KEY", raising=False)
     settings = Settings(

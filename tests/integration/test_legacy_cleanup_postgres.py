@@ -10,9 +10,9 @@ from sqlalchemy.orm import Session
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
+from app.core.ingestion.legacy_cleanup import cleanup_verdict
+from app.core.ingestion.pipeline import AdmissionState, _screen_candidate
 from app.core.jev import JevAssessment
-from app.core.legacy_cleanup import cleanup_verdict
-from app.core.pipeline import AdmissionState, _screen_candidate
 from app.storage.admission import list_pending, upsert_pending
 from app.storage.legacy_cleanup import (
     apply_cleanup,

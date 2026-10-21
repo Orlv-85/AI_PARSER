@@ -12,10 +12,10 @@ from typing import Any
 from sqlalchemy import Date, DateTime, delete, insert, inspect, select, text, update
 from sqlalchemy.engine import Connection, Engine
 
-from app.core.admission import admission_cache_key
 from app.core.canonicalize import canonicalize_url
-from app.core.legacy_cleanup import CLEANUP_POLICY, article_evidence_hash
-from app.core.pipeline import _assessment_from_cached
+from app.core.ingestion.admission import admission_cache_key
+from app.core.ingestion.legacy_cleanup import CLEANUP_POLICY, article_evidence_hash
+from app.core.ingestion.pipeline import _assessment_from_cached
 from app.storage.models_sql import Base
 from app.storage.non_news_cleanup import EXPORT_TABLES, _reference_ids
 
@@ -147,8 +147,8 @@ def verify_manifest(snapshot: dict[str, Any], manifest: dict[str, Any]) -> None:
     }} for entry in manifest["entries"]}
     if build_manifest(snapshot, verdicts)["manifest_hash"] != manifest["manifest_hash"]:
         raise ValueError("Manifest does not match frozen rows")
+    from app.core.ingestion.legacy_cleanup import cleanup_verdict  # pylint: disable=import-outside-toplevel
     from app.core.jev import JevAssessment  # pylint: disable=import-outside-toplevel
-    from app.core.legacy_cleanup import cleanup_verdict  # pylint: disable=import-outside-toplevel
     articles = {row["id"]: row for row in snapshot["tables"]["articles"]}
     for entry in manifest["entries"]:
         if entry["outcome"] == "rejected":

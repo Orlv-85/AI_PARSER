@@ -5,8 +5,8 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 
+from app.core.ingestion.legacy_cleanup import cleanup_verdict
 from app.core.jev import JevAssessment
-from app.core.legacy_cleanup import cleanup_verdict
 from app.storage.cleanup_journal import CleanupJournal, CleanupStopped
 from app.storage.legacy_cleanup import (
     build_manifest,

@@ -19,9 +19,9 @@ from sqlalchemy.orm import Session
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
 from app.core.canonicalize import canonical_url_hash
-from app.core.weekly_analytics import DEFAULT_THRESHOLDS, METHODOLOGY_VERSION, Coverage, windows
-from app.core.weekly_input import compatible_admission, publication
-from app.core.weekly_topics import TAXONOMY_VERSION, topic_registry
+from app.core.weekly.analytics import DEFAULT_THRESHOLDS, METHODOLOGY_VERSION, Coverage, windows
+from app.core.weekly.input import compatible_admission, publication
+from app.core.weekly.topics import TAXONOMY_VERSION, topic_registry
 from app.storage.models_sql import (
     AdmissionDecision,
     Article,

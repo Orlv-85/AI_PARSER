@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.core import source_onboarding
+from app.core.sources import onboarding as source_onboarding
 from app.storage.models_sql import Base, SourceCandidate
 from app.storage.repos import SourceCandidateRepo
 
@@ -18,7 +18,7 @@ def test_run_source_validation_persists_status_and_timestamp_end_to_end() -> Non
         "run_source_validation",
     ), (
         "Phase 2 validation orchestrator missing: "
-        "app.core.source_onboarding.run_source_validation"
+        "app.core.sources.onboarding.run_source_validation"
     )
     assert hasattr(
         SourceCandidateRepo,

@@ -7,7 +7,7 @@ from typing import Any
 
 from sqlalchemy import select
 
-from app.core.weekly_analytics import METHODOLOGY_VERSION
+from app.core.weekly.analytics import METHODOLOGY_VERSION
 from app.storage.models_sql import (
     WeeklyAnalyticsStoredReport,
     WeeklyDecision,

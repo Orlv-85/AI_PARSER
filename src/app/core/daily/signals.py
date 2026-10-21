@@ -1,7 +1,7 @@
 """Daily AI Signals run: membership, bounded extraction, reconciliation and snapshot recompute.
 
 The digest is never written here; signals have their own tables, ledger and run report.
-Behavior, decisions, invariants and code map: daily_signals.md next to this file.
+Behavior, decisions, invariants and code map: signals.md next to this file.
 """
 import json
 import logging
@@ -17,7 +17,7 @@ from typing import Any
 import httpx
 from sqlalchemy.orm import Session
 
-from app.core.daily_signals_brief import (
+from app.core.daily.signals_brief import (
     BRIEF_MAX_USD_PER_DAY,
     BRIEF_PRICES,
     BRIEF_VERSION,
@@ -29,10 +29,10 @@ from app.core.daily_signals_brief import (
     input_hash,
     parse_brief,
 )
-from app.core.daily_signals_brief import request_body as brief_body
-from app.core.daily_signals_brief import request_key as brief_key
-from app.core.daily_signals_entities import is_stopped, join, name_tokens
-from app.core.daily_signals_extract import (
+from app.core.daily.signals_brief import request_body as brief_body
+from app.core.daily.signals_brief import request_key as brief_key
+from app.core.daily.signals_entities import is_stopped, join, name_tokens
+from app.core.daily.signals_extract import (
     EXTRACTION_VERSION,
     MAX_INPUT_BYTES,
     ExtractionInvalid,

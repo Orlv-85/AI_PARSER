@@ -6,9 +6,9 @@ import httpx
 import pytest
 
 from app.config.settings import Settings
-from app.core.weekly_enrichment import BudgetExhausted, WeeklyEnricher
-from app.core.weekly_narrative import INSTRUCTION, explain, narrative_packet
-from app.core.weekly_topics import TAXONOMY_VERSION, topic_registry
+from app.core.weekly.enrichment import BudgetExhausted, WeeklyEnricher
+from app.core.weekly.narrative import INSTRUCTION, explain, narrative_packet
+from app.core.weekly.topics import TAXONOMY_VERSION, topic_registry
 from app.storage.weekly import encoded
 
 
@@ -129,7 +129,7 @@ def test_provider_auth_failure_has_no_retry_loop_and_no_secrets_logged(caplog) -
 
 
 def test_timeout_is_bounded_and_classification_quality_falls(monkeypatch) -> None:
-    monkeypatch.setattr("app.core.weekly_enrichment.time.sleep", lambda _: None)
+    monkeypatch.setattr("app.core.weekly.enrichment.time.sleep", lambda _: None)
     requests = []
 
     def handler(request):

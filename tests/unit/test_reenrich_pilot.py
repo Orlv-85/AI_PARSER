@@ -7,8 +7,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from app.core.jev import JevRelevanceScorer
-from app.core.reenrich_pilot import (
+from app.core.daily.reenrich_pilot import (
     SUMMARY_RECOVERY_VERSION,
     TOPIC_CRITERIA,
     TOPIC_FALLBACK_VERSION,
@@ -20,6 +19,7 @@ from app.core.reenrich_pilot import (
     summary_request,
     topic_request,
 )
+from app.core.jev import JevRelevanceScorer
 from app.storage.legacy_cleanup import fingerprint
 from app.storage.reenrich_pilot_journal import PilotJournal, PilotStopped
 

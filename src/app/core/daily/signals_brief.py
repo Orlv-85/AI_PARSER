@@ -10,8 +10,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from app.core.daily_signals_entities import QUOTES
-from app.core.daily_signals_extract import GROUNDING
+from app.core.daily.signals_entities import QUOTES
+from app.core.daily.signals_extract import GROUNDING
 from app.storage.legacy_cleanup import encoded, fingerprint
 
 BRIEF_VERSION = "daily-signals-brief-3"

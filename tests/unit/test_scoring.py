@@ -2,8 +2,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from app.core.ingestion.scoring import ai_relevance_score, freshness_score, rank_score
 from app.core.models import Article
-from app.core.scoring import ai_relevance_score, freshness_score, rank_score
 
 
 def test_ai_relevance_higher_for_ai_keywords() -> None:

@@ -9,7 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.config.settings import Settings
-from app.core.weekly_frozen import (
+from app.core.weekly.frozen import (
     prepare,
     prepare_narrative_revision,
     publish_prepared,

@@ -10,7 +10,7 @@
   "idea": "Ask Jev, the cheap probability-returning classifier already used for admission, relevance and topic, a separate novelty question per article (optionally per candidate entity). Show an entity as New only when DeepSeek marks it new with a quote AND Jev confirms the article announces a new release with confidence above a threshold. Two different models must both be wrong for a false New.",
   "facts": {
     "jev_client": "src/app/core/jev.py (JevRelevanceScorer): body {model, state, questions}; question types 'choice' and 'noul'; answers carry a choice and a probability/confidence",
-    "rubric_location": "src/app/core/daily_rubric.py (QUESTIONS, RUBRIC_VERSION pinned for admission)",
+    "rubric_location": "src/app/core/daily/rubric.py (QUESTIONS, RUBRIC_VERSION pinned for admission)",
     "price_assumption": "Jev ~0.042 USD per million input tokens, output free (rates in daily-digest log); ~7-30x cheaper than DeepSeek per article",
     "known_limit": "Jev holds long inputs (log message jev_input_held, reason conservative_input_bound)",
     "current_use": "Jev runs at fetch time for admission (~150 calls/day, ~0.02 USD/day); daily signals do not call Jev"

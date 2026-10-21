@@ -7,8 +7,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from app.core.daily_signals_brief import HARD_EVENTS, cut, norm
-from app.core.daily_signals_entities import (
+from app.core.daily.signals_brief import HARD_EVENTS, cut, norm
+from app.core.daily.signals_entities import (
     TOKEN,
     Entity,
     clean,
@@ -19,7 +19,7 @@ from app.core.daily_signals_entities import (
     tokens,
     vendor_tokens,
 )
-from app.core.dedup import hamming_distance, simhash64
+from app.core.ingestion.dedup import hamming_distance, simhash64
 from app.storage.legacy_cleanup import fingerprint
 
 METHODOLOGY_VERSION = "daily-signals-3"

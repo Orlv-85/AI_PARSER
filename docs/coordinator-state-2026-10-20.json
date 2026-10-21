@@ -18,7 +18,7 @@
     "master": "23f753f (PR #62)",
     "last_tag": "v0.1.108 (b2461df); not deployed since: #60 (Fetcher close, /admin sorted by date) and #62 (pipeline refactor, was_cached fix) change code; the rest is docs and tests",
     "open_prs": "this docs PR only",
-    "code_docs": ["src/app/core/daily_signals.md (reference format)", "src/app/core/pipeline.md (ingestion; every rule has a test since PR #61)"],
+    "code_docs": ["src/app/core/daily/signals.md (reference format)", "src/app/core/ingestion/pipeline.md (ingestion; every rule has a test since PR #61)"],
     "spec_format": "Spec Kit templates in .specify/templates/; .specify/scripts, .codex/prompts/speckit.* and constitution.md are history"
   },
   "decided_2026_10_20": [

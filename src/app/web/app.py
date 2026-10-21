@@ -19,7 +19,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.config.settings import get_settings
 from app.core.categories import READABLE_CATEGORIES
-from app.core.source_onboarding import (
+from app.core.sources.onboarding import (
     import_source_candidates,
     review_candidate_overlaps,
     run_source_validation_batch,

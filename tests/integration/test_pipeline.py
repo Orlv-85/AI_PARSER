@@ -6,8 +6,8 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config.sources import SourceConfig
 from app.core.canonicalize import canonical_url_hash, canonicalize_url
+from app.core.ingestion.scoring import ai_relevance_score, freshness_score, rank_score
 from app.core.models import Article
-from app.core.scoring import ai_relevance_score, freshness_score, rank_score
 from app.ingest.html import extract_article_text, extract_links_from_html
 from app.ingest.rss import parse_rss
 from app.storage.models_sql import Base

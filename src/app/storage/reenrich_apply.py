@@ -68,8 +68,8 @@ def verify_manifest(manifest: dict[str, Any]) -> None:
                 ):
                     raise ValueError("Article field exceeds schema limit: " + column.name)
         if after is None:
+            from app.core.ingestion.legacy_cleanup import cleanup_verdict  # pylint: disable=import-outside-toplevel
             from app.core.jev import JevAssessment  # pylint: disable=import-outside-toplevel
-            from app.core.legacy_cleanup import cleanup_verdict  # pylint: disable=import-outside-toplevel
 
             verdict = cleanup_verdict(entry["source_row"], JevAssessment(**entry["assessment"]))
             if verdict["outcome"] != "rejected" or entry.get("review_required"):

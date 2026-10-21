@@ -10,11 +10,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.config.sources import SourceConfig
-from app.core import daily_enrichment as daily
-from app.core.daily_rubric import QUESTIONS
+from app.core.daily import enrichment as daily
+from app.core.daily.rubric import QUESTIONS
+from app.core.ingestion.pipeline import _build_article_row
 from app.core.jev import JevRelevanceScorer
 from app.core.models import Article as CoreArticle
-from app.core.pipeline import _build_article_row
 from app.storage.legacy_cleanup import encoded, fingerprint
 from app.storage.models_sql import Article, Base
 from app.storage.reenrich_pilot_journal import PilotJournal

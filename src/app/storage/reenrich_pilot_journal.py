@@ -9,7 +9,7 @@ from decimal import Decimal
 
 import httpx
 
-from app.core.reenrich_pilot import (
+from app.core.daily.reenrich_pilot import (
     DEEPSEEK_MODEL,
     ENDPOINTS,
     PRICES,

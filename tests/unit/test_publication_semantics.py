@@ -2,7 +2,7 @@ from datetime import UTC, date, datetime
 from types import SimpleNamespace
 
 from app.config.sources import SourceConfig
-from app.core.pipeline import _build_article_row
+from app.core.ingestion.pipeline import _build_article_row
 from app.ingest.html import fetch_html_article
 from app.ingest.rss import parse_rss
 

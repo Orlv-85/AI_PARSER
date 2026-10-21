@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from app.core.daily_signals_compute import (
+from app.core.daily.signals_compute import (
     METHODOLOGY_VERSION,
     ArticleObs,
     DayCoverage,
@@ -20,7 +20,7 @@ from app.core.daily_signals_compute import (
     payload_hash,
     sentences,
 )
-from app.core.daily_signals_entities import Mention, Override, reconcile
+from app.core.daily.signals_entities import Mention, Override, reconcile
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "daily_signals"
 COMPARABLE_FROM = date(2026, 10, 10)

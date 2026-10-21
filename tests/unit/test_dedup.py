@@ -1,4 +1,4 @@
-from app.core.dedup import hamming_distance, simhash64
+from app.core.ingestion.dedup import hamming_distance, simhash64
 
 
 def test_simhash_close_for_near_duplicate_titles() -> None:

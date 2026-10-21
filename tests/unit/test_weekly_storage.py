@@ -15,8 +15,8 @@ from app.config.settings import Settings, get_settings
 from app.config.sources import SourceConfig
 from app.core.canonicalize import canonical_url_hash
 from app.core.models import Article as InputArticle
-from app.core.weekly_analytics import calculate
-from app.core.weekly_audit import audit
+from app.core.weekly.analytics import calculate
+from app.core.weekly.audit import audit
 from app.storage.models_sql import (
     Article,
     Base,
@@ -263,7 +263,7 @@ def test_api_reads_snapshot_without_provider_calls_and_rejects_old_publisher(
 
 
 def test_monday_v2_trigger_only_enqueues(session, monkeypatch) -> None:
-    module = import_module("app.core.pipeline")
+    module = import_module("app.core.ingestion.pipeline")
     monkeypatch.setattr(module, "_weekly_report_date_to_publish", lambda _: date(2026, 10, 4))
     module._publish_weekly_analytics_if_due(
         session=session, logger=logging.getLogger("weekly-test"), run_id="test",

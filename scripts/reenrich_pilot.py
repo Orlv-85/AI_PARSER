@@ -12,7 +12,7 @@ import httpx
 from reenrich_articles import read_plan
 
 from app.config.settings import get_settings
-from app.core.reenrich_pilot import (
+from app.core.daily.reenrich_pilot import (
     CLEANUP_POLICY,
     DEEPSEEK_MODEL,
     JEV_MODEL,

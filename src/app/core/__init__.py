@@ -1,7 +1,7 @@
 from app.core.canonicalize import canonical_url_hash, canonicalize_url
-from app.core.dedup import hamming_distance, simhash64
+from app.core.ingestion.dedup import hamming_distance, simhash64
+from app.core.ingestion.scoring import ai_relevance_score, freshness_score, rank_score
 from app.core.models import Article
-from app.core.scoring import ai_relevance_score, freshness_score, rank_score
 
 __all__ = [
     "Article",

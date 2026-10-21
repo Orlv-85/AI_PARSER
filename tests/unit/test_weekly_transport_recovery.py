@@ -4,7 +4,7 @@ import json
 import httpx
 import pytest
 
-from app.core.weekly_enrichment import BudgetExhausted
+from app.core.weekly.enrichment import BudgetExhausted
 from app.storage.reenrich_pilot_journal import PilotJournal, PilotStopped
 
 

@@ -4,8 +4,8 @@ import re
 from logging import getLogger
 from math import ceil
 
+from app.core.ingestion.legacy_cleanup import CLEANUP_POLICY, cleanup_verdict
 from app.core.jev import JevAssessment, JevInputTooLarge, JevRelevanceScorer, _probability
-from app.core.legacy_cleanup import CLEANUP_POLICY, cleanup_verdict
 from app.storage.legacy_cleanup import encoded, fingerprint
 
 TAXONOMY_VERSION = "article-topics-2"

@@ -8,18 +8,18 @@ from sqlalchemy import select
 
 from app.config.settings import get_settings
 from app.config.sources import load_sources
-from app.core.daily_enrichment import publish_day
-from app.core.daily_signals import (
+from app.core.daily.enrichment import publish_day
+from app.core.daily.signals import (
     EntityCommandError,
     RunOptions,
     alias_entity,
     merge_entities,
     run_signals,
 )
-from app.core.pipeline import run_fetch_cycle
-from app.core.source_onboarding import import_source_candidates, run_source_validation_batch
-from app.core.weekly_audit import audit
-from app.core.weekly_worker import drain
+from app.core.ingestion.pipeline import run_fetch_cycle
+from app.core.sources.onboarding import import_source_candidates, run_source_validation_batch
+from app.core.weekly.audit import audit
+from app.core.weekly.worker import drain
 from app.mcp.server import run_mcp_server
 from app.observability import setup_json_logging
 from app.storage import SessionLocal, create_all

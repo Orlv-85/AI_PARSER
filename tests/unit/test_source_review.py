@@ -5,8 +5,8 @@ import httpx
 import pytest
 
 from app.config.settings import Settings
-from app.core import source_review
-from app.core.source_review import SourceProbe, SourceReviewer, evidence_fingerprint, probe_source
+from app.core.sources import review as source_review
+from app.core.sources.review import SourceProbe, SourceReviewer, evidence_fingerprint, probe_source
 
 RSS = b'''<?xml version="1.0"?><rss version="2.0"><channel><title>AI News</title>
 <description>AI research</description><item><title>New AI model</title>

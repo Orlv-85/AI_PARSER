@@ -9,8 +9,8 @@ Specs in `specs/` are the history of how a feature got there.
 | Feature | Doc | Main module |
 | --- | --- | --- |
 | System overview | [src/app/README.md](../src/app/README.md) | - |
-| Daily AI Signals (006, 007) | [src/app/core/daily_signals.md](../src/app/core/daily_signals.md) | `src/app/core/daily_signals.py` |
-| Fetch pipeline (001, 002, admission) | [src/app/core/pipeline.md](../src/app/core/pipeline.md) | `src/app/core/pipeline.py` |
+| Daily AI Signals (006, 007) | [src/app/core/daily/signals.md](../src/app/core/daily/signals.md) | `src/app/core/daily/signals.py` |
+| Fetch pipeline (001, 002, admission) | [src/app/core/ingestion/pipeline.md](../src/app/core/ingestion/pipeline.md) | `src/app/core/ingestion/pipeline.py` |
 
 ## General
 

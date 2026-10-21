@@ -4,9 +4,9 @@
 A code doc is a `*.md` file under `src/` with a header comment:
 
     <!-- code-doc
-    module: src/app/core/daily_signals.py
+    module: src/app/core/daily/signals.py
     covers:
-      - src/app/core/daily_signals*.py
+      - src/app/core/daily/signals*.py
     -->
 
 Static checks (every doc under `src/`, header or not):

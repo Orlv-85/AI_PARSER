@@ -12,9 +12,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.canonicalize import canonical_url_hash
-from app.core.daily_enrichment import digest_title
-from app.core.daily_signals_brief import digest_summary
-from app.core.daily_signals_compute import (
+from app.core.daily.enrichment import digest_title
+from app.core.daily.signals_brief import digest_summary
+from app.core.daily.signals_compute import (
     METHODOLOGY_VERSION,
     ArticleObs,
     DayCoverage,
@@ -25,7 +25,7 @@ from app.core.daily_signals_compute import (
     compute_snapshot,
     payload_hash,
 )
-from app.core.daily_signals_entities import (
+from app.core.daily.signals_entities import (
     Mention,
     Override,
     Reconciliation,
@@ -36,7 +36,7 @@ from app.core.daily_signals_entities import (
     selectors_conflict,
     type_group,
 )
-from app.core.daily_signals_extract import EXTRACTION_VERSION, EXTRACTION_VERSIONS, Extraction
+from app.core.daily.signals_extract import EXTRACTION_VERSION, EXTRACTION_VERSIONS, Extraction
 from app.storage.models_sql import (
     AIEntity,
     AIEntityOverride,

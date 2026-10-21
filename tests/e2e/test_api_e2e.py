@@ -45,8 +45,8 @@ def test_api_e2e_update_and_read_news(monkeypatch, tmp_path) -> None:
             items=items, not_modified=False, status_code=200, etag=None, last_modified=None,
         ))
 
-    monkeypatch.setattr("app.core.pipeline.fetch_rss", _fake_fetch_rss)
-    monkeypatch.setattr("app.core.pipeline.load_sources", lambda _path: [source_config])
+    monkeypatch.setattr("app.core.ingestion.pipeline.fetch_rss", _fake_fetch_rss)
+    monkeypatch.setattr("app.core.ingestion.pipeline.load_sources", lambda _path: [source_config])
 
     engine = create_engine(f"sqlite:///{tmp_path}/e2e.db", future=True)
     session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
@@ -54,8 +54,8 @@ def test_api_e2e_update_and_read_news(monkeypatch, tmp_path) -> None:
     def _create_all_local() -> None:
         Base.metadata.create_all(bind=engine)
 
-    monkeypatch.setattr("app.core.pipeline.SessionLocal", session_local)
-    monkeypatch.setattr("app.core.pipeline.create_all", _create_all_local)
+    monkeypatch.setattr("app.core.ingestion.pipeline.SessionLocal", session_local)
+    monkeypatch.setattr("app.core.ingestion.pipeline.create_all", _create_all_local)
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "SessionLocal", session_local)
     monkeypatch.setattr(web_app_module, "create_all", _create_all_local)
