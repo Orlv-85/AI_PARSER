@@ -1,4 +1,8 @@
 # pylint: disable=too-many-lines
+"""Source onboarding: import candidates, overlap groups, validation, review actions, YAML export.
+
+Behavior, decisions, invariants and code map: onboarding.md next to this file.
+"""
 import json
 import re
 from collections.abc import Sequence
