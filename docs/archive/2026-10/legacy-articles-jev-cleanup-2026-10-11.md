@@ -153,5 +153,5 @@ budgets/provider failure, concurrent writers, FK ordering, atomic rollback,
 idempotent apply/restore, preservation of post-snapshot rows and deployment
 retention overrides. Exact final results and code/PR references accompany delivery.
 
-See [operator documentation](../../legacy-articles-jev-cleanup.md). Private article
+See [operator documentation](legacy-articles-jev-cleanup.md). Private article
 texts, full manifests, provider responses and backups are excluded from Git.
