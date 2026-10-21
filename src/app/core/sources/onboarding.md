@@ -180,17 +180,19 @@ check it.
   each capped; never article text. Tests:
   `test_evidence_brief_ignores_full_articles_and_cache_depends_on_models`,
   `test_probe_uses_only_source_listing_and_records_bounded_evidence`.
-- Cache: the candidate's own stored review from `jev` or `deepseek` is reused when its
-  `evidence_fingerprint` (`_PROMPT_VERSION`, `jev_model`, `source_review_deepseek_model`, brief)
-  matches and the model call is younger than the age bound in `_check_candidate`. Tests:
+- Cache: the candidate's own stored review is reused when its `evidence_fingerprint`
+  (`_PROMPT_VERSION`, `jev_model`, `source_review_deepseek_model`, brief) matches and its model
+  call (`reviewed_at`, kept on a cache hit) is younger than the age bound in `_check_candidate`; a
+  cache hit does not renew the age. Tests:
   `test_background_reviews_commit_results_cache_repeats_and_bulk_connect`,
-  `test_stale_cache_rechecks_and_missing_provider_is_not_cached` (expiry only),
-  `test_evidence_brief_ignores_full_articles_and_cache_depends_on_models`. Code differs
-  (source_intake.py:146, see PR #75 review): age is counted from `validated_at`, which a cache hit
-  renews, so a review re-checked within the bound is reused indefinitely.
-- Only successful decisions are cached (011): a fallback review (no provider) is never reused (no
-  test); a Jev `review` whose DeepSeek call failed or hit the budget is reused, so DeepSeek is not
-  asked again on a re-check (code differs: source_intake.py:158, see PR #75 review).
+  `test_stale_cache_rechecks_and_missing_provider_is_not_cached`,
+  `test_cache_hit_keeps_the_age_of_the_model_call`,
+  `test_evidence_brief_ignores_full_articles_and_cache_depends_on_models`.
+- Only successful decisions are reused (`_reusable_review`, 011): a DeepSeek answer, or a confident
+  Jev `ready` / `reject`. A fallback review (no provider) and a Jev `review` whose DeepSeek call
+  failed, hit the budget or had no key are asked again on the next check. Tests:
+  `test_failed_second_opinion_is_asked_again_and_deepseek_answer_is_reused`,
+  `test_stale_cache_rechecks_and_missing_provider_is_not_cached`.
 - Model review (`SourceReviewer.review`, brief cut to a fixed length): Jev answers three questions
   (publication source, AI coverage, sufficient evidence). All confident yes: `ready`; sufficient
   evidence and a confident no on either of the others: `reject`; else `review`, and the same brief
@@ -231,11 +233,12 @@ check it.
   `test_background_reviews_commit_results_cache_repeats_and_bulk_connect`,
   `test_upload_api_returns_immediately_health_and_progress_remain_available`,
   `test_editing_a_candidate_invalidates_its_model_review`.
-- Reject: status `rejected`, note = reason. A rejected candidate is not fetched (003, US3): the
-  source of an approved candidate is disabled. Code differs (onboarding.py:662, see PR #75 review):
-  that source stays enabled. Tests (draft candidates only):
+- Reject: status `rejected`, note = reason. A rejected candidate is not fetched (003, US3): when
+  the candidate was `approved`, its own source (`approved_source_id`) is disabled; a duplicate's
+  copied source id is never touched. Tests:
   `test_source_onboarding_reject_and_mark_duplicate_actions_capture_review_decisions`,
-  `test_review_source_candidate_guard_and_fallback_paths`.
+  `test_review_source_candidate_guard_and_fallback_paths`,
+  `test_review_source_candidate_reject_disables_approved_managed_source`.
 - Disable: only a candidate with `approved_source_id`; that source is disabled, status `disabled`,
   duplicate link cleared; the note is replaced only when given. Tests:
   `test_review_source_candidate_disable_turns_off_previously_approved_managed_source`,
@@ -316,7 +319,9 @@ check it.
 | Jev first, DeepSeek second opinion on uncertain cases, high confidence bounds | conservative decisions; model scores are judgments, not guarantees (011, PR #8) |
 | Provider failure or missing key leaves manual review; provider stops for the job; DeepSeek calls and output capped | a failure must never approve; paid calls are bounded (011, PR #8) |
 | Same-host candidates go to manual review without a model call | DeepSeek may not override unresolved overlap (011) |
-| Successful reviews cached by evidence fingerprint and models, reused for 7 days | rechecking unchanged evidence does not repeat paid work (011; 7 days: PR #8) |
+| Successful reviews cached by evidence fingerprint and models, reused for 7 days from the model call | rechecking unchanged evidence does not repeat paid work (011; 7 days: PR #8) |
+| A failed or skipped DeepSeek second opinion is asked again on the next check | only successful decisions are cached (011); owner decision 2026-10-21; bounded by the per-check DeepSeek budget |
+| Rejecting an approved candidate disables its source | a rejected candidate must be excluded from fetch (003 US4); owner decision 2026-10-21 |
 | Check results in `validation_details`, no new table | no schema migration (011) |
 | An edit resets validation; a running check never overwrites a candidate whose URL or raw input changed | old evidence must not approve a changed URL (PR #8) |
 | Deterministic validation, API, CLI and helper kept beside the check | existing API/CLI behavior preserved (011) |

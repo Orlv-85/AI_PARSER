@@ -99,6 +99,62 @@ def test_stale_cache_rechecks_and_missing_provider_is_not_cached(intake, monkeyp
     assert intake.approve_ready(batch) == []
 
 
+def test_failed_second_opinion_is_asked_again_and_deepseek_answer_is_reused(
+    intake, monkeypatch
+) -> None:
+    batch = _batch(intake, ["https://one.example/feed"])
+    answers = iter([
+        {"decision": "review", "provider": "jev", "reason": "Manual review: DeepSeek check failed"},
+        {"decision": "ready", "provider": "deepseek", "reason": "AI publication samples"},
+    ])
+    calls = []
+
+    def review(_self, brief):
+        calls.append(brief)
+        return next(answers)
+
+    monkeypatch.setattr(source_intake.SourceReviewer, "review", review)
+    intake._run(batch)
+    intake._run(batch)
+    assert len(calls) == 2
+    intake._run(batch)
+    assert len(calls) == 2
+    assert _reviews(intake, batch)[0][3]["cached"] is True
+    assert _reviews(intake, batch)[0][3]["provider"] == "deepseek"
+
+
+def test_cache_hit_keeps_the_age_of_the_model_call(intake, monkeypatch) -> None:
+    batch = _batch(intake, ["https://one.example/feed"])
+    calls = []
+
+    def review(_self, brief):
+        calls.append(brief)
+        return {"decision": "ready", "provider": "jev", "reason": "AI feed"}
+
+    monkeypatch.setattr(source_intake.SourceReviewer, "review", review)
+    intake._run(batch)
+    old = (datetime.now(UTC) - timedelta(days=6)).isoformat()
+    with intake.session_factory() as session:
+        candidate = session.scalar(select(SourceCandidate))
+        details = json.loads(candidate.validation_details)
+        details["source_review"]["reviewed_at"] = old
+        candidate.validation_details = json.dumps(details)
+        session.commit()
+    intake._run(batch)
+    assert len(calls) == 1
+    assert _reviews(intake, batch)[0][3]["reviewed_at"] == old
+    with intake.session_factory() as session:
+        candidate = session.scalar(select(SourceCandidate))
+        details = json.loads(candidate.validation_details)
+        details["source_review"]["reviewed_at"] = (
+            datetime.now(UTC) - timedelta(days=8)
+        ).isoformat()
+        candidate.validation_details = json.dumps(details)
+        session.commit()
+    intake._run(batch)
+    assert len(calls) == 2
+
+
 def test_existing_urls_and_same_host_families_never_use_models(intake, monkeypatch) -> None:
     with intake.session_factory() as session:
         session.add(Source(source_key="known", name="Known", type="rss",
