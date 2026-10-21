@@ -38,6 +38,8 @@ Secret check (coordinator, read-only, 2026-10-21): only `reenrich-final-20261011
 
 One-time archive: declined by the owner on 2026-10-21 (the pre-change snapshots are not needed);
 not uploaded, no archive workflow.
+The nine pre-change entries were then deleted from the server with the owner's yes (2026-10-21,
+~720 MB); `retired-ai-tools.HOvdBe/` and `semantic-admission-enable-*/` were kept.
 
 ## 2. Targets and prices (pricing pages read 2026-10-21)
 

@@ -86,11 +86,10 @@ dates to satisfy the previous non-null constraint.
 
 The one-time apply and targeted restore (`src/app/storage/reenrich_apply.py`) ran
 once, on 2026-10-11 (see the outcome report), and was removed on 2026-10-21: nothing
-called it after that run. To roll back that run, restore the module's last version
-from git history (`git log --diff-filter=D -- src/app/storage/reenrich_apply.py`)
-and use it with the targeted backup in
-`/opt/ai-news/backups/reenrich-final-20261011/`, and rehearse on an isolated
-PostgreSQL database first.
+called it after that run. That run can no longer be rolled back: its targeted backup
+`/opt/ai-news/backups/reenrich-final-20261011/` was deleted on 2026-10-21 by the
+owner's decision (the pre-rework state is not needed). The module's last version stays
+in git history (`git log --diff-filter=D -- src/app/storage/reenrich_apply.py`).
 
 Copied digest/weekly URLs, text and frozen snapshots are not rewritten by article
 cleanup. Retention remains 800 days, with the existing 5 GiB size threshold and
