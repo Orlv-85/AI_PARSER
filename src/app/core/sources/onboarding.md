@@ -112,8 +112,10 @@ check it.
   (`validate_rss_candidate`): the feed is fetched with the ingestion `Fetcher` and
   `fetch_rss_with_metadata`; at least one entry: `validated` with `entry_count`, none: `failed`.
   HTML (`validate_html_candidate`): the page is fetched, links are extracted with link selector `a`
-  and no list selector; at least one link: `validated` with `link_count` and a few `sample_links`,
-  none: `warning`. Another type: `failed`. Tests:
+  and no list selector (links in `nav`/`footer` and URLs excluded by ingestion are skipped); at
+  least one link: `validated` with `link_count` and a few `sample_links`, none: `warning`. Any page
+  with one such link passes; the 003 plan asks for article links scored for quality (code differs:
+  `_extract_links_with_ingest`, onboarding.py:979, see PR #75 review). Another type: `failed`. Tests:
   `test_validate_rss_candidate_marks_candidate_valid_when_feed_has_entries`,
   `test_validate_rss_candidate_fails_when_feed_has_no_entries`,
   `test_validate_html_candidate_marks_candidate_valid_when_article_links_are_extractable`,
@@ -129,8 +131,9 @@ check it.
   Tests: `test_record_validation_result_updates_candidate_and_guards_missing_candidate`,
   `test_record_validation_result_keeps_candidate_type_when_detected_type_missing`,
   `test_run_source_validation_persists_status_and_timestamp_end_to_end`.
-- `run_source_validation_batch` needs a batch id or candidate ids and validates in id order; the
-  caller commits once. `POST /api/source-onboarding/validate` runs it in a worker thread (health
+- `run_source_validation_batch` needs a batch id or candidate ids and validates in id order,
+  candidates of any status (an approved one included; its source is not touched); unknown ids are
+  skipped, an unknown batch gives an empty result; the caller commits once. `POST /api/source-onboarding/validate` runs it in a worker thread (health
   stays responsive); bad ids: 422; storage error: 503. CLI `ai-news validate-candidates`, helper
   `db-validate`. Tests: `test_run_source_validation_batch_requires_scope`,
   `test_run_source_validation_rejects_missing_candidate`,
@@ -148,16 +151,16 @@ check it.
   or an unknown batch: 409. `GET .../check-status` shows status, completed and total; a crash sets
   `failed` with the exception type only. The job state is in memory: after a restart the status is
   `idle` and unchecked candidates stay `pending` until the operator starts the check again (no
-  test). Only `draft` candidates are checked. Tests:
+  test). Only `draft` candidates are checked (no test). Tests:
   `test_upload_api_returns_immediately_health_and_progress_remain_available`,
   `test_worker_failure_does_not_report_success_and_bad_details_are_safe`,
   `test_background_reviews_commit_results_cache_repeats_and_bulk_connect`.
 - Registry duplicates: URLs are compared by `_url_key` (normalized, https, no `www.`). A candidate
-  whose key matches an earlier candidate of the batch or any `sources` row (enabled or not) gets
+  whose key matches any `sources` row (enabled or not) or an earlier draft of the batch gets
   `warning`, decision `duplicate` and status `duplicate`, without network or model calls; so does a
   candidate whose probe redirects to an existing source. Tests:
   `test_existing_urls_and_same_host_families_never_use_models`,
-  `test_failures_and_redirect_duplicates_stay_out_of_approval`.
+  `test_failures_and_redirect_duplicates_stay_out_of_approval`; the earlier-draft case: no test.
 - Probe (`probe_source`): reads only the candidate URL, public addresses only on every hop
   (`_ensure_public_url`: http/https, no credentials, every resolved address global), redirects
   followed by hand up to the loop bound in `_read_source`, body capped by `_MAX_RESPONSE_BYTES`,
@@ -168,20 +171,26 @@ check it.
   `test_probe_rejects_pages_without_publication_evidence`, `test_probe_bounds_redirects_and_body_size`,
   `test_private_network_sources_are_blocked`, `test_non_http_and_credential_urls_are_blocked`,
   `test_public_resolution_and_empty_dns`, `test_failures_and_redirect_duplicates_stay_out_of_approval`.
-- Same host: when a `sources` row or another candidate of the batch has the same host (requested or
-  final), the decision is `review` with up to five overlap URLs and no model call. Tests:
+- Same host: when a `sources` row (requested or final host) or another draft of the batch
+  (requested host) has the same host, the decision is `review` with up to five overlap URLs and no
+  model call. Tests:
   `test_existing_urls_and_same_host_families_never_use_models`.
 - Evidence brief (`SourceProbe.brief`): observed URL, format, title, description, item count, at
   most five samples (title, URL, date) and the declared name and description marked unverified,
   each capped; never article text. Tests:
   `test_evidence_brief_ignores_full_articles_and_cache_depends_on_models`,
   `test_probe_uses_only_source_listing_and_records_bounded_evidence`.
-- Cache: a stored review from `jev` or `deepseek` is reused when its `evidence_fingerprint`
-  (`_PROMPT_VERSION`, `jev_model`, `source_review_deepseek_model`, brief) matches and it is younger
-  than the age bound in `_check_candidate`; a fallback review (no provider) is never reused. Tests:
+- Cache: the candidate's own stored review from `jev` or `deepseek` is reused when its
+  `evidence_fingerprint` (`_PROMPT_VERSION`, `jev_model`, `source_review_deepseek_model`, brief)
+  matches and the model call is younger than the age bound in `_check_candidate`. Tests:
   `test_background_reviews_commit_results_cache_repeats_and_bulk_connect`,
-  `test_stale_cache_rechecks_and_missing_provider_is_not_cached`,
-  `test_evidence_brief_ignores_full_articles_and_cache_depends_on_models`.
+  `test_stale_cache_rechecks_and_missing_provider_is_not_cached` (expiry only),
+  `test_evidence_brief_ignores_full_articles_and_cache_depends_on_models`. Code differs
+  (source_intake.py:146, see PR #75 review): age is counted from `validated_at`, which a cache hit
+  renews, so a review re-checked within the bound is reused indefinitely.
+- Only successful decisions are cached (011): a fallback review (no provider) is never reused (no
+  test); a Jev `review` whose DeepSeek call failed or hit the budget is reused, so DeepSeek is not
+  asked again on a re-check (code differs: source_intake.py:158, see PR #75 review).
 - Model review (`SourceReviewer.review`, brief cut to a fixed length): Jev answers three questions
   (publication source, AI coverage, sufficient evidence). All confident yes: `ready`; sufficient
   evidence and a confident no on either of the others: `reject`; else `review`, and the same brief
@@ -201,10 +210,11 @@ check it.
 
 **Review actions** (`review_source_candidate`; API returns 400 on a domain error, 503 on storage)
 - Approve: only `validated` candidates, whatever the decision or status. `SourceRepo.create_from_candidate`
-  reuses the candidate's earlier source, else a source with the same URL, else creates one (key
-  from host and path, unique suffix; name from the declared JSON name, else host; type from the
-  candidate; default interval and weight); the source is enabled. The candidate becomes `approved`
-  with `approved_source_id`; the review note is replaced. Tests:
+  reuses the candidate's earlier source (and sets its URL to the candidate's), else a source with
+  the same exact URL, else creates one (key from host and path, unique suffix; default interval and
+  weight); a reused source gets the candidate's type and name too. Name: the declared JSON name,
+  else the host; type: the candidate's. The source is enabled. The candidate becomes `approved`
+  with `approved_source_id`, its duplicate link is cleared and the review note replaced. Tests:
   `test_review_source_candidate_approve_promotes_validated_draft`,
   `test_review_source_candidate_rejects_approval_when_validation_failed`,
   `test_review_source_candidate_reuses_existing_source_for_reapproval`,
@@ -221,19 +231,26 @@ check it.
   `test_background_reviews_commit_results_cache_repeats_and_bulk_connect`,
   `test_upload_api_returns_immediately_health_and_progress_remain_available`,
   `test_editing_a_candidate_invalidates_its_model_review`.
-- Reject: status `rejected`, note = reason; the source of an approved candidate stays enabled.
-  Tests: `test_source_onboarding_reject_and_mark_duplicate_actions_capture_review_decisions`,
+- Reject: status `rejected`, note = reason. A rejected candidate is not fetched (003, US3): the
+  source of an approved candidate is disabled. Code differs (onboarding.py:662, see PR #75 review):
+  that source stays enabled. Tests (draft candidates only):
+  `test_source_onboarding_reject_and_mark_duplicate_actions_capture_review_decisions`,
   `test_review_source_candidate_guard_and_fallback_paths`.
-- Disable: only a candidate with `approved_source_id`; that source is disabled, status `disabled`.
-  Tests: `test_review_source_candidate_disable_turns_off_previously_approved_managed_source`,
+- Disable: only a candidate with `approved_source_id`; that source is disabled, status `disabled`,
+  duplicate link cleared; the note is replaced only when given. Tests:
+  `test_review_source_candidate_disable_turns_off_previously_approved_managed_source`,
   `test_source_onboarding_disable_action_disables_previously_approved_managed_source`,
   `test_source_onboarding_review_helper_guards_and_edit_inference`,
   `test_source_onboarding_service_disable_requires_approved_source_id`.
-- Mark duplicate: the target must exist and differ; status `duplicate`, link to the target, and the
-  target's `approved_source_id` is copied. Tests:
+- Mark duplicate (any status): the target must exist and differ; status `duplicate`, link to the
+  target. A candidate acts only on a source it approved itself: the duplicate gets no
+  `approved_source_id` of the target's. Code differs (onboarding.py:702, see PR #75 review): the
+  target's `approved_source_id` is copied (an approved candidate's own id is overwritten), so
+  disabling the duplicate (the admin page offers Disable) disables the target's source, and an API
+  approve of the duplicate rewrites the target's source URL. Tests:
   `test_review_source_candidate_mark_duplicate_sets_duplicate_relationship`,
   `test_review_source_candidate_rejects_invalid_duplicate_targets`,
-  `test_source_onboarding_review_routes_reject_malformed_inputs_cleanly`.
+  `test_source_onboarding_review_routes_reject_malformed_inputs_cleanly`; the copied id: no test.
 - Edit (not for `approved`): a new URL is normalized again and must be unique; a type must be
   `rss`, `html` or `unknown`, else it is inferred from a new URL. Any change of URL, raw input or
   type resets validation to `pending` (clears details, error, detected type, time), so an earlier
@@ -249,7 +266,11 @@ check it.
 - `GET .../candidates` filters by batch, status and validation status, with the summary of the
   given batch or of the first listed candidate's batch; `GET .../batches/{batch_id}/summary`: 404
   for an unknown batch; `GET .../latest` returns the newest batch id and the check job. Counts come
-  from `summarize_batch`. CLI `ai-news review-batch-outcomes`. Tests:
+  from `summarize_batch`: pending review = `draft` (its `validated` status branch never matches, no
+  candidate has that status: source_candidate_repo.py:289); `disabled` is not counted;
+  `rejected_count` is the batch's import rejections (candidate rejections when there is no batch);
+  with no batch and no listed candidate the summary covers all candidates. CLI
+  `ai-news review-batch-outcomes`. Tests:
   `test_source_onboarding_candidate_list_filters_return_summary_payload`,
   `test_source_onboarding_batch_summary_route_returns_aggregate_counts`,
   `test_source_onboarding_batch_summary_route_returns_not_found_for_missing_batch`,
@@ -264,8 +285,9 @@ check it.
   `src/app/core/ingestion/pipeline.md`, Behavior, "Sources and the run". Approval never writes
   `sources.yaml`. Tests: `test_source_onboarding_approve_action_creates_enabled_managed_source`,
   `test_source_onboarding_approve_action_returns_persisted_review_payload`.
-- When the approved source is a row that `sources.yaml` also defines (same URL), the YAML upsert of
-  the next run sets its `enabled` from YAML again: no test.
+- When the approved or disabled source is a row that `sources.yaml` also defines (same key), the
+  YAML upsert of the next run sets its name, type, URL, `enabled`, interval and weight from YAML
+  again: no test.
 
 **YAML export**
 - `export_approved_sources_yaml` dumps every enabled `sources` row (from YAML or approved), sorted
@@ -294,12 +316,12 @@ check it.
 | Jev first, DeepSeek second opinion on uncertain cases, high confidence bounds | conservative decisions; model scores are judgments, not guarantees (011, PR #8) |
 | Provider failure or missing key leaves manual review; provider stops for the job; DeepSeek calls and output capped | a failure must never approve; paid calls are bounded (011, PR #8) |
 | Same-host candidates go to manual review without a model call | DeepSeek may not override unresolved overlap (011) |
-| Reviews cached by evidence fingerprint and models, reused for 7 days | repeated imports do not repeat paid work (011, PR #8); decided 2026-10-21 (agent): keep 7 days, a listing changes slowly and a week bounds stale decisions |
+| Successful reviews cached by evidence fingerprint and models, reused for 7 days | rechecking unchanged evidence does not repeat paid work (011; 7 days: PR #8) |
 | Check results in `validation_details`, no new table | no schema migration (011) |
-| An edit resets validation; a running check never overwrites an edited candidate | old evidence must not approve a changed URL (PR #8) |
+| An edit resets validation; a running check never overwrites a candidate whose URL or raw input changed | old evidence must not approve a changed URL (PR #8) |
 | Deterministic validation, API, CLI and helper kept beside the check | existing API/CLI behavior preserved (011) |
 | Individual approve accepts any `validated` candidate, bulk only `ready` | the operator overrides model decisions; bulk rechecks readiness (011) |
-| New source: interval 30 minutes, weight 1.0 | no source states it; decided 2026-10-21 (agent): keep, the interval no longer skips fetches (`pipeline.md`) and 1.0 is the neutral weight of `rank_score` |
+| New source: interval 30 minutes, weight 1.0 | no source states it; decided 2026-10-21 (agent): keep the `SourceConfig` field defaults, so a new source ranks like a YAML source without a weight (1.0 is the top of the clamp in `rank_score`); the interval skips no fetch and only sets expected attempts of weekly coverage (`pipeline.md`) |
 | Approved HTML sources carry no selectors; `MANAGED_LINK_SELECTORS` in code | DB rows store no CSS options (non-news record, see `pipeline.md` decisions) |
 | InfoQ named as broad media | the provided 50-source batch (003 plan, domain finding 3; fixture `qa_ai_sources.txt`) |
 
@@ -317,6 +339,8 @@ check it.
   `test_missing_keys_jev_failure_and_deepseek_budget_never_approve`,
   `test_provider_failure_remains_manual_and_stops_repeated_provider_calls`.
 - The check never requests a private or local address. Tests: `test_private_network_sources_are_blocked`.
+- The check never changes a `sources` row; model judgments alone never enable or disable a source
+  (011, registry repair). Tests: none beyond the bulk-approval ones above.
 - Keys and provider error texts never reach results or job status. Tests:
   `test_provider_failure_remains_manual_and_stops_repeated_provider_calls`,
   `test_worker_failure_does_not_report_success_and_bad_details_are_safe`.
@@ -349,7 +373,7 @@ scripts/sources_onboarding_helper.py db-bootstrap | db-review | db-validate | db
 | `core/sources/onboarding.py` | URL parsing, overlap groups, deterministic validation, import, review actions, YAML export (split planned, below) |
 | `core/sources/review.py` | Check probe (`probe_source`), evidence brief, `SourceReviewer` (Jev, DeepSeek), `evidence_fingerprint` |
 | `web/source_intake.py` | `SourceIntakeService`: check job, registry and same-host checks, cache, `approve_ready` |
-| `web/routes/sources.py` | 13 `/api/source-onboarding/*` routes |
+| `web/routes/sources.py` | 14 `/api/source-onboarding/*` routes |
 | `web/service.py` (not covered, shared) | `SourceOnboardingService`: list, summary and review actions over `review_source_candidate`; planned to move out |
 | `storage/source_candidate_repo.py` | `SourceImportBatchRepo`, `SourceCandidateRepo` (drafts, filters, validation result, review save, summary) |
 | `storage/source_repo.py` (not covered) | `SourceRepo.create_from_candidate`, `disable_source` |
@@ -375,7 +399,11 @@ Patch targets and quoted names that change (checked 2026-10-21; the plan text di
 | `test_source_candidate_repo.py` | string `app.core.sources.onboarding.group_candidate_overlaps` | the module that `SourceCandidateRepo.find_overlap_groups` imports lazily (in `storage/source_candidate_repo.py`, not `storage/repos.py`) |
 | `test_source_onboarding_dedupe.py`, `test_source_onboarding_batch_rules.py`, `test_source_validation.py`, `tests/integration/test_source_validation_flow.py` | `hasattr(source_onboarding, ...)` and message strings for `group_candidate_overlaps`, `classify_candidate_batch`, `run_source_validation` and others | point at the new module or keep re-exports |
 | `test_source_onboarding_service.py` | string `app.web.service.review_source_candidate` | the module `SourceOnboardingService` moves to |
-| `test_web_source_onboarding_api.py` | `sources_routes.run_source_validation_batch`, `sources_routes.SourceOnboardingService` | unchanged while the routes import these names directly |
+| `test_web_source_onboarding_api.py` | `sources_routes.import_source_candidates`, `run_source_validation_batch`, `review_candidate_overlaps`, `SourceOnboardingService` | unchanged while the routes import these names directly |
+
+No caller outside tests: `classify_candidate_batch`, `write_approved_sources_yaml_snapshot`,
+`SourceImportBatchRepo.create_import_batch`, `SourceCandidateRepo.update_candidate`,
+`insert_normalized_draft_candidates`; the split decides whether to keep them.
 
 Importers: `src/` 6 (`core/sources/review.py`, `web/service.py`, `web/routes/sources.py`,
 `web/source_intake.py`, `cli/main.py`, `storage/source_candidate_repo.py`), scripts 1, tests 10.
