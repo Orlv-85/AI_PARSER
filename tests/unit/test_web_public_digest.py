@@ -15,6 +15,8 @@ from app.core.daily.signals_compute import EVENT_LABELS
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import Base, DailySignalBrief, DailySignalReport
 from app.web.app import create_app
+from app.web.routes import common as common_routes
+from app.web.routes import pages as pages_routes
 from app.web.signals_view import AI_NOTE, SINGULAR, event_label
 
 
@@ -38,7 +40,7 @@ def test_public_digest_page_renders_digest_shell_with_yesterday_selected(
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", _create_all_local)
     monkeypatch.setattr(web_app_module, "SessionLocal", session_local)
-    monkeypatch.setattr(web_app_module, "datetime", _FrozenDateTime)
+    monkeypatch.setattr(pages_routes, "datetime", _FrozenDateTime)
 
     client = TestClient(create_app())
 
@@ -72,7 +74,7 @@ def test_public_digest_page_shows_clean_empty_state_when_digest_missing(
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", _create_all_local)
     monkeypatch.setattr(web_app_module, "SessionLocal", session_local)
-    monkeypatch.setattr(web_app_module, "datetime", _FrozenDateTime)
+    monkeypatch.setattr(pages_routes, "datetime", _FrozenDateTime)
 
     client = TestClient(create_app())
 
@@ -100,7 +102,7 @@ def test_public_digest_page_keeps_explicit_query_date_selected(monkeypatch, tmp_
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", _create_all_local)
     monkeypatch.setattr(web_app_module, "SessionLocal", session_local)
-    monkeypatch.setattr(web_app_module, "datetime", _FrozenDateTime)
+    monkeypatch.setattr(pages_routes, "datetime", _FrozenDateTime)
 
     client = TestClient(create_app())
 
@@ -140,7 +142,7 @@ def test_public_digest_page_stays_public_when_auth_is_enabled(monkeypatch, tmp_p
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", _create_all_local)
     monkeypatch.setattr(web_app_module, "SessionLocal", session_local)
-    monkeypatch.setattr(web_app_module, "datetime", _FrozenDateTime)
+    monkeypatch.setattr(pages_routes, "datetime", _FrozenDateTime)
 
     client = TestClient(create_app())
 
@@ -206,7 +208,7 @@ def _signals_client(monkeypatch, tmp_path, payload=None, *, broken=False, brief=
         class _Broken:
             def __init__(self, _session, **_kwargs):
                 raise SQLAlchemyError("signals table missing")
-        monkeypatch.setattr(web, "DailySignalRepo", _Broken)
+        monkeypatch.setattr(common_routes, "DailySignalRepo", _Broken)
     return TestClient(create_app())
 
 
@@ -284,15 +286,14 @@ def test_trend_without_expected_value_and_any_render_error_keep_page(monkeypatch
     response = _signals_client(monkeypatch, tmp_path, odd).get("/?date=2026-10-16")
     assert response.status_code == 200
     assert "Odd Trend" in response.text and "7d: - &rarr; 3" in response.text
-    web = import_module("app.web.app")
-    original = web.render_signals
+    original = pages_routes.render_signals
 
     def _boom(signals, *, read_error=False):
         if not read_error:
             raise RuntimeError("render bug")
         return original(signals, read_error=True)
 
-    monkeypatch.setattr(web, "render_signals", _boom)
+    monkeypatch.setattr(pages_routes, "render_signals", _boom)
     (tmp_path / "b").mkdir()
     response = _signals_client(monkeypatch, tmp_path / "b", SIGNALS).get("/?date=2026-10-16")
     assert response.status_code == 200

@@ -15,6 +15,7 @@ from sqlalchemy.orm import sessionmaker
 from app.config.settings import Settings, get_settings
 from app.storage.models_sql import Base
 from app.web.app import create_app
+from app.web.routes import news as news_routes
 
 
 def _build_authenticated_client(monkeypatch, tmp_path) -> TestClient:
@@ -49,7 +50,7 @@ def _build_authenticated_client(monkeypatch, tmp_path) -> TestClient:
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: Base.metadata.create_all(bind=engine))
     monkeypatch.setattr(web_app_module, "SessionLocal", session_local)
-    monkeypatch.setattr(web_app_module, "ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr(news_routes, "ArticleRepo", _ArticleRepo)
 
     return TestClient(create_app())
 

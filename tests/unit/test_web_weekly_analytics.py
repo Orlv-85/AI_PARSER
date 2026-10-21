@@ -11,6 +11,9 @@ from app.config.settings import get_settings
 from app.storage.models_sql import Article, Base, FetchRun, Source
 from app.storage.repos import WeeklyAnalyticsRepo
 from app.web.app import create_app
+from app.web.routes import common as common_routes
+from app.web.routes import pages as pages_routes
+from app.web.routes import weekly as weekly_routes
 
 
 class _NoSignalsRepo:
@@ -25,7 +28,7 @@ class _NoSignalsRepo:
 
 @pytest.fixture(autouse=True)
 def _no_daily_signals(monkeypatch) -> None:
-    monkeypatch.setattr(import_module("app.web.app"), "DailySignalRepo", _NoSignalsRepo)
+    monkeypatch.setattr(common_routes, "DailySignalRepo", _NoSignalsRepo)
 
 
 def test_public_digest_page_links_to_weekly_ai_analytics(monkeypatch, tmp_path) -> None:
@@ -52,7 +55,7 @@ def test_public_digest_page_links_to_weekly_ai_analytics(monkeypatch, tmp_path) 
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(web_app_module, "NewsDigestRepo", _NewsDigestRepo)
+    monkeypatch.setattr(pages_routes, "NewsDigestRepo", _NewsDigestRepo)
 
     client = TestClient(create_app())
 
@@ -72,8 +75,7 @@ def test_weekly_reports_page_renders(monkeypatch, tmp_path) -> None:
         def now(cls, tz=None):
             return cls(2026, 3, 11, 9, 0, tzinfo=tz or UTC)
 
-    web_app_module = import_module("app.web.app")
-    monkeypatch.setattr(web_app_module, "datetime", _FrozenDateTime)
+    monkeypatch.setattr(pages_routes, "datetime", _FrozenDateTime)
 
     client = TestClient(create_app())
 
@@ -97,7 +99,7 @@ def test_weekly_ai_analytics_page_renders_shell_with_requested_date(
 
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
-    monkeypatch.setattr(web_app_module, "datetime", _FrozenDateTime)
+    monkeypatch.setattr(pages_routes, "datetime", _FrozenDateTime)
 
     client = TestClient(create_app())
 
@@ -125,7 +127,7 @@ def test_weekly_ai_analytics_page_back_link_preserves_requested_report_date(
 
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
-    monkeypatch.setattr(web_app_module, "datetime", _FrozenDateTime)
+    monkeypatch.setattr(pages_routes, "datetime", _FrozenDateTime)
 
     client = TestClient(create_app())
 
@@ -148,7 +150,7 @@ def test_weekly_ai_analytics_page_back_link_preserves_default_previous_utc_day(
 
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
-    monkeypatch.setattr(web_app_module, "datetime", _FrozenDateTime)
+    monkeypatch.setattr(pages_routes, "datetime", _FrozenDateTime)
 
     client = TestClient(create_app())
 
@@ -190,8 +192,8 @@ def test_weekly_ai_analytics_page_defaults_to_latest_published_report_date(
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(web_app_module, "datetime", _FrozenDateTime)
-    monkeypatch.setattr(web_app_module, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo, raising=False)
+    monkeypatch.setattr(pages_routes, "datetime", _FrozenDateTime)
+    monkeypatch.setattr(pages_routes, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo)
 
     client = TestClient(create_app())
 
@@ -260,7 +262,7 @@ def test_weekly_ai_analytics_api_returns_report_sections_for_last_7_days(
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(web_app_module, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo, raising=False)
+    monkeypatch.setattr(weekly_routes, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo)
 
     client = TestClient(create_app())
 
@@ -346,7 +348,7 @@ def test_weekly_ai_analytics_api_sanitizes_stored_items_for_public_schema(
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(web_app_module, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo, raising=False)
+    monkeypatch.setattr(weekly_routes, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo)
 
     client = TestClient(create_app())
 
@@ -401,7 +403,7 @@ def test_weekly_ai_analytics_api_can_save_report_payload(monkeypatch, tmp_path) 
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(web_app_module, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo, raising=False)
+    monkeypatch.setattr(weekly_routes, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo)
 
     client = TestClient(create_app())
     response = client.post(
@@ -548,7 +550,7 @@ def test_weekly_ai_analytics_reports_api_returns_published_list(
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(web_app_module, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo, raising=False)
+    monkeypatch.setattr(weekly_routes, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo)
 
     client = TestClient(create_app())
     response = client.get("/api/news/weekly-analytics/reports")
@@ -609,8 +611,8 @@ def test_weekly_ai_analytics_api_defaults_to_previous_utc_day(
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(web_app_module, "datetime", _FrozenDateTime)
-    monkeypatch.setattr(web_app_module, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo, raising=False)
+    monkeypatch.setattr(weekly_routes, "datetime", _FrozenDateTime)
+    monkeypatch.setattr(weekly_routes, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo)
 
     client = TestClient(create_app())
 
@@ -676,8 +678,8 @@ def test_weekly_ai_analytics_api_defaults_to_latest_published_report_date(
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(web_app_module, "datetime", _FrozenDateTime)
-    monkeypatch.setattr(web_app_module, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo, raising=False)
+    monkeypatch.setattr(weekly_routes, "datetime", _FrozenDateTime)
+    monkeypatch.setattr(weekly_routes, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo)
 
     client = TestClient(create_app())
 
@@ -721,7 +723,7 @@ def test_public_digest_page_renders_weekly_ai_analytics_section(monkeypatch, tmp
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(web_app_module, "NewsDigestRepo", _NewsDigestRepo)
+    monkeypatch.setattr(pages_routes, "NewsDigestRepo", _NewsDigestRepo)
 
     client = TestClient(create_app())
 

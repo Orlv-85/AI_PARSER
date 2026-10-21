@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from app.config.settings import get_settings
 from app.storage.models_sql import Base
 from app.web.app import create_app
+from app.web.routes import news as news_routes
 
 
 def test_e2e_login_protected_logout_denied(monkeypatch, tmp_path) -> None:
@@ -39,7 +40,7 @@ def test_e2e_login_protected_logout_denied(monkeypatch, tmp_path) -> None:
 
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
-    monkeypatch.setattr(web_app_module, "ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr(news_routes, "ArticleRepo", _ArticleRepo)
 
     client = TestClient(create_app())
 
@@ -105,7 +106,7 @@ def test_e2e_second_login_immediately_invalidates_previous_session_token(
 
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
-    monkeypatch.setattr(web_app_module, "ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr(news_routes, "ArticleRepo", _ArticleRepo)
 
     client = TestClient(create_app())
 
@@ -166,7 +167,7 @@ def test_e2e_auth_disabled_default_routes_are_open(monkeypatch, tmp_path) -> Non
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: Base.metadata.create_all(bind=engine))
     monkeypatch.setattr(web_app_module, "SessionLocal", session_local)
-    monkeypatch.setattr(web_app_module, "ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr(news_routes, "ArticleRepo", _ArticleRepo)
 
     client = TestClient(create_app())
 
@@ -205,7 +206,7 @@ def test_e2e_login_grants_access_to_admin_shell(monkeypatch, tmp_path) -> None:
 
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
-    monkeypatch.setattr(web_app_module, "ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr(news_routes, "ArticleRepo", _ArticleRepo)
 
     client = TestClient(create_app())
 
@@ -263,7 +264,7 @@ def test_e2e_public_digest_apis_stay_open_while_admin_apis_require_auth(
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", _create_all_local)
     monkeypatch.setattr(web_app_module, "SessionLocal", session_local)
-    monkeypatch.setattr(web_app_module, "ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr(news_routes, "ArticleRepo", _ArticleRepo)
 
     client = TestClient(create_app())
 
