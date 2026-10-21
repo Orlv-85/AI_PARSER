@@ -59,15 +59,12 @@ jobs:
           AINEWS_AUTH_ENABLED: ${{ vars.AINEWS_AUTH_ENABLED || 'true' }}
           AINEWS_AUTH_SESSION_TTL_SECONDS: ${{ vars.AINEWS_AUTH_SESSION_TTL_SECONDS || '3600' }}
           AINEWS_AUTH_COOKIE_SECURE: ${{ vars.AINEWS_AUTH_COOKIE_SECURE || 'true' }}
-          AINEWS_MCP_AUTH_ENABLED: ${{ vars.AINEWS_MCP_AUTH_ENABLED || 'false' }}
-          AINEWS_MCP_AUTH_TOKEN: ${{ secrets.AINEWS_MCP_AUTH_TOKEN }}
           AINEWS_PUBLISH_API_TOKEN: ${{ secrets.AINEWS_PUBLISH_API_TOKEN }}
         run: |
           umask 077
           DS_API_KEY_ESCAPED="$(printf '%s' "${DS_API_KEY}" | sed 's/[$]/$$/g')"
           AINEWS_AUTH_PASSWORD_HASH_ESCAPED="$(printf '%s' "${AINEWS_AUTH_PASSWORD_HASH}" | sed 's/[$]/$$/g')"
           AINEWS_AUTH_SECRET_ESCAPED="$(printf '%s' "${AINEWS_AUTH_SECRET}" | sed 's/[$]/$$/g')"
-          AINEWS_MCP_AUTH_TOKEN_ESCAPED="$(printf '%s' "${AINEWS_MCP_AUTH_TOKEN}" | sed 's/[$]/$$/g')"
           AINEWS_PUBLISH_API_TOKEN_ESCAPED="$(printf '%s' "${AINEWS_PUBLISH_API_TOKEN}" | sed 's/[$]/$$/g')"
           {
             printf 'DS_API_KEY=%s\n' "${DS_API_KEY_ESCAPED}"
@@ -82,8 +79,6 @@ jobs:
             printf 'AINEWS_AUTH_SECRET=%s\n' "${AINEWS_AUTH_SECRET_ESCAPED}"
             printf 'AINEWS_AUTH_SESSION_TTL_SECONDS=%s\n' "${AINEWS_AUTH_SESSION_TTL_SECONDS}"
             printf 'AINEWS_AUTH_COOKIE_SECURE=%s\n' "${AINEWS_AUTH_COOKIE_SECURE}"
-            printf 'AINEWS_MCP_AUTH_ENABLED=%s\n' "${AINEWS_MCP_AUTH_ENABLED}"
-            printf 'AINEWS_MCP_AUTH_TOKEN=%s\n' "${AINEWS_MCP_AUTH_TOKEN_ESCAPED}"
             printf 'AINEWS_PUBLISH_API_TOKEN=%s\n' "${AINEWS_PUBLISH_API_TOKEN_ESCAPED}"
           } > /tmp/ai_news_auth.env
 
