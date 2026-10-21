@@ -1,0 +1,68 @@
+name: offsite-archive
+
+# One-time, manual: encrypted tar of named entries under backups/ on the server to archive/ in B2.
+# No retention on archive/. Never include files with secrets (for example server.env copies).
+on:
+  workflow_dispatch:
+    inputs:
+      entries:
+        description: "Space-separated names under backups/ on the server"
+        required: true
+      archive_name:
+        description: "Object name under archive/ (without .tar.gz.age)"
+        required: true
+
+jobs:
+  archive:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Validate config
+        run: |
+          test -n "${{ vars.DEPLOY_HOST }}"
+          test -n "${{ vars.DEPLOY_USER }}"
+          test -n "${{ secrets.SERVER_PASSWORD }}"
+          test -n "${{ vars.OFFSITE_B2_BUCKET }}"
+          test -n "${{ vars.BACKUP_AGE_RECIPIENT }}"
+          test -n "${{ secrets.OFFSITE_B2_KEY_ID }}"
+          test -n "${{ secrets.OFFSITE_B2_APPLICATION_KEY }}"
+
+      - name: Install sshpass, age, rclone
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass age rclone
+
+      - name: Trust server host key
+        run: |
+          mkdir -p ~/.ssh
+          for _ in 1 2 3; do
+            ssh-keyscan -T 5 -H "${{ vars.DEPLOY_HOST }}" >> ~/.ssh/known_hosts && break
+            sleep 2
+          done
+
+      - name: Upload archive
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_APP_DIR: ${{ vars.DEPLOY_APP_DIR || '/opt/ai-news' }}
+          SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
+          ENTRIES: ${{ inputs.entries }}
+          ARCHIVE_NAME: ${{ inputs.archive_name }}
+          BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+          RCLONE_CONFIG_OFFSITE_TYPE: b2
+          RCLONE_CONFIG_OFFSITE_ACCOUNT: ${{ secrets.OFFSITE_B2_KEY_ID }}
+          RCLONE_CONFIG_OFFSITE_KEY: ${{ secrets.OFFSITE_B2_APPLICATION_KEY }}
+          OFFSITE_B2_BUCKET: ${{ vars.OFFSITE_B2_BUCKET }}
+        run: |
+          set -euo pipefail
+          case "${ARCHIVE_NAME}" in *[!A-Za-z0-9._-]*|"") echo "Bad archive_name" >&2; exit 1;; esac
+          quoted=""
+          for entry in ${ENTRIES}; do
+            case "${entry}" in *[!A-Za-z0-9._-]*|.*) echo "Bad entry: ${entry}" >&2; exit 1;; esac
+            quoted="${quoted} '${entry}'"
+          done
+          archive="${RUNNER_TEMP}/${ARCHIVE_NAME}.tar.gz.age"
+          sshpass -p "${SERVER_PASSWORD}" ssh "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "cd '${DEPLOY_APP_DIR}/backups' && tar -czf - --exclude='*.env' ${quoted}" \
+            | age -r "${BACKUP_AGE_RECIPIENT}" -o "${archive}"
+          rclone copyto "${archive}" "offsite:${OFFSITE_B2_BUCKET}/archive/${ARCHIVE_NAME}.tar.gz.age"
+          echo "Uploaded archive/${ARCHIVE_NAME}.tar.gz.age ($(wc -c < "${archive}" | tr -d ' ') bytes)"

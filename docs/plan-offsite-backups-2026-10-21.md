@@ -1,6 +1,7 @@
 # Plan: off-site database backups (B1 / A0, 2026-10-21)
 
-Status: Part A (options and plan). Waiting for the owner's choice of storage (money question).
+Status: owner chose **Backblaze B2** on 2026-10-21; the age key is kept by the owner; the owner
+keeps a copy of the server `.env` themselves. Part B implements the plan with B2 (section 9).
 Prompt: `docs/prompt-offsite-backups-2026-10-21.md`.
 
 ## 1. What exists now (checked read-only on prod, 2026-10-21)
@@ -152,17 +153,20 @@ Choose B2 instead if the owner prefers no card on file / already has a Backblaze
 only the endpoint and key type differ. Hetzner costs money for no gain at this size; the Mac pull is
 a useful second copy later, not the primary.
 
-## 9. What the owner creates (for R2)
+## 9. What the owner creates (B2, chosen)
 
-1. Cloudflare account with R2 enabled (payment method required, $0 billed within free tier).
-2. Bucket `ai-news-backups` (private, location hint EU), lifecycle rules: `daily/` delete after 30
-   days, `monthly/` delete after 365 days.
-3. R2 API token: "Object Read & Write", only bucket `ai-news-backups`; gives Access Key ID, Secret
-   Access Key, account endpoint `https://<account_id>.r2.cloudflarestorage.com`.
-4. GitHub repository secrets `OFFSITE_S3_ACCESS_KEY_ID`, `OFFSITE_S3_SECRET_ACCESS_KEY`; variables
-   `OFFSITE_S3_ENDPOINT`, `OFFSITE_S3_BUCKET`.
-5. `age-keygen` on the Mac; private key into the password manager + offline copy; public key into
-   GitHub variable `BACKUP_AGE_RECIPIENT`.
+1. Backblaze account (B2 Cloud Storage).
+2. Private bucket (for example `ai-news-backups-<random>`; B2 bucket names are global), lifecycle
+   rules: prefix `daily/` - hide after 30 days, delete 1 day after hiding; prefix `monthly/` -
+   hide after 365 days, delete 1 day after hiding.
+3. Application key "Read and Write", only that bucket -> `keyID` + `applicationKey` (shown once).
+   A second "Read Only" key for the owner's machine (restore tests).
+4. GitHub secrets `OFFSITE_B2_KEY_ID`, `OFFSITE_B2_APPLICATION_KEY`; variables `OFFSITE_B2_BUCKET`,
+   `BACKUP_AGE_RECIPIENT`.
+5. `age-keygen -o ~/ai-news-backup.agekey` on the Mac; private key into the password manager +
+   offline copy; the `age1...` public key into `BACKUP_AGE_RECIPIENT`.
+
+Implementation uses rclone's native `b2` backend (env-only config), not the S3 endpoint.
 
 ## 10. Part B scope (after the answer)
 

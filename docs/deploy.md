@@ -59,10 +59,14 @@ Repository Variables:
 - `AINEWS_AUTH_ENABLED` (optional, default `true`)
 - `AINEWS_AUTH_SESSION_TTL_SECONDS` (optional, default `3600`)
 - `AINEWS_AUTH_COOKIE_SECURE` (optional, default `true`)
+- `OFFSITE_B2_BUCKET` (Backblaze B2 bucket for off-site backups)
+- `BACKUP_AGE_RECIPIENT` (age public key `age1...`; the private key stays with the owner)
 
 Repository Secrets:
 - `DS_API_KEY` (DeepSeek key, required for digest generation)
 - `SERVER_PASSWORD`
+- `OFFSITE_B2_KEY_ID`, `OFFSITE_B2_APPLICATION_KEY` (B2 application key limited to the backup
+  bucket, read and write)
 - `AINEWS_AUTH_PASSWORD_HASH`
 - `AINEWS_AUTH_SECRET`
 - `AINEWS_PUBLISH_API_TOKEN` (optional; bearer token for machine POSTs of
@@ -215,9 +219,48 @@ Backup:
 ./scripts/db_backup.sh
 ```
 
+`db_backup.sh` fails and removes the file when the dump lacks the pg_dump footer
+(`-- PostgreSQL database dump complete`), so a failed `pg_dump` is not kept as a backup.
+
 Nightly maintenance workflow:
 - `.github/workflows/db-maintenance.yml`
 - runs DB maintenance and backup over SSH (same deploy credentials)
+- then copies the newest `backups/postgres_*.sql.gz` to the runner and runs
+  `scripts/db_offsite_upload.sh`: checks the dump (age < 26 h, size, gzip, pg_dump footer),
+  encrypts it with `age` to `BACKUP_AGE_RECIPIENT`, uploads it with `rclone` to B2
+  `daily/<name>.age`, and to `monthly/` when the month has no copy yet
+- a failed check or upload fails the run; GitHub mails failed scheduled runs. The repo is public:
+  GitHub disables scheduled workflows after 60 days without repository activity - re-enable in
+  the Actions tab if that happens
+
+### Off-site backups (Backblaze B2)
+
+- Bucket `OFFSITE_B2_BUCKET`, private. Retention by the bucket's lifecycle rules, not by our code:
+  `daily/` 30 days, `monthly/` 365 days, `archive/` kept.
+- Objects are `age`-encrypted; only the owner's private key decrypts them. Lost key = off-site
+  copies unreadable (on-server copies, 14 days, are not affected).
+- One-time archive of other files under `backups/` (pre-change dumps and snapshots): workflow
+  `offsite-archive` (manual) with `entries` (names under `backups/`) and `archive_name`; it skips
+  `*.env` files. Never archive copies of `.env`.
+
+Restore test or real restore from the off-site copy, on the owner's machine (docker, `rclone`,
+`age`; `brew install age rclone`), never on prod:
+
+```bash
+export OFFSITE_B2_KEY_ID=... OFFSITE_B2_APPLICATION_KEY=... OFFSITE_B2_BUCKET=...  # read-only key is enough
+export BACKUP_AGE_IDENTITY=~/ai-news-backup.agekey
+PROD_SSH=ai-news ./scripts/db_offsite_restore_test.sh            # newest daily/
+./scripts/db_offsite_restore_test.sh monthly/postgres_<UTC>.sql.gz.age
+```
+
+It downloads and decrypts the copy, compares its sha256 with the server copy (when `PROD_SSH` is
+set and the copy is still on the server), restores it into a throwaway `postgres:18-alpine`
+container `ai-news-restore-test` with `ON_ERROR_STOP=1`, prints row counts per table and, with
+`PROD_SSH`, the prod counts next to them (read-only `SELECT`; prod counts may only be larger).
+The container and the plaintext dump are removed at exit.
+
+For a real restore, decrypt the same way (`age -d -i <key> <file>.age > <file>`) and feed the
+`.sql.gz` to `psql` of the target database; replacing prod data needs the owner's explicit yes.
 
 ### Healthcheck
 
