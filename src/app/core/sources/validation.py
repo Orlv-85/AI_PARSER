@@ -11,6 +11,7 @@ from app.ingest.html import extract_links_from_html
 from app.ingest.rss import fetch_rss_with_metadata
 from app.storage.source_candidate_repo import SourceCandidateRepo
 
+
 @dataclass(frozen=True, slots=True)
 class ValidationResult:
     candidate_id: int
@@ -20,6 +21,7 @@ class ValidationResult:
     entry_count: int | None = None
     link_count: int | None = None
     sample_links: list[str] | None = None
+
 
 def validate_rss_candidate(
     candidate: object,

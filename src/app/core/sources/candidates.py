@@ -19,16 +19,6 @@ _TOPIC_SEGMENTS = {"tag", "tags", "topic", "topics", "category", "categories", "
 
 _ROOT_SEGMENTS = {"", "blog", "news", "articles", "feed"}
 
-_REVIEW_REASON_SEARCH_WRAPPER = "search_wrapper"
-
-_REVIEW_REASON_INVALID_URL = "invalid_url"
-
-_REVIEW_REASON_DUPLICATE_URL = "duplicate_url"
-
-_REVIEW_REASON_BROAD_MEDIA_PAGE = "broad_media_page"
-
-_REVIEW_REASON_TOPIC_PAGE = "topic_page"
-
 _REVIEW_REASON_SAME_HOST_PATH_PREFIX = "same_host_path_prefix"
 
 _REVIEW_REASON_SAME_HOST_TOPIC_VARIANT = "same_host_topic_variant"
@@ -38,7 +28,6 @@ _REVIEW_REASON_SAME_HOST_FAMILY = "same_host_family"
 _REVIEW_REASON_PRIORITIES = {
     _REVIEW_REASON_SAME_HOST_PATH_PREFIX: 3,
     _REVIEW_REASON_SAME_HOST_TOPIC_VARIANT: 2,
-    _REVIEW_REASON_TOPIC_PAGE: 2,
     _REVIEW_REASON_SAME_HOST_FAMILY: 1,
 }
 
@@ -55,24 +44,6 @@ class CandidateOverlapGroup:
     preferred_candidate_id: int
     candidate_urls: list[str] | None = None
     preferred_url: str | None = None
-
-@dataclass(frozen=True, slots=True)
-class BatchRejectedCandidate:
-    raw_input: str
-    normalized_url: str
-    reason: str
-
-@dataclass(frozen=True, slots=True)
-class BatchFlaggedCandidate:
-    raw_input: str
-    normalized_url: str
-    reason: str
-
-@dataclass(frozen=True, slots=True)
-class BatchCandidateReview:
-    rejected_candidates: list[BatchRejectedCandidate]
-    flagged_candidates: list[BatchFlaggedCandidate]
-    overlap_groups: list[CandidateOverlapGroup]
 
 def extract_candidate_urls(raw_text: str) -> list[str]:
     records = _json_source_records(raw_text)
@@ -191,76 +162,6 @@ def parse_source_candidates(raw_text: str) -> tuple[list[NormalizedSourceCandida
 
     return normalized_candidates, len(extracted_urls), rejected_count
 
-def classify_candidate_batch(raw_text: str) -> BatchCandidateReview:
-    extracted_urls = extract_candidate_urls(raw_text)
-    normalized_candidates: list[NormalizedSourceCandidate] = []
-    rejected_candidates: list[BatchRejectedCandidate] = []
-    flagged_candidates: list[BatchFlaggedCandidate] = []
-    seen_urls: set[str] = set()
-
-    for raw_url in extracted_urls:
-        try:
-            normalized_url = normalize_candidate_url(raw_url)
-        except ValueError:
-            reason = (
-                _REVIEW_REASON_SEARCH_WRAPPER
-                if _is_search_wrapper_url(raw_url)
-                else _REVIEW_REASON_INVALID_URL
-            )
-            rejected_candidates.append(
-                BatchRejectedCandidate(
-                    raw_input=raw_url,
-                    normalized_url=raw_url.strip(),
-                    reason=reason,
-                )
-            )
-            continue
-
-        if normalized_url in seen_urls:
-            rejected_candidates.append(
-                BatchRejectedCandidate(
-                    raw_input=raw_url,
-                    normalized_url=normalized_url,
-                    reason=_REVIEW_REASON_DUPLICATE_URL,
-                )
-            )
-            continue
-
-        seen_urls.add(normalized_url)
-        candidate = NormalizedSourceCandidate(
-            raw_input=raw_url,
-            normalized_url=normalized_url,
-            candidate_type=_infer_candidate_type(normalized_url),
-        )
-        normalized_candidates.append(candidate)
-        flag_reason = _batch_flag_reason(candidate)
-        if flag_reason is not None:
-            flagged_candidates.append(
-                BatchFlaggedCandidate(
-                    raw_input=candidate.raw_input,
-                    normalized_url=_batch_output_url(
-                        raw_input=candidate.raw_input,
-                        normalized_url=candidate.normalized_url,
-                    ),
-                    reason=flag_reason,
-                )
-            )
-
-    overlap_input = [
-        {
-            "id": index,
-            "normalized_url": candidate.normalized_url,
-            "candidate_type": candidate.candidate_type,
-        }
-        for index, candidate in enumerate(normalized_candidates, start=1)
-    ]
-    overlap_groups = group_candidate_overlaps(overlap_input)
-    return BatchCandidateReview(
-        rejected_candidates=rejected_candidates,
-        flagged_candidates=flagged_candidates,
-        overlap_groups=overlap_groups,
-    )
-
 def group_candidate_overlaps(  # pylint: disable=too-many-branches
     candidates: Sequence[object],
 ) -> list[CandidateOverlapGroup]:
@@ -365,11 +266,6 @@ def _is_search_wrapper(*, hostname: str, path: str, query: str) -> bool:
 def _default_port(scheme: str) -> int:
     return 443 if scheme == "https" else 80
 
-def _is_search_wrapper_url(raw_url: str) -> bool:
-    parts = urlsplit(raw_url.strip())
-    hostname = (parts.hostname or "").lower()
-    return _is_search_wrapper(hostname=hostname, path=parts.path, query=parts.query)
-
 def _infer_candidate_type(normalized_url: str) -> str:
     lower_url = normalized_url.lower()
     if lower_url.endswith((".xml", ".rss", ".atom")) or "/feed" in lower_url:
@@ -435,41 +331,6 @@ def _is_root_family_path(path: str) -> bool:
     if not segments:
         return True
     return len(segments) == 1 and segments[0].lower() in _ROOT_SEGMENTS
-
-def _batch_flag_reason(candidate: NormalizedSourceCandidate) -> str | None:
-    path = _normalized_path(candidate.normalized_url)
-    hostname = (urlsplit(candidate.normalized_url).hostname or "").lower()
-    if _is_topic_path(path):
-        return _REVIEW_REASON_TOPIC_PAGE
-    if _is_broad_media_candidate(hostname=hostname, path=path):
-        return _REVIEW_REASON_BROAD_MEDIA_PAGE
-    return None
-
-def _is_broad_media_candidate(*, hostname: str, path: str) -> bool:
-    if hostname not in {"infoq.com", "www.infoq.com"}:
-        return False
-    segments = _path_segments(path)
-    return bool(segments) and len(segments) <= 2
-
-def _batch_output_url(*, raw_input: str, normalized_url: str) -> str:
-    raw_parts = urlsplit(raw_input.strip())
-    normalized_parts = urlsplit(normalized_url)
-    if (
-        raw_parts.query == normalized_parts.query
-        and raw_parts.path.endswith("/")
-        and normalized_parts.path
-        and not normalized_parts.path.endswith("/")
-    ):
-        return urlunsplit(
-            (
-                normalized_parts.scheme,
-                normalized_parts.netloc,
-                f"{normalized_parts.path}/",
-                normalized_parts.query,
-                "",
-            )
-        )
-    return normalized_url
 
 def _prefer_reason(current_reason: str | None, new_reason: str) -> str:
     normalized_new_reason = new_reason.strip().lower()

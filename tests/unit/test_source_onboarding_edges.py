@@ -1,6 +1,5 @@
 # pylint: disable=protected-access
 
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -95,7 +94,7 @@ def test_review_source_candidate_guard_and_fallback_paths() -> None:
     assert candidate.review_note == "manual reject"
 
 
-def test_export_snapshot_and_html_serialization_helpers() -> None:
+def test_export_approved_sources_yaml_serializes_html_sources() -> None:
     session = _session()
     session.add(
         Source(
@@ -113,11 +112,6 @@ def test_export_snapshot_and_html_serialization_helpers() -> None:
     dumped = source_onboarding.export_approved_sources_yaml(session=session)
     assert "managed-html" in dumped
     assert "parser_options: {}" in dumped
-
-    target = Path("tmp/source_onboarding_snapshot_test.yaml")
-    snapshot = source_onboarding.write_approved_sources_yaml_snapshot(session=session, path=target)
-    assert target.read_text(encoding="utf-8") == snapshot
-    target.unlink(missing_ok=True)
 
 
 def test_source_onboarding_review_helper_guards_and_edit_inference() -> None:
@@ -267,10 +261,6 @@ def test_source_onboarding_path_and_reason_helpers() -> None:
         path="/other",
         query="q=https://example.com",
     ) is True
-    assert source_candidates._is_search_wrapper_url(
-        "https://www.google.com/search?q=https://example.com/blog"
-    ) is True
-
     assert source_candidates._normalized_path("https://example.com/blog/") == "/blog"
     assert source_candidates._normalized_path("https://example.com") == "/"
     assert source_candidates._path_segments("https://example.com") == []
@@ -287,19 +277,6 @@ def test_source_onboarding_path_and_reason_helpers() -> None:
         == "same_host_family"
     )
 
-    flagged = source_candidates._batch_flag_reason(
-        source_candidates.NormalizedSourceCandidate(
-            raw_input="https://www.infoq.com/news",
-            normalized_url="https://www.infoq.com/news",
-            candidate_type="html",
-        )
-    )
-    assert flagged == "broad_media_page"
-
-    assert source_candidates._batch_output_url(
-        raw_input="https://example.com/blog/",
-        normalized_url="https://example.com/blog",
-    ) == "https://example.com/blog/"
     assert source_candidates._prefer_reason("same_host_family", "same_host_path_prefix") == (
         "same_host_path_prefix"
     )

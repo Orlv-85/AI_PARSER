@@ -345,7 +345,10 @@ def test_source_onboarding_service_disable_requires_approved_source_id(monkeypat
             },
         )()
 
-    monkeypatch.setattr("app.web.source_onboarding.review_source_candidate", _review_source_candidate)
+    monkeypatch.setattr(
+        "app.web.source_onboarding.review_source_candidate",
+        _review_source_candidate,
+    )
 
     try:
         service.disable_candidate(11)

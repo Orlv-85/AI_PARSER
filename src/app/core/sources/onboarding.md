@@ -102,11 +102,6 @@ check it.
   (`review_candidate_overlaps`). Tests: `test_review_candidate_overlaps_filters_non_group_results`,
   `test_find_overlap_groups_and_summarize_batch_cover_review_helpers`,
   `test_source_onboarding_overlaps_and_listing_return_503_on_storage_errors`.
-- `classify_candidate_batch` (no caller in `src/`) lists rejected URLs (`search_wrapper`,
-  `invalid_url`, `duplicate_url`), flagged ones (`topic_page`; `broad_media_page` for short InfoQ
-  paths, `_is_broad_media_candidate`) and the overlap groups of a pasted batch. Tests:
-  `test_classify_candidate_batch_rejects_search_wrappers_and_flags_broad_candidates`,
-  `test_classify_candidate_batch_groups_same_vendor_overlaps_for_review`.
 
 **Validation** (deterministic; API, CLI, helper; no model)
 - `run_source_validation`: a candidate of type `unknown` gets the inferred type. RSS
@@ -116,7 +111,7 @@ check it.
   and no list selector (links in `nav`/`footer` and URLs excluded by ingestion are skipped); at
   least one link: `validated` with `link_count` and a few `sample_links`, none: `warning`. Any page
   with one such link passes; the 003 plan asks for article links scored for quality (code differs:
-  `_extract_links_with_ingest`, validation.py:182, see PR #75 review). Another type: `failed`. Tests:
+  `_extract_links_with_ingest`, validation.py:183, see PR #75 review). Another type: `failed`. Tests:
   `test_validate_rss_candidate_marks_candidate_valid_when_feed_has_entries`,
   `test_validate_rss_candidate_fails_when_feed_has_no_entries`,
   `test_validate_html_candidate_marks_candidate_valid_when_article_links_are_extractable`,
@@ -248,7 +243,7 @@ check it.
   `test_source_onboarding_service_disable_requires_approved_source_id`.
 - Mark duplicate (any status): the target must exist and differ; status `duplicate`, link to the
   target. A candidate acts only on a source it approved itself: the duplicate gets no
-  `approved_source_id` of the target's. Code differs (onboarding.py:207, see PR #75 review): the
+  `approved_source_id` of the target's. Code differs (onboarding.py:200, see PR #75 review): the
   target's `approved_source_id` is copied (an approved candidate's own id is overwritten), so
   disabling the duplicate (the admin page offers Disable) disables the target's source, and an API
   approve of the duplicate rewrites the target's source URL. Tests:
@@ -279,6 +274,7 @@ check it.
   `test_source_onboarding_batch_summary_route_returns_aggregate_counts`,
   `test_source_onboarding_batch_summary_route_returns_not_found_for_missing_batch`,
   `test_list_candidates_filters_by_ids_status_and_validation_status`,
+  `test_list_candidates_empty_candidate_ids_include_all_candidates`,
   `test_find_overlap_groups_and_summarize_batch_cover_review_helpers`,
   `test_source_onboarding_service_first_batch_id_returns_first_candidate_batch_id`,
   `test_review_batch_outcomes_command_reports_deterministic_summary`.
@@ -298,7 +294,7 @@ check it.
   by key: id, name, type, url, enabled, interval, weight, and empty `parser_options` for HTML; the
   output is deterministic and loads with `load_sources`. Only the helper `db-export` writes it.
   Tests: `test_export_approved_sources_yaml_is_deterministic_and_round_trips_html_sources`,
-  `test_export_snapshot_and_html_serialization_helpers`.
+  `test_export_approved_sources_yaml_serializes_html_sources`.
 
 **Access**
 - Every `/api/source-onboarding/*` route and the admin page need an admin session when auth is on.
@@ -410,7 +406,7 @@ scripts/sources_onboarding_helper.py db-bootstrap | db-review | db-validate | db
 ## Tests
 
 Per rule: see Behavior and Invariants. Files: `tests/unit/test_source_onboarding_parser.py`,
-`test_source_onboarding_dedupe.py`, `test_source_onboarding_batch_rules.py`,
+`test_source_onboarding_dedupe.py`,
 `test_source_onboarding_edges.py`, `test_source_validation.py`, `test_source_onboarding_service.py`,
 `test_source_candidate_repo.py`, `test_source_candidate_repo_edges.py`, `test_source_repo_edges.py`,
 `test_sources_export.py`, `test_source_intake.py`, `test_source_review.py`,
@@ -418,4 +414,3 @@ Per rule: see Behavior and Invariants. Files: `tests/unit/test_source_onboarding
 `test_web_route_table.py`, `test_cli_main.py`, `tests/integration/test_source_validation_flow.py`.
 Tests never call a network or provider: validation takes fake fetch functions, the probe and
 reviewer use `httpx.MockTransport`, the check patches `probe_source` and `SourceReviewer.review`.
-Batch fixture: `tests/fixtures/source_batches/qa_ai_sources.txt`.

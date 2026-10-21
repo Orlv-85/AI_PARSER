@@ -5,8 +5,7 @@ Behavior, decisions, invariants and code map: onboarding.md next to this file.
 """
 
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import yaml
 from sqlalchemy import select
@@ -23,6 +22,7 @@ from app.core.sources.candidates import (
 from app.storage.models_sql import Source, SourceCandidate, SourceImportBatch
 from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
 
+
 @dataclass(frozen=True, slots=True)
 class SourceImportResult:
     batch: SourceImportBatch
@@ -30,6 +30,7 @@ class SourceImportResult:
     parsed_count: int
     accepted_count: int
     rejected_count: int
+
 
 def import_source_candidates(
     *,
@@ -144,12 +145,6 @@ def export_approved_sources_yaml(*, session: Session) -> str:
     sources = session.execute(stmt).scalars().all()
     payload = {"sources": [_serialize_approved_source(source) for source in sources]}
     return yaml.safe_dump(payload, sort_keys=False)
-
-def write_approved_sources_yaml_snapshot(*, session: Session, path: Path) -> str:
-    snapshot = export_approved_sources_yaml(session=session)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(snapshot, encoding="utf-8")
-    return snapshot
 
 def _approve_candidate(
     *,

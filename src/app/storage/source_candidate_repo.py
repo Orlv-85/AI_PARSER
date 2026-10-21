@@ -15,21 +15,6 @@ class SourceImportBatchRepo:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def create_import_batch(
-        self,
-        *,
-        raw_text: str,
-        parsed_count: int = 0,
-        accepted_count: int = 0,
-        rejected_count: int = 0,
-    ) -> SourceImportBatch:
-        return self.create_batch(
-            raw_text=raw_text,
-            parsed_count=parsed_count,
-            accepted_count=accepted_count,
-            rejected_count=rejected_count,
-        )
-
     def create_batch(
         self,
         *,
@@ -122,14 +107,6 @@ class SourceCandidateRepo:
                 accepted_count += 1
         return rows, accepted_count
 
-    def insert_normalized_draft_candidates(
-        self,
-        *,
-        batch_id: int | None,
-        candidates: list[object],
-    ) -> tuple[list[SourceCandidate], int]:
-        return self.create_draft_candidates(batch_id=batch_id, candidates=candidates)
-
     @staticmethod
     def _read_candidate_value(
         candidate_data: object,
@@ -194,30 +171,6 @@ class SourceCandidateRepo:
             candidate.candidate_type = detected_type
         candidate.validation_details = self._build_validation_details(result)
         candidate.validated_at = datetime.now(UTC)
-        self.session.flush()
-        return candidate
-
-    def update_candidate(
-        self,
-        *,
-        candidate_id: int,
-        raw_input: str | None = None,
-        normalized_url: str | None = None,
-        candidate_type: str | None = None,
-    ) -> SourceCandidate:
-        candidate = self.get_candidate(candidate_id)
-        if candidate is None:
-            raise ValueError(f"source candidate not found: {candidate_id}")
-
-        if normalized_url is not None and normalized_url != candidate.normalized_url:
-            existing = self.find_by_normalized_url(normalized_url)
-            if existing is not None and existing.id != candidate_id:
-                raise ValueError("normalized URL already exists for another candidate")
-            candidate.normalized_url = normalized_url
-        if raw_input is not None:
-            candidate.raw_input = raw_input
-        if candidate_type is not None:
-            candidate.candidate_type = candidate_type
         self.session.flush()
         return candidate
 

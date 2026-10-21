@@ -5,9 +5,7 @@ from datetime import UTC, datetime
 from logging import Logger
 from pathlib import Path
 from queue import Empty
-from typing import Any, cast
-
-from sqlalchemy.orm import Session
+from typing import Any
 
 from app.config.settings import get_settings
 from app.core.ingestion.pipeline import run_fetch_cycle

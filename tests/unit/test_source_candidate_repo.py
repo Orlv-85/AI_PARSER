@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -95,30 +96,11 @@ def test_create_draft_candidates_returns_only_rows_created_for_current_batch() -
     assert stored_rows[0].id == 1
     assert stored_rows[0].batch_id == first_batch.id
 
-
-def test_insert_normalized_draft_candidates_alias_and_required_field_validation() -> None:
-    session = _session()
-    repo = SourceCandidateRepo(session)
-
-    rows, accepted = repo.insert_normalized_draft_candidates(
-        batch_id=None,
-        candidates=[
-            {
-                "raw_input": "https://example.com/feed.xml",
-                "normalized_url": "https://example.com/feed.xml",
-            }
-        ],
-    )
-
-    assert accepted == 1
-    assert [row.normalized_url for row in rows] == ["https://example.com/feed.xml"]
-
-    try:
-        repo.create_draft_candidates(batch_id=None, candidates=[{"raw_input": "https://example.com"}])
-    except ValueError as exc:
-        assert "candidate field is required: normalized_url" in str(exc)
-    else:  # pragma: no cover - exercised when guard is implemented incorrectly
-        raise AssertionError("create_draft_candidates should require normalized_url")
+    with pytest.raises(ValueError, match="candidate field is required: normalized_url"):
+        candidate_repo.create_draft_candidates(
+            batch_id=None,
+            candidates=[{"raw_input": "https://example.com"}],
+        )
 
 
 def test_list_candidates_filters_by_ids_status_and_validation_status() -> None:
@@ -197,46 +179,6 @@ def test_record_validation_result_updates_candidate_and_guards_missing_candidate
         assert "source candidate not found: 999" in str(exc)
     else:  # pragma: no cover
         raise AssertionError("record_validation_result should reject unknown candidates")
-
-
-def test_update_candidate_rejects_missing_candidate_and_duplicate_normalized_url() -> None:
-    session = _session()
-    repo = SourceCandidateRepo(session)
-    batch = SourceImportBatchRepo(session).create_batch(raw_text="seed")
-    first, _ = repo.create_draft_candidate(
-        batch_id=batch.id,
-        raw_input="https://example.com/a",
-        normalized_url="https://example.com/a",
-    )
-    second, _ = repo.create_draft_candidate(
-        batch_id=batch.id,
-        raw_input="https://example.com/b",
-        normalized_url="https://example.com/b",
-    )
-
-    try:
-        repo.update_candidate(candidate_id=999, normalized_url="https://example.com/missing")
-    except ValueError as exc:
-        assert "source candidate not found: 999" in str(exc)
-    else:  # pragma: no cover
-        raise AssertionError("update_candidate should reject unknown candidates")
-
-    try:
-        repo.update_candidate(candidate_id=second.id, normalized_url=first.normalized_url)
-    except ValueError as exc:
-        assert "normalized URL already exists" in str(exc)
-    else:  # pragma: no cover
-        raise AssertionError("update_candidate should reject duplicate normalized_url")
-
-    updated = repo.update_candidate(
-        candidate_id=second.id,
-        raw_input="https://example.com/b-updated",
-        normalized_url="https://example.com/b-updated",
-        candidate_type="html",
-    )
-    assert updated.raw_input == "https://example.com/b-updated"
-    assert updated.normalized_url == "https://example.com/b-updated"
-    assert updated.candidate_type == "html"
 
 
 def test_save_review_update_supports_dict_and_object_inputs() -> None:
