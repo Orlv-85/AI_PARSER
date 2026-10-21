@@ -6,7 +6,8 @@ from math import ceil
 
 from app.core.ingestion.legacy_cleanup import CLEANUP_POLICY, cleanup_verdict
 from app.core.jev import JevAssessment, JevInputTooLarge, JevRelevanceScorer, _probability
-from app.storage.legacy_cleanup import encoded, fingerprint
+from app.core.provider_costs import PRICES
+from app.storage.journal_files import encoded, fingerprint
 
 TAXONOMY_VERSION = "article-topics-2"
 PILOT_VERSION = "reenrich-pilot-1"
@@ -18,8 +19,6 @@ TOPIC_MIN_CONFIDENCE = 0.7
 COMPARISON_MIN_CONFIDENCE = 0.7
 JEV_MODEL = "jev-1.13.0"
 DEEPSEEK_MODEL = "deepseek-flash"
-PRICES = {"jev": {"input": 0.042, "output": 0},
-          "deepseek": {"input": 0.30, "output": 1.20}}
 ENDPOINTS = {"jev": "https://api.typesafe.ai/v1/systemone",
              "deepseek": "https://api.deepseek.com/chat/completions"}
 

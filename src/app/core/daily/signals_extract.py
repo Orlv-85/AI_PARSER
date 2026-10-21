@@ -23,7 +23,7 @@ from app.core.daily.signals_entities import (
     type_group,
     vendor_tokens,
 )
-from app.storage.legacy_cleanup import encoded, fingerprint
+from app.storage.journal_files import encoded, fingerprint
 
 EXTRACTION_VERSION = "daily-signals-extract-5"
 # Oldest first; the evidence set prefers the newest version with an `ok` extraction (Decision 4).

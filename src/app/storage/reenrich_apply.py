@@ -7,13 +7,12 @@ from typing import Any
 from sqlalchemy import String, delete, insert, select, update
 from sqlalchemy.engine import Engine
 
+from app.storage.journal_files import fingerprint, private_write
 from app.storage.legacy_cleanup import (
     _lock,
-    _typed,
     dependencies,
-    fingerprint,
-    private_write,
     read_tables,
+    typed_row,
 )
 from app.storage.models_sql import Base
 
@@ -164,7 +163,8 @@ def apply_reenrichment(  # pylint: disable=too-many-branches
                 select(ledger_table.c.key).where(ledger_table.c.key == row["key"])
             ).scalar_one_or_none()
             if existing is None:
-                connection.execute(insert(ledger_table).values(_typed("admission_decisions", row)))
+                connection.execute(
+                    insert(ledger_table).values(typed_row("admission_decisions", row)))
         articles, aliases = (Base.metadata.tables[n] for n in ("articles", "article_aliases"))
         for article_id, row in backup["after"].items():
             if row is None:
@@ -174,7 +174,7 @@ def apply_reenrichment(  # pylint: disable=too-many-branches
                 connection.execute(
                     update(articles)
                     .where(articles.c.id == int(article_id))
-                    .values(_typed("articles", row))
+                    .values(typed_row("articles", row))
                 )
         if fail_after_write:
             raise RuntimeError("Injected rollback probe")
@@ -191,7 +191,7 @@ def restore_reenrichment(engine: Engine, backup: dict[str, Any]) -> None:
             raise ValueError("Restore refuses changed article rows")
         articles, aliases = (Base.metadata.tables[n] for n in ("articles", "article_aliases"))
         for article_id, row in backup["before"].items():
-            values = _typed("articles", row)
+            values = typed_row("articles", row)
             if backup["after"][article_id] is None:
                 connection.execute(insert(articles).values(values))
             else:
@@ -199,7 +199,7 @@ def restore_reenrichment(engine: Engine, backup: dict[str, Any]) -> None:
                     update(articles).where(articles.c.id == int(article_id)).values(values)
                 )
         for row in backup["aliases"]:
-            connection.execute(insert(aliases).values(_typed("article_aliases", row)))
+            connection.execute(insert(aliases).values(typed_row("article_aliases", row)))
         table = Base.metadata.tables["admission_decisions"]
         for expected in backup["ledger_after"]:
             current = (
@@ -216,5 +216,5 @@ def restore_reenrichment(engine: Engine, backup: dict[str, Any]) -> None:
                 connection.execute(
                     update(table)
                     .where(table.c.key == expected["key"])
-                    .values(_typed("admission_decisions", previous))
+                    .values(typed_row("admission_decisions", previous))
                 )

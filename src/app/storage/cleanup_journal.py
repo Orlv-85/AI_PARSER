@@ -14,7 +14,7 @@ import httpx
 
 from app.core.ingestion.legacy_cleanup import cleanup_verdict
 from app.core.jev import JevRelevanceScorer
-from app.storage.legacy_cleanup import encoded, fingerprint
+from app.storage.journal_files import encoded, fingerprint
 
 INPUT_PRICE_PER_MILLION = 0.042
 MAX_INPUT_TOKENS = 64000

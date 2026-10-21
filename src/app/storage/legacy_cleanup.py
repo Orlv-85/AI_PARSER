@@ -1,7 +1,5 @@
 """Frozen legacy cleanup manifests, dependency guards and targeted transactional restore."""
-import hashlib
 import json
-import os
 import re
 from collections import Counter
 from collections.abc import Mapping
@@ -16,36 +14,9 @@ from app.core.canonicalize import canonicalize_url
 from app.core.ingestion.admission import admission_cache_key
 from app.core.ingestion.legacy_cleanup import CLEANUP_POLICY, article_evidence_hash
 from app.core.ingestion.pipeline import _assessment_from_cached
+from app.storage.journal_files import encoded, fingerprint, private_write, serialize
 from app.storage.models_sql import Base
 from app.storage.non_news_cleanup import EXPORT_TABLES, _reference_ids
-
-
-def _serialize(value: Any) -> str:
-    if isinstance(value, datetime):
-        return value.replace(tzinfo=value.tzinfo or UTC).astimezone(UTC).isoformat()
-    if isinstance(value, date):
-        return value.isoformat()
-    raise TypeError(type(value).__name__)
-
-
-def encoded(value: Any) -> str:
-    return json.dumps(value, sort_keys=True, ensure_ascii=True, default=_serialize)
-
-
-def fingerprint(value: Any) -> str:
-    return hashlib.sha256(encoded(value).encode()).hexdigest()
-
-
-def private_write(path: Path, value: Any) -> None:
-    staged = path.with_suffix(path.suffix + ".next")
-    # The directory must also be private; open creates a protected file immediately.
-    fd = os.open(staged, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    os.fchmod(fd, 0o600)
-    with os.fdopen(fd, "w") as stream:
-        stream.write(encoded(value) + "\n")
-        stream.flush()
-        os.fsync(stream.fileno())
-    os.replace(staged, path)
 
 
 def cache_key(row: dict[str, Any], screening: dict[str, str]) -> str:
@@ -163,7 +134,7 @@ def read_tables(connection: Connection) -> dict[str, Any]:
         select(Base.metadata.tables[name])).mappings()] for name in EXPORT_TABLES}
 
 
-def _typed(name: str, row: dict[str, Any]) -> dict[str, Any]:
+def typed_row(name: str, row: dict[str, Any]) -> dict[str, Any]:
     values = dict(row)
     for column in Base.metadata.tables[name].columns:
         value = values.get(column.name)
@@ -177,7 +148,7 @@ def _typed(name: str, row: dict[str, Any]) -> dict[str, Any]:
 
 def normalize_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     snapshot = dict(snapshot)
-    snapshot["tables"] = {name: [_typed(name, row) for row in rows]
+    snapshot["tables"] = {name: [typed_row(name, row) for row in rows]
                           for name, rows in snapshot["tables"].items()}
     return snapshot
 
@@ -262,7 +233,7 @@ def apply_cleanup(engine: Engine, snapshot: dict[str, Any], manifest: dict[str, 
         private_write(backup_path, backup)
         ledger = Base.metadata.tables["admission_decisions"]
         for row in ledger_after:
-            values = _typed("admission_decisions", row)
+            values = typed_row("admission_decisions", row)
             if row["key"] in ledger_before:
                 connection.execute(update(ledger).where(ledger.c.key == row["key"]).values(values))
             else:
@@ -289,7 +260,7 @@ def _reject_ledger(tables: dict[str, Any], entries: list[dict[str, Any]],
             before[key] = current[key]
         candidate = {"kind": "article", "title": row["title"], "url": row["url"],
                      "canonical_url": row["url_canonical"], "summary": row["summary"],
-                     "content": row["content"], "published_at": _serialize(row["published_at"])
+                     "content": row["content"], "published_at": serialize(row["published_at"])
                      if isinstance(row["published_at"], datetime) else row["published_at"],
                      "publication_date_kind": "unknown"}
         after[key] = {**current.get(key, {}), "key": key,
@@ -331,7 +302,7 @@ def restore_cleanup(engine: Engine, backup: dict[str, Any]) -> None:
                     if fingerprint(dict(current)) != fingerprint(row):
                         raise ValueError("Restore conflict: " + name)
                 else:
-                    connection.execute(insert(table).values(_typed(name, row)))
+                    connection.execute(insert(table).values(typed_row(name, row)))
         table = Base.metadata.tables["admission_decisions"]
         for expected in backup["ledger_after"]:
             current = connection.execute(
@@ -350,6 +321,6 @@ def restore_cleanup(engine: Engine, backup: dict[str, Any]) -> None:
                 raise ValueError("Restore conflict: changed admission decision")
             if previous:
                 connection.execute(update(table).where(table.c.key == expected["key"]).values(
-                    _typed("admission_decisions", previous)))
+                    typed_row("admission_decisions", previous)))
             else:
                 connection.execute(delete(table).where(table.c.key == expected["key"]))

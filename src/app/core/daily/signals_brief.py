@@ -12,7 +12,7 @@ from typing import Any
 
 from app.core.daily.signals_entities import QUOTES
 from app.core.daily.signals_extract import GROUNDING
-from app.storage.legacy_cleanup import encoded, fingerprint
+from app.storage.journal_files import encoded, fingerprint
 
 BRIEF_VERSION = "daily-signals-brief-3"
 MAX_OUTPUT = 900

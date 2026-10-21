@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from app.storage.legacy_cleanup import fingerprint
+from app.storage.journal_files import fingerprint
 from app.storage.reenrich_apply import article_with_defaults, verify_manifest
 
 

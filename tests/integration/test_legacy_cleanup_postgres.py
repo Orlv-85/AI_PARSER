@@ -15,11 +15,11 @@ from app.core.ingestion.pipeline import AdmissionState, _screen_candidate
 from app.core.jev import JevAssessment
 from app.storage.admission import list_pending, upsert_pending
 from app.storage.article_repo import ArticleRepo
+from app.storage.journal_files import fingerprint
 from app.storage.legacy_cleanup import (
     apply_cleanup,
     build_manifest,
     cache_key,
-    fingerprint,
     read_tables,
     restore_cleanup,
 )
