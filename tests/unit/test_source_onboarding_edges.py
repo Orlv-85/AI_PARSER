@@ -7,7 +7,9 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.core.sources import candidates as source_candidates
 from app.core.sources import onboarding as source_onboarding
+from app.core.sources import validation as source_validation
 from app.storage.models_sql import Base, Source
 
 
@@ -18,7 +20,7 @@ def _session():
 
 
 def test_group_candidate_overlaps_skips_missing_host_and_singletons() -> None:
-    groups = source_onboarding.group_candidate_overlaps(
+    groups = source_candidates.group_candidate_overlaps(
         [
             {"id": 1, "normalized_url": "http:///path-only", "candidate_type": "html"},
             {"id": 2, "normalized_url": "https://solo.example.com/blog", "candidate_type": "html"},
@@ -29,7 +31,7 @@ def test_group_candidate_overlaps_skips_missing_host_and_singletons() -> None:
 
 
 def test_group_candidate_overlaps_covers_no_overlap_hosts_and_revisited_pending_nodes() -> None:
-    no_overlap = source_onboarding.group_candidate_overlaps(
+    no_overlap = source_candidates.group_candidate_overlaps(
         [
             {"id": 1, "normalized_url": "https://example.com/alpha", "candidate_type": "html"},
             {"id": 2, "normalized_url": "https://example.com/beta", "candidate_type": "html"},
@@ -37,7 +39,7 @@ def test_group_candidate_overlaps_covers_no_overlap_hosts_and_revisited_pending_
     )
     assert not no_overlap
 
-    groups = source_onboarding.group_candidate_overlaps(
+    groups = source_candidates.group_candidate_overlaps(
         [
             {"id": 1, "normalized_url": "https://example.com/blog", "candidate_type": "html"},
             {"id": 2, "normalized_url": "https://example.com/blog/post", "candidate_type": "html"},
@@ -251,42 +253,42 @@ def test_source_onboarding_lookup_and_value_helpers() -> None:
     )
 
     with pytest.raises(ValueError, match="candidate field is required: normalized_url"):
-        source_onboarding._candidate_value({}, "normalized_url")
+        source_candidates._candidate_value({}, "normalized_url")
 
 
 def test_source_onboarding_path_and_reason_helpers() -> None:
-    assert source_onboarding._is_search_wrapper(
+    assert source_candidates._is_search_wrapper(
         hostname="bing.com",
         path="/url",
         query="q=https://example.com",
     ) is False
-    assert source_onboarding._is_search_wrapper(
+    assert source_candidates._is_search_wrapper(
         hostname="google.com",
         path="/other",
         query="q=https://example.com",
     ) is True
-    assert source_onboarding._is_search_wrapper_url(
+    assert source_candidates._is_search_wrapper_url(
         "https://www.google.com/search?q=https://example.com/blog"
     ) is True
 
-    assert source_onboarding._normalized_path("https://example.com/blog/") == "/blog"
-    assert source_onboarding._normalized_path("https://example.com") == "/"
-    assert source_onboarding._path_segments("https://example.com") == []
-    assert source_onboarding._path_segments("https://example.com/a/b") == ["a", "b"]
+    assert source_candidates._normalized_path("https://example.com/blog/") == "/blog"
+    assert source_candidates._normalized_path("https://example.com") == "/"
+    assert source_candidates._path_segments("https://example.com") == []
+    assert source_candidates._path_segments("https://example.com/a/b") == ["a", "b"]
 
-    assert source_onboarding._is_strict_path_prefix("/blog", "/blog") is False
-    assert source_onboarding._is_strict_path_prefix("/", "/blog") is False
-    assert source_onboarding._is_root_family_path("/") is True
+    assert source_candidates._is_strict_path_prefix("/blog", "/blog") is False
+    assert source_candidates._is_strict_path_prefix("/", "/blog") is False
+    assert source_candidates._is_root_family_path("/") is True
     assert (
-        source_onboarding._overlap_reason(
+        source_candidates._overlap_reason(
             {"normalized_url": "https://example.com/blog", "candidate_type": "html"},
             {"normalized_url": "https://example.com/news", "candidate_type": "html"},
         )
         == "same_host_family"
     )
 
-    flagged = source_onboarding._batch_flag_reason(
-        source_onboarding.NormalizedSourceCandidate(
+    flagged = source_candidates._batch_flag_reason(
+        source_candidates.NormalizedSourceCandidate(
             raw_input="https://www.infoq.com/news",
             normalized_url="https://www.infoq.com/news",
             candidate_type="html",
@@ -294,20 +296,20 @@ def test_source_onboarding_path_and_reason_helpers() -> None:
     )
     assert flagged == "broad_media_page"
 
-    assert source_onboarding._batch_output_url(
+    assert source_candidates._batch_output_url(
         raw_input="https://example.com/blog/",
         normalized_url="https://example.com/blog",
     ) == "https://example.com/blog/"
-    assert source_onboarding._prefer_reason("same_host_family", "same_host_path_prefix") == (
+    assert source_candidates._prefer_reason("same_host_family", "same_host_path_prefix") == (
         "same_host_path_prefix"
     )
-    assert source_onboarding._prefer_reason("same_host_path_prefix", "same_host_family") == (
+    assert source_candidates._prefer_reason("same_host_path_prefix", "same_host_family") == (
         "same_host_path_prefix"
     )
 
 
 def test_source_onboarding_picker_and_ingest_helpers(monkeypatch) -> None:
-    chosen = source_onboarding._pick_preferred_candidate(
+    chosen = source_candidates._pick_preferred_candidate(
         [
             {
                 "id": 2,
@@ -317,7 +319,7 @@ def test_source_onboarding_picker_and_ingest_helpers(monkeypatch) -> None:
             {"id": 1, "normalized_url": "https://example.com/feed.xml", "candidate_type": "rss"},
         ]
     )
-    assert source_onboarding._candidate_value(chosen, "id") == "1"
+    assert source_candidates._candidate_value(chosen, "id") == "1"
 
     calls: dict[str, object] = {}
 
@@ -334,33 +336,33 @@ def test_source_onboarding_picker_and_ingest_helpers(monkeypatch) -> None:
             calls["fetch_text"] = (source_id, url)
             return "<html>body</html>"
 
-    monkeypatch.setattr(source_onboarding, "Fetcher", _Fetcher)
+    monkeypatch.setattr(source_validation, "Fetcher", _Fetcher)
     monkeypatch.setattr(
-        source_onboarding,
+        source_validation,
         "fetch_rss_with_metadata",
         lambda **kwargs: {"entries": [kwargs["url"]]},
     )
     monkeypatch.setattr(
-        source_onboarding,
+        source_validation,
         "extract_links_from_html",
         lambda **kwargs: [kwargs["base_url"]],
     )
 
-    feed_payload = source_onboarding._fetch_feed_with_ingest("https://example.com/feed.xml")
+    feed_payload = source_validation._fetch_feed_with_ingest("https://example.com/feed.xml")
     assert feed_payload == {"entries": ["https://example.com/feed.xml"]}
 
-    html_payload = source_onboarding._fetch_html_with_ingest("https://example.com/html")
+    html_payload = source_validation._fetch_html_with_ingest("https://example.com/html")
     assert html_payload == "<html>body</html>"
     assert calls["fetch_text"] == ("source-onboarding-validation", "https://example.com/html")
 
-    links = source_onboarding._extract_links_with_ingest("<html/>", "https://example.com/html")
+    links = source_validation._extract_links_with_ingest("<html/>", "https://example.com/html")
     assert links == ["https://example.com/html"]
 
-    assert source_onboarding._extract_feed_entries({"entries": [1, 2]}) == [1, 2]
-    assert source_onboarding._extract_feed_entries([1, 2]) == [1, 2]
-    assert source_onboarding._extract_feed_entries(SimpleNamespace(entries=[3, 4])) == [3, 4]
-    assert source_onboarding._extract_feed_entries(SimpleNamespace(items=[5, 6])) == [5, 6]
-    assert source_onboarding._extract_feed_entries(SimpleNamespace(items=lambda: [7])) == []
+    assert source_validation._extract_feed_entries({"entries": [1, 2]}) == [1, 2]
+    assert source_validation._extract_feed_entries([1, 2]) == [1, 2]
+    assert source_validation._extract_feed_entries(SimpleNamespace(entries=[3, 4])) == [3, 4]
+    assert source_validation._extract_feed_entries(SimpleNamespace(items=[5, 6])) == [5, 6]
+    assert source_validation._extract_feed_entries(SimpleNamespace(items=lambda: [7])) == []
 
-    assert source_onboarding._format_validation_error(RuntimeError("boom")) == "RuntimeError: boom"
-    assert source_onboarding._format_validation_error(RuntimeError()) == "RuntimeError"
+    assert source_validation._format_validation_error(RuntimeError("boom")) == "RuntimeError: boom"
+    assert source_validation._format_validation_error(RuntimeError()) == "RuntimeError"

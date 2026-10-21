@@ -7,7 +7,7 @@ from app.core.sources.onboarding import review_source_candidate
 from app.storage.models_sql import Base, Source
 from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
 from app.storage.source_repo import SourceRepo
-from app.web.service import SourceOnboardingService
+from app.web.source_onboarding import SourceOnboardingService
 
 
 def _build_session():
@@ -345,7 +345,7 @@ def test_source_onboarding_service_disable_requires_approved_source_id(monkeypat
             },
         )()
 
-    monkeypatch.setattr("app.web.service.review_source_candidate", _review_source_candidate)
+    monkeypatch.setattr("app.web.source_onboarding.review_source_candidate", _review_source_candidate)
 
     try:
         service.disable_candidate(11)

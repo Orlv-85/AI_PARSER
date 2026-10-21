@@ -8,11 +8,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.concurrency import run_in_threadpool
 
-from app.core.sources.onboarding import (
-    import_source_candidates,
-    review_candidate_overlaps,
-    run_source_validation_batch,
-)
+from app.core.sources.onboarding import import_source_candidates, review_candidate_overlaps
+from app.core.sources.validation import run_source_validation_batch
 from app.storage.models_sql import Base
 from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
 from app.web.models import (
@@ -28,7 +25,7 @@ from app.web.models import (
     SourceOnboardingRejectResponse,
 )
 from app.web.routes import WebDeps
-from app.web.service import SourceOnboardingService
+from app.web.source_onboarding import SourceOnboardingService
 
 _SOURCE_ONBOARDING_OVERLAP_BATCH_QUERY = Query(None, ge=1)
 _SOURCE_ONBOARDING_OVERLAP_CANDIDATE_QUERY = Query(default=[])

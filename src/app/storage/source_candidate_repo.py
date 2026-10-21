@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.storage.models_sql import SourceCandidate, SourceImportBatch
 
 if TYPE_CHECKING:
-    from app.core.sources.onboarding import CandidateOverlapGroup
+    from app.core.sources.candidates import CandidateOverlapGroup
 
 
 class SourceImportBatchRepo:
@@ -254,7 +254,7 @@ class SourceCandidateRepo:
         batch_id: int | None = None,
         candidate_ids: list[int] | None = None,
     ) -> list[CandidateOverlapGroup]:
-        from app.core.sources.onboarding import (  # pylint: disable=import-outside-toplevel
+        from app.core.sources.candidates import (  # pylint: disable=import-outside-toplevel
             group_candidate_overlaps,
         )
 

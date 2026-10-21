@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config.settings import Settings
-from app.core.sources.onboarding import normalize_candidate_url
+from app.core.sources.candidates import normalize_candidate_url
 from app.core.sources.review import (
     SourceReviewer,
     evidence_fingerprint,
@@ -18,7 +18,7 @@ from app.core.sources.review import (
 )
 from app.storage.models_sql import Source, SourceCandidate, SourceImportBatch
 from app.storage.source_candidate_repo import SourceCandidateRepo
-from app.web.service import SourceOnboardingService
+from app.web.source_onboarding import SourceOnboardingService
 
 
 def _url_key(url: str) -> str:

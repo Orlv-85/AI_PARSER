@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from app.core.sources.onboarding import (
+from app.core.sources.candidates import (
     extract_candidate_urls,
     normalize_candidate_url,
     parse_source_candidates,

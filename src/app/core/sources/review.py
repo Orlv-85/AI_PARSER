@@ -12,7 +12,7 @@ import httpx
 from lxml import html as lxml_html
 
 from app.config.settings import Settings
-from app.core.sources.onboarding import normalize_candidate_url
+from app.core.sources.candidates import normalize_candidate_url
 from app.ingest.fetcher import DEFAULT_USER_AGENT
 
 _MAX_RESPONSE_BYTES = 1_000_000

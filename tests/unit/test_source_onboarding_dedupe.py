@@ -1,17 +1,17 @@
 from types import SimpleNamespace
 
-from app.core.sources import onboarding as source_onboarding
+from app.core.sources import candidates as source_candidates
 
 
 def _require_overlap_api():
     assert hasattr(
-        source_onboarding,
+        source_candidates,
         "group_candidate_overlaps",
     ), (
         "Phase 2 overlap grouping API missing: "
-        "app.core.sources.onboarding.group_candidate_overlaps"
+        "app.core.sources.candidates.group_candidate_overlaps"
     )
-    return source_onboarding.group_candidate_overlaps
+    return source_candidates.group_candidate_overlaps
 
 
 def _value(container, key: str):

@@ -679,7 +679,7 @@ def cmd_db_review(args: argparse.Namespace) -> int:
 def cmd_db_validate(args: argparse.Namespace) -> int:
     ensure_src_path()
 
-    from app.core.sources.onboarding import run_source_validation_batch
+    from app.core.sources.validation import run_source_validation_batch
 
     candidate_ids = db_ids_arg(args.ids)
     if args.batch_id is None and not candidate_ids:

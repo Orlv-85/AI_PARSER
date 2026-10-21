@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.core.sources import onboarding as source_onboarding
+from app.core.sources import candidates as source_candidates
 
 
 def _fixture_text() -> str:
@@ -19,13 +19,13 @@ def _fixture_urls() -> list[str]:
 
 def _require_batch_rule_api():
     assert hasattr(
-        source_onboarding,
+        source_candidates,
         "classify_candidate_batch",
     ), (
         "Phase 5 batch classification API missing: "
-        "app.core.sources.onboarding.classify_candidate_batch"
+        "app.core.sources.candidates.classify_candidate_batch"
     )
-    return source_onboarding.classify_candidate_batch
+    return source_candidates.classify_candidate_batch
 
 
 def _lookup(container, key: str):
