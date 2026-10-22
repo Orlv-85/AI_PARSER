@@ -5,6 +5,8 @@ covers:
   - src/app/core/ingestion/admission.py
   - src/app/core/ingestion/scoring.py
   - src/app/core/canonicalize.py
+  - src/app/core/jev.py
+  - src/app/storage/reenrich_pilot_journal.py
   - src/app/storage/admission.py
   - src/app/ingest/*.py
 -->
@@ -244,8 +246,28 @@ function. Each rule lists the tests that check it.
   again. Tests: `test_admission_and_cache_all_ingestion_paths`, `test_cache_key_changes_with_prompt_version`,
   `test_ambiguity_cached_category_independent_and_policy_invalidates`,
   `test_corrupt_accept_cache_requires_new_assessment`, `test_canonical_aliases_share_decision`.
-- Screening unavailable (provider error, timeout, invalid admission answer): no more Jev calls,
-  the run pauses. Accepted articles of the current source are kept, the rest of its candidates
+- With the daily admission journal (`daily_enrichment_enabled`), a transport failure of a Jev call
+  (timeout or dropped connection: the error types accepted by
+  `PilotJournal.review_transport_failure`; per-request timeout `jev_timeout_seconds`) keeps its
+  reservation, is reviewed with `ADMISSION_TRANSPORT_REVIEW_REASON` and retried once after
+  `ADMISSION_TRANSPORT_RETRY_DELAYS`. The path without a journal is unchanged. Tests:
+  `test_admission_timeout_is_retried_once_without_pausing`.
+- If the retry also fails, that candidate is unresolved: it stays `pending` (replayed by the next
+  run like any pending candidate), no decision is cached, the run goes on with the next candidate.
+  Only `ADMISSION_CONSECUTIVE_TRANSPORT_LIMIT` such candidates in a row (no successful Jev answer
+  between them) pause the run. A successful answer resets the count. Tests:
+  `test_admission_timeout_twice_holds_only_that_candidate`,
+  `test_admission_consecutive_timeouts_pause_run`, `test_admission_success_resets_timeout_count`.
+- A candidate whose retries were already exhausted by an earlier run of the same UTC day is held
+  the same way without sending a request and does not count toward the limit. Tests:
+  `test_exhausted_candidate_from_earlier_run_is_held_without_request`.
+- A failed row left by an older version (no review) is reviewed when the scorer opens the journal
+  (`PilotJournal.review_failed_transports`, so it cannot block other candidates) and retried the
+  same way. Tests:
+  `test_failed_admission_row_from_older_version_is_retried`.
+- Screening unavailable (provider error: HTTP error answer such as 5xx after the journal's overload
+  retries, auth error; invalid admission answer; or `ADMISSION_CONSECUTIVE_TRANSPORT_LIMIT`
+  transport failures in a row): no more Jev calls, the run pauses. Accepted articles of the current source are kept, the rest of its candidates
   stay `pending`, its validators are cleared, later sources are not fetched, the notice is set.
   Tests: `test_provider_failure_stops_all_further_requests`, `test_malformed_admission_pauses_even_with_valid_category`,
   `test_outage_preserves_verified_and_replays_after_list_rotation`.
@@ -304,6 +326,7 @@ function. Each rule lists the tests that check it.
 | --- | --- |
 | Conditional requests; 304 is a successful no-op | repeated polling of unchanged sources was the largest avoidable cost (002 US2) |
 | Conditional HTML list fetch off by default | optional last rollout slice; risky optimizations stay behind flags with conservative defaults (002 plan); decided 2026-10-20 (agent): keep off, two-stage dedup already skips known links, a 304 saves only one list request |
+| A transport failure holds one candidate, not the day | one timeout paused collection for the whole UTC day (incident 2026-10-22); a timeout says nothing about the article, the candidate stays pending and is replayed. A provider error (5xx, auth) or 5 timeouts in a row mean the service is down, so the run pauses (owner, 2026-10-22). One retry after 10 s, timeout 5 s: 3 s was too tight; 3938 journal calls 2026-10-12..22 all took 2 s or less |
 | Two-stage HTML: dedup before article download | article download and extraction dominated run time on HTML sources (002 US3) |
 | Known-streak early stop for RSS and HTML | skip reprocessing of known items; risk of missing a late new link accepted (002 risks) |
 | Batch upsert behind a flag, off by default | fewer DB round trips; enabled only after the network changes proved stable (002 rollout) |

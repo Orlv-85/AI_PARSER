@@ -12,7 +12,12 @@ from app.config.settings import Settings
 from app.config.sources import SourceConfig
 from app.core.canonicalize import canonical_url_hash
 from app.core.ingestion.pipeline import PENDING_REPLAY_LIMIT, run_fetch_cycle
-from app.core.jev import JevRelevanceScorer
+from app.core.jev import (
+    ADMISSION_CONSECUTIVE_TRANSPORT_LIMIT,
+    ADMISSION_TRANSPORT_RETRY_DELAYS,
+    ADMISSION_TRANSPORT_REVIEW_REASON,
+    JevRelevanceScorer,
+)
 from app.core.models import Article
 from app.ingest.html import HtmlListPageResult, fetch_html_article
 from app.ingest.rss import RssFetchResult, _with_rss_metadata
@@ -163,6 +168,158 @@ def test_oversized_journal_input_stays_pending_without_pausing_other_articles(
     assert not any(row.paused for row in scenario.rows(CollectionStatus))
     scenario.run()
     assert len(requests) == 2
+
+
+class AdmissionRig:
+    """Daily admission journal over a mock Jev.
+
+    `behavior(title, n)` returns None (answer), "timeout" or an HTTP status.
+    """
+
+    def __init__(self, scenario, tmp_path, monkeypatch, behavior, *, reviewed=True):
+        self.behavior, self.reviewed, self.path = behavior, reviewed, tmp_path / "journal.sqlite3"
+        self.titles, self.sleeps, self.reports, self.scorers = [], [], [], []
+        scenario.settings.daily_enrichment_enabled = True
+        monkeypatch.setattr("app.storage.reenrich_pilot_journal.time.sleep", self.sleeps.append)
+        monkeypatch.setattr("app.core.ingestion.pipeline.jev_relevance_scorer", self.scorer)
+
+    def attempts(self, title):
+        return self.titles.count(title)
+
+    @contextmanager
+    def scorer(self, *_args):
+        def respond(request):
+            title = json.loads(request.content)["state"].splitlines()[0][7:]
+            self.titles.append(title)
+            outcome = self.behavior(title, self.attempts(title))
+            if outcome == "timeout":
+                raise httpx.ReadTimeout("timed out", request=request)
+            if outcome is not None:
+                return httpx.Response(outcome)
+            return httpx.Response(200, json={"model": "jev-1.13.0",
+                "usage": {"input_tokens": 100}, "answers": {
+                    "ai_relevant": {"noul": 0.99},
+                    "admission": {"choice": "accepted_ai_editorial", "confidence": 0.99},
+                    "category": {"choice": "AI Coding", "confidence": 0.99},
+                    "comparison": {"choice": "NotComparison", "confidence": 0.99}}})
+
+        extra = {"transport_review_reason": ADMISSION_TRANSPORT_REVIEW_REASON,
+                 "transport_retry_delays": ADMISSION_TRANSPORT_RETRY_DELAYS
+                 } if self.reviewed else {}
+        journal = PilotJournal(self.path, {"version": "test"},
+                               {"total": "2", "jev": "1", "deepseek": "1"}, **extra)
+        with httpx.Client(transport=httpx.MockTransport(respond),
+                          headers={"Authorization": "Bearer test-key"}) as client:
+            scorer = JevRelevanceScorer(client, "jev-1.13.0", getLogger("semantic-test"),
+                semantic_admission_enabled=True, daily_enrichment_enabled=True,
+                payment_journal=journal)
+            self.scorers.append(scorer)
+            yield scorer
+        self.reports.append(journal.report()["providers"]["jev"])
+        journal.close()
+
+
+def add_items(scenario, total):
+    scenario.items = [Article(
+        source_key="s1", title=story_title(i), url=f"https://example.com/story-{i}",
+        published_at=datetime(2026, 10, 4, 12, tzinfo=UTC),
+        summary=f"Study {i}", content=f"AI is central in research {i}.",
+    ) for i in range(1, total + 1)]
+
+
+def story_title(index):
+    return f"AI research release {index}"
+
+
+def test_admission_timeout_is_retried_once_without_pausing(tmp_path, monkeypatch):
+    scenario = Scenario(tmp_path, monkeypatch, "rss", False)
+    rig = AdmissionRig(scenario, tmp_path, monkeypatch,
+                       lambda name, n: "timeout" if name == story_title(1) and n == 1 else None)
+    result = scenario.run()
+    assert result.new == 3 and result.screening_paused == 0
+    assert rig.sleeps == [10]
+    assert rig.attempts(story_title(1)) == 2
+    assert rig.reports[0]["states"] == {"reviewed_transport": 1, "response": 3}
+    assert not any(row.paused for row in scenario.rows(CollectionStatus))
+
+
+def test_admission_timeout_twice_holds_only_that_candidate(tmp_path, monkeypatch):
+    scenario = Scenario(tmp_path, monkeypatch, "rss", False)
+    rig = AdmissionRig(scenario, tmp_path, monkeypatch,
+                       lambda name, _n: "timeout" if name == story_title(1) else None)
+    result = scenario.run()
+    assert result.new == 2 and result.screening_paused == 0
+    assert result.semantic_unresolved == 1
+    assert rig.attempts(story_title(1)) == 2
+    assert not any(row.paused for row in scenario.rows(CollectionStatus))
+    pending = [row for row in scenario.rows(AdmissionDecision) if row.provider_status == "pending"]
+    assert len(pending) == 1
+    assert json.loads(pending[0].payload)["candidate"]["url"] == str(scenario.items[0].url)
+    assert len([row for row in scenario.rows(AdmissionDecision)
+                if row.decision == "accept"]) == 2
+
+
+def test_admission_consecutive_timeouts_pause_run(tmp_path, monkeypatch):
+    scenario = Scenario(tmp_path, monkeypatch, "rss", False)
+    add_items(scenario, ADMISSION_CONSECUTIVE_TRANSPORT_LIMIT + 2)
+    rig = AdmissionRig(scenario, tmp_path, monkeypatch, lambda _name, _n: "timeout")
+    result = scenario.run()
+    assert result.screening_paused == 1
+    assert scenario.rows(CollectionStatus)[0].paused
+    assert len(rig.titles) == 2 * ADMISSION_CONSECUTIVE_TRANSPORT_LIMIT
+    assert len(set(rig.titles)) == ADMISSION_CONSECUTIVE_TRANSPORT_LIMIT
+
+
+def test_admission_success_resets_timeout_count(tmp_path, monkeypatch):
+    limit = ADMISSION_CONSECUTIVE_TRANSPORT_LIMIT
+    scenario = Scenario(tmp_path, monkeypatch, "rss", False)
+    add_items(scenario, 2 * (limit - 1) + 1)
+    timeouts = {story_title(i) for i in range(1, limit)}
+    timeouts |= {story_title(i) for i in range(limit + 1, 2 * limit)}
+    rig = AdmissionRig(scenario, tmp_path, monkeypatch,
+                       lambda name, _n: "timeout" if name in timeouts else None)
+    result = scenario.run()
+    assert result.screening_paused == 0
+    assert result.semantic_unresolved == 2 * (limit - 1)
+    assert not any(row.paused for row in scenario.rows(CollectionStatus))
+    assert rig.scorers[0].consecutive_transport_failures == limit - 1
+
+
+def test_exhausted_candidate_from_earlier_run_is_held_without_request(tmp_path, monkeypatch):
+    scenario = Scenario(tmp_path, monkeypatch, "rss", False)
+    rig = AdmissionRig(scenario, tmp_path, monkeypatch,
+                       lambda name, _n: "timeout" if name == story_title(1) else None)
+    scenario.run()
+    assert rig.attempts(story_title(1)) == 2
+    second = scenario.run()
+    assert rig.attempts(story_title(1)) == 2
+    assert second.screening_paused == 0
+    assert rig.scorers[1].consecutive_transport_failures == 0
+    pending = [row for row in scenario.rows(AdmissionDecision) if row.provider_status == "pending"]
+    assert len(pending) == 1
+
+
+def test_failed_admission_row_from_older_version_is_retried(tmp_path, monkeypatch):
+    scenario = Scenario(tmp_path, monkeypatch, "rss", False)
+    old = AdmissionRig(
+        scenario, tmp_path, monkeypatch,
+        lambda name, _n: "timeout" if name == story_title(1) else None, reviewed=False)
+    assert scenario.run().screening_paused == 1
+    assert old.reports[0]["states"] == {"failed": 1}
+    healthy = AdmissionRig(scenario, tmp_path, monkeypatch, lambda _name, _n: None)
+    result = scenario.run()
+    assert result.screening_paused == 0 and result.new == 3
+    assert healthy.reports[0]["states"].get("reviewed_transport") == 1
+    assert not any(row.paused for row in scenario.rows(CollectionStatus))
+
+
+def test_admission_server_error_still_pauses_at_once(tmp_path, monkeypatch):
+    scenario = Scenario(tmp_path, monkeypatch, "rss", False)
+    rig = AdmissionRig(scenario, tmp_path, monkeypatch, lambda _name, _n: 500)
+    result = scenario.run()
+    assert result.screening_paused == 1
+    assert scenario.rows(CollectionStatus)[0].paused
+    assert len(rig.titles) == 1
 
 
 @pytest.mark.parametrize("batch", [False, True])
