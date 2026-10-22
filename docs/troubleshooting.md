@@ -146,6 +146,19 @@ the Troubleshooting section of `README.md`.
       "cause": "BSD join (macOS) stops option parsing at the first file name; GNU join accepts options after the files.",
       "fix": "Put all join options before the two file names.",
       "verification": "Rerun on macOS: per-table restored vs prod counts printed, all 29 tables equal."
+    },
+    {
+      "id": "admission-jev-timeout-pauses-day",
+      "date": "2026-10-22",
+      "area": "news collection (nightly fetch, Jev admission)",
+      "symptom": "The site shows the paused-collection notice; the fetch log has `jev_screening_unavailable error_type=PilotStopped` after only a few sources, and every later run of the same UTC day stops the same way.",
+      "evidence": [
+        "data/daily-admission/2026-10-22/journal.sqlite3: one jev call state=failed, error_type=ReadTimeout (billing unknown)",
+        "logs/daily-fetch.log run 20261022010003 (prod v0.1.114): 3 sources processed"
+      ],
+      "cause": "One Jev request hit the per-request timeout (httpx.ReadTimeout, AINEWS_JEV_TIMEOUT_SECONDS=3). The admission journal was created without transport_review_reason, so the failed row blocked the next dispatch with PilotStopped and the run paused for the whole day.",
+      "fix": "src/app/core/jev.py passes ADMISSION_TRANSPORT_REVIEW_REASON and ADMISSION_TRANSPORT_RETRY_DELAYS to the admission journal: a timeout is retried once; if it fails again the candidate stays pending and the run goes on. ADMISSION_CONSECUTIVE_TRANSPORT_LIMIT such candidates in a row, a provider error or an invalid answer still pause. Jev timeout default is now 5 s. A failed row left by the old version is reviewed and retried automatically.",
+      "verification": "tests/unit/test_semantic_admission_pipeline.py: test_admission_timeout_is_retried_once_without_pausing, test_admission_timeout_twice_holds_only_that_candidate, test_admission_consecutive_timeouts_pause_run, test_admission_success_resets_timeout_count, test_exhausted_candidate_from_earlier_run_is_held_without_request, test_failed_admission_row_from_older_version_is_retried, test_admission_server_error_still_pauses_at_once."
     }
   ]
 }

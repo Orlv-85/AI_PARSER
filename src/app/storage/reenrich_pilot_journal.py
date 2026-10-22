@@ -26,6 +26,14 @@ class PilotStopped(RuntimeError):
     """No further paid requests may be dispatched."""
 
 
+class TransportAttemptsExhausted(ValueError):
+    """Every reviewed transport attempt failed; `dispatched` tells if this call sent one."""
+
+    def __init__(self, message, dispatched=False):
+        super().__init__(message)
+        self.dispatched = dispatched
+
+
 def priced_usage(provider, data):
     usage = data.get("usage") if isinstance(data, dict) else None
     if not isinstance(usage, dict):
@@ -142,6 +150,14 @@ class PilotJournal:
             self.db.rollback()
             raise
 
+    def review_failed_transports(self):
+        """Review every failed transport row that has no review yet; return how many."""
+        if not self.transport_review_reason:
+            return 0
+        keys = [row[0] for row in self.db.execute("SELECT key FROM calls WHERE state='failed'")]
+        return sum(self.review_transport_failure(key, self.transport_review_reason)
+                   for key in keys)
+
     def _attempt(self, request):
         """Return (key, saved, attempt, parent) of the first unresolved attempt in the chain."""
         key, attempt, parent = request, 1, None
@@ -160,7 +176,8 @@ class PilotJournal:
             if not self.db.execute("SELECT 1 FROM reviews WHERE key=?", (key,)).fetchone():
                 raise PilotStopped("transport_review_provenance_missing")
             if attempt > len(self.transport_retry_delays):
-                raise ValueError("Reviewed transport attempts exhausted; result unresolved")
+                raise TransportAttemptsExhausted(
+                    "Reviewed transport attempts exhausted; result unresolved")
             # request_attempts links each attempt to the next one (request -> 2 -> 3).
             following = self.db.execute("SELECT attempt_key FROM request_attempts "
                                         "WHERE request_key=?", (key,)).fetchone()
@@ -264,6 +281,14 @@ class PilotJournal:
             self.db.execute("UPDATE calls SET state='response' WHERE key=?", (key,))
         return True
 
+    def _retry_after_failure(self, provider, body, client, secret, before_dispatch):
+        """Retry after a reviewed transport failure; exhaustion here follows our own request."""
+        try:
+            return self.call(provider, body, client, secret, before_dispatch=before_dispatch)
+        except TransportAttemptsExhausted as exhausted:
+            exhausted.dispatched = True
+            raise
+
     def call(self, provider, body, client, secret, *, before_dispatch=None):
         request = self.key_function(provider, body)
         key, saved, attempt, parent = self._attempt(request)
@@ -294,7 +319,7 @@ class PilotJournal:
             self.fail(key, type(exc).__name__)
             if self.transport_review_reason and self.review_transport_failure(
                     key, self.transport_review_reason):
-                return self.call(provider, body, client, secret, before_dispatch=before_dispatch)
+                return self._retry_after_failure(provider, body, client, secret, before_dispatch)
             raise PilotStopped("provider_outage_unknown_billing") from None
         data = _json_or_none(response)
         actual = priced_usage(provider, data)

@@ -14,6 +14,12 @@ from app.core.categories import CATEGORY_CRITERIA
 from app.core.daily.rubric import QUESTIONS
 from app.core.models import Article
 
+ADMISSION_TRANSPORT_REVIEW_REASON = (
+    "daily-admission: transport failure, conservative reservation kept"
+)
+ADMISSION_TRANSPORT_RETRY_DELAYS = (10,)
+ADMISSION_CONSECUTIVE_TRANSPORT_LIMIT = 5
+
 
 @dataclass(frozen=True)
 class JevAssessment:
@@ -69,11 +75,15 @@ class JevRelevanceScorer:  # pylint: disable=too-many-instance-attributes
         self.logger = logger
         self.failed = False
         self.input_held = False
+        self.consecutive_transport_failures = 0
         self.cache: dict[str, JevAssessment] = {}
         self.category_min_confidence = category_min_confidence
         self.semantic_admission_enabled = semantic_admission_enabled
         self.daily_enrichment_enabled = daily_enrichment_enabled
         self.payment_journal = payment_journal
+        if payment_journal is not None and payment_journal.transport_review_reason:
+            # A failed row of an older version would block every other candidate's reservation.
+            payment_journal.review_failed_transports()
 
     def score(self, article: Article) -> float | None:
         assessment = self.classify(article)
@@ -143,6 +153,8 @@ class JevRelevanceScorer:  # pylint: disable=too-many-instance-attributes
             return None
         if state in self.cache:
             return self.cache[state]
+        journal_module = import_module("app.storage.reenrich_pilot_journal")
+        exhausted_error = journal_module.TransportAttemptsExhausted
         try:
             body = {"model": self.model, "state": state, "questions": self.questions()}
             if self.payment_journal is not None:
@@ -157,9 +169,13 @@ class JevRelevanceScorer:  # pylint: disable=too-many-instance-attributes
             admission_choice, admission_confidence = (None, None)
             if self.semantic_admission_enabled:
                 admission_choice, admission_confidence = self._admission(answers)
+            self.consecutive_transport_failures = 0
         except JevInputTooLarge:
             self.input_held = True
             self.logger.info("jev_input_held", {"reason": "conservative_input_bound"})
+            return None
+        except exhausted_error as exc:
+            self._hold_transport_failure(exc)
             return None
         except (httpx.HTTPError, ValueError, KeyError, TypeError, RuntimeError) as exc:
             # Stop calling a failed provider for the remainder of this fetch cycle.
@@ -188,6 +204,18 @@ class JevRelevanceScorer:  # pylint: disable=too-many-instance-attributes
         )
         self.cache[state] = assessment
         return assessment
+
+    def _hold_transport_failure(self, exc: ValueError) -> None:
+        """Keep one candidate unresolved; enough of them in a row mean the service is down."""
+        self.input_held = True
+        dispatched = bool(getattr(exc, "dispatched", False))
+        self.logger.info("jev_transport_held", {"dispatched": dispatched})
+        if dispatched:
+            self.consecutive_transport_failures += 1
+        if self.consecutive_transport_failures >= ADMISSION_CONSECUTIVE_TRANSPORT_LIMIT:
+            self.failed = True
+            self.input_held = False
+            self.logger.error("jev_screening_unavailable", {"error_type": type(exc).__name__})
 
     def _category(self, answers: dict) -> tuple[str | None, float | None]:
         try:
@@ -248,7 +276,9 @@ def jev_relevance_scorer(
             root = Path("data/daily-admission") / datetime.now(UTC).date().isoformat()
             root.mkdir(parents=True, exist_ok=True, mode=0o700)
             journal = journal_class(root / "journal.sqlite3", {"version": "daily-admission-1"},
-                                   {"total": "2", "jev": "1", "deepseek": "1"})
+                                   {"total": "2", "jev": "1", "deepseek": "1"},
+                                   transport_review_reason=ADMISSION_TRANSPORT_REVIEW_REASON,
+                                   transport_retry_delays=ADMISSION_TRANSPORT_RETRY_DELAYS)
         try:
             yield JevRelevanceScorer(
                 client, settings.jev_model, logger, settings.jev_category_min_confidence,

@@ -43,7 +43,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("JEV_API_KEY", "AINEWS_JEV_API_KEY", "jev_api_key"),
     )
     jev_model: str = "jev-1.13.0"
-    jev_timeout_seconds: float = Field(default=3.0, gt=0, allow_inf_nan=False)
+    jev_timeout_seconds: float = Field(default=5.0, gt=0, allow_inf_nan=False)
     jev_category_min_confidence: float = Field(
         default=0.7, ge=0, le=1, allow_inf_nan=False,
     )
