@@ -1,0 +1,85 @@
+name: nightly-health
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nightly-health:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Install sshpass
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass
+
+      - name: Check nightly jobs over SSH
+        env:
+          SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_APP_DIR: ${{ vars.DEPLOY_APP_DIR || '/opt/ai-news' }}
+        run: |
+          sshpass -p "${SERVER_PASSWORD}" ssh \
+            -o StrictHostKeyChecking=accept-new \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "DEPLOY_APP_DIR='${DEPLOY_APP_DIR}' bash -s" <<'REMOTE'
+          set +e
+          cd "$DEPLOY_APP_DIR" || exit 1
+          failed=0
+          today="$(date -u +%F)"
+          yesterday="$(date -u -d yesterday +%F)"
+
+          collection_status="$(docker exec ai-news-app python -c '
+          from app.storage.db import SessionLocal
+          from app.storage.admission import read_collection_status
+          session = SessionLocal()
+          try:
+              paused, _ = read_collection_status(session)
+              print("paused" if paused else "active")
+          finally:
+              session.close()
+          ' 2>/dev/null)"
+          if [ "$?" -eq 0 ] && [ "$collection_status" = "active" ]; then
+            echo "collection_not_paused: ok"
+          else
+            echo "collection_not_paused: failed"
+            failed=1
+          fi
+
+          if grep -F "$today" logs/daily-fetch.log 2>/dev/null | \
+            grep -F "fetch_run_finished" >/dev/null; then
+            echo "today_fetch_finished: ok"
+          else
+            echo "today_fetch_finished: failed"
+            failed=1
+          fi
+
+          digest_status="$(MIN_DIGEST_SCOPE=5 python3 -c '
+          import json
+          import os
+          import sys
+          from pathlib import Path
+          try:
+              report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+              ok = (isinstance(report, dict)
+                    and str(report.get("state", "")).startswith("published")
+                    and int(report.get("scope_count", -1)) >= int(os.environ["MIN_DIGEST_SCOPE"]))
+          except (OSError, ValueError, TypeError):
+              ok = False
+          print("ok" if ok else "failed")
+          ' "data/daily-enrichment/$yesterday/report.json" 2>/dev/null)"
+          if [ "$?" -eq 0 ] && [ "$digest_status" = "ok" ]; then
+            echo "yesterday_digest_published_with_scope: ok"
+          else
+            echo "yesterday_digest_published_with_scope: failed"
+            failed=1
+          fi
+
+          exit "$failed"
+          REMOTE

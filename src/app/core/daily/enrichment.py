@@ -1,4 +1,5 @@
-"""Resumable, grounded daily publication over the complete stored UTC-day scope."""
+"""Resumable, grounded daily publication over the complete stored UTC-day scope; see
+enrichment.md."""
 # pylint: disable=too-many-statements,too-many-branches,too-many-return-statements
 import asyncio
 import hashlib
@@ -28,6 +29,7 @@ from app.core.daily.reenrich_pilot import (
 )
 from app.core.daily.rubric import QUESTIONS, RUBRIC_VERSION
 from app.core.jev import JevInputTooLarge, _probability
+from app.storage.admission import read_collection_status
 from app.storage.article_evidence_cache import PageCache, SourcePageDownloader, make_http_client
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.journal_files import encoded, fingerprint, private_write
@@ -39,6 +41,7 @@ CAPS = {"total": "5", "jev": "1", "deepseek": "4"}
 # A dropped connection may have been billed: accept its reservation and retry after 1, then 5 min.
 TRANSPORT_REVIEW_REASON = "daily-publication: transport failure, conservative reservation kept"
 TRANSPORT_RETRY_DELAYS = (60, 300)
+DAILY_CATCH_UP_DAYS = 3
 # Aggregator decorations only; meaningful parentheticals such as "(Sponsor)" stay.
 TITLE_JUNK = re.compile(
     r"\s*\((?:\d+ min(?:ute)? read|GitHub Repo|"
@@ -372,18 +375,52 @@ def digest_groups(articles):
     return groups
 
 
+def catch_up_days(today: date, root: Path) -> list[date]:
+    """Return eligible completed days in oldest-first order."""
+    yesterday = today - timedelta(days=1)
+    eligible = []
+    for offset in range(DAILY_CATCH_UP_DAYS, 0, -1):
+        target = today - timedelta(days=offset)
+        report_path = root / target.isoformat() / "report.json"
+        if not report_path.exists():
+            if target == yesterday:
+                eligible.append(target)
+            continue
+        try:
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(report, dict) and report.get("state") == "held_collection_paused":
+            eligible.append(target)
+    return eligible
+
+
+def publish_catch_up(session, settings, today: date, root: Path) -> list[dict[str, Any]]:
+    """Publish eligible held reports from the recent completed UTC-day window."""
+    return [publish_day(session, settings, target, root)
+            for target in catch_up_days(today, root)]
+
+
 def publish_day(session, settings, target: date, root: Path):
     """Complete scope, bounded paid work, per-row resume, atomic publication with backup."""
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    root.chmod(0o700)
+    run = root / target.isoformat()
+    run.mkdir(parents=True, exist_ok=True, mode=0o700)
+    report: dict[str, Any] = {"report_date": target.isoformat(), "version": DAILY_VERSION,
+              "started_at": datetime.now(UTC).isoformat(), "state": "preparing"}
+    paused, message = read_collection_status(session)
+    if paused:
+        report.update(state="held_collection_paused", reason=message or "collection_paused",
+                      counts={}, held=[], usage={}, finished_at=datetime.now(UTC).isoformat())
+        private_write(run / "report.json", report)
+        return report
     if not settings.semantic_admission_enabled:
         raise ValueError("mandatory_admission_disabled")
     keys = {"jev": settings.jev_api_key, "deepseek": settings.ds_api_key}
     if any(v is None or not v.get_secret_value().strip() for v in keys.values()):
         raise ValueError("missing_provider_key")
     keys = {k: v.get_secret_value() for k, v in keys.items()}
-    root.mkdir(parents=True, exist_ok=True, mode=0o700)
-    root.chmod(0o700)
-    run = root / target.isoformat()
-    run.mkdir(parents=True, exist_ok=True, mode=0o700)
     cache = PageCache(root / "source-cache")
     journal = PilotJournal(run / "journal.sqlite3",
                            {"version": DAILY_VERSION, "day": target.isoformat()}, CAPS,
@@ -391,8 +428,6 @@ def publish_day(session, settings, target: date, root: Path):
                            transport_retry_delays=TRANSPORT_RETRY_DELAYS)
     counts: Counter[str] = Counter()
     held = []
-    report: dict[str, Any] = {"report_date": target.isoformat(), "version": DAILY_VERSION,
-              "started_at": datetime.now(UTC).isoformat(), "state": "preparing"}
     try:
         articles = day_articles(session, target)
         report["scope_count"] = len(articles)

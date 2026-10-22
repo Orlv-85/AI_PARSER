@@ -1,6 +1,7 @@
 import ast
 import importlib.util
 import json
+import re
 import shutil
 import subprocess
 import time
@@ -319,11 +320,16 @@ def _daily_job(tmp_path, *, publish_exit=0, signals_exit=0, with_timeout=True, e
     (tmp_path / ".last_deploy_image").write_text("release:tested\n", encoding="utf-8")
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    for tool in ("sh", "date", "cat", "dirname", "basename"):
+    for tool in ("sh", "date", "cat", "dirname", "basename", "grep"):
         (bin_dir / tool).symlink_to(shutil.which(tool))
     fakes = {
         "docker": ('printf "docker %s|image=%s\\n" "$*" "$APP_IMAGE" >> "$TEST_LOG"\n'
-                   'case "$*" in *daily-publish*) exit "$PUBLISH_EXIT";; '
+                   'case "$*" in *"daily-publish --catch-up"*) '
+                   'for report in "$HOME"/data/daily-enrichment/*/report.json; do '
+                   '[ -f "$report" ] || continue; '
+                   'printf \'{ "state": "published" }\\n\' > "$report"; done; '
+                   'exit "$PUBLISH_EXIT";; '
+                   '*daily-publish*) exit "$PUBLISH_EXIT";; '
                    '*daily-signals*) exit "$SIGNALS_EXIT";; esac\nexit 0\n'),
         "flock": 'printf "flock %s\\n" "$*" >> "$TEST_LOG"\nshift 3\nexec "$@"\n',
     }
@@ -376,6 +382,38 @@ def test_daily_job_publish_failure_skips_signals(tmp_path) -> None:
     assert len(docker) == 1 and "daily-publish" in docker[0]
 
 
+def test_digest_job_held_skips_signals_and_exits_zero(tmp_path) -> None:
+    result, calls = _daily_job(tmp_path, publish_exit=2)
+    assert result.returncode == 0
+    assert "daily-publish held: collection paused" in result.stderr
+    assert len([call for call in calls if call.startswith("docker ")]) == 1
+
+
+def test_digest_job_catch_up_runs_signals_for_each_published_day(tmp_path) -> None:
+    today = datetime.now(UTC).date()
+    first = today - timedelta(days=3)
+    second = today - timedelta(days=2)
+    yesterday = today - timedelta(days=1)
+    reports = tmp_path / "data" / "daily-enrichment"
+    for day in (first, second):
+        path = reports / day.isoformat() / "report.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('{ "state": "held_collection_paused" }\n', encoding="utf-8")
+    yesterday_report = reports / yesterday.isoformat() / "report.json"
+    yesterday_report.parent.mkdir(parents=True, exist_ok=True)
+    yesterday_report.write_text('{ "state": "published" }\n', encoding="utf-8")
+
+    result, calls = _daily_job(tmp_path, args=("--catch-up",))
+
+    assert result.returncode == 0, result.stderr
+    docker = [call for call in calls if call.startswith("docker ")]
+    assert "ai-news daily-publish --catch-up" in docker[0]
+    signals = [call for call in docker if "daily-signals" in call]
+    assert len(signals) == 2
+    assert f"--report-date {first.isoformat()}" in signals[0]
+    assert f"--report-date {second.isoformat()}" in signals[1]
+
+
 def test_daily_job_signals_failure_keeps_success_and_removes_container(tmp_path) -> None:
     result, calls = _daily_job(tmp_path, signals_exit=124)
     assert result.returncode == 0
@@ -426,3 +464,81 @@ def test_daily_job_started_by_relative_path(tmp_path) -> None:
     result, calls = _daily_job(tmp_path, from_scripts_dir=True)
     assert result.returncode == 0, result.stderr
     assert len([c for c in calls if c.startswith("docker ")]) == 2
+
+
+def _fetch_job(tmp_path, *, fetch_exit=0, held_report=False, digest_exit=0):
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    for name in ("run_daily_fetch_job.sh", "run_daily_digest_job.sh"):
+        (scripts / name).write_text(
+            Path("scripts", name).read_text(encoding="utf-8"), encoding="utf-8")
+    (tmp_path / ".last_deploy_image").write_text("release:tested\n", encoding="utf-8")
+    yesterday = (datetime.now(UTC).date() - timedelta(days=1)).isoformat()
+    if held_report:
+        report = tmp_path / "data" / "daily-enrichment" / yesterday / "report.json"
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_text('{ "state": "held_collection_paused" }\n', encoding="utf-8")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for tool in ("sh", "date", "cat", "dirname", "basename", "grep"):
+        (bin_dir / tool).symlink_to(shutil.which(tool))
+    fakes = {
+        "flock": 'printf "flock %s\\n" "$*" >> "$TEST_LOG"\nshift 3\nexec "$@"\n',
+        "docker": ('printf "docker %s\\n" "$*" >> "$TEST_LOG"\n'
+                   'case "$*" in *"ai-news fetch --once"*) exit "$FETCH_EXIT";; '
+                   '*"daily-publish --catch-up"*) '
+                   'for report in "$HOME"/data/daily-enrichment/*/report.json; do '
+                   '[ -f "$report" ] || continue; '
+                   'printf \'{ "state": "published" }\\n\' > "$report"; done; '
+                   'exit "$PUBLISH_EXIT";; esac\nexit 0\n'),
+    }
+    for name, body in fakes.items():
+        (bin_dir / name).write_text("#!/bin/sh\n" + body, encoding="utf-8")
+        (bin_dir / name).chmod(0o755)
+    log = tmp_path / "calls"
+    env = {"PATH": str(bin_dir), "HOME": str(tmp_path), "TEST_LOG": str(log),
+           "FETCH_EXIT": str(fetch_exit), "PUBLISH_EXIT": str(digest_exit), "APP_IMAGE": "",
+           "COMPOSE_FILE": "docker-compose.prod.yml"}
+    result = subprocess.run(
+        ["sh", str(scripts / "run_daily_fetch_job.sh")], env=env, cwd=tmp_path,
+        capture_output=True, text=True, check=False)
+    return result, log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+
+
+@pytest.mark.parametrize("fetch_exit,held_report,catch_up", [
+    (0, True, True), (0, False, False), (17, True, False),
+])
+def test_fetch_job_runs_catch_up_only_after_success_with_recent_hold(
+    tmp_path, fetch_exit, held_report, catch_up,
+):
+    result, calls = _fetch_job(tmp_path, fetch_exit=fetch_exit, held_report=held_report)
+
+    assert result.returncode == fetch_exit
+    assert any("ai-news fetch --once" in call for call in calls if call.startswith("docker "))
+    catch_up_calls = [call for call in calls if "daily-publish --catch-up" in call]
+    assert bool(catch_up_calls) is catch_up
+
+
+def test_fetch_job_preserves_success_status_when_catch_up_fails(tmp_path):
+    result, calls = _fetch_job(
+        tmp_path, fetch_exit=0, held_report=True, digest_exit=23)
+
+    assert result.returncode == 0
+    assert any("daily-publish --catch-up" in call for call in calls)
+
+
+def test_nightly_health_workflow_is_read_only():
+    workflow = yaml.safe_load(
+        Path(".github/workflows/nightly-health.yml").read_text(encoding="utf-8"))
+    triggers = workflow.get("on", workflow.get(True))
+    assert triggers["schedule"][0]["cron"] == "0 3 * * *"
+    assert workflow["permissions"] == {"contents": "read"}
+    assert len(workflow["jobs"]) == 1
+    job = next(iter(workflow["jobs"].values()))
+    assert job["timeout-minutes"] == 10
+    commands = "\n".join(step.get("run", "") for step in job.get("steps", []))
+    assert "read_collection_status" in commands
+    assert "fetch_run_finished" in commands
+    assert "MIN_DIGEST_SCOPE=5" in commands and "scope_count" in commands
+    assert re.search(r"\bsystemctl\b|\bdocker\s+compose\s+run\b|\brm\b|\brestart\b",
+                     commands, flags=re.IGNORECASE) is None

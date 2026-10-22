@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from app.config.settings import get_settings
 from app.config.sources import load_sources
-from app.core.daily.enrichment import publish_day
+from app.core.daily.enrichment import publish_catch_up, publish_day
 from app.core.daily.signals import (
     EntityCommandError,
     RunOptions,
@@ -106,21 +106,36 @@ def sources() -> None:
 def daily_publish(
     report_date: str | None = _WEEKLY_DATE_OPTION,
     cache_dir: str = typer.Option("data/daily-enrichment", "--cache-dir"),
+    catch_up: bool = typer.Option(False, "--catch-up"),
 ) -> None:
     """Enrich the complete previous UTC day and atomically publish grounded summaries."""
-    try:
-        target = date.fromisoformat(report_date) if report_date else (
-            datetime.now(UTC).date() - timedelta(days=1))
-    except ValueError as exc:
-        raise typer.BadParameter("report-date must be YYYY-MM-DD") from exc
-    if target >= datetime.now(UTC).date():
-        raise typer.BadParameter("Only completed UTC days can be published")
+    today = datetime.now(UTC).date()
+    if catch_up and report_date:
+        raise typer.BadParameter("--catch-up cannot be combined with --report-date")
+    if catch_up:
+        target = None
+    else:
+        try:
+            target = date.fromisoformat(report_date) if report_date else today - timedelta(days=1)
+        except ValueError as exc:
+            raise typer.BadParameter("report-date must be YYYY-MM-DD") from exc
+        if target >= today:
+            raise typer.BadParameter("Only completed UTC days can be published")
     create_all()
     with SessionLocal() as session:
-        result = publish_day(session, get_settings(), target, Path(cache_dir))
-    typer.echo(json.dumps(result))
-    if result["state"] == "failed_preserved_previous":
+        settings = get_settings()
+        if catch_up:
+            results = publish_catch_up(session, settings, today, Path(cache_dir))
+            result_states = [report["state"] for report in results]
+            typer.echo(json.dumps({"reports": results}))
+        else:
+            result = publish_day(session, settings, target, Path(cache_dir))
+            result_states = [result["state"]]
+            typer.echo(json.dumps(result))
+    if "failed_preserved_previous" in result_states:
         raise typer.Exit(1)
+    if "held_collection_paused" in result_states:
+        raise typer.Exit(2)
 
 
 def _completed_day(report_date: str | None) -> date:

@@ -15,8 +15,9 @@ from app.core.daily.rubric import QUESTIONS
 from app.core.ingestion.pipeline import _build_article_row
 from app.core.jev import JevRelevanceScorer
 from app.core.models import Article as CoreArticle
+from app.storage.admission import set_collection_paused
 from app.storage.digest_repo import NewsDigestRepo
-from app.storage.journal_files import encoded, fingerprint
+from app.storage.journal_files import encoded, fingerprint, private_write
 from app.storage.models_sql import Article, Base
 from app.storage.reenrich_pilot_journal import PilotJournal
 
@@ -36,11 +37,11 @@ def daily_session(tmp_path):
     engine.dispose()
 
 
-def article(session, index=1, *, proof=False):
+def article(session, index=1, *, proof=False, target=TARGET):
     row = Article(title="AI document extraction", url=f"https://example.org/{index}",
                   url_canonical=f"https://example.org/{index}",
                   url_canonical_hash=f"{index:064x}", content=SOURCE,
-                  published_at=datetime(2026, 10, 10, 12, tzinfo=UTC),
+                  published_at=datetime.combine(target, datetime.min.time(), tzinfo=UTC),
                   publication_status="confirmed", ai_relevance_score=0.9,
                   freshness_score=0.5, rank_score=0.7)
     if proof:
@@ -58,6 +59,12 @@ def article(session, index=1, *, proof=False):
 def settings():
     return SimpleNamespace(semantic_admission_enabled=True, jev_api_key=SecretStr("test-key"),
                            ds_api_key=SecretStr("test-key"))
+
+
+def write_report(root, target, state):
+    path = root / target.isoformat() / "report.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    private_write(path, {"state": state})
 
 
 async def no_download(*_args):
@@ -153,6 +160,101 @@ def test_failure_retains_good_digest_and_records_reason(session, tmp_path, monke
     assert result["state"] == "failed_preserved_previous"
     assert "reason" in result and "test-key" not in json.dumps(result)
     assert repo.get_digest(report_date=TARGET).groups[0].title == "Good"
+
+
+def test_paused_collection_holds_day_without_paid_calls(session, tmp_path, monkeypatch):
+    repo = NewsDigestRepo(session)
+    repo.save_digest(report_date=TARGET, groups=[{"title": "Good", "items": [
+        {"title": "Good", "summary": "Previously checked", "url": "https://good.org"}]}])
+    session.commit()
+    set_collection_paused(session)
+    session.commit()
+    mock_client(monkeypatch, lambda _request: pytest.fail("Paused collection made a provider call"))
+
+    result = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+
+    assert result["state"] == "held_collection_paused"
+    assert repo.get_digest(report_date=TARGET).groups[0].title == "Good"
+    saved = json.loads((tmp_path / "cache" / TARGET.isoformat() / "report.json").read_text())
+    assert saved["state"] == "held_collection_paused"
+    assert saved["usage"] == {}
+
+
+def test_catch_up_publishes_held_days_oldest_first(session, tmp_path, monkeypatch):
+    root = tmp_path / "cache"
+    first = date(2026, 10, 8)
+    second = date(2026, 10, 9)
+    yesterday = date(2026, 10, 10)
+    article(session, 1, proof=True, target=first)
+    article(session, 2, proof=True, target=second)
+    for day in (first, second):
+        write_report(root, day, "held_collection_paused")
+    write_report(root, yesterday, "published")
+    mock_client(monkeypatch, lambda _request: pytest.fail("Reusable rows must not be billed"))
+
+    reports = daily.publish_catch_up(session, settings(), date(2026, 10, 11), root)
+
+    assert [report["report_date"] for report in reports] == [
+        first.isoformat(), second.isoformat()]
+    assert [report["state"] for report in reports] == ["published", "published"]
+
+
+def test_catch_up_keeps_days_held_while_paused(session, tmp_path, monkeypatch):
+    root = tmp_path / "cache"
+    held_days = [date(2026, 10, 8), date(2026, 10, 9)]
+    repo = NewsDigestRepo(session)
+    for index, day in enumerate(held_days, start=1):
+        article(session, index, proof=True, target=day)
+        repo.save_digest(report_date=day, groups=[{"title": "Previous", "items": [
+            {"title": "Previous", "summary": "Saved", "url": f"https://old.org/{index}"}]}])
+        write_report(root, day, "held_collection_paused")
+    write_report(root, date(2026, 10, 10), "published")
+    session.commit()
+    set_collection_paused(session)
+    session.commit()
+    mock_client(monkeypatch, lambda _request: pytest.fail("Paused collection made a provider call"))
+
+    reports = daily.publish_catch_up(session, settings(), date(2026, 10, 11), root)
+
+    assert [report["state"] for report in reports] == [
+        "held_collection_paused", "held_collection_paused"]
+    assert [repo.get_digest(report_date=day).groups[0].title for day in held_days] == [
+        "Previous", "Previous"]
+
+
+def test_catch_up_ignores_days_older_than_limit(session, tmp_path, monkeypatch):
+    root = tmp_path / "cache"
+    older = date(2026, 10, 7)
+    oldest_eligible = date(2026, 10, 8)
+    write_report(root, older, "held_collection_paused")
+    write_report(root, oldest_eligible, "held_collection_paused")
+    write_report(root, date(2026, 10, 9), "published")
+    write_report(root, date(2026, 10, 10), "failed_preserved_previous")
+    called = []
+
+    def publish(_session, _settings, target, _root):
+        called.append(target)
+        return {"report_date": target.isoformat(), "state": "published"}
+
+    monkeypatch.setattr(daily, "publish_day", publish)
+    reports = daily.publish_catch_up(session, settings(), date(2026, 10, 11), root)
+
+    assert called == [oldest_eligible]
+    assert reports[0]["report_date"] == oldest_eligible.isoformat()
+
+
+def test_catch_up_includes_yesterday_without_a_report(session, tmp_path, monkeypatch):
+    root = tmp_path / "cache"
+    called = []
+
+    def publish(_session, _settings, target, _root):
+        called.append(target)
+        return {"report_date": target.isoformat(), "state": "published"}
+
+    monkeypatch.setattr(daily, "publish_day", publish)
+    daily.publish_catch_up(session, settings(), date(2026, 10, 11), root)
+
+    assert called == [date(2026, 10, 10)]
 
 
 def test_insufficient_evidence_is_explicit_and_never_an_excerpt(session, tmp_path, monkeypatch):

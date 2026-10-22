@@ -22,6 +22,7 @@ Feature docs live next to their main module and are checked by `scripts/check_co
 
 | Feature | Doc |
 | --- | --- |
+| Daily digest enrichment | `core/daily/enrichment.md` |
 | Daily AI Signals (006, 007) | `core/daily/signals.md` |
 | Fetch pipeline (001, 002, admission) | `core/ingestion/pipeline.md` |
 | Source onboarding (003, 011) | `core/sources/onboarding.md` |

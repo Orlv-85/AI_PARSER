@@ -1,0 +1,76 @@
+<!-- code-doc
+module: src/app/core/daily/enrichment.py
+covers:
+  - src/app/core/daily/enrichment.py
+  - scripts/run_daily_digest_job.sh
+  - scripts/run_daily_fetch_job.sh
+-->
+# Daily digest enrichment
+
+## Behavior
+
+```mermaid
+flowchart LR
+  fetch["Daily fetch"] --> pause{"Collection paused?"}
+  pause -- yes --> held["Keep prior digest; write held report"]
+  pause -- no --> scope["Load complete UTC day with day_articles"]
+  scope --> reuse["Reuse validated summaries"]
+  reuse --> paid["Enrich remaining articles through PilotJournal"]
+  paid --> publish["Back up prior digest; publish atomically"]
+  held --> catchup["Next successful fetch requests catch-up"]
+  publish --> catchup
+  catchup --> days["Publish eligible held days oldest first"]
+```
+
+- `day_articles` selects the complete stored UTC day; previously validated summaries are reused.
+  Tests: `test_complete_day_more_than_200_and_preserves_history`,
+  `test_new_summary_review_then_resume_without_provider_calls`.
+- Remaining articles use `PilotJournal`, bounded by `CAPS`; uncertain transport failures retain
+  their reservation and retry under `TRANSPORT_REVIEW_REASON` and `TRANSPORT_RETRY_DELAYS`.
+  Tests: `test_dropped_connection_is_retried_after_one_then_five_minutes`,
+  `test_transport_retries_exhausted_fails_day_without_more_dispatch`.
+- A collection pause is checked before provider setup. It writes `held_collection_paused`, makes no
+  provider call and leaves the previous digest unchanged. Tests:
+  `test_paused_collection_holds_day_without_paid_calls`,
+  `test_daily_publish_exits_two_for_held_collection`.
+- Publication backs up an existing digest, commits the new groups, and records the report with
+  `private_write`. Failed work keeps the prior digest. Tests:
+  `test_new_summary_review_then_resume_without_provider_calls`,
+  `test_failure_retains_good_digest_and_records_reason`.
+- `--catch-up` considers the last `DAILY_CATCH_UP_DAYS` completed UTC days, oldest first: days with
+  a latest `held_collection_paused` report and yesterday when no report exists. The digest job runs
+  signals for days it publishes; the fetch job requests catch-up after a successful fetch when a
+  recent held report exists. Tests: `test_catch_up_publishes_held_days_oldest_first`,
+  `test_catch_up_keeps_days_held_while_paused`, `test_catch_up_ignores_days_older_than_limit`,
+  `test_daily_publish_catch_up_exits_two_when_a_day_is_held`,
+  `test_digest_job_held_skips_signals_and_exits_zero`,
+  `test_digest_job_catch_up_runs_signals_for_each_published_day`,
+  `test_fetch_job_runs_catch_up_only_after_success_with_recent_hold`,
+  `test_fetch_job_preserves_success_status_when_catch_up_fails`,
+  `test_nightly_health_workflow_is_read_only`.
+
+## Decisions
+
+- 2026-10-22 (owner): during a collection pause, publish the digest later when complete rather than
+  on time with an incomplete one.
+- 2026-10-22 (agent): nightly health requires a digest scope of at least 5,
+  based on the observed scope of 11-100 on 2026-10-10..20 and 1 on the broken night.
+
+## Invariants
+
+- A held or failed publication never replaces an existing digest.
+- Only completed UTC days are eligible for publication or catch-up.
+- Daily fetch and digest share the host lock; catch-up stays inside the existing job budget.
+
+## Code map
+
+- `enrichment.py`: day scope, validation/reuse, provider journal, publication and catch-up selection.
+- `cli/main.py`: `daily-publish` options and exit codes.
+- `run_daily_fetch_job.sh`: fetch lock and post-fetch catch-up dispatch.
+- `run_daily_digest_job.sh`: publication, held result handling, signals and shared budget.
+- `.github/workflows/nightly-health.yml`: read-only checks for collection, fetch and digest health.
+
+## Tests
+
+- `tests/unit/test_daily_enrichment.py`: publication, reuse, holds and catch-up selection.
+- `tests/unit/test_deepseek_digest.py`: digest/fetch job shells and nightly workflow safety checks.
