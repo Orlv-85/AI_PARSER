@@ -159,6 +159,16 @@ the Troubleshooting section of `README.md`.
       "cause": "One Jev request hit the per-request timeout (httpx.ReadTimeout, AINEWS_JEV_TIMEOUT_SECONDS=3). The admission journal was created without transport_review_reason, so the failed row blocked the next dispatch with PilotStopped and the run paused for the whole day.",
       "fix": "src/app/core/jev.py passes ADMISSION_TRANSPORT_REVIEW_REASON and ADMISSION_TRANSPORT_RETRY_DELAYS to the admission journal: a timeout is retried once; if it fails again the candidate stays pending and the run goes on. ADMISSION_CONSECUTIVE_TRANSPORT_LIMIT such candidates in a row, a provider error or an invalid answer still pause. Jev timeout default is now 5 s. A failed row left by the old version is reviewed and retried automatically.",
       "verification": "tests/unit/test_semantic_admission_pipeline.py: test_admission_timeout_is_retried_once_without_pausing, test_admission_timeout_twice_holds_only_that_candidate, test_admission_consecutive_timeouts_pause_run, test_admission_success_resets_timeout_count, test_exhausted_candidate_from_earlier_run_is_held_without_request, test_failed_admission_row_from_older_version_is_retried, test_admission_server_error_still_pauses_at_once."
+    },
+    {
+      "id": "digest-published-during-collection-pause",
+      "date": "2026-10-22",
+      "area": "daily publication (daily-publish)",
+      "symptom": "The 2026-10-21 digest was published with one article after the 2026-10-22 nightly fetch paused collection after three sources.",
+      "evidence": ["2026-10-22 incident report: Jev timeout paused the 01:00 UTC fetch; the 02:00 UTC digest published one article."],
+      "cause": "publish_day did not read collection status, so it treated the partial stored day as ready to publish.",
+      "fix": "publish_day now writes held_collection_paused without provider calls or replacing the previous digest. After a successful fetch, the digest job publishes held days in the last DAILY_CATCH_UP_DAYS (3) completed UTC days, oldest first, and runs their signals.",
+      "verification": "tests/unit/test_daily_enrichment.py: test_paused_collection_holds_day_without_paid_calls, test_catch_up_publishes_held_days_oldest_first, test_catch_up_keeps_days_held_while_paused, test_catch_up_ignores_days_older_than_limit; tests/unit/test_cli_daily_publish.py: test_daily_publish_exits_two_for_held_collection; tests/unit/test_deepseek_digest.py: test_digest_job_held_skips_signals_and_exits_zero, test_digest_job_catch_up_runs_signals_for_each_published_day, test_fetch_job_runs_catch_up_only_after_success_with_recent_hold."
     }
   ]
 }

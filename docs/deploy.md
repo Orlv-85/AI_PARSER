@@ -131,6 +131,14 @@ header, not in CLI arguments.
   Retired local tooling is moved to `backups/retired-ai-tools.*`, not reinstalled.
   The old proxy-provider CLI and external-agent job template are removed.
 
+### Nightly health check
+
+The read-only `.github/workflows/nightly-health.yml` workflow runs at 03:00 UTC and checks that
+collection is not paused, today's fetch log contains `fetch_run_finished`, and yesterday's digest
+is published with scope at least `MIN_DIGEST_SCOPE` (5). Run it by hand with
+`gh workflow run nightly-health.yml`. GitHub emails scheduled workflow failures to the user who
+last changed its cron line.
+
 The tag deploy copies `DS_API_KEY` from GitHub Actions repository secrets into
 the private server-side `.env`. A missing secret fails validation before any
 server changes. Set the repository variable `AINEWS_DIGEST_MODEL` to override
