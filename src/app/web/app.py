@@ -64,9 +64,16 @@ def create_app() -> FastAPI:
     @api.middleware("http")
     async def auth_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
         if not auth_enabled:
+            request.state.full_text_allowed = True
             return await call_next(request)
 
         path = request.url.path
+        session_cookie = request.cookies.get(settings.auth_cookie_name)
+        has_session = bool(session_cookie and signer and signer.verify(session_cookie) is not None)
+        # Stored article text is internal: routes return it only to a session or the publish token.
+        request.state.full_text_allowed = has_session or verify_bearer_token(
+            request.headers.get("authorization"), settings.publish_api_token
+        )
         is_auth_route = path in {"/login", "/api/auth/login", "/api/auth/logout"}
         # Public API paths are read-only; write methods on them require auth.
         is_public_news_api = request.method in _PUBLIC_READ_METHODS and path in {
@@ -97,8 +104,7 @@ def create_app() -> FastAPI:
         if not is_protected or is_unprotected:
             return await call_next(request)
 
-        session_cookie = request.cookies.get(settings.auth_cookie_name)
-        if session_cookie and signer and signer.verify(session_cookie) is not None:
+        if has_session:
             return await call_next(request)
 
         if (

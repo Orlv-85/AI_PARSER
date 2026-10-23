@@ -251,10 +251,20 @@ def read_json_response(
         raise RuntimeError(f"Network error for {url}: {exc.reason}") from exc
 
 
+def _app_auth_headers() -> dict[str, str]:
+    token = os.environ.get("AINEWS_PUBLISH_API_TOKEN", "").strip()
+    return {"Authorization": f"Bearer {token}"} if token else {}
+
+
+def get_app_json(url: str) -> Any:
+    """GET from the app with AINEWS_PUBLISH_API_TOKEN when set (article text needs it)."""
+    return read_json_response(url, headers=_app_auth_headers())
+
+
 def post_app_json(url: str, payload: object) -> Any:
     """POST JSON to the app, authenticating with AINEWS_PUBLISH_API_TOKEN when set."""
     token = os.environ.get("AINEWS_PUBLISH_API_TOKEN", "").strip()
-    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    headers = _app_auth_headers()
     try:
         return read_json_response(url, body=json.dumps(payload).encode("utf-8"), headers=headers)
     except RuntimeError as exc:
@@ -556,7 +566,7 @@ def _write_json(path: Path, payload: object) -> None:
 
 def _fetch_feed_items(*, base_url: str, report_date: str, limit: int) -> list[dict[str, Any]]:
     query = urlencode({"date": report_date, "limit": limit, "include_content": "true"})
-    items = read_json_response(f"{base_url.rstrip('/')}/api/news/links?{query}")
+    items = get_app_json(f"{base_url.rstrip('/')}/api/news/links?{query}")
     if not isinstance(items, list):
         raise RuntimeError("news links API did not return a list")
     if not items:
@@ -591,7 +601,7 @@ def _fetch_news_links_range(
                     "include_content": "true",
                 }
             )
-            daily_rows = read_json_response(f"{base_url.rstrip('/')}/api/news/links?{query}")
+            daily_rows = get_app_json(f"{base_url.rstrip('/')}/api/news/links?{query}")
             if not isinstance(daily_rows, list):
                 raise RuntimeError("news links API did not return a list")
             if not all(isinstance(row, dict) for row in daily_rows):
