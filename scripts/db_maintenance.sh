@@ -4,6 +4,11 @@ set -eu
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 ROOT_DIR="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
 cd "$ROOT_DIR"
+# Same release image as the deploy and the nightly jobs; without it compose runs a stale local :latest.
+if [ -f .last_deploy_image ]; then
+  APP_IMAGE="$(cat .last_deploy_image)"
+  export APP_IMAGE
+fi
 
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 if [ -z "${RETENTION_DAYS:-}" ] && [ -f .env ]; then

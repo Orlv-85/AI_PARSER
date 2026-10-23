@@ -40,6 +40,28 @@ def test_maintenance_default_server_config_and_explicit_override(
     assert "tightening retention" not in result.stdout
 
 
+def test_maintenance_prunes_with_last_deployed_image(tmp_path):
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    script = scripts / "db_maintenance.sh"
+    script.write_text(Path("scripts/db_maintenance.sh").read_text(encoding="utf-8"))
+    (tmp_path / ".last_deploy_image").write_text("release:tested\n", encoding="utf-8")
+    binaries = tmp_path / "bin"
+    binaries.mkdir()
+    docker = binaries / "docker"
+    docker.write_text('#!/bin/sh\nprintf "%s %s\\n" "${APP_IMAGE:-none}" "$*" >> "$TEST_LOG"\n'
+                      'case "$*" in *pg_database_size*) echo 1000000;; esac\n')
+    docker.chmod(0o755)
+    environment = {**os.environ, "PATH": f"{binaries}:/usr/bin:/bin",
+                   "TEST_LOG": str(tmp_path / "calls")}
+    environment.pop("APP_IMAGE", None)
+    result = subprocess.run(["sh", str(script)], env=environment, capture_output=True,
+                            text=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "release:tested compose -f docker-compose.prod.yml run --rm app ai-news prune" in (
+        tmp_path / "calls").read_text()
+
+
 def test_cli_default_and_explicit_retention_remain_compatible(monkeypatch):
     calls = []
 
