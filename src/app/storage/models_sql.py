@@ -558,5 +558,48 @@ class DailySignalBrief(Base):  # pylint: disable=too-many-instance-attributes
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
 
 
+class ArchiveDocument(Base):  # pylint: disable=too-many-instance-attributes
+    """Archived URL identity (spec 016); no FK to articles or sources so it outlives them."""
+    __tablename__ = "archive_documents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    url_canonical_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    url: Mapped[str] = mapped_column(String(2048))
+    url_canonical: Mapped[str] = mapped_column(String(2048))
+    source_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    host: Mapped[str] = mapped_column(String(255), index=True)
+    title: Mapped[str] = mapped_column(String(512))
+    published_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    publication_day: Mapped[date | None] = mapped_column(Date, nullable=True)
+    publication_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    article_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    first_seen_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    state: Mapped[str] = mapped_column(String(16), index=True)  # pending|archived|failed|gave_up
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    last_issue: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+
+
+class ArchiveText(Base):  # pylint: disable=too-many-instance-attributes
+    """Append-only clean text version of an archive document."""
+    __tablename__ = "archive_texts"
+    __table_args__ = (UniqueConstraint("document_id", "text_sha256",
+                                       name="uq_archive_texts_document_sha"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("archive_documents.id"), index=True)
+    text: Mapped[str] = mapped_column(Text)
+    text_chars: Mapped[int] = mapped_column(Integer)
+    text_sha256: Mapped[str] = mapped_column(String(64))
+    origin: Mapped[str] = mapped_column(String(32))  # article_content | source_page
+    extraction_version: Mapped[str] = mapped_column(String(64))
+    final_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    issues: Mapped[str] = mapped_column(Text, default="[]")  # JSON list
+    captured_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+
+
 Index("ix_articles_published_at_desc", Article.published_at.desc())
 Index("ix_articles_rank_score_desc", Article.rank_score.desc())

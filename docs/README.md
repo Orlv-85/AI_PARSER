@@ -13,6 +13,7 @@ Specs in `specs/` are the history of how a feature got there.
 | Daily AI Signals (006, 007) | [src/app/core/daily/signals.md](../src/app/core/daily/signals.md) | `src/app/core/daily/signals.py` |
 | Fetch pipeline (001, 002, admission) | [src/app/core/ingestion/pipeline.md](../src/app/core/ingestion/pipeline.md) | `src/app/core/ingestion/pipeline.py` |
 | Source onboarding (003, 011) | [src/app/core/sources/onboarding.md](../src/app/core/sources/onboarding.md) | `src/app/core/sources/onboarding.py` |
+| Article archive (016) | [src/app/core/archive/capture.md](../src/app/core/archive/capture.md) | `src/app/core/archive/capture.py` |
 
 ## General
 

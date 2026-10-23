@@ -103,3 +103,33 @@ def test_briefs_table_upgrade_downgrade_without_article_fk(tmp_path, monkeypatch
     assert "daily_signal_briefs" not in tables
     assert SIGNAL_TABLES - {"daily_signal_briefs"} <= tables
     engine.dispose()
+
+
+ARCHIVE_TABLES = {"archive_documents", "archive_texts"}
+
+
+def test_article_archive_migration_round_trip(tmp_path, monkeypatch):
+    path = tmp_path / "archive.db"
+    config = upgrade(monkeypatch, path, "c3a8e5d27f14")
+    engine = create_engine(f"sqlite:///{path}")
+    with Session(engine) as session:
+        session.add(article())
+        session.commit()
+    assert not ARCHIVE_TABLES & set(inspect(engine).get_table_names())
+    command.upgrade(config, "head")
+    created = tmp_path / "created.db"
+    model_engine = create_engine(f"sqlite:///{created}")
+    Base.metadata.create_all(model_engine)
+    model_engine.dispose()
+    for table in ARCHIVE_TABLES:
+        assert schema(f"sqlite:///{path}", table) == schema(f"sqlite:///{created}", table), table
+    assert schema(f"sqlite:///{path}", "archive_documents")[3] == set()
+    assert schema(f"sqlite:///{path}", "archive_texts")[3] == {
+        (("document_id",), "archive_documents", None)}
+    command.downgrade(config, "c3a8e5d27f14")
+    assert not ARCHIVE_TABLES & set(inspect(engine).get_table_names())
+    command.upgrade(config, "head")
+    assert ARCHIVE_TABLES <= set(inspect(engine).get_table_names())
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT COUNT(*) FROM articles")).scalar() == 1
+    engine.dispose()
