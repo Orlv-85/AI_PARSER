@@ -339,6 +339,9 @@ class ArticleRepo:
         return len(self.session.scalars(stmt).all())
 
     def prune_older_than(self, *, older_than_days: int) -> tuple[int, int]:
+        """Delete rows past the cutoff; archives them first in the same transaction (016)."""
+        # Local import: app.storage/__init__ imports this module, and capture imports app.storage.
+        from app.core.archive.capture import archive_articles  # pylint: disable=import-outside-toplevel
         cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
         old_article_ids = select(Article.id).where(_publication_before(cutoff))
 
@@ -346,10 +349,15 @@ class ArticleRepo:
             ArticleAlias.article_id.in_(old_article_ids)
         )
         deleted_aliases = len(self.session.scalars(deleted_aliases_stmt).all())
-        deleted_articles = self.count_older_than(older_than_days=older_than_days)
+        old_articles = list(
+            self.session.scalars(select(Article).where(_publication_before(cutoff))))
+        deleted_articles = len(old_articles)
+        archive_articles(self.session, old_articles)
 
         self.session.execute(delete(ArticleAlias).where(ArticleAlias.article_id.in_(old_article_ids)))
-        self.session.execute(delete(Article).where(_publication_before(cutoff)))
+        # The archived rows are loaded; "fetch" avoids evaluating the cutoff on naive SQLite values.
+        self.session.execute(delete(Article).where(_publication_before(cutoff))
+                             .execution_options(synchronize_session="fetch"))
         return deleted_articles, deleted_aliases
 
     def daily_stats(self, *, date_from: date, date_to: date) -> list[ArticleDailyStats]:

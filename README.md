@@ -45,6 +45,7 @@ Index of all docs: [docs/README.md](docs/README.md). Code docs live next to the 
 - [Daily AI Signals](src/app/core/daily/signals.md) - behavior, decisions, invariants, code map.
 - [Fetch pipeline](src/app/core/ingestion/pipeline.md) - ingestion: sources, page filter, admission, scoring.
 - [Source onboarding](src/app/core/sources/onboarding.md) - candidate import, check, review, approval into collection.
+- [Article archive](src/app/core/archive/capture.md) - private archive of article text; prune archives before delete.
 
 General:
 
