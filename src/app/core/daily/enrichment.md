@@ -48,6 +48,12 @@ flowchart LR
   `test_fetch_job_runs_catch_up_only_after_success_with_recent_hold`,
   `test_fetch_job_preserves_success_status_when_catch_up_fails`,
   `test_nightly_health_workflow_is_read_only`.
+- The first summary request (`grounded_summary`, attempt 0) carries the rule tagged
+  `SUMMARY_PROMPT_VERSION`: every name, number, role, product and attribution in a sentence appears
+  in its own quote, and a claim is attributed only to a speaker its quote names. The repair requests
+  and the review are unchanged. `enrichment_provenance` records the version as `summary_prompt`.
+  Tests: `test_first_summary_request_keeps_details_in_quote`,
+  `test_provenance_records_summary_prompt_version`.
 
 ## Decisions
 
@@ -55,12 +61,17 @@ flowchart LR
   on time with an incomplete one.
 - 2026-10-22 (agent): nightly health requires a digest scope of at least 5,
   based on the observed scope of 11-100 on 2026-10-10..20 and 1 on the broken night.
+- 2026-10-24 (owner): the first summary request keeps every detail inside its quote (pilots 1-3,
+  `docs/report-summary-grounding-pilot-2026-10-24.md`); a stricter review gate was rejected because
+  it held ~20% of the digest.
 
 ## Invariants
 
 - A held or failed publication never replaces an existing digest.
 - Only completed UTC days are eligible for publication or catch-up.
 - Daily fetch and digest share the host lock; catch-up stays inside the existing job budget.
+- Summaries already published are reused as before: `reusable` does not depend on the summary
+  prompt version. Tests: `test_reuse_ignores_summary_prompt_version`.
 
 ## Code map
 
