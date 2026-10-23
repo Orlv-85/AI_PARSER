@@ -243,8 +243,15 @@ Nightly maintenance workflow:
 
 ### Article archive
 
-Behavior: `src/app/core/archive/capture.md`. Seed once after the deploy that ships the commands,
-then check:
+Behavior: `src/app/core/archive/capture.md`. Run every command below from the deploy dir after
+pinning the deployed image first: without `APP_IMAGE`, compose falls back to the local `:latest`
+image, which deploys do not pull, and that image may not have the `archive` commands.
+
+```bash
+export APP_IMAGE="$(cat .last_deploy_image)"
+```
+
+Seed once after the deploy that ships the commands, then check:
 
 ```bash
 docker compose -f docker-compose.prod.yml run --rm app ai-news archive capture --all --no-download
@@ -256,6 +263,23 @@ Remove a URL, source or host on request (dry run first, then `--apply`):
 ```bash
 docker compose -f docker-compose.prod.yml run --rm app ai-news archive purge --host example.com
 docker compose -f docker-compose.prod.yml run --rm app ai-news archive purge --host example.com --apply
+```
+
+Archive articles that exist only in a backup (for example rows pruned before the archive existed).
+The dump is a plain `pg_dump` of one database (no `CREATE DATABASE`), so it loads into a scratch
+database; `import-db` only reads it and writes nothing to `articles`:
+
+```bash
+DUMP=backups/postgres_20261022T074337Z.sql.gz
+SCRATCH=ainews_restore_20261022
+docker compose -f docker-compose.prod.yml exec -T db sh -lc "createdb -U \"\$POSTGRES_USER\" $SCRATCH"
+gunzip -c "$DUMP" | docker compose -f docker-compose.prod.yml exec -T db \
+  sh -lc "psql -q -v ON_ERROR_STOP=1 -U \"\$POSTGRES_USER\" -d $SCRATCH" > /dev/null
+docker compose -f docker-compose.prod.yml run --rm app sh -c \
+  "ai-news archive import-db --source-url \"\${AINEWS_DATABASE_URL%/*}/$SCRATCH\""
+docker compose -f docker-compose.prod.yml run --rm app sh -c \
+  "ai-news archive import-db --source-url \"\${AINEWS_DATABASE_URL%/*}/$SCRATCH\" --apply"
+docker compose -f docker-compose.prod.yml exec -T db sh -lc "dropdb -U \"\$POSTGRES_USER\" $SCRATCH"
 ```
 
 ### Off-site backups (Backblaze B2)

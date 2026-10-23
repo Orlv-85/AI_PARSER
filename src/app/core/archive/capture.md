@@ -56,6 +56,15 @@ flowchart LR
 - `ai-news archive status` is read-only and prints counts by state, versions, size, coverage per
   first-seen day of the last `ARCHIVE_LOOKBACK_DAYS` and the top hosts without text. Tests:
   `test_capture_summary_reports_coverage`.
+- `ai-news archive import-db --source-url URL` archives articles of another database (a restored
+  dump) whose `url_canonical_hash` is in neither the current `articles` nor `archive_documents`, so
+  an existing document never gets an older text. The source is only read (columns that
+  `archive_articles` needs, plus `source_key` from its own `sources`); rows go as transient
+  `Article` objects through `archive_articles` in batches of `CAPTURE_BATCH_SIZE`, one commit per
+  batch. Dry run by default (`source_articles`, `selected`, `selected_with_text`); `--apply` adds
+  `documents` and `new_versions`. A missing SQLite file or a source without `articles` exits 2
+  without writing. Tests: `test_import_db_archives_only_missing_hashes`,
+  `test_import_db_dry_run_writes_nothing`.
 - Prune and `purge_evidence` never delete archive rows; only `ArchiveRepo.purge` with `apply=True`
   does. `ai-news archive purge` takes exactly one of `--url`, `--source`, `--host` (else exit 2),
   prints document and version counts, and deletes only with `--apply`. Tests:
@@ -78,6 +87,8 @@ flowchart LR
   versions explicitly, so SQLite (foreign keys off) and PostgreSQL behave the same.
 - decided 2026-10-23 (agent): the capture window counts documents by `first_seen_at`, so the
   coverage of a window does not depend on rows that prune has already removed.
+- decided 2026-10-23 (agent): `archive_articles` takes an optional `source_keys` map, because source
+  ids of a restored dump need not match the current `sources`.
 
 ## Invariants
 
@@ -89,8 +100,8 @@ flowchart LR
 ## Code map
 
 - `capture.py`: constants, `archive_articles` (sync of stored articles, no network), `capture`
-  (window, batches, summary) and `status`.
-- `cli/main.py`: `archive` Typer group (`capture`, `status`, `purge`).
+  (window, batches, summary), `status` and `import_db` (archive pruned rows from a dump).
+- `cli/main.py`: `archive` Typer group (`capture`, `status`, `purge`, `import-db`).
 - `storage/archive.py`: `ArchiveRepo` (upsert document, add version by hash, purge selection,
   state counts, window coverage, hosts without text, size).
 - `storage/models_sql.py`: `ArchiveDocument`, `ArchiveText` (tables `archive_documents`,
@@ -102,5 +113,6 @@ flowchart LR
 ## Tests
 
 - `tests/unit/test_article_archive.py`: sync, versions, re-collection, prune, evidence purge, repo
-  purge/status/size, capture and status, `archive purge` CLI, web import guard.
+  purge/status/size, capture and status, `archive purge` CLI, import from another database, web
+  import guard.
 - `tests/unit/test_daily_signals_migration.py`: migration round trip.
