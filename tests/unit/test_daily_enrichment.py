@@ -577,6 +577,56 @@ def test_unsupported_details_trigger_entailment_repair_with_reviewer_reason(
     assert repaired.summary == REPAIRED
 
 
+def test_first_summary_request_keeps_details_in_quote(session, tmp_path, monkeypatch):
+    rule = "Every name, number, role, product and attribution in a sentence must appear"
+    article(session)
+    article(session, 2, target=date(2026, 10, 11))
+    summaries = []
+
+    def respond(request):
+        body = json.loads(request.content)
+        system = body["messages"][0]["content"] if "messages" in body else ""
+        if "questions" in body or daily.TOPIC_FALLBACK_VERSION in system:
+            return provider_response(request)
+        if "entailment" in system:
+            # The first day's attempt-0 summary gets a reason, so its repair is the entailment one.
+            return provider_response(request, supported=len(summaries) > 1, reason="Quote omits X")
+        summaries.append(system)
+        if len(summaries) == 3:
+            # The second day's attempt-0 quote is ungrounded, so its repair is the quote one.
+            value = {"facts": [{"sentence": SUMMARY, "quote": "A quote absent from the source."}],
+                     "compared_products": []}
+            return httpx.Response(200, json={"model": "deepseek-flash",
+                "usage": {"prompt_tokens": 500, "completion_tokens": 90},
+                "choices": [{"finish_reason": "stop", "message": {"content": json.dumps(value)}}]})
+        return provider_response(request)
+
+    mock_client(monkeypatch, respond)
+    daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    daily.publish_day(session, settings(), date(2026, 10, 11), tmp_path / "cache")
+    # Order: day 1 attempt 0, its entailment repair, day 2 attempt 0, its quote repair.
+    assert len(summaries) == 4
+    for system in (summaries[0], summaries[2]):
+        assert rule in system and daily.SUMMARY_PROMPT_VERSION in system
+    assert "daily-summary-3" in summaries[1] and "daily-summary-2" in summaries[3]
+    for system in (summaries[1], summaries[3]):
+        assert rule not in system and daily.SUMMARY_PROMPT_VERSION not in system
+
+
+def test_provenance_records_summary_prompt_version(session, tmp_path, monkeypatch):
+    row = article(session)
+    mock_client(monkeypatch, provider_response)
+    daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    proof = json.loads(row.enrichment_provenance)
+    assert proof["summary_prompt"] == daily.SUMMARY_PROMPT_VERSION
+
+
+def test_reuse_ignores_summary_prompt_version(session):
+    row = article(session, proof=True)
+    assert "summary_prompt" not in json.loads(row.enrichment_provenance)
+    assert daily.reusable(row)
+
+
 def two_fact_response(request, supported_sentences):
     body = json.loads(request.content)
     system = body["messages"][0]["content"] if "messages" in body else ""

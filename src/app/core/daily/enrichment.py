@@ -37,6 +37,7 @@ from app.storage.models_sql import Article
 from app.storage.reenrich_pilot_journal import PilotJournal, PilotStopped
 
 DAILY_VERSION = "daily-publication-1"
+SUMMARY_PROMPT_VERSION = "daily-summary-details-1"
 CAPS = {"total": "5", "jev": "1", "deepseek": "4"}
 # A dropped connection may have been billed: accept its reservation and retry after 1, then 5 min.
 TRANSPORT_REVIEW_REASON = "daily-publication: transport failure, conservative reservation kept"
@@ -235,7 +236,11 @@ def grounded_summary(row, comparison, journal, client, secret):
             body["messages"][0]["content"] += (
                 " Prefer exactly ONE informative English sentence, at most 25 words. "
                 "Use a contiguous exact supporting quote of 30-80 words that supports "
-                "every assertion. Attribute vendor claims and preserve uncertainty.")
+                "every assertion. Attribute vendor claims and preserve uncertainty."
+                " Summary rule " + SUMMARY_PROMPT_VERSION + ":"
+                " Every name, number, role, product and attribution in a sentence must appear "
+                "in its own quote. When you attribute a claim, choose a quote that names who "
+                "makes it; if no such quote exists, state the claim without naming a speaker.")
         if repair:
             body["messages"][0]["content"] += (
                 " Semantic repair daily-summary-2: Return exactly ONE English sentence, "
@@ -351,7 +356,7 @@ def enrich(article, row, journal, client, keys, *, details=None):
         "rubric": RUBRIC_VERSION, "version": DAILY_VERSION,
         "jev_key": request_key("jev", body), "source_origin": row["origin"],
         "source_content_hash": fingerprint(row["content"]),
-        "summary": summary, "summary_review": review,
+        "summary": summary, "summary_review": review, "summary_prompt": SUMMARY_PROMPT_VERSION,
         "topic_source": "jev" if fallback is None else "deepseek_fallback",
         **({} if fallback is None else {"topic_fallback": fallback}),
     })
