@@ -49,7 +49,10 @@ CONTENT_LIMIT = 16000
 
 
 def jev_state(article: object, *, with_summary: bool = True) -> str:
-    """Bounded article text sent to Jev as `state` (the daily rubric leaves out the summary)."""
+    """Bounded article text sent to Jev as `state`.
+
+    The daily rubric leaves out the summary unless there is no content.
+    """
     title = str(getattr(article, "title", "") or "")[:TITLE_LIMIT]
     content = str(getattr(article, "content", "") or "")[:CONTENT_LIMIT]
     if not with_summary:
@@ -144,6 +147,9 @@ class JevRelevanceScorer:  # pylint: disable=too-many-instance-attributes
 
     def state(self, article: object) -> str:
         """The text classify sends for this article; also its key in the in-cycle cache."""
+        if self.daily_enrichment_enabled and not str(getattr(article, "content", "") or "").strip():
+            # No page text: the feed description is the only evidence besides the title.
+            return jev_state(article)
         return jev_state(article, with_summary=not self.daily_enrichment_enabled)
 
     def classify(self, article: Article) -> JevAssessment | None:

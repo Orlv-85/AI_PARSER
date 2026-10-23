@@ -249,6 +249,7 @@ PINNED_TEXT = {
     "daily_enrichment": "d9dab80771cb3908a45b5094fce3a4de5fbc7866652f22bfcacca685a9085bea",
     "plain": "1d5da0677f4673412268c107ea26c5bebb1a0e9c961b04a1122372d7c014b236",
     "admission_empty": "73358b694ace7d401bc6f09c3f381a9cadf964c985785ff927cfa0f210d3ba93",
+    "daily_feed_only": "a482cfc351a944e8a37803eb1cac3931ebdb8430d7d830b6b0e30e3272c130fe",
 }
 
 
@@ -279,11 +280,34 @@ def _sha(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-@pytest.mark.parametrize("mode", ["admission", "daily_enrichment", "plain", "admission_empty"])
+def _pinned_row(article: Article) -> dict:
+    row = _build_article_row(
+        item=article, config=SourceConfig(id="test", name="Test", type="rss",
+                                          url="https://example.com/feed"),
+        db_source_id=1, canonical="c", canonical_hash="h", admission_enabled=True,
+        assessment=JevAssessment(0.9, None, None, "accepted_ai_editorial", 0.9,
+                                 "NotComparison", 0.9),
+    )
+    assert row is not None
+    provenance: dict = json.loads(str(row["enrichment_provenance"]))
+    return provenance
+
+
+@pytest.mark.parametrize(
+    "mode", ["admission", "daily_enrichment", "plain", "admission_empty", "daily_feed_only"])
 def test_bounded_jev_text_is_pinned_per_mode(mode) -> None:
     article = (_pinned_article(summary=None, content=None) if mode == "admission_empty"
+               else _pinned_article(content=None) if mode == "daily_feed_only"
                else _pinned_article())
-    if mode.startswith("admission"):
+    if mode == "daily_feed_only":
+        sent = _sent_state(article, admission=True, daily=True)
+        # No content: the feed description is sent, the same text as the cache-key evidence.
+        assert sent == bounded_evidence(article)
+        # The provenance hash stays title + content, so enrichment reuses the answer.
+        provenance = _pinned_row(article)
+        assert provenance["admission_source_hash"] == fingerprint(
+            source_state({"title": article.title, "content": ""}))
+    elif mode.startswith("admission"):
         sent = _sent_state(article, admission=True, daily=False)
         # The admission cache key hashes the same text that is sent.
         assert bounded_evidence(article) == sent
@@ -292,17 +316,17 @@ def test_bounded_jev_text_is_pinned_per_mode(mode) -> None:
         sent = _sent_state(article, admission=True, daily=True)
         # Evidence for the cache key keeps the summary in every mode.
         assert _sha(bounded_evidence(article)) == PINNED_TEXT["admission"]
-        row = _build_article_row(
-            item=article, config=SourceConfig(id="test", name="Test", type="rss",
-                                              url="https://example.com/feed"),
-            db_source_id=1, canonical="c", canonical_hash="h", admission_enabled=True,
-            assessment=JevAssessment(0.9, None, None, "accepted_ai_editorial", 0.9,
-                                     "NotComparison", 0.9),
-        )
-        assert row is not None
-        provenance = json.loads(str(row["enrichment_provenance"]))
+        provenance = _pinned_row(article)
         assert provenance["admission_source_hash"] == fingerprint(sent)
         assert sent == source_state({"title": article.title, "content": article.content})
     else:
         sent = _sent_state(article, admission=False, daily=False)
     assert _sha(sent) == PINNED_TEXT[mode]
+
+
+def test_daily_feed_only_candidate_sends_feed_description() -> None:
+    for content in (None, "   "):
+        article = _article().model_copy(update={"summary": "Feed line", "content": content})
+        assert "Summary: Feed line" in _sent_state(article, admission=True, daily=True)
+    article = _article().model_copy(update={"summary": "Feed line", "content": "Body"})
+    assert "Summary:" not in _sent_state(article, admission=True, daily=True)

@@ -328,6 +328,39 @@ def test_ordinary_ingestion_uses_rubric_journal_and_reusable_admission(tmp_path,
     assert data["answers"]["comparison"]["choice"] == "NotComparison"
 
 
+def test_feed_only_admission_is_reused_by_enrichment(tmp_path, session):
+    from logging import getLogger  # pylint: disable=import-outside-toplevel
+
+    states = []
+
+    def respond(request):
+        states.append(json.loads(request.content)["state"])
+        return httpx.Response(200, json={"model": "jev-1.13.0", "usage": {"input_tokens": 500},
+            "answers": {"ai_relevant": {"noul": 0.99},
+                "admission": {"choice": "accepted_ai_editorial", "confidence": 0.99},
+                "category": {"choice": "AI Applications", "confidence": 0.99},
+                "comparison": {"choice": "NotComparison", "confidence": 0.99}}})
+
+    item = CoreArticle(source_key="test", title="AI document extraction",
+                       url="https://example.org/1", summary="Feed line about AI", content=None)
+    journal = PilotJournal(tmp_path / "admission.sqlite3", {"version": "test"}, daily.CAPS)
+    with httpx.Client(transport=httpx.MockTransport(respond),
+                      headers={"Authorization": "Bearer test-key"}) as client:
+        assessment = JevRelevanceScorer(client, "jev-1.13.0", getLogger(__name__),
+            semantic_admission_enabled=True, daily_enrichment_enabled=True,
+            payment_journal=journal).classify(item)
+    journal.close()
+    assert len(states) == 1
+    assert "Summary: Feed line about AI" in states[0]
+    config = SourceConfig(id="test", name="Test", type="rss", url="https://example.org/feed")
+    values = _build_article_row(item=item, config=config, db_source_id=1,
+        canonical=item.url, canonical_hash="hash", assessment=assessment, admission_enabled=True)
+    row = article(session)
+    row.enrichment_provenance = values["enrichment_provenance"]
+    data = daily.admission_from_proof(row, {"title": item.title, "content": ""})
+    assert data["answers"]["admission"]["choice"] == "accepted_ai_editorial"
+
+
 @pytest.mark.parametrize("schema", ["facts", "string_flags", "list"])
 def test_review_schema_recovery_does_not_regenerate_summary(
     session, tmp_path, monkeypatch, schema,

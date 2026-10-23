@@ -239,6 +239,11 @@ function. Each rule lists the tests that check it.
   become articles; no keyword fallback runs. Category is independent of admission. Tests:
   `test_admission_choice_mapping`, `test_admission_request_only_when_enabled`,
   `test_admission_and_cache_all_ingestion_paths`, `test_ambiguity_cached_category_independent_and_policy_invalidates`.
+- With daily enrichment the assessment text is title and content; a candidate without content (an
+  RSS item whose page could not be extracted) is assessed on title, feed description and content.
+  The cache key and the enrichment provenance hash do not change. Tests:
+  `test_bounded_jev_text_is_pinned_per_mode`, `test_daily_feed_only_candidate_sends_feed_description`,
+  `test_feed_only_admission_is_reused_by_enrichment`.
 - Decisions are cached in `admission_decisions` by `admission_cache_key` (canonical hash,
   `evidence_hash` of `bounded_evidence`, model, policy version, prompt version). Rejected and
   unresolved candidates are not sent again while the key is unchanged; a cached accept is reused
@@ -353,6 +358,7 @@ function. Each rule lists the tests that check it.
 | Screening outage pauses collection, no keyword fallback | an outage is "screening unavailable", not an article decision (admission spec); a keyword score must not pass for a semantic check, the ledger replays instead (admission prompt 2026-10-10, `docs/archive/`) |
 | Durable pending ledger, replayed before the fresh fetch | unchecked candidates must not be lost; after a 304 or list rotation the feed no longer shows them (`docs/configuration.md`) |
 | Stale pending candidates are settled without screening | a feed such as OpenAI lists its archive since 2015; replaying 50 old pending rows per run was a paid Jev call each for articles no digest (built by publication day) will show, and delayed fresh ones; decided 2026-10-23 (agent) |
+| Feed description is admission evidence only when there is no content | decided 2026-10-23 (agent): without it Jev decides on the title alone (openai.com answers 403; 23 of 29 OpenAI candidates unresolved); the summary is dropped elsewhere because a stored summary may be generated, but at ingestion it is the publisher's feed text. Cached decisions are kept so the feed archive is not re-screened |
 | Cache rejects and unresolved by evidence, model, policy, prompt | the same candidate is not paid for again while nothing changed (admission spec) |
 | Notice clears only after a fresh successful assessment | a cache-only or empty run does not prove the provider works (admission spec) |
 | Oversized input held as unresolved, no pause | one oversized article must not stop collection (commit 01bc4c2) |
@@ -459,7 +465,7 @@ web update (thread or process)               web/service.py: UpdateRunService
 | Keyword relevance | `AI_KEYWORDS`, `STOP_WORDS` in `core/ingestion/scoring.py` | only used with admission off |
 | Rank weights, half-life | `rank_score`, `freshness_score` in `core/ingestion/scoring.py` | no rescoring of stored rows |
 | Admission choices | `decision_from_assessment` in `core/ingestion/admission.py` and the admission question in `core/jev.py` | bump policy or prompt version |
-| Evidence bound sent to Jev | `jev_state` and `TITLE_LIMIT` / `SUMMARY_LIMIT` / `CONTENT_LIMIT` in `core/jev.py` (used by `bounded_evidence`, `JevRelevanceScorer.state`, the daily provenance hash) | changes cache keys: bump the prompt version; `reenrich_pilot.source_state`, `core/weekly/input.py`, `core/weekly/frozen.py` repeat the daily text; test `test_bounded_jev_text_is_pinned_per_mode` |
+| Evidence bound sent to Jev | `jev_state` and `TITLE_LIMIT` / `SUMMARY_LIMIT` / `CONTENT_LIMIT` in `core/jev.py` (used by `bounded_evidence`, `JevRelevanceScorer.state`, the daily provenance hash) | changes cache keys: bump the prompt version; `reenrich_pilot.source_state`, `core/weekly/input.py`, `core/weekly/frozen.py` repeat the daily text; in daily mode `JevRelevanceScorer.state` adds the summary for content-less candidates; test `test_bounded_jev_text_is_pinned_per_mode` |
 | Pause notice text | `PAUSED_MESSAGE` in `storage/admission.py` | public API and admin status show it |
 | Date evidence | `ingest/date_evidence.py` | bump `DATE_EVIDENCE_VERSION` |
 
