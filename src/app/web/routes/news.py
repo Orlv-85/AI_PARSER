@@ -8,7 +8,7 @@ import json
 from datetime import UTC, date, datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
@@ -177,7 +177,11 @@ def build_news_router(deps: WebDeps) -> APIRouter:
         offset: int = Query(0, ge=0),
         min_ai_relevance: float = Query(0.2, ge=0.0, le=1.0),
         include_content: bool = False,
+        request: Request,
     ) -> list[DigestLinkFeedItem]:
+        # Without a session or the publish token the content fields are left out (set by
+        # the auth middleware); the answer is otherwise the same, so old clients keep working.
+        include_content = include_content and getattr(request.state, "full_text_allowed", False)
         try:
             deps.create_all()
             with deps.SessionLocal() as session:

@@ -812,6 +812,28 @@ def test_post_app_json_reports_clear_unauthorized_error(monkeypatch, token, hint
     assert "publish-token" not in str(excinfo.value)
 
 
+def test_links_reads_send_publish_token(monkeypatch) -> None:
+    bridge = _load_bridge_module()
+    calls: list[tuple[str, dict]] = []
+
+    def fake_read_json_response(url, **kwargs):
+        calls.append((url, kwargs))
+        return [{"url": "https://example.com/a"}]
+
+    monkeypatch.setattr(bridge, "read_json_response", fake_read_json_response)
+    monkeypatch.setenv("AINEWS_PUBLISH_API_TOKEN", "publish-token-0123456789abcdef0123")
+    bridge.__dict__["_fetch_feed_items"](base_url="http://app.test", report_date="2026-10-17",
+                                         limit=5)
+    bridge.__dict__["_fetch_news_links_range"](base_url="http://app.test", date_from="2026-10-17",
+                                               date_to="2026-10-17", limit=5)
+
+    assert len(calls) == 2
+    for url, kwargs in calls:
+        assert "/api/news/links?" in url and "include_content=true" in url
+        assert kwargs["headers"] == {
+            "Authorization": "Bearer publish-token-0123456789abcdef0123"}
+
+
 def test_publish_paths_post_through_authenticated_helper(monkeypatch, tmp_path) -> None:
     bridge = _load_bridge_module()
     posted: list[str] = []

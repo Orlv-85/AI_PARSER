@@ -121,11 +121,17 @@ AINEWS_PUBLISH_API_TOKEN=<openssl rand -hex 32>
 - The token must be at least 32 characters; an empty value disables bearer auth.
 - It is accepted only for `POST /api/news/digests` and
   `POST /api/news/weekly-analytics`, not for other admin APIs.
+- `GET /api/news/links` is public, but `include_content=true` returns `summary`,
+  `content` and `rank_score` only to a valid session cookie or this bearer
+  token; other callers get the same list without those fields (status 200).
+  Stored article text is internal and never republished.
 - `scripts/digest_generator.py` sends `Authorization: Bearer <token>` on every
-  POST to the app when `AINEWS_PUBLISH_API_TOKEN` is set in its environment.
+  request to the app (its `/api/news/links` reads and its POSTs) when
+  `AINEWS_PUBLISH_API_TOKEN` is set in its environment.
   `scripts/run_weekly_analytics_job.sh` reads the token from the app container
   when it is not exported.
-- With auth disabled (local dev), writes stay open as before.
+- With auth disabled (local dev), writes stay open and `include_content` works
+  for everyone, as before.
 - In production the deploy workflows write the value from the repository secret
   `AINEWS_PUBLISH_API_TOKEN` into the server `.env` (see [deploy](deploy.md)).
 

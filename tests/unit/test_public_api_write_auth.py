@@ -1,4 +1,5 @@
 import re
+from datetime import UTC, datetime
 from importlib import import_module
 
 import pytest
@@ -10,7 +11,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import Settings, get_settings
-from app.storage.models_sql import Base
+from app.storage.models_sql import Article, Base
 from app.web.app import create_app
 
 _PUBLISH_TOKEN = "publish-token-0123456789abcdef0123"
@@ -179,6 +180,71 @@ def test_settings_treat_blank_publish_token_as_unset() -> None:
     settings = Settings(_env_file=None, publish_api_token="   ")
 
     assert settings.publish_api_token is None
+
+
+_LINKS_URL = "/api/news/links?date=2026-10-20&include_content=true"
+_CONTENT_FIELDS = ("summary", "content", "rank_score")
+
+
+def _seed_article(tmp_path) -> None:
+    engine = create_engine(f"sqlite:///{tmp_path}/public-write-auth.db", future=True)
+    Base.metadata.create_all(bind=engine)
+    with sessionmaker(bind=engine, future=True)() as session:
+        session.add(Article(
+            title="AI story", summary="Feed line", content="Full third-party text.",
+            url="https://example.com/a", url_canonical="https://example.com/a",
+            url_canonical_hash="a" * 64, ai_relevance_score=0.9, rank_score=0.5,
+            published_at=datetime(2026, 10, 20, 12, tzinfo=UTC),
+        ))
+        session.commit()
+
+
+def _links(client: TestClient, headers: dict[str, str] | None = None) -> list[dict]:
+    response = client.get(_LINKS_URL, headers=headers or {})
+    assert response.status_code == 200
+    items: list[dict] = response.json()
+    assert len(items) == 1
+    return items
+
+
+def test_anonymous_links_never_get_content(monkeypatch, tmp_path) -> None:
+    client = _build_client(monkeypatch, tmp_path)
+    _seed_article(tmp_path)
+
+    item = _links(client)[0]
+
+    assert item["title"] == "AI story"
+    assert not set(_CONTENT_FIELDS) & set(item)
+
+
+def test_logged_in_links_get_content(monkeypatch, tmp_path) -> None:
+    client = _build_client(monkeypatch, tmp_path)
+    _seed_article(tmp_path)
+    _login(client)
+
+    item = _links(client)[0]
+
+    assert item["content"] == "Full third-party text."
+    assert item["summary"] == "Feed line"
+
+
+def test_publish_token_links_get_content(monkeypatch, tmp_path) -> None:
+    client = _build_client(monkeypatch, tmp_path)
+    _seed_article(tmp_path)
+
+    item = _links(client, {"Authorization": f"Bearer {_PUBLISH_TOKEN}"})[0]
+    assert item["content"] == "Full third-party text."
+    wrong = _links(client, {"Authorization": f"Bearer {_PUBLISH_TOKEN}x"})[0]
+    assert not set(_CONTENT_FIELDS) & set(wrong)
+
+
+def test_auth_disabled_links_content_unchanged(monkeypatch, tmp_path) -> None:
+    client = _build_client(monkeypatch, tmp_path, auth_enabled=False, publish_token=None)
+    _seed_article(tmp_path)
+
+    item = _links(client)[0]
+
+    assert item["content"] == "Full third-party text."
 
 
 @pytest.mark.parametrize("method", ["POST", "PUT", "PATCH", "DELETE"])
