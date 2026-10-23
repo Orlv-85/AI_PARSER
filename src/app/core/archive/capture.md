@@ -9,8 +9,8 @@ covers:
 
 Private, permanent copy of collected articles: one document per canonical URL hash and
 append-only text versions. Retention and cleanup never delete it. Spec:
-`specs/016-article-archive/spec.md` (phases 1-2: storage, archive-before-prune, seed and
-operator commands; downloads come in phase 3).
+`specs/016-article-archive/spec.md` (phases 1-3: storage, archive-before-prune, seed and
+operator commands, downloads with retries).
 
 ## Behavior
 
@@ -28,7 +28,14 @@ flowchart LR
   pending --> delete
   cli["ai-news archive capture"] --> window["Window: first seen within ARCHIVE_LOOKBACK_DAYS, or --all"]
   window --> batches["archive_articles per CAPTURE_BATCH_SIZE rows; commit per batch"]
-  batches --> summary["archive_capture_finished JSON line"]
+  batches --> nodl{"--no-download?"}
+  nodl -- yes --> summary["archive_capture_finished JSON line"]
+  nodl -- no --> due["Due: window documents without text, next_attempt_at reached"]
+  due --> reuse["Reuse extracted daily-publish page (read only)"]
+  reuse --> download["Download the rest: caps per run and host, stop at --max-seconds"]
+  download --> record["Record per document: version, retry or gave_up; commit"]
+  record --> clean["Delete raw page dirs older than ARCHIVE_RAW_KEEP_DAYS"]
+  clean --> summary
 ```
 
 - `archive_articles` makes one `ArchiveDocument` per `url_canonical_hash` with the article's
@@ -45,14 +52,48 @@ flowchart LR
   `test_prune_dry_run_does_not_archive`.
 - `ai-news archive capture` syncs articles discovered within `ARCHIVE_LOOKBACK_DAYS` (all
   articles with `--all`) through `archive_articles`, in batches of `CAPTURE_BATCH_SIZE` with a
-  commit per batch. It makes no network request; with or without `--no-download` there is no
-  download step yet, and `--max-seconds` only bounds the future download step. Tests:
+  commit per batch. With `--no-download` it stops there and makes no network request. Tests:
   `test_capture_window_and_seed_make_no_requests`.
+- Due documents: `next_attempt_at` empty or reached, and either `pending` and first seen in the
+  same window as the coverage (every pending document with `--all`) or `failed` of any age, so the
+  retry schedule can finish after the window; newest first, alternating hosts so one host does not
+  hold every worker. Tests:
+  `test_capture_window_and_seed_make_no_requests`, `test_capture_retry_schedule_then_gives_up`.
+- A due document whose URL has a completed attempt with quality `extracted`, at least
+  `ARCHIVE_MIN_TEXT_CHARS` and a text hash matching its evidence in the daily-publish cache
+  (`DAILY_CACHE_ROOT`) gets that text as an `origin = source_page` version without a request. The
+  capture only reads that cache. Tests: `test_capture_reuses_daily_publish_page`.
+- The rest is downloaded through `SourcePageDownloader` on `ARCHIVE_CACHE_ROOT` (robots.txt, crawl
+  delay, per-host pacing, redirects, body limit, 429/503 pause, fetcher user agent) with
+  `ARCHIVE_DOWNLOAD_CONCURRENCY` workers. An extracted page of at least `ARCHIVE_MIN_TEXT_CHARS`
+  becomes an `origin = source_page` version with `EXTRACTION_VERSION`, final URL and HTTP status;
+  the document is `archived`. Tests: `test_capture_downloads_and_archives_page`.
+- At most `ARCHIVE_MAX_DOWNLOADS` downloads per run and `ARCHIVE_MAX_PER_HOST` per host
+  (`skipped_cap`); no download starts after `--max-seconds` (`skipped_time`). Skipped documents
+  are unchanged. Tests: `test_capture_respects_caps_and_time`.
+- `PERMANENT_ISSUES` set `gave_up` at once. A robots result counts as permanent only when the
+  cached robots.txt answered 200, 404 or 410; an unavailable robots.txt is a retryable
+  `robots_unavailable`. Tests: `test_capture_gives_up_on_permanent_issues`.
+- Any other failure sets `failed` and `next_attempt_at = now + ARCHIVE_RETRY_DELAYS[attempts - 1]`;
+  the failure after the last delay sets `gave_up`. `last_issue` keeps the latest issue, an
+  HTTP status issue before quality issues. Tests:
+  `test_capture_retry_schedule_then_gives_up`.
+- A retry deletes that URL's page directory in `ARCHIVE_CACHE_ROOT` before downloading again; the
+  daily-publish cache is never written or cleared. A pending document whose page was downloaded by
+  a killed run is recorded from that attempt without a new request. Tests:
+  `test_capture_retry_clears_only_archive_cache`, `test_capture_resumes_attempt_of_killed_run`.
+- When the downloader reports an outage, documents without an attempt or failed only by
+  `download_outage` or `ConnectError` keep their state and attempts, and their cache entries are
+  deleted so the next run retries them. Tests: `test_capture_outage_keeps_attempts`.
+- After the downloads the capture deletes page directories in `ARCHIVE_CACHE_ROOT` older than
+  `ARCHIVE_RAW_KEEP_DAYS` and robots files older than `ARCHIVE_ROBOTS_KEEP_HOURS`. Tests:
+  `test_capture_deletes_old_raw_pages`.
 - The capture ends with one `archive_capture_finished` JSON log line, which the CLI also prints:
-  `window_days` (null with `--all`), `articles_synced`, `window_documents` and `window_archived` (documents first seen
-  in the window), `coverage_pct`, `new_versions` by origin, `archive_bytes`,
-  `archive_size_warning` (from `ARCHIVE_SIZE_WARN_BYTES`). Tests:
-  `test_capture_summary_reports_coverage`.
+  `window_days` (null with `--all`), `articles_synced`, `window_documents` and `window_archived`
+  (documents first seen in the window), `coverage_pct`, `new_versions` by origin, `cache_reused`,
+  `downloads`, `failed` by issue, `gave_up`, `skipped_cap`, `skipped_time`, `outage`,
+  `outage_kept`, `raw_dirs_deleted`, `archive_bytes`, `archive_size_warning` (from
+  `ARCHIVE_SIZE_WARN_BYTES`). Tests: `test_capture_summary_reports_coverage`.
 - `ai-news archive status` is read-only and prints counts by state, versions, size, coverage per
   first-seen day of the last `ARCHIVE_LOOKBACK_DAYS` and the top hosts without text. Tests:
   `test_capture_summary_reports_coverage`.
@@ -89,6 +130,17 @@ flowchart LR
   coverage of a window does not depend on rows that prune has already removed.
 - decided 2026-10-23 (agent): `archive_articles` takes an optional `source_keys` map, because source
   ids of a restored dump need not match the current `sources`.
+- Downloads reuse `SourcePageDownloader` and its politeness rules unchanged; the capture adds only
+  caps, the time limit and the retry table (plan.md, "Politeness").
+- decided 2026-10-23 (agent): the downloader reports robots "disallowed" and "unavailable" as one
+  issue; the capture tells them apart by the cached robots status, so one 5xx on robots.txt does
+  not give up every page of a host. Robots files expire after `ARCHIVE_ROBOTS_KEEP_HOURS` so a
+  retry asks again.
+- decided 2026-10-23 (agent): `failed` documents stay due after the window, because
+  `ARCHIVE_RETRY_DELAYS` add up to more than `ARCHIVE_LOOKBACK_DAYS` and FR-010 requires
+  `gave_up` after the last delay; coverage still counts only the window.
+- decided 2026-10-23 (agent): `ConnectError` results are recorded after all downloads, because only
+  then is it known whether they were part of an outage.
 
 ## Invariants
 
@@ -100,10 +152,13 @@ flowchart LR
 ## Code map
 
 - `capture.py`: constants, `archive_articles` (sync of stored articles, no network), `capture`
-  (window, batches, summary), `status` and `import_db` (archive pruned rows from a dump).
+  (window, batches, due, reuse, downloads, record, clean, summary), `status` and `import_db`
+  (archive pruned rows from a dump).
+- `storage/article_evidence_cache.py`: shared `PageCache`, `SourcePageDownloader`,
+  `make_http_client` (not changed by the archive).
 - `cli/main.py`: `archive` Typer group (`capture`, `status`, `purge`, `import-db`).
 - `storage/archive.py`: `ArchiveRepo` (upsert document, add version by hash, purge selection,
-  state counts, window coverage, hosts without text, size).
+  due selection, `record_attempt`, state counts, window coverage, hosts without text, size).
 - `storage/models_sql.py`: `ArchiveDocument`, `ArchiveText` (tables `archive_documents`,
   `archive_texts`).
 - `storage/migrations/versions/e7b4c2a9d150_add_article_archive.py`: additive migration after
@@ -115,4 +170,6 @@ flowchart LR
 - `tests/unit/test_article_archive.py`: sync, versions, re-collection, prune, evidence purge, repo
   purge/status/size, capture and status, `archive purge` CLI, import from another database, web
   import guard.
+- `tests/unit/test_archive_capture.py`: due selection, cache reuse, downloads, caps and time,
+  retries, outage, raw page cleanup (all with `httpx.MockTransport`).
 - `tests/unit/test_daily_signals_migration.py`: migration round trip.

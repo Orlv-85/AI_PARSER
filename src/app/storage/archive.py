@@ -11,6 +11,8 @@ from app.storage.models_sql import ArchiveDocument, ArchiveText
 
 STATE_PENDING = "pending"
 STATE_ARCHIVED = "archived"
+STATE_FAILED = "failed"
+STATE_GAVE_UP = "gave_up"
 
 
 def text_sha256(text: str) -> str:
@@ -130,3 +132,28 @@ class ArchiveRepo:
             .group_by(ArchiveDocument.host)
             .order_by(func.count().desc(), ArchiveDocument.host).limit(limit)).all()
         return [(str(host), int(count)) for host, count in rows]
+
+    def due(self, since: datetime | None, now: datetime) -> list[ArchiveDocument]:
+        """Documents without text that may be downloaded now, newest first: pending ones first
+        seen since `since` (all when None) and failed ones of any age."""
+        stmt = (select(ArchiveDocument)
+                .where(ArchiveDocument.state.in_((STATE_PENDING, STATE_FAILED)),
+                       ArchiveDocument.next_attempt_at.is_(None)
+                       | (ArchiveDocument.next_attempt_at <= now))
+                .order_by(ArchiveDocument.first_seen_at.desc(), ArchiveDocument.id.desc()))
+        if since is not None:
+            # Documents already in the retry schedule stay due after the window (FR-010).
+            stmt = stmt.where((ArchiveDocument.first_seen_at >= since)
+                              | (ArchiveDocument.state == STATE_FAILED))
+        return list(self.session.scalars(stmt))
+
+    def record_attempt(self, document: ArchiveDocument, *, issue: str | None, gave_up: bool,
+                       next_attempt_at: datetime | None) -> None:
+        """Count one download attempt; a success comes with `add_version` (issue None)."""
+        document.attempts = (document.attempts or 0) + 1
+        document.last_issue = issue
+        document.next_attempt_at = next_attempt_at
+        if issue is not None:
+            document.state = STATE_GAVE_UP if gave_up else STATE_FAILED
+        document.updated_at = datetime.now(UTC)
+        self.session.flush()
