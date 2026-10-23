@@ -172,3 +172,30 @@ fresh calls on set B, about $0.04, to see whether B's 10% partial and held is th
 - Owner (product, yes/no): ship V1 now and accept up to ~10% of today's clean summaries becoming
   partial or held, in exchange for A's 3/25 → 11/25? Recommendation: no, measure B's noise floor
   first (~$0.04).
+
+## Addendum: noise floor on set B (2026-10-24)
+
+Owner approved (~$0.04). Today's attempt-0 text (`C0`) with fresh calls on the same 30 set B
+articles, in new journals (`journals/C0.sqlite3`, `journals/jev-C0.sqlite3`) under a $0.05 guard.
+Runner: `data/summary-grounding-pilot/run_noise_floor.py` (sha256
+`8396515701c96e71c5e2ffe113cb4cae29b31679d83806f1ea3a83e1e5fe6366`), which imports
+`run_variants.py` unchanged and only swaps the variant table, the cap and the set. Run by the
+coordinator session (Claude Opus 5.5); no judge pass.
+
+| set B | today, journals | C0 (today, fresh) | V1 |
+|---|---|---|---|
+| full / partial / held | 30 / 0 / 0 | 29 / 1 / 0 | 27 / 2 / 1 |
+| DeepSeek accepts first review | 30/30 | 27/30 | 25/30 |
+| Jev reject at 0.5 | 0/30 | 6/30 | 6/29 |
+| Jev reject at 0.6 | 4/30 | 10/30 | 8/29 |
+| mean words | 29.9 | 31.0 | 35.9 |
+| DeepSeek micro-USD per article | 1081 | 1118 | 1254 |
+
+- Spend: DeepSeek $0.0335 (72 calls), Jev $0.0007 (30 calls); all calls in state `response`.
+- Only 1 of 30 C0 final summaries equals V1's: a fresh run of today's text already changes most
+  summaries.
+- Reading: B's Jev reject share under V1 (20%) is the same as a fresh run of today's text, so it is
+  noise of a new summary, not the prompt. V1's partial or held on B is 3/30 against 1/30 for C0;
+  two articles on 30 is within chance. The B gate of the recommendation is met within noise.
+- Updated recommendation: ship V1 (text in "Run" above) through a code change with the feature
+  doc (`src/app/core/daily/enrichment.md`) and tests, and watch the held share of the first nights.
