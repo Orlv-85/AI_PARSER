@@ -279,6 +279,13 @@ function. Each rule lists the tests that check it.
   `test_outage_preserves_verified_and_replays_after_list_rotation`, `test_replay_and_fresh_fetch_share_source_savepoint`,
   `test_redirect_identity_survives_pending_body_replay`,
   `test_pending_replay_is_bounded_by_list_pending_limit`.
+- A pending body candidate whose stored `published_at` is older than `PENDING_REPLAY_MAX_AGE_DAYS`
+  is archive material: it is settled (`stale_pending`) without a Jev call and is not stored as an
+  article. Stale rows are settled before the replay batch is taken, so they do not use
+  `PENDING_REPLAY_LIMIT`. Candidates without a parsable `published_at` and HTML link placeholders are
+  replayed as above. Tests: `test_stale_pending_candidate_is_settled_without_screening`,
+  `test_recent_and_undated_pending_candidates_are_still_replayed`,
+  `test_stale_pending_does_not_use_the_replay_limit`.
 - HTML: each unknown link gets a pending placeholder before download; an exclusion, a decision or a
   known hash settles it; a temporary download or parse failure keeps it pending. Tests:
   `test_html_article_failure_retains_retry_and_continues`, `test_confirmed_html_exclusion_settles_before_304`.
@@ -345,6 +352,7 @@ function. Each rule lists the tests that check it.
 | Admission is opt-in; local default off, production on | legacy behavior stays when off (admission spec); production enabled by owner decision (activation record) |
 | Screening outage pauses collection, no keyword fallback | an outage is "screening unavailable", not an article decision (admission spec); a keyword score must not pass for a semantic check, the ledger replays instead (admission prompt 2026-10-10, `docs/archive/`) |
 | Durable pending ledger, replayed before the fresh fetch | unchecked candidates must not be lost; after a 304 or list rotation the feed no longer shows them (`docs/configuration.md`) |
+| Stale pending candidates are settled without screening | a feed such as OpenAI lists its archive since 2015; replaying 50 old pending rows per run was a paid Jev call each for articles no digest (built by publication day) will show, and delayed fresh ones; decided 2026-10-23 (agent) |
 | Cache rejects and unresolved by evidence, model, policy, prompt | the same candidate is not paid for again while nothing changed (admission spec) |
 | Notice clears only after a fresh successful assessment | a cache-only or empty run does not prove the provider works (admission spec) |
 | Oversized input held as unresolved, no pause | one oversized article must not stop collection (commit 01bc4c2) |

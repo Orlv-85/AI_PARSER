@@ -1,6 +1,6 @@
 import json
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from logging import getLogger
 
 import httpx
@@ -11,7 +11,11 @@ from sqlalchemy.orm import sessionmaker
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
 from app.core.canonicalize import canonical_url_hash
-from app.core.ingestion.pipeline import PENDING_REPLAY_LIMIT, run_fetch_cycle
+from app.core.ingestion.pipeline import (
+    PENDING_REPLAY_LIMIT,
+    PENDING_REPLAY_MAX_AGE_DAYS,
+    run_fetch_cycle,
+)
 from app.core.jev import (
     ADMISSION_CONSECUTIVE_TRANSPORT_LIMIT,
     ADMISSION_TRANSPORT_RETRY_DELAYS,
@@ -32,6 +36,9 @@ from app.storage.models_sql import (
 )
 from app.storage.models_sql import Article as StoredArticle
 from app.storage.reenrich_pilot_journal import PilotJournal
+
+# Scenario dates stay inside PENDING_REPLAY_MAX_AGE_DAYS whatever the run date.
+RECENT = datetime.now(UTC).replace(microsecond=0) - timedelta(days=1)
 
 
 class Scenario:  # pylint: disable=too-many-instance-attributes
@@ -55,7 +62,7 @@ class Scenario:  # pylint: disable=too-many-instance-attributes
         self.items = [Article(
             source_key="s1", title=f"AI research release {i}",
             url=f"https://example.com/story-{i}",
-            published_at=datetime(2026, 10, 4, 12, tzinfo=UTC),
+            published_at=RECENT,
             summary=f"Study {i}", content=f"AI is central in research {i}.",
         ) for i in range(1, 4)]
         self.answers = {}
@@ -222,7 +229,7 @@ class AdmissionRig:
 def add_items(scenario, total):
     scenario.items = [Article(
         source_key="s1", title=story_title(i), url=f"https://example.com/story-{i}",
-        published_at=datetime(2026, 10, 4, 12, tzinfo=UTC),
+        published_at=RECENT,
         summary=f"Study {i}", content=f"AI is central in research {i}.",
     ) for i in range(1, total + 1)]
 
@@ -619,7 +626,7 @@ def test_pending_replay_is_bounded_by_list_pending_limit(monkeypatch, tmp_path):
     scenario.items = [Article(
         source_key="s1", title=f"AI research release {i}",
         url=f"https://example.com/story-{i}",
-        published_at=datetime(2026, 10, 4, 12, tzinfo=UTC),
+        published_at=RECENT,
         summary=f"Study {i}", content=f"AI is central in research {i}.",
     ) for i in range(1, PENDING_REPLAY_LIMIT + 3)]
     scenario.fail_at = 1
@@ -636,6 +643,64 @@ def test_pending_replay_is_bounded_by_list_pending_limit(monkeypatch, tmp_path):
     assert scenario.run().new == 2
     assert not [r for r in scenario.rows(AdmissionDecision) if r.provider_status == "pending"]
 
+
+
+def _aged_items(ages):
+    return [Article(
+        source_key="s1", title=f"AI research release {i}",
+        url=f"https://example.com/story-{i}",
+        published_at=None if age is None else datetime.now(UTC) - timedelta(days=age),
+        summary=f"Study {i}", content=f"AI is central in research {i}.",
+    ) for i, age in enumerate(ages, start=1)]
+
+
+def _leave_pending(scenario):
+    scenario.fail_at = 1
+    assert scenario.run().screening_paused == 1
+    scenario.fail_at = None
+    scenario.items = []
+    scenario.not_modified = True
+    scenario.requests.clear()
+
+
+def _pending(scenario):
+    return [r for r in scenario.rows(AdmissionDecision) if r.provider_status == "pending"]
+
+
+def test_stale_pending_candidate_is_settled_without_screening(monkeypatch, tmp_path):
+    scenario = Scenario(tmp_path, monkeypatch, "rss", False)
+    scenario.items = _aged_items([PENDING_REPLAY_MAX_AGE_DAYS + 1])
+    _leave_pending(scenario)
+    assert len(_pending(scenario)) == 1
+    assert scenario.run().new == 0
+    assert not scenario.requests
+    assert not _pending(scenario)
+    assert [r.reason for r in scenario.rows(AdmissionDecision)] == ["stale_pending"]
+    assert not scenario.rows(StoredArticle)
+
+
+def test_recent_and_undated_pending_candidates_are_still_replayed(monkeypatch, tmp_path):
+    scenario = Scenario(tmp_path, monkeypatch, "rss", False)
+    scenario.items = _aged_items([PENDING_REPLAY_MAX_AGE_DAYS - 1, None])
+    _leave_pending(scenario)
+    assert len(_pending(scenario)) == 2
+    scenario.run()
+    assert len(scenario.requests) == 2
+    assert not _pending(scenario)
+    assert "stale_pending" not in {r.reason for r in scenario.rows(AdmissionDecision)}
+
+
+def test_stale_pending_does_not_use_the_replay_limit(monkeypatch, tmp_path):
+    scenario = Scenario(tmp_path, monkeypatch, "rss", False)
+    stale = [PENDING_REPLAY_MAX_AGE_DAYS + 1] * (PENDING_REPLAY_LIMIT + 2)
+    scenario.items = _aged_items([*stale, 1])
+    _leave_pending(scenario)
+    assert len(_pending(scenario)) == PENDING_REPLAY_LIMIT + 3
+    assert scenario.run().new == 1
+    assert len(scenario.requests) == 1
+    assert not _pending(scenario)
+    reasons = [r.reason for r in scenario.rows(AdmissionDecision)]
+    assert reasons.count("stale_pending") == PENDING_REPLAY_LIMIT + 2
 
 def test_rss_records_known_items_as_weekly_observations(monkeypatch, tmp_path):
     scenario = Scenario(tmp_path, monkeypatch, "rss", False)
