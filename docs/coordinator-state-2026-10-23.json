@@ -1,12 +1,14 @@
 {
   "title": "Coordinator state for the next session",
   "created": "2026-10-20",
-  "updated": "2026-10-23 (after v0.1.116)",
+  "updated": "2026-10-23 06:30 UTC (after v0.1.120)",
   "role": "Coordinator: plans, writes prompts for other sessions, reviews their PRs, merges. Does not write feature code itself (small test or docs fixes are fine).",
   "owner_rules": [
     "Owner writes Russian, takes part minimally (AGENTS.md 'Owner And Questions'); design questions are decided by the agent and reported, or go to another session.",
     "Always tell the owner about open questions: one line each, settled how, or a yes/no question with a recommendation; explain product questions in plain words (what a reader of the site notices).",
     "Coordinator may merge docs and test PRs itself after review and green CI.",
+    "Sessions: the coordinator hands out prompts to local Claude Code sessions itself (ListAgents, SendMessage with notify_when_idle) and the owner does not duplicate them (agreed 2026-10-23 after the same prompts ran twice). Never push or open a PR for a peer whose push was blocked in its own session: the owner tells that session directly. Close finished sessions on the owner's request (kill the claude process; pids from /tmp/cc-socks/<pid>.sock).",
+    "Deploy also prunes articles older than RETENTION_DAYS=800 (scripts/deploy_prod.sh:241), not only nightly db-maintenance; until 016 phase 1 (archive before prune) every deploy deletes the oldest articles.",
     "Code PRs (behavior or move-only refactors) and deploy files: merge only with the owner's yes.",
     "Tags v0.1.NNN trigger deploy: only on the owner's request. Before a tag check that no nightly job runs (systemctl is-active ai-news-daily-fetch.service ai-news-daily-digest.service).",
     "Prod (ssh ai-news) is read-only; any write needs the owner's yes for that action. When the owner asks to 'restart everything', fetch AND digest+signals of the affected day are meant.",
@@ -19,82 +21,80 @@
     "zsh: write ${VAR} before ':' in refspecs ($SHA:refs is read as a modifier). A stacked PR is not retargeted when the base branch stays on GitHub: gh pr edit N --base master."
   ],
   "state": {
-    "master": "05b8401 (PR #83)",
-    "prod": "v0.1.116 (05b8401)",
+    "master": "6b187ea (PR #90)",
+    "prod": "v0.1.120 (6b187ea)",
     "open_prs": "none",
     "code_docs": [
-      "src/app/core/ingestion/pipeline.md (covers core/jev.py and storage/reenrich_pilot_journal.py since #82)",
+      "src/app/core/ingestion/pipeline.md",
       "src/app/core/daily/signals.md",
-      "src/app/core/daily/enrichment.md (new in #83: digest, hold while paused, catch-up, job scripts)",
+      "src/app/core/daily/enrichment.md",
       "src/app/core/sources/onboarding.md"
     ],
     "incident_2026_10_22": "One Jev ReadTimeout (3 s) at 01:01 UTC made the admission journal stop all calls for the day; fetch paused after 3 sources, digest of 2026-10-21 published with 1 article. Recovered by hand (owner yes): failed journal row removed (backup journal.sqlite3.bak-20261022-before-rerun), fetch rerun (159 new), digest+signals of 2026-10-21 republished (81 items). Fixes: #82 (v0.1.115) timeout 5 s, one retry, a timeout holds one candidate, pause only after 5 in a row or on 5xx/auth/invalid answer; #83 (v0.1.116) digest held while collection is paused, catch-up after the next successful fetch (last 3 days), nightly-health workflow.",
-    "nightly_health": ".github/workflows/nightly-health.yml, cron 03:00 UTC, read-only: collection not paused, today's fetch finished, yesterday's digest published with scope >= 5. Manual run 2026-10-22 green. GitHub delays schedules here by about 5 h (db-maintenance cron 02:20 runs ~07:40), so expect the run in the morning UTC; first scheduled run not seen yet at 05:30 UTC 2026-10-23.",
+    "nightly_health": "nightly-health.yml cron 03:00 UTC; GitHub delays schedules here ~5 h (db-maintenance 02:20 cron ran 07:42 on 2026-10-22). At 06:30 UTC 2026-10-23 neither nightly-health nor db-maintenance had run yet: check that both ran today.",
     "digest_history": "First nightly attempt failed on 2026-10-11, 13, 14, 15, 19 (later republished). Nightly-health now reports such nights.",
     "rising_cooling": "Not shown yet, as designed: both 7-day windows need 6 complete days and the previous window may not start before comparable_from (2026-10-10). All days since 2026-10-10 are complete, so the snapshot of 2026-10-23 (computed 2026-10-24 02:00 UTC) should show Rising/Cooling.",
-    "openai_source": "openai.com answers 403 to the server (bot protection); the feed (openai.com/news/rss.xml) has the whole archive since 2015 (~1360 items) and only title + one line. Last 30 days: 1 accept, 4 reject, 21 unresolved; 1044 pending candidates (mostly 2016-2024) replayed 50 per run.",
-    "backups": "Done (B1/A0): nightly db-maintenance uploads an age-encrypted dump to Backblaze B2; restore tested 2026-10-21; scheduled upload green 2026-10-22."
+    "openai_source": "openai.com 403 (Cloudflare). #86 settles ~1000 archive-old pending rows on the next fetch without Jev; #88 sends title + feed description when there is no page text. Check after 3 runs (2026-10-26): unresolved share of new openai_news and TLDR (bullrich-dev-tldr-rss-ai-rss) candidates (was 79% and 33/170). Digest unchanged by owner decision: feed-only items stay out of it.",
+    "backups": "Done (B1/A0): nightly db-maintenance uploads an age-encrypted dump to Backblaze B2; restore tested 2026-10-21; scheduled upload green 2026-10-22.",
+    "merged_2026_10_23": "#84 docs state; #85 owner dependency bump (v0.1.117); #86 stale pending (>30 days) settled without Jev (v0.1.118); #87 OpenAI source report; #88 feed description sent to Jev when an item has no page text (v0.1.119); #89 spec 016 article archive; #90 article full text only for a session or the publish token, digest_generator sends the token on GET (v0.1.120)",
+    "sessions": "ai-parser-12 [97f318] is idle and knows spec 016 (wrote it, did #88 and #90): use it for 016 phase tasks. ai-parser-8f/ca and four old orphaned sessions were closed 2026-10-23. 'Limit resets' is a Claude Desktop session, not ours.",
+    "pruned_2026_10_23": "79 articles (71 with text, publication from 2017) past the 800-day cutoff were deleted by the v0.1.118 deploy prune; they are in the 2026-10-22 dump (server backups/postgres_20261022T074337Z.sql.gz and B2). PR #89 comment asks 016 phase 2 to seed them from that dump (prod write, owner yes).",
+    "ledger_vs_bill": "Owner saw DeepSeek $0.47 / Jev $0.07 (period unclear, maybe two days). Ledger: DeepSeek ~$0.25/day, Jev ~$0.04-0.05/day. Jev output tokens are priced 0 in the ledger (rates_usd_per_million jev output 0); if Jev bills output that explains a gap. Owner: watch, no data yet."
   },
   "next": [
     {
       "id": "NH-check",
-      "title": "See the first scheduled nightly-health run (expected morning UTC); if none by 2026-10-24, investigate the schedule",
+      "title": "Check that today's scheduled nightly-health and db-maintenance runs happened and are green; if nightly-health never ran on schedule by 2026-10-24, investigate",
       "status": "todo 2026-10-23"
     },
     {
-      "id": "OLD-pending",
-      "title": "Stop replaying archive-old pending candidates (OpenAI feed: 1044, mostly 2016-2024) every run: agent decision, prompt for an implementer",
-      "status": "todo 2026-10-23"
+      "id": "016-P1",
+      "title": "Spec 016 phase 1 (specs/016-article-archive/tasks.md): archive tables + prune archives before delete. Highest priority: every deploy keeps deleting the oldest articles. Prompt for ai-parser-12; code PR -> owner yes to merge and tag",
+      "status": "todo, proposed to the owner 2026-10-23"
     },
     {
-      "id": "R-2410",
-      "title": "2026-10-24: check Rising/Cooling on / (read-only)",
+      "id": "016-next",
+      "title": "Next 016 phases in order of tasks.md; phase 2 seed `ai-news archive capture --all --no-download` and restoring the 79 pruned articles from the 2026-10-22 dump are prod writes: owner yes each",
       "status": "todo"
     },
     {
-      "id": "B3",
-      "title": "Full-text article archive (docs/backlog/article-archive-todo.json, A1 spec + A3 daily capture): owner yes 2026-10-23 to start before weekly, via a planner session",
-      "status": "prompt for a planner session"
+      "id": "R-2410",
+      "title": "2026-10-24 morning: Rising/Cooling on / (snapshot of 2026-10-23 is the first with both windows from comparable_from 2026-10-10)",
+      "status": "todo"
     },
     {
-      "id": "OPENAI",
-      "title": "OpenAI news barely admitted (403, title + one line only): another session investigates and proposes (e.g. admit official sources on title+description); a change of what readers see goes to the owner as yes/no",
-      "status": "prompt for another session"
+      "id": "OPENAI-check",
+      "title": "2026-10-26: unresolved share of openai_news and TLDR after #86/#88; confirm the ~1000 stale pending rows were settled (admission_decisions reason stale_pending)",
+      "status": "todo"
     },
     {
       "id": "B2",
       "title": "Weekly and monthly analytics on the 006 data layer; first decide keep-or-delete of weekly v2 (memory weekly-v2-fate-deferred)",
-      "status": "todo, after B3 planning starts; big spec: planner and implementer sessions"
+      "status": "after 016 phase 1"
     },
     {
       "id": "S-onb",
-      "title": "Onboarding leftovers from the PR #75 review",
-      "items": [
-        "Deterministic HTML validation accepts any page with one link (doc rule 'code differs', _extract_links_with_ingest): behavior fix, owner question if it changes which sources get approved.",
-        "summarize_batch counts a status no candidate gets (storage/source_candidate_repo.py): dead branch.",
-        "Three URL normalizations (normalize_candidate_url, web/source_intake.py _url_key, canonicalize_url)."
-      ],
+      "title": "Onboarding leftovers from the PR #75 review (HTML one-link validation, dead summarize_batch branch, three URL normalizations)",
       "status": "backlog"
     },
     {
       "id": "F1",
-      "title": "Pipeline findings left out of P3 (behavior changes)",
-      "items": [
-        "'fetched' counts different things per path.",
-        "No source_fetch_finished log line for a failed fetch with admission off.",
-        "FetchSummary.source_count counts all sources after a pause.",
-        "fetch_failure is recorded as complete coverage (decide with weekly work)."
-      ],
+      "title": "Pipeline findings left out of P3 ('fetched' counts, missing source_fetch_finished on failed fetch with admission off, FetchSummary.source_count after pause, fetch_failure as complete coverage)",
       "status": "backlog"
     },
     {
       "id": "C1",
-      "title": "Rename storage/reenrich_pilot_journal.py (live paid-call journal, now used by admission and daily digest); enrichment.md exists since #83",
+      "title": "Rename storage/reenrich_pilot_journal.py (live paid-call journal of admission and digest)",
+      "status": "backlog"
+    },
+    {
+      "id": "UA",
+      "title": "016 risk: DEFAULT_USER_AGENT imitates a browser; decide honest bot UA with A7 (legal/policy)",
       "status": "backlog"
     }
   ],
   "carried_unverified": [
-    "Compare the real DeepSeek bill for October with the ledger (owner has the account; end of month).",
-    "Backlog: docs/backlog/backlog-todo.json (B2 weekly/monthly, B3 archive next, B4 Jev second opinion, B5-B9 outputs)."
+    "Ledger vs real bills (DeepSeek, Jev): owner watches; end of October compare.",
+    "Backlog: docs/backlog/backlog-todo.json (B2 weekly/monthly, B3 archive = spec 016, B4 Jev second opinion, B5-B9 outputs)."
   ]
 }
