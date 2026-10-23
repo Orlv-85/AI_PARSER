@@ -4,13 +4,14 @@ covers:
   - src/app/core/archive/*.py
   - src/app/storage/archive.py
   - src/app/storage/migrations/versions/*article_archive*.py
+  - scripts/run_daily_archive_job.sh
 -->
 # Article archive
 
 Private, permanent copy of collected articles: one document per canonical URL hash and
 append-only text versions. Retention and cleanup never delete it. Spec:
-`specs/016-article-archive/spec.md` (phases 1-3: storage, archive-before-prune, seed and
-operator commands, downloads with retries).
+`specs/016-article-archive/spec.md` (phases 1-4: storage, archive-before-prune, seed and
+operator commands, downloads with retries, nightly job).
 
 ## Behavior
 
@@ -94,6 +95,14 @@ flowchart LR
   `downloads`, `failed` by issue, `gave_up`, `skipped_cap`, `skipped_time`, `outage`,
   `outage_kept`, `raw_dirs_deleted`, `archive_bytes`, `archive_size_warning` (from
   `ARCHIVE_SIZE_WARN_BYTES`). Tests: `test_capture_summary_reports_coverage`.
+- The capture runs nightly as its own systemd job `ai-news-daily-archive` at 03:00 UTC
+  (`TimeoutStartSec=3600`, log `logs/daily-archive.log`), after fetch (01:00) and digest (02:00).
+  `run_daily_archive_job.sh` uses the release image from `.last_deploy_image`, waits at most
+  1800 s for the shared host lock, runs `archive capture --max-seconds 1500` in the named container
+  `ai-news-archive` under `timeout -k 30 1680`, removes that container after a failure or timeout,
+  and always exits 0 with one stderr line on a lock timeout, failure or timeout, so it never changes
+  the fetch or digest jobs. Tests: `test_archive_job_script_is_isolated`,
+  `test_install_timers_includes_archive`.
 - `ai-news archive status` is read-only and prints counts by state, versions, size, coverage per
   first-seen day of the last `ARCHIVE_LOOKBACK_DAYS` and the top hosts without text. Tests:
   `test_capture_summary_reports_coverage`.
@@ -139,6 +148,11 @@ flowchart LR
 - decided 2026-10-23 (agent): `failed` documents stay due after the window, because
   `ARCHIVE_RETRY_DELAYS` add up to more than `ARCHIVE_LOOKBACK_DAYS` and FR-010 requires
   `gave_up` after the last delay; coverage still counts only the window.
+- Own timer instead of a step in the fetch or digest job: a capture failure, hang or kill cannot
+  change their exit status or 4-hour budget, and at 03:00 the pages daily-publish downloaded can be
+  reused (plan.md, "Where in the nightly flow").
+- decided 2026-10-23 (agent): the job removes a leftover `ai-news-archive` container before the
+  run, because a container left by a killed run would make `--name` fail every night.
 - decided 2026-10-23 (agent): `ConnectError` results are recorded after all downloads, because only
   then is it known whether they were part of an outage.
 
@@ -156,6 +170,9 @@ flowchart LR
   (archive pruned rows from a dump).
 - `storage/article_evidence_cache.py`: shared `PageCache`, `SourcePageDownloader`,
   `make_http_client` (not changed by the archive).
+- `scripts/run_daily_archive_job.sh`: nightly job (image, lock, timeout, exit 0).
+- `scripts/install_daily_timers.sh`: installs the `ai-news-daily-archive` unit and timer next to
+  fetch and digest (run by every deploy with the systemd scheduler).
 - `cli/main.py`: `archive` Typer group (`capture`, `status`, `purge`, `import-db`).
 - `storage/archive.py`: `ArchiveRepo` (upsert document, add version by hash, purge selection,
   due selection, `record_attempt`, state counts, window coverage, hosts without text, size).
@@ -173,3 +190,5 @@ flowchart LR
 - `tests/unit/test_archive_capture.py`: due selection, cache reuse, downloads, caps and time,
   retries, outage, raw page cleanup (all with `httpx.MockTransport`).
 - `tests/unit/test_daily_signals_migration.py`: migration round trip.
+- `tests/unit/test_deepseek_digest.py`: archive job script; `tests/unit/test_daily_timers.py`:
+  archive timer.

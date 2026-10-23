@@ -30,5 +30,30 @@ Persistent=false
 WantedBy=timers.target
 EOF
 done
+# Archive capture (spec 016): after fetch and digest, with its own shorter limit and log.
+cat > "$UNIT_DIR/ai-news-daily-archive.service" <<EOF
+[Unit]
+Description=AI News nightly archive capture of collected article text
+After=docker.service network-online.target
+Requires=docker.service
+[Service]
+Type=oneshot
+WorkingDirectory=$ROOT_DIR
+ExecStart=/bin/sh $ROOT_DIR/scripts/run_daily_archive_job.sh
+TimeoutStartSec=3600
+StandardOutput=append:$ROOT_DIR/logs/daily-archive.log
+StandardError=append:$ROOT_DIR/logs/daily-archive.log
+EOF
+cat > "$UNIT_DIR/ai-news-daily-archive.timer" <<EOF
+[Unit]
+Description=AI News nightly archive capture in UTC (independent of host DST)
+[Timer]
+OnCalendar=*-*-* 03:00:00 UTC
+AccuracySec=1s
+Persistent=false
+[Install]
+WantedBy=timers.target
+EOF
 systemctl daemon-reload
 systemctl enable --now ai-news-daily-fetch.timer ai-news-daily-digest.timer
+systemctl enable --now ai-news-daily-archive.timer

@@ -527,6 +527,62 @@ def test_fetch_job_preserves_success_status_when_catch_up_fails(tmp_path):
     assert any("daily-publish --catch-up" in call for call in calls)
 
 
+def _archive_job(tmp_path, *, lock_exit=0, capture_exit=0):
+    scripts = tmp_path / "scripts"
+    scripts.mkdir(parents=True)
+    (scripts / "run_daily_archive_job.sh").write_text(
+        Path("scripts/run_daily_archive_job.sh").read_text(encoding="utf-8"), encoding="utf-8")
+    (tmp_path / ".last_deploy_image").write_text("release:tested\n", encoding="utf-8")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for tool in ("sh", "cat", "dirname", "basename"):
+        (bin_dir / tool).symlink_to(shutil.which(tool))
+    fakes = {
+        "flock": ('printf "flock %s\\n" "$*" >> "$TEST_LOG"\n'
+                  '[ "$LOCK_EXIT" -eq 0 ] || exit "$LOCK_EXIT"\nshift 3\nexec "$@"\n'),
+        "timeout": 'printf "timeout %s\\n" "$*" >> "$TEST_LOG"\nshift 3\nexec "$@"\n',
+        "docker": ('printf "docker %s|image=%s\\n" "$*" "$APP_IMAGE" >> "$TEST_LOG"\n'
+                   'case "$*" in *"archive capture"*) exit "$CAPTURE_EXIT";; esac\nexit 0\n'),
+    }
+    for name, body in fakes.items():
+        (bin_dir / name).write_text("#!/bin/sh\n" + body, encoding="utf-8")
+        (bin_dir / name).chmod(0o755)
+    log = tmp_path / "calls"
+    env = {"PATH": str(bin_dir), "HOME": str(tmp_path), "TEST_LOG": str(log), "APP_IMAGE": "",
+           "LOCK_EXIT": str(lock_exit), "CAPTURE_EXIT": str(capture_exit)}
+    result = subprocess.run(["sh", str(scripts / "run_daily_archive_job.sh")], env=env,
+                            cwd=tmp_path, capture_output=True, text=True, check=False)
+    return result, log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+
+
+def test_archive_job_script_is_isolated(tmp_path):
+    result, calls = _archive_job(tmp_path / "ok")
+    assert (result.returncode, result.stderr) == (0, "")
+    assert calls[0].startswith("flock -w 1800 /tmp/ai-news-auto-update.lock sh ")
+    assert calls[0].endswith("/scripts/run_daily_archive_job.sh --locked")
+    capture = ("docker compose -f docker-compose.prod.yml run --rm --name ai-news-archive app "
+               "ai-news archive capture --max-seconds 1500|image=release:tested")
+    assert calls[-2:] == ["timeout -k 30 1680 " + capture.split("|", maxsplit=1)[0], capture]
+    assert calls[1:3] == ["timeout -k 10 60 docker rm -f ai-news-archive",
+                          "docker rm -f ai-news-archive|image=release:tested"]
+
+    result, calls = _archive_job(tmp_path / "timeout", capture_exit=124)
+    assert result.returncode == 0
+    assert result.stderr.splitlines() == [
+        "archive capture failed or timed out (exit 124); other jobs are unaffected"]
+    assert calls[-2:] == ["timeout -k 10 60 docker rm -f ai-news-archive",
+                          "docker rm -f ai-news-archive|image=release:tested"]
+
+    result, calls = _archive_job(tmp_path / "locked", lock_exit=1)
+    assert result.returncode == 0
+    assert result.stderr.splitlines() == [
+        "archive capture skipped: host lock not acquired within 1800 s"]
+    assert [call for call in calls if call.startswith("docker")] == []
+
+    text = Path("scripts/run_daily_archive_job.sh").read_text(encoding="utf-8")
+    assert "run_daily_fetch_job" not in text and "run_daily_digest_job" not in text
+
+
 def test_nightly_health_workflow_is_read_only():
     workflow = yaml.safe_load(
         Path(".github/workflows/nightly-health.yml").read_text(encoding="utf-8"))
