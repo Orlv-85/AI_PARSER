@@ -12,7 +12,8 @@
       "where": "docs/backlog/article-archive-todo.json (first task: off-site backups before anything else)",
       "why": "Backups live only on the VPS for 14 days; losing the server loses all history.",
       "priority": 1,
-      "status": "todo"
+      "status": "done",
+      "done": "2026-10-22: nightly db-maintenance uploads an age-encrypted dump to Backblaze B2 (daily/ 30 days, monthly/ 365 days); restore from B2 tested 2026-10-21; scheduled upload green 2026-10-22."
     },
     {
       "id": "B2",

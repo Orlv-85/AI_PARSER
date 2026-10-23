@@ -1,0 +1,100 @@
+{
+  "title": "Coordinator state for the next session",
+  "created": "2026-10-20",
+  "updated": "2026-10-23 (after v0.1.116)",
+  "role": "Coordinator: plans, writes prompts for other sessions, reviews their PRs, merges. Does not write feature code itself (small test or docs fixes are fine).",
+  "owner_rules": [
+    "Owner writes Russian, takes part minimally (AGENTS.md 'Owner And Questions'); design questions are decided by the agent and reported, or go to another session.",
+    "Always tell the owner about open questions: one line each, settled how, or a yes/no question with a recommendation; explain product questions in plain words (what a reader of the site notices).",
+    "Coordinator may merge docs and test PRs itself after review and green CI.",
+    "Code PRs (behavior or move-only refactors) and deploy files: merge only with the owner's yes.",
+    "Tags v0.1.NNN trigger deploy: only on the owner's request. Before a tag check that no nightly job runs (systemctl is-active ai-news-daily-fetch.service ai-news-daily-digest.service).",
+    "Prod (ssh ai-news) is read-only; any write needs the owner's yes for that action. When the owner asks to 'restart everything', fetch AND digest+signals of the affected day are meant.",
+    "Allow-listed commands run alone, nothing chained: `gh pr merge N --merge`; tags as `git tag -a vX <sha> -m ...` then `git push origin vX` from the main folder root. Chained or other forms are blocked by auto mode. Check .claude/settings.local.json before asking the owner for a permission.",
+    "Work in git worktrees from origin/master; no git writes in the main folder except tags (it may lag behind master; the owner pulls). venv1 is editable on the main folder: in a worktree run checks with PYTHONPATH=src ../AI_PARSER/venv1/bin/...",
+    "Docs-only PRs skip the full gate (say so in the PR). Merge with gh pr merge --merge.",
+    "Prompts for other sessions: untracked in docs/ while active, then copied to docs/archive/2026-10/ in a docs PR and the untracked copy removed.",
+    "The owner saves the Claude limit: some prompts run on other models (GPT-6-Luna, DeepSeek V4-Pro, Sonnet). Write them step by step (worktree path, branch, exact edits, checks, commit message, full gh pr create, report fields) and verify every report against the diff and CI yourself.",
+    "Review of a move-only PR: compare every moved top-level definition with the old file (ast.get_source_segment), list deleted names and check they were dead, check test patch targets.",
+    "zsh: write ${VAR} before ':' in refspecs ($SHA:refs is read as a modifier). A stacked PR is not retargeted when the base branch stays on GitHub: gh pr edit N --base master."
+  ],
+  "state": {
+    "master": "05b8401 (PR #83)",
+    "prod": "v0.1.116 (05b8401)",
+    "open_prs": "none",
+    "code_docs": [
+      "src/app/core/ingestion/pipeline.md (covers core/jev.py and storage/reenrich_pilot_journal.py since #82)",
+      "src/app/core/daily/signals.md",
+      "src/app/core/daily/enrichment.md (new in #83: digest, hold while paused, catch-up, job scripts)",
+      "src/app/core/sources/onboarding.md"
+    ],
+    "incident_2026_10_22": "One Jev ReadTimeout (3 s) at 01:01 UTC made the admission journal stop all calls for the day; fetch paused after 3 sources, digest of 2026-10-21 published with 1 article. Recovered by hand (owner yes): failed journal row removed (backup journal.sqlite3.bak-20261022-before-rerun), fetch rerun (159 new), digest+signals of 2026-10-21 republished (81 items). Fixes: #82 (v0.1.115) timeout 5 s, one retry, a timeout holds one candidate, pause only after 5 in a row or on 5xx/auth/invalid answer; #83 (v0.1.116) digest held while collection is paused, catch-up after the next successful fetch (last 3 days), nightly-health workflow.",
+    "nightly_health": ".github/workflows/nightly-health.yml, cron 03:00 UTC, read-only: collection not paused, today's fetch finished, yesterday's digest published with scope >= 5. Manual run 2026-10-22 green. GitHub delays schedules here by about 5 h (db-maintenance cron 02:20 runs ~07:40), so expect the run in the morning UTC; first scheduled run not seen yet at 05:30 UTC 2026-10-23.",
+    "digest_history": "First nightly attempt failed on 2026-10-11, 13, 14, 15, 19 (later republished). Nightly-health now reports such nights.",
+    "rising_cooling": "Not shown yet, as designed: both 7-day windows need 6 complete days and the previous window may not start before comparable_from (2026-10-10). All days since 2026-10-10 are complete, so the snapshot of 2026-10-23 (computed 2026-10-24 02:00 UTC) should show Rising/Cooling.",
+    "openai_source": "openai.com answers 403 to the server (bot protection); the feed (openai.com/news/rss.xml) has the whole archive since 2015 (~1360 items) and only title + one line. Last 30 days: 1 accept, 4 reject, 21 unresolved; 1044 pending candidates (mostly 2016-2024) replayed 50 per run.",
+    "backups": "Done (B1/A0): nightly db-maintenance uploads an age-encrypted dump to Backblaze B2; restore tested 2026-10-21; scheduled upload green 2026-10-22."
+  },
+  "next": [
+    {
+      "id": "NH-check",
+      "title": "See the first scheduled nightly-health run (expected morning UTC); if none by 2026-10-24, investigate the schedule",
+      "status": "todo 2026-10-23"
+    },
+    {
+      "id": "OLD-pending",
+      "title": "Stop replaying archive-old pending candidates (OpenAI feed: 1044, mostly 2016-2024) every run: agent decision, prompt for an implementer",
+      "status": "todo 2026-10-23"
+    },
+    {
+      "id": "R-2410",
+      "title": "2026-10-24: check Rising/Cooling on / (read-only)",
+      "status": "todo"
+    },
+    {
+      "id": "B3",
+      "title": "Full-text article archive (docs/backlog/article-archive-todo.json, A1 spec + A3 daily capture): owner yes 2026-10-23 to start before weekly, via a planner session",
+      "status": "prompt for a planner session"
+    },
+    {
+      "id": "OPENAI",
+      "title": "OpenAI news barely admitted (403, title + one line only): another session investigates and proposes (e.g. admit official sources on title+description); a change of what readers see goes to the owner as yes/no",
+      "status": "prompt for another session"
+    },
+    {
+      "id": "B2",
+      "title": "Weekly and monthly analytics on the 006 data layer; first decide keep-or-delete of weekly v2 (memory weekly-v2-fate-deferred)",
+      "status": "todo, after B3 planning starts; big spec: planner and implementer sessions"
+    },
+    {
+      "id": "S-onb",
+      "title": "Onboarding leftovers from the PR #75 review",
+      "items": [
+        "Deterministic HTML validation accepts any page with one link (doc rule 'code differs', _extract_links_with_ingest): behavior fix, owner question if it changes which sources get approved.",
+        "summarize_batch counts a status no candidate gets (storage/source_candidate_repo.py): dead branch.",
+        "Three URL normalizations (normalize_candidate_url, web/source_intake.py _url_key, canonicalize_url)."
+      ],
+      "status": "backlog"
+    },
+    {
+      "id": "F1",
+      "title": "Pipeline findings left out of P3 (behavior changes)",
+      "items": [
+        "'fetched' counts different things per path.",
+        "No source_fetch_finished log line for a failed fetch with admission off.",
+        "FetchSummary.source_count counts all sources after a pause.",
+        "fetch_failure is recorded as complete coverage (decide with weekly work)."
+      ],
+      "status": "backlog"
+    },
+    {
+      "id": "C1",
+      "title": "Rename storage/reenrich_pilot_journal.py (live paid-call journal, now used by admission and daily digest); enrichment.md exists since #83",
+      "status": "backlog"
+    }
+  ],
+  "carried_unverified": [
+    "Compare the real DeepSeek bill for October with the ledger (owner has the account; end of month).",
+    "Backlog: docs/backlog/backlog-todo.json (B2 weekly/monthly, B3 archive next, B4 Jev second opinion, B5-B9 outputs)."
+  ]
+}
