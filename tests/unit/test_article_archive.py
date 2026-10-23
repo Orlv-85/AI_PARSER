@@ -1,14 +1,22 @@
 import ast
+import json
+import logging
+import socket
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
+from typer.testing import CliRunner
 
+from app.cli import main as cli_main
+from app.core.archive import capture as capture_module
 from app.core.archive.capture import (
     ARCHIVE_MIN_TEXT_CHARS,
     ARTICLE_CONTENT_VERSION,
     archive_articles,
+    capture,
+    status,
 )
 from app.storage.archive import ArchiveRepo
 from app.storage.article_repo import ArticleRepo
@@ -189,3 +197,93 @@ def test_archive_not_imported_by_web_or_mcp() -> None:
             if any(n == b or n.startswith(b + ".") for n in names for b in banned):
                 offenders.append(str(path))
     assert not offenders, offenders
+
+
+def _no_network(monkeypatch):
+    def refuse(*args, **kwargs):
+        raise AssertionError("network request in archive capture")
+    monkeypatch.setattr(socket.socket, "connect", refuse)
+    monkeypatch.setattr(socket, "create_connection", refuse)
+
+
+def test_capture_window_and_seed_make_no_requests(monkeypatch) -> None:
+    _no_network(monkeypatch)
+    monkeypatch.setattr(capture_module, "CAPTURE_BATCH_SIZE", 2)
+    session = _session()
+    for key, days in (("a", 1), ("b", 2), ("c", 3), ("o", 30)):
+        _article(session, key, days_old=days)
+    session.commit()
+
+    summary = capture(session, no_download=False, max_seconds=1)
+    assert (summary["window_days"], summary["articles_synced"]) == (7, 3)
+    assert _counts(session) == (3, 3)
+
+    summary = capture(session, scope_all=True, no_download=True)
+    assert (summary["window_days"], summary["articles_synced"]) == (None, 4)
+    assert summary["new_versions"] == {"article_content": 1}
+    assert _counts(session) == (4, 4)
+
+
+def test_capture_summary_reports_coverage(caplog) -> None:
+    session = _session()
+    _article(session, "a", days_old=1)
+    _article(session, "b", days_old=1, content=None)
+    other = _article(session, "c", days_old=2, content=None)
+    other.url_canonical = "https://other.org/c"
+    _article(session, "o", days_old=30, content=None)
+    session.commit()
+
+    logger = logging.getLogger("test_archive_capture")
+    with caplog.at_level(logging.INFO, logger="test_archive_capture"):
+        summary = capture(session, logger=logger)
+    assert summary == {
+        "window_days": 7, "articles_synced": 3, "window_documents": 3, "window_archived": 1,
+        "coverage_pct": 33.3, "new_versions": {"article_content": 1},
+        "archive_bytes": len(LONG), "archive_size_warning": False}
+    record = next(r for r in caplog.records if r.getMessage() == "archive_capture_finished")
+    assert record.event_fields == summary
+
+    report = status(session)
+    assert report["states"] == {"archived": 1, "pending": 2}
+    assert (report["versions"], report["window_documents"], report["coverage_pct"]) == (1, 3, 33.3)
+    day = (NOW - timedelta(days=1)).date().isoformat()
+    assert report["coverage_by_day"][day] == {"documents": 2, "archived": 1, "coverage_pct": 50.0}
+    assert report["top_hosts_without_text"] == [{"host": "example.com", "documents": 1},
+                                                {"host": "other.org", "documents": 1}]
+    assert _counts(session) == (3, 1)
+
+
+def test_archive_purge_dry_run_and_apply(tmp_path, monkeypatch) -> None:
+    engine = create_engine(f"sqlite:///{tmp_path / 'archive.db'}", future=True)
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    with factory() as session:
+        rows = [_article(session, "a"), _article(session, "b")]
+        rows[1].url = rows[1].url_canonical = "https://other.org/b"
+        archive_articles(session, rows)
+        session.commit()
+    monkeypatch.setattr(cli_main, "create_all", lambda: None)
+    monkeypatch.setattr(cli_main, "SessionLocal", factory)
+    runner = CliRunner()
+
+    def run(*args):
+        return runner.invoke(cli_main.app, ["archive", "purge", *args])
+
+    def counts():
+        with factory() as session:
+            return _counts(session)
+
+    for bad in ([], ["--host", "example.com", "--source", "x"]):
+        result = run(*bad)
+        assert result.exit_code == 2
+        assert "exactly one of --url, --source, --host" in result.output
+    result = run("--host", "example.com")
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == {"state": "dry_run", "documents": 1, "versions": 1}
+    assert counts() == (2, 2)
+    result = run("--host", "example.com", "--apply")
+    assert json.loads(result.stdout) == {"state": "deleted", "documents": 1, "versions": 1}
+    assert counts() == (1, 1)
+    result = run("--url", "https://other.org/b", "--apply")
+    assert json.loads(result.stdout) == {"state": "deleted", "documents": 1, "versions": 1}
+    assert counts() == (0, 0)

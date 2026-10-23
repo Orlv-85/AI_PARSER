@@ -8,6 +8,8 @@ from sqlalchemy import select
 
 from app.config.settings import get_settings
 from app.config.sources import load_sources
+from app.core.archive.capture import capture as archive_capture
+from app.core.archive.capture import status as archive_status
 from app.core.daily.enrichment import publish_catch_up, publish_day
 from app.core.daily.signals import (
     EntityCommandError,
@@ -24,6 +26,7 @@ from app.core.weekly.audit import audit
 from app.core.weekly.worker import drain
 from app.observability import setup_json_logging
 from app.storage import SessionLocal, create_all
+from app.storage.archive import ArchiveRepo
 from app.storage.article_repo import ArticleRepo
 from app.storage.daily_signals import DailySignalRepo, OverrideConflict
 from app.storage.models_sql import AIEntityOverride
@@ -341,6 +344,53 @@ def prune(
             f"prune complete: older_than_days={older_than_days} "
             f"deleted_articles={deleted_articles} deleted_aliases={deleted_aliases}"
         )
+
+
+archive_app = typer.Typer(help="Private article archive (no web access, no provider calls).")
+app.add_typer(archive_app, name="archive")
+
+
+@archive_app.command("capture")
+def archive_capture_command(
+    scope_all: bool = typer.Option(False, "--all", help="Sync every stored article."),
+    no_download: bool = typer.Option(False, "--no-download", help="Never download pages."),
+    max_seconds: int = typer.Option(1500, "--max-seconds", min=1),
+) -> None:
+    """Copy stored articles of the window (or all) into the archive."""
+    create_all()
+    logger = setup_json_logging()
+    with SessionLocal() as session:
+        summary = archive_capture(session, scope_all=scope_all, no_download=no_download,
+                                  max_seconds=max_seconds, logger=logger)
+    typer.echo(json.dumps(summary, sort_keys=True))
+
+
+@archive_app.command("status")
+def archive_status_command() -> None:
+    """Archive counts, coverage and size (read-only)."""
+    create_all()
+    with SessionLocal() as session:
+        typer.echo(json.dumps(archive_status(session), sort_keys=True))
+
+
+@archive_app.command("purge")
+def archive_purge(
+    url: str | None = typer.Option(None, "--url"),
+    source: str | None = typer.Option(None, "--source"),
+    host: str | None = typer.Option(None, "--host"),
+    apply: bool = typer.Option(False, "--apply", help="Delete; without it only counts."),
+) -> None:
+    """Remove archived documents of one URL, source or host (dry run by default)."""
+    if sum(value is not None for value in (url, source, host)) != 1:
+        typer.echo("archive purge needs exactly one of --url, --source, --host", err=True)
+        raise typer.Exit(2)
+    create_all()
+    with SessionLocal() as session:
+        documents, versions = ArchiveRepo(session).purge(url=url, source_key=source, host=host,
+                                                         apply=apply)
+        session.commit()
+    typer.echo(json.dumps({"state": "deleted" if apply else "dry_run", "documents": documents,
+                           "versions": versions}, sort_keys=True))
 
 
 @app.command("import-candidates")
