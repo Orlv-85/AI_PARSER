@@ -109,3 +109,24 @@ class ArchiveRepo:
                 + func.pg_total_relation_size("archive_texts"))) or 0)
         return int(self.session.scalar(select(func.coalesce(
             func.sum(func.length(ArchiveText.text)), 0))) or 0)
+
+    def window_states(self, since: datetime | None) -> list[tuple[datetime, str]]:
+        """(first_seen_at, state) of documents first seen at or after `since` (all when None)."""
+        stmt = select(ArchiveDocument.first_seen_at, ArchiveDocument.state)
+        if since is not None:
+            stmt = stmt.where(ArchiveDocument.first_seen_at >= since)
+        return [(seen, str(state)) for seen, state in self.session.execute(stmt).all()]
+
+    def new_versions_since(self, since: datetime) -> dict[str, int]:
+        rows = self.session.execute(select(ArchiveText.origin, func.count())
+                                    .where(ArchiveText.captured_at >= since)
+                                    .group_by(ArchiveText.origin)).all()
+        return {str(origin): int(count) for origin, count in rows}
+
+    def hosts_without_text(self, limit: int) -> list[tuple[str, int]]:
+        rows = self.session.execute(
+            select(ArchiveDocument.host, func.count().label("n"))
+            .where(ArchiveDocument.state != STATE_ARCHIVED)
+            .group_by(ArchiveDocument.host)
+            .order_by(func.count().desc(), ArchiveDocument.host).limit(limit)).all()
+        return [(str(host), int(count)) for host, count in rows]

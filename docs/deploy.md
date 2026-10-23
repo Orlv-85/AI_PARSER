@@ -241,6 +241,23 @@ Nightly maintenance workflow:
   GitHub disables scheduled workflows after 60 days without repository activity - re-enable in
   the Actions tab if that happens
 
+### Article archive
+
+Behavior: `src/app/core/archive/capture.md`. Seed once after the deploy that ships the commands,
+then check:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm app ai-news archive capture --all --no-download
+docker compose -f docker-compose.prod.yml run --rm app ai-news archive status
+```
+
+Remove a URL, source or host on request (dry run first, then `--apply`):
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm app ai-news archive purge --host example.com
+docker compose -f docker-compose.prod.yml run --rm app ai-news archive purge --host example.com --apply
+```
+
 ### Off-site backups (Backblaze B2)
 
 - Bucket `OFFSITE_B2_BUCKET`, private. Retention by the bucket's lifecycle rules, not by our code:
