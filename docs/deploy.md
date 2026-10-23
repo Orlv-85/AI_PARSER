@@ -258,6 +258,21 @@ docker compose -f docker-compose.prod.yml run --rm app ai-news archive capture -
 docker compose -f docker-compose.prod.yml run --rm app ai-news archive status
 ```
 
+Nightly capture: the systemd timer `ai-news-daily-archive` (03:00 UTC, installed by every deploy
+with the other daily timers) runs `scripts/run_daily_archive_job.sh`, which pins the release image
+itself. Each run appends to `logs/daily-archive.log`: one `archive_capture_finished` JSON line
+(also printed as plain JSON), or one stderr line when the lock was not acquired, the capture failed
+or timed out. Read the last result:
+
+```bash
+systemctl list-timers 'ai-news-daily-*'
+grep archive_capture_finished logs/daily-archive.log | tail -1 | python3 -m json.tool
+grep -E 'archive capture (skipped|failed)' logs/daily-archive.log | tail -5
+```
+
+Fields to watch: `coverage_pct` (target 90 for the 7-day window), `downloads`, `failed` by issue,
+`gave_up`, `skipped_cap` / `skipped_time` (budget reached), `outage`, `archive_size_warning`.
+
 Remove a URL, source or host on request (dry run first, then `--apply`):
 
 ```bash
