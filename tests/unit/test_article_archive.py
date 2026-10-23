@@ -6,6 +6,7 @@ import socket
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
+import httpx
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 from typer.testing import CliRunner
@@ -207,51 +208,74 @@ def _no_network(monkeypatch):
     monkeypatch.setattr(socket, "create_connection", refuse)
 
 
-def test_capture_window_and_seed_make_no_requests(monkeypatch) -> None:
+def test_capture_window_and_seed_make_no_requests(tmp_path, monkeypatch) -> None:
     _no_network(monkeypatch)
     monkeypatch.setattr(capture_module, "CAPTURE_BATCH_SIZE", 2)
     session = _session()
     for key, days in (("a", 1), ("b", 2), ("c", 3), ("o", 30)):
         _article(session, key, days_old=days)
+    _article(session, "p", days_old=1, content=None)  # due, but --no-download
     session.commit()
 
-    summary = capture(session, no_download=False, max_seconds=1)
-    assert (summary["window_days"], summary["articles_synced"]) == (7, 3)
-    assert _counts(session) == (3, 3)
+    summary = capture(session, no_download=True, max_seconds=1, cache_root=tmp_path / "a",
+                      daily_cache_root=tmp_path / "d")
+    assert (summary["window_days"], summary["articles_synced"]) == (7, 4)
+    assert (summary["downloads"], summary["cache_reused"]) == (0, 0)
+    assert _counts(session) == (4, 3)
+    assert not (tmp_path / "a").exists()
 
     summary = capture(session, scope_all=True, no_download=True)
-    assert (summary["window_days"], summary["articles_synced"]) == (None, 4)
+    assert (summary["window_days"], summary["articles_synced"]) == (None, 5)
     assert summary["new_versions"] == {"article_content": 1}
-    assert _counts(session) == (4, 4)
+    assert _counts(session) == (5, 4)
 
 
-def test_capture_summary_reports_coverage(caplog) -> None:
+PAGE = ("<html><head><title>Page</title></head><body><article><h1>Archived page</h1>"
+        + "An editorial article about AI models and research. " * 30 + "</article></body></html>")
+
+
+def _site(request):
+    if request.url.path == "/robots.txt":
+        return httpx.Response(404)
+    if "other.org" in str(request.url):
+        return httpx.Response(404, text="<html><title>Not found</title></html>",
+                              headers={"Content-Type": "text/html"})
+    return httpx.Response(200, text=PAGE, headers={"Content-Type": "text/html"})
+
+
+def test_capture_summary_reports_coverage(tmp_path, caplog) -> None:
     session = _session()
     _article(session, "a", days_old=1)
     _article(session, "b", days_old=1, content=None)
     other = _article(session, "c", days_old=2, content=None)
-    other.url_canonical = "https://other.org/c"
+    other.url = other.url_canonical = "https://other.org/c"
     _article(session, "o", days_old=30, content=None)
     session.commit()
 
     logger = logging.getLogger("test_archive_capture")
     with caplog.at_level(logging.INFO, logger="test_archive_capture"):
-        summary = capture(session, logger=logger)
+        summary = capture(session, logger=logger, cache_root=tmp_path / "archive",
+                          daily_cache_root=tmp_path / "daily", host_interval=0,
+                          client_factory=lambda: httpx.AsyncClient(
+                              transport=httpx.MockTransport(_site)))
+    texts = sum(len(t) for t in session.scalars(select(ArchiveText.text)))
     assert summary == {
-        "window_days": 7, "articles_synced": 3, "window_documents": 3, "window_archived": 1,
-        "coverage_pct": 33.3, "new_versions": {"article_content": 1},
-        "archive_bytes": len(LONG), "archive_size_warning": False}
+        "window_days": 7, "articles_synced": 3, "window_documents": 3, "window_archived": 2,
+        "coverage_pct": 66.7, "new_versions": {"article_content": 1, "source_page": 1},
+        "cache_reused": 0, "downloads": 2, "failed": {"http_404": 1}, "gave_up": 1,
+        "skipped_cap": 0, "skipped_time": 0, "outage": False, "outage_kept": 0,
+        "raw_dirs_deleted": 0, "archive_bytes": texts, "archive_size_warning": False}
     record = next(r for r in caplog.records if r.getMessage() == "archive_capture_finished")
     assert record.event_fields == summary
 
     report = status(session)
-    assert report["states"] == {"archived": 1, "pending": 2}
-    assert (report["versions"], report["window_documents"], report["coverage_pct"]) == (1, 3, 33.3)
+    assert report["states"] == {"archived": 2, "gave_up": 1}
+    assert (report["versions"], report["window_documents"], report["coverage_pct"]) == (2, 3, 66.7)
     day = (NOW - timedelta(days=1)).date().isoformat()
-    assert report["coverage_by_day"][day] == {"documents": 2, "archived": 1, "coverage_pct": 50.0}
-    assert report["top_hosts_without_text"] == [{"host": "example.com", "documents": 1},
-                                                {"host": "other.org", "documents": 1}]
-    assert _counts(session) == (3, 1)
+    assert report["coverage_by_day"][day] == {"documents": 2, "archived": 2,
+                                              "coverage_pct": 100.0}
+    assert report["top_hosts_without_text"] == [{"host": "other.org", "documents": 1}]
+    assert _counts(session) == (3, 2)
 
 
 def test_archive_purge_dry_run_and_apply(tmp_path, monkeypatch) -> None:
