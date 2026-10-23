@@ -60,6 +60,8 @@ from app.storage.weekly import WeeklyStore, record_attempt, record_observation, 
 
 # Pending admission candidates replayed per source before its fresh fetch.
 PENDING_REPLAY_LIMIT = 50
+# Pending body candidates published longer ago are settled without screening.
+PENDING_REPLAY_MAX_AGE_DAYS = 30
 # A daily-rubric Comparison answer sets material_type from this confidence on.
 COMPARISON_MIN_CONFIDENCE = 0.7
 
@@ -383,20 +385,47 @@ def _restore_admission(
     state.fresh_success = snapshot[4]
 
 
+def _is_stale_pending(candidate: dict[str, object], cutoff: datetime) -> bool:
+    if candidate.get("kind") != "article":
+        return False
+    published = _parse_dt(candidate.get("published_at"))
+    if published is None:
+        return False
+    if published.tzinfo is None:
+        published = published.replace(tzinfo=UTC)
+    return published < cutoff
+
+
+def _take_fresh_pending(session: Session, db_source_id: int) -> list[Any]:
+    """Settle archive-old pending bodies, then return up to the replay limit of the rest."""
+    cutoff = datetime.now(UTC) - timedelta(days=PENDING_REPLAY_MAX_AGE_DAYS)
+    while True:
+        pending: list[Any] = list_pending(
+            session, source_id=db_source_id, limit=PENDING_REPLAY_LIMIT,
+        )
+        stale = 0
+        for entry in pending:
+            candidate = json.loads(entry.payload).get("candidate")
+            if not isinstance(candidate, dict):
+                raise ValueError("Invalid stored admission candidate")
+            if _is_stale_pending(candidate, cutoff):
+                settle_pending(session, key=entry.key, reason="stale_pending")
+                stale += 1
+        if not stale:
+            return pending
+
+
 def _replay_pending_for_source(  # pylint: disable=too-many-branches
     *, session: Session, config: SourceConfig, db_source_id: int,
     article_repo: ArticleRepo, settings: Settings,
     relevance_scorer: JevRelevanceScorer | None, admission_state: AdmissionState,
     metrics: SourceMetrics,
 ) -> int:
-    pending = list_pending(session, source_id=db_source_id, limit=PENDING_REPLAY_LIMIT)
+    pending = _take_fresh_pending(session, db_source_id)
     bodies: list[tuple[Any, CoreArticle]] = []
     links: list[Any] = []
     for entry in pending:
-        payload = json.loads(entry.payload)
-        candidate = payload.get("candidate")
-        if not isinstance(candidate, dict):
-            raise ValueError("Invalid stored admission candidate")
+        candidate = json.loads(entry.payload).get("candidate")
         if candidate.get("kind") == "html_link":
             links.append(entry)
         elif candidate.get("kind") == "article":
