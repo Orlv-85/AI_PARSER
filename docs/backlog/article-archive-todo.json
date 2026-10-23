@@ -41,7 +41,8 @@
         "Run and document a restore test from the off-site copy."
       ],
       "done_when": "A fresh backup exists off-site daily and a restore from it was tested.",
-      "status": "todo"
+      "status": "done",
+      "done": "2026-10-22 (see backlog B1): daily encrypted upload to Backblaze B2, restore tested 2026-10-21."
     },
     {
       "id": "A1",
