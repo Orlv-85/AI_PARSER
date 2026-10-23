@@ -1,4 +1,5 @@
 import ast
+import hashlib
 import json
 import logging
 import socket
@@ -287,3 +288,80 @@ def test_archive_purge_dry_run_and_apply(tmp_path, monkeypatch) -> None:
     result = run("--url", "https://other.org/b", "--apply")
     assert json.loads(result.stdout) == {"state": "deleted", "documents": 1, "versions": 1}
     assert counts() == (0, 0)
+
+
+def _file_db(path):
+    engine = create_engine(f"sqlite:///{path}", future=True)
+    Base.metadata.create_all(engine)
+    return sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+
+
+def _import_dbs(tmp_path):
+    """Source (dump): a, b, c with source s_dump; target: article a, archived b, no c."""
+    source_path = tmp_path / "source.db"
+    with _file_db(source_path)() as session:
+        session.add(Source(source_key="unused", name="U", type="rss", url="https://u/feed"))
+        session.flush()
+        dump_source = Source(source_key="s_dump", name="Dump", type="rss", url="https://d/feed")
+        session.add(dump_source)
+        session.flush()
+        for key in ("a", "b", "c"):
+            _article(session, key, days_old=2900, source=dump_source)
+        _article(session, "d", days_old=2900, content="short")
+        session.commit()
+    target = _file_db(tmp_path / "target.db")
+    with target() as session:
+        _article(session, "a")
+        archive_articles(session, [_article(session, "b")])
+        session.delete(session.scalars(select(Article).where(
+            Article.url_canonical_hash == "b" * 8)).one())
+        session.commit()
+    return source_path, target
+
+
+def _run_import(monkeypatch, target, *args):
+    monkeypatch.setattr(cli_main, "create_all", lambda: None)
+    monkeypatch.setattr(cli_main, "SessionLocal", target)
+    return CliRunner().invoke(cli_main.app, ["archive", "import-db", *args])
+
+
+def test_import_db_archives_only_missing_hashes(tmp_path, monkeypatch) -> None:
+    _no_network(monkeypatch)
+    source_path, target = _import_dbs(tmp_path)
+    result = _run_import(monkeypatch, target, "--source-url", f"sqlite:///{source_path}",
+                         "--apply")
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout) == {"source_articles": 4, "selected": 2,
+                                         "selected_with_text": 1, "documents": 2,
+                                         "new_versions": 1}
+    with target() as session:
+        documents = {d.url_canonical_hash: d for d in session.scalars(select(ArchiveDocument))}
+        assert set(documents) == {"b" * 8, "c" * 8, "d" * 8}
+        imported = documents["c" * 8]
+        assert (imported.source_key, imported.state, imported.title) == ("s_dump", "archived",
+                                                                         "Title c")
+        assert documents["d" * 8].state == "pending"
+        texts = session.scalars(select(ArchiveText).where(
+            ArchiveText.document_id == imported.id)).all()
+        assert [t.text for t in texts] == [LONG]
+        assert session.scalar(select(func.count()).select_from(Article)) == 1
+    again = _run_import(monkeypatch, target, "--source-url", f"sqlite:///{source_path}",
+                        "--apply")
+    assert json.loads(again.stdout)["selected"] == 0
+
+
+def test_import_db_dry_run_writes_nothing(tmp_path, monkeypatch) -> None:
+    source_path, target = _import_dbs(tmp_path)
+    before = hashlib.sha256(source_path.read_bytes()).hexdigest()
+    result = _run_import(monkeypatch, target, "--source-url", f"sqlite:///{source_path}")
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout) == {"source_articles": 4, "selected": 2,
+                                         "selected_with_text": 1}
+    with target() as session:
+        assert _counts(session) == (1, 1)
+    assert hashlib.sha256(source_path.read_bytes()).hexdigest() == before
+    missing = tmp_path / "missing.db"
+    result = _run_import(monkeypatch, target, "--source-url", f"sqlite:///{missing}")
+    assert result.exit_code == 2
+    assert "source database file not found" in result.output
+    assert not missing.exists()

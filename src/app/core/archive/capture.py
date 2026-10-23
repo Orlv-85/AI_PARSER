@@ -1,17 +1,18 @@
 """Private article archive: copy stored articles into archive documents and text versions; see
 capture.md."""
 import logging
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from sqlalchemy import select
+from sqlalchemy import create_engine, inspect, make_url, select
 from sqlalchemy.orm import Session
 
 from app.observability.logging import log_event
 from app.storage.archive import STATE_ARCHIVED, ArchiveRepo
-from app.storage.models_sql import Article, Source
+from app.storage.models_sql import ArchiveDocument, Article, Source
 
 ARCHIVE_MIN_TEXT_CHARS = 300
 ARCHIVE_LOOKBACK_DAYS = 7
@@ -31,16 +32,18 @@ def url_host(url: str) -> str:
     return (urlsplit(url).hostname or "").lower().removeprefix("www.")
 
 
-def archive_articles(session: Session, articles: Iterable[Article]) -> tuple[int, int]:
+def archive_articles(session: Session, articles: Iterable[Article],
+                     source_keys: Mapping[int, str] | None = None) -> tuple[int, int]:
     """Upsert one document per article and add its content as a version when long enough.
 
-    Sync, no network, no commit (the caller owns the transaction). Returns (documents, new
-    versions)."""
+    Sync, no network, no commit (the caller owns the transaction). `source_keys` maps source ids
+    when the articles come from another database. Returns (documents, new versions)."""
     rows = list(articles)
     source_ids = {row.source_id for row in rows if row.source_id is not None}
-    source_keys: dict[int, str] = dict(session.execute(  # type: ignore[arg-type]
-        select(Source.id, Source.source_key).where(Source.id.in_(source_ids))).all()
-    ) if source_ids else {}
+    if source_keys is None:
+        source_keys = dict(session.execute(  # type: ignore[arg-type]
+            select(Source.id, Source.source_key).where(Source.id.in_(source_ids))).all()
+        ) if source_ids else {}
     repo = ArchiveRepo(session)
     added = 0
     for row in rows:
@@ -121,3 +124,47 @@ def status(session: Session, *, now: datetime | None = None) -> dict[str, Any]:
         "top_hosts_without_text": [{"host": host, "documents": count}
                                    for host, count in repo.hosts_without_text(STATUS_TOP_HOSTS)],
     }
+
+
+IMPORT_COLUMNS = (Article.id, Article.source_id, Article.title, Article.url, Article.url_canonical,
+                  Article.url_canonical_hash, Article.content, Article.published_at,
+                  Article.publication_day, Article.publication_status, Article.discovered_at)
+
+
+def import_db(session: Session, source_url: str, *, apply: bool = False) -> dict[str, Any]:
+    """Archive articles of another database (a restored dump) whose hash is neither a current
+    article nor an archive document. The source is only read; dry run unless `apply`."""
+    url = make_url(source_url)
+    if url.get_backend_name() == "sqlite" and not Path(url.database or "").is_file():
+        raise ValueError(f"source database file not found: {url.database}")
+    current = set(session.scalars(select(Article.url_canonical_hash)))
+    current |= set(session.scalars(select(ArchiveDocument.url_canonical_hash)))
+    engine = create_engine(source_url, future=True)
+    try:
+        with engine.connect() as source:
+            if not inspect(source).has_table("articles"):
+                raise ValueError("source database has no articles table")
+            hashes = list(source.scalars(select(Article.url_canonical_hash)))
+            selected = sorted(set(hashes) - current)
+            source_keys = {int(i): str(k) for i, k in source.execute(
+                select(Source.id, Source.source_key)).all()}
+            with_text = documents = versions = 0
+            for start in range(0, len(selected), CAPTURE_BATCH_SIZE):
+                chunk = selected[start:start + CAPTURE_BATCH_SIZE]
+                rows = [Article(**row._asdict()) for row in source.execute(
+                    select(*IMPORT_COLUMNS).where(Article.url_canonical_hash.in_(chunk))).all()]
+                with_text += sum(len((row.content or "").strip()) >= ARCHIVE_MIN_TEXT_CHARS
+                                 for row in rows)
+                if apply:
+                    batch_documents, batch_versions = archive_articles(session, rows, source_keys)
+                    documents += batch_documents
+                    versions += batch_versions
+                    session.commit()
+            source.rollback()
+    finally:
+        engine.dispose()
+    result: dict[str, Any] = {"source_articles": len(hashes), "selected": len(selected),
+                              "selected_with_text": with_text}
+    if apply:
+        result.update(documents=documents, new_versions=versions)
+    return result

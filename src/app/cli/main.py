@@ -9,6 +9,7 @@ from sqlalchemy import select
 from app.config.settings import get_settings
 from app.config.sources import load_sources
 from app.core.archive.capture import capture as archive_capture
+from app.core.archive.capture import import_db as archive_import_db
 from app.core.archive.capture import status as archive_status
 from app.core.daily.enrichment import publish_catch_up, publish_day
 from app.core.daily.signals import (
@@ -391,6 +392,23 @@ def archive_purge(
         session.commit()
     typer.echo(json.dumps({"state": "deleted" if apply else "dry_run", "documents": documents,
                            "versions": versions}, sort_keys=True))
+
+
+@archive_app.command("import-db")
+def archive_import_db_command(
+    source_url: str = typer.Option(..., "--source-url",
+                                   help="SQLAlchemy URL of the database to read (never written)."),
+    apply: bool = typer.Option(False, "--apply", help="Write; without it only counts."),
+) -> None:
+    """Archive articles of another database (a restored dump) missing here."""
+    create_all()
+    with SessionLocal() as session:
+        try:
+            result = archive_import_db(session, source_url, apply=apply)
+        except ValueError as exc:
+            typer.echo(f"archive import-db: {exc}", err=True)
+            raise typer.Exit(2) from exc
+    typer.echo(json.dumps(result, sort_keys=True))
 
 
 @app.command("import-candidates")
