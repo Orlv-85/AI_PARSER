@@ -15,13 +15,9 @@ from pathlib import Path
 
 TESTS = Path(__file__).resolve().parent.parent
 PATCH_METHODS = {"setattr", "delattr"}
-# Existing patches that hit a module without a reader (module.NAME). Found when this guard was
-# added (2026-10-24); the patched name is never read there, so the patch does nothing. Not fixed
-# here: test_source_candidate_repo patches the module, but the repo reads its own import.
-KNOWN_NO_READER: set[tuple[str, str]] = {
-    ("app.core.sources.candidates", "group_candidate_overlaps"),
-    ("app.core.daily.signals", "run_signals"),
-}
+# Patches that hit a module without a reader (module.NAME): none now. An entry means the patch
+# does nothing; fix the test instead of adding one.
+KNOWN_NO_READER: set[tuple[str, str]] = set()
 
 
 @dataclass(frozen=True)

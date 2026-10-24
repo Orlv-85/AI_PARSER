@@ -229,13 +229,13 @@ def test_find_overlap_groups_and_summarize_batch_cover_review_helpers(monkeypatc
     batch = SourceImportBatchRepo(session).create_batch(raw_text="seed")
     first, _ = repo.create_draft_candidate(
         batch_id=batch.id,
-        raw_input="https://example.com/a",
-        normalized_url="https://example.com/a",
+        raw_input="https://example.com/news",
+        normalized_url="https://example.com/news",
     )
     second, _ = repo.create_draft_candidate(
         batch_id=batch.id,
-        raw_input="https://example.com/b",
-        normalized_url="https://example.com/b",
+        raw_input="https://example.com/news/ai",
+        normalized_url="https://example.com/news/ai",
     )
     third, _ = repo.create_draft_candidate(
         batch_id=batch.id,
@@ -250,14 +250,13 @@ def test_find_overlap_groups_and_summarize_batch_cover_review_helpers(monkeypatc
     third.validation_status = "warning"
     session.flush()
 
-    expected_group = SimpleNamespace(candidate_ids=[first.id, second.id], reason="same_host")
-    monkeypatch.setattr(
-        "app.core.sources.candidates.group_candidate_overlaps",
-        lambda candidates: [expected_group] if len(candidates) == 2 else [],
-    )
-
     groups = repo.find_overlap_groups(batch_id=batch.id, candidate_ids=[first.id, second.id])
-    assert groups == [expected_group]
+    assert len(groups) == 1
+    assert groups[0].candidate_ids == [first.id, second.id]
+    assert groups[0].reason == "same_host_path_prefix"
+
+    # The third candidate is not requested, so it stays out of every group.
+    assert repo.find_overlap_groups(batch_id=batch.id, candidate_ids=[third.id]) == []
 
     summary = repo.summarize_batch(batch_id=batch.id)
     assert summary == {
