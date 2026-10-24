@@ -6,7 +6,7 @@ covers:
   - src/app/core/ingestion/scoring.py
   - src/app/core/canonicalize.py
   - src/app/core/jev.py
-  - src/app/storage/reenrich_pilot_journal.py
+  - src/app/storage/provider_journal.py
   - src/app/storage/admission.py
   - src/app/ingest/*.py
 -->
@@ -465,7 +465,7 @@ web update (thread or process)               web/service.py: UpdateRunService
 | Keyword relevance | `AI_KEYWORDS`, `STOP_WORDS` in `core/ingestion/scoring.py` | only used with admission off |
 | Rank weights, half-life | `rank_score`, `freshness_score` in `core/ingestion/scoring.py` | no rescoring of stored rows |
 | Admission choices | `decision_from_assessment` in `core/ingestion/admission.py` and the admission question in `core/jev.py` | bump policy or prompt version |
-| Evidence bound sent to Jev | `jev_state` and `TITLE_LIMIT` / `SUMMARY_LIMIT` / `CONTENT_LIMIT` in `core/jev.py` (used by `bounded_evidence`, `JevRelevanceScorer.state`, the daily provenance hash) | changes cache keys: bump the prompt version; `reenrich_pilot.source_state`, `core/weekly/input.py`, `core/weekly/frozen.py` repeat the daily text; in daily mode `JevRelevanceScorer.state` adds the summary for content-less candidates; test `test_bounded_jev_text_is_pinned_per_mode` |
+| Evidence bound sent to Jev | `jev_state` and `TITLE_LIMIT` / `SUMMARY_LIMIT` / `CONTENT_LIMIT` in `core/jev.py` (used by `bounded_evidence`, `JevRelevanceScorer.state`, the daily provenance hash) | changes cache keys: bump the prompt version; `provider_requests.source_state`, `core/weekly/input.py`, `core/weekly/frozen.py` repeat the daily text; in daily mode `JevRelevanceScorer.state` adds the summary for content-less candidates; test `test_bounded_jev_text_is_pinned_per_mode` |
 | Pause notice text | `PAUSED_MESSAGE` in `storage/admission.py` | public API and admin status show it |
 | Date evidence | `ingest/date_evidence.py` | bump `DATE_EVIDENCE_VERSION` |
 

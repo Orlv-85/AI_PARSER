@@ -12,7 +12,7 @@ from datetime import date
 from typing import Any
 
 from app.core.daily.enrichment import digest_title
-from app.core.daily.reenrich_pilot import DEEPSEEK_MODEL
+from app.core.daily.provider_requests import DEEPSEEK_MODEL
 from app.core.daily.signals_entities import (
     QUOTES,
     is_stopped,

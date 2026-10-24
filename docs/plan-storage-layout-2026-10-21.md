@@ -38,7 +38,7 @@ is next touched.
 | `source_candidate_repo.py` | source onboarding candidates | future `core/sources/onboarding.md` | doc when onboarding is next changed |
 | `digest_repo.py` | daily digest reports | future `core/daily/enrichment.md` | doc with daily enrichment |
 | `daily_signals.py`, `daily_signals_ledger.py` | Daily AI Signals | `core/daily/signals.md` (already in `covers:`) | keep |
-| `reenrich_pilot_journal.py` | paid provider journal (budget caps, reservations, recovery); used by daily enrichment, daily admission (`core/jev.py`), weekly frozen | future `core/daily/enrichment.md` | live, misnamed: rename to e.g. `provider_journal.py` with the daily enrichment doc (weekly `code_hashes` names the path, see below) |
+| `provider_journal.py` | paid provider journal (budget caps, reservations, recovery); used by daily enrichment, daily admission (`core/jev.py`), weekly frozen | future `core/daily/enrichment.md` | live, misnamed: rename to e.g. `provider_journal.py` with the daily enrichment doc (weekly `code_hashes` names the path, see below) |
 | `article_evidence_cache.py` | private source-page cache; used by daily enrichment and the re-enrichment scripts | future `core/daily/enrichment.md` | live; cover it in that doc |
 | `legacy_cleanup.py` | one-off legacy cleanup (manifest, apply, restore); ran 2026-10-11 | none; operator guide `docs/legacy-articles-jev-cleanup.md` | finished one-off; still holds `known_article_fk`, which CI uses to guard new FKs to `articles` (`tests/integration/test_legacy_cleanup_postgres.py`) |
 | `cleanup_journal.py` | provider journal of the legacy cleanup run | none | finished one-off, only `scripts/legacy_articles_cleanup.py` uses it |
@@ -50,8 +50,8 @@ is next touched.
 
 | Feature | Live or finished | Recommendation |
 | --- | --- | --- |
-| Daily digest enrichment (`core/daily/enrichment.py`, `reenrich_pilot.py`, provider journal, page cache, `digest_repo.py`) | live (`publish_day`; see `docs/troubleshooting.md`) | write `core/daily/enrichment.md` next time it changes; rename the "pilot" modules then |
-| Re-enrichment of existing articles (`scripts/reenrich_articles.py`, `scripts/reenrich_pilot.py`) | finished 2026-10-11 (`docs/archive/2026-10/reenrich-production-results-2026-10-11.md`); the scripts remain as tools | no code doc; `docs/article-reenrichment.md` stays the operator record; decide delete-or-keep of the two scripts separately |
+| Daily digest enrichment (`core/daily/enrichment.py`, `provider_requests.py`, provider journal, page cache, `digest_repo.py`) | live (`publish_day`; see `docs/troubleshooting.md`) | write `core/daily/enrichment.md` next time it changes; rename the "pilot" modules then |
+| Re-enrichment of existing articles (`scripts/reenrich_articles.py`, `scripts/reenrich_pilot.py`) | finished 2026-10-11 (`docs/archive/2026-10/reenrich-production-results-2026-10-11.md`); scripts, snapshot helpers and tests deleted 2026-10-24 | no code doc; `docs/archive/2026-10/article-reenrichment.md` is the record |
 | Legacy cleanup (`legacy_cleanup.py`, `cleanup_journal.py`, script) | finished 2026-10-11 | no code doc; before any deletion, move `known_article_fk` / `DERIVED_CASCADE_TABLES` (the FK guard) to where it stays live |
 | Non-news cleanup (`non_news_cleanup.py`, script) | finished (plan 2026-10-10) | no code doc; delete together with legacy cleanup or keep as tools |
 | Article evidence cache | live (daily enrichment) | covered by the future `core/daily/enrichment.md` |
@@ -60,13 +60,13 @@ is next touched.
 
 `core/weekly/*.py`, `storage/weekly.py`, `storage/repos.py` (`WeeklyAnalyticsRepo`),
 `scripts/weekly_frozen_report.py`, `scripts/run_weekly_analytics_job.sh`.
-`core/weekly/frozen.py` `code_hashes()` hashes its own file and `storage/reenrich_pilot_journal.py`;
+`core/weekly/frozen.py` `code_hashes()` hashes its own file and `storage/provider_journal.py`;
 any edit of either (including this PR's import re-pointing) makes existing frozen weekly runs
 refuse to resume. Weekly is off in production, so this is accepted until weekly work starts.
 
 ## Other notes
 
-- `core/daily/reenrich_pilot.py` still holds `ENDPOINTS` and the model names that
+- `core/daily/provider_requests.py` still holds `ENDPOINTS` and the model names that
   `storage/daily_signals_ledger.py` and `core/daily/signals_extract.py` import; move them to
   `core/provider_costs.py` (or a `core/providers.py`) with the daily enrichment doc.
 - `storage/weekly.py` has its own `encoded` / `fingerprint`; not merged with `journal_files.py`

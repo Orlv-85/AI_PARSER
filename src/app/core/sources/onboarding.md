@@ -269,8 +269,7 @@ check it.
 - `GET .../candidates` filters by batch, status and validation status, with the summary of the
   given batch or of the first listed candidate's batch; `GET .../batches/{batch_id}/summary`: 404
   for an unknown batch; `GET .../latest` returns the newest batch id and the check job. Counts come
-  from `summarize_batch`: pending review = `draft` (its `validated` status branch never matches, no
-  candidate has that status: source_candidate_repo.py:289); `disabled` is not counted;
+  from `summarize_batch`: pending review = `draft` (no candidate has status `validated`); `disabled` is not counted;
   `rejected_count` is the batch's import rejections (candidate rejections when there is no batch);
   with no batch and no listed candidate the summary covers all candidates. CLI
   `ai-news review-batch-outcomes`. Tests:

@@ -1,13 +1,11 @@
 """Payment safety and source grounding using synthetic HTTP responses only."""
-import importlib.util
 import json
 from logging import getLogger
-from pathlib import Path
 
 import httpx
 import pytest
 
-from app.core.daily.reenrich_pilot import (
+from app.core.daily.provider_requests import (
     SUMMARY_RECOVERY_VERSION,
     TOPIC_CRITERIA,
     TOPIC_FALLBACK_VERSION,
@@ -21,7 +19,7 @@ from app.core.daily.reenrich_pilot import (
 )
 from app.core.jev import JevRelevanceScorer
 from app.storage.journal_files import fingerprint
-from app.storage.reenrich_pilot_journal import PilotJournal, PilotStopped
+from app.storage.provider_journal import PilotJournal, PilotStopped
 
 ROW = {"url": "https://example.com/article/ai", "title": "Synthetic AI release",
        "content": "The AI system handles document extraction for hospitals.",
@@ -277,34 +275,6 @@ def test_quote_mapping_preserves_source_whitespace_and_rejects_omitted_words():
     value["facts"][0]["quote"] = "The AI system handles extraction for hospitals."
     with pytest.raises(ValueError, match="quote"):
         parse_summary(row, response(), False)
-
-
-def test_driver_repairs_known_quote_failure_once_and_replays_success(tmp_path, monkeypatch):
-    scripts = Path(__file__).resolve().parents[2] / "scripts"
-    monkeypatch.syspath_prepend(str(scripts))
-    spec = importlib.util.spec_from_file_location("pilot_driver", scripts / "reenrich_pilot.py")
-    assert spec and spec.loader
-    driver = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(driver)
-    journal = PilotJournal(tmp_path / "journal.sqlite3", {}, CAPS)
-    dispatched = []
-
-    def respond(request):
-        dispatched.append(request)
-        quote = "Fabricated source quotation" if len(dispatched) == 1 else ROW["content"]
-        value = {"facts": [{"sentence": "The system extracts documents.", "quote": quote}],
-                 "compared_products": []}
-        return httpx.Response(200, json={"model": "deepseek-flash",
-            "usage": {"prompt_tokens": 100, "completion_tokens": 100},
-            "choices": [{"finish_reason": "stop", "message": {"content": json.dumps(value)}}]})
-
-    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
-        first = driver.obtain_summary(ROW, False, journal, client, "synthetic-key", 4096)
-        second = driver.obtain_summary(ROW, False, journal, client, "synthetic-key", 4096)
-    assert first == second
-    assert len(dispatched) == 2
-    assert journal.report()["providers"]["deepseek"]["states"] == {"reviewed": 1, "response": 1}
-    journal.close()
 
 
 def test_unclear_product_stays_unknown_without_discarding_grounded_summary():

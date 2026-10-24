@@ -14,7 +14,7 @@ import httpx
 from sqlalchemy import or_, select
 
 from app.core.categories import REENRICH_TOPIC_ORDER
-from app.core.daily.reenrich_pilot import (
+from app.core.daily.provider_requests import (
     DEEPSEEK_MODEL,
     JEV_MODEL,
     SUMMARY_RECOVERY_VERSION,
@@ -34,7 +34,7 @@ from app.storage.article_evidence_cache import PageCache, SourcePageDownloader, 
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.journal_files import encoded, fingerprint, private_write
 from app.storage.models_sql import Article
-from app.storage.reenrich_pilot_journal import PilotJournal, PilotStopped
+from app.storage.provider_journal import PilotJournal, PilotStopped
 
 DAILY_VERSION = "daily-publication-1"
 SUMMARY_PROMPT_VERSION = "daily-summary-details-1"

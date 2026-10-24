@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
 from app.core.categories import CATEGORY_CRITERIA
-from app.core.daily.reenrich_pilot import source_state
+from app.core.daily.provider_requests import source_state
 from app.core.ingestion.admission import bounded_evidence, evidence_hash
 from app.core.ingestion.pipeline import _build_article_row, run_fetch_cycle
 from app.core.ingestion.scoring import ai_relevance_score

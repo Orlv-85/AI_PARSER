@@ -8,7 +8,7 @@ from collections import Counter
 
 import httpx
 
-from app.core.daily.reenrich_pilot import (
+from app.core.daily.provider_requests import (
     DEEPSEEK_MODEL,
     ENDPOINTS,
     parse_summary,

@@ -19,7 +19,7 @@ from app.storage.admission import set_collection_paused
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.journal_files import encoded, fingerprint, private_write
 from app.storage.models_sql import Article, Base
-from app.storage.reenrich_pilot_journal import PilotJournal
+from app.storage.provider_journal import PilotJournal
 
 TARGET = date(2026, 10, 10)
 SOURCE = "The company says its AI system handles document extraction for hospitals. " * 8
@@ -147,7 +147,7 @@ def test_failure_retains_good_digest_and_records_reason(session, tmp_path, monke
     repo.save_digest(report_date=TARGET, groups=[{"title": "Good", "items": [
         {"title": "Good", "summary": "Previously checked", "url": "https://good.org"}]}])
     session.commit()
-    monkeypatch.setattr("app.storage.reenrich_pilot_journal.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr("app.storage.provider_journal.time.sleep", lambda _seconds: None)
 
     def respond(request):
         if failure == "outage":
@@ -693,7 +693,7 @@ def test_ungrounded_quote_holds_one_article_instead_of_failing_day(
 def test_provider_overload_is_retried_then_resumable(session, tmp_path, monkeypatch):
     article(session)
     sleeps = []
-    monkeypatch.setattr("app.storage.reenrich_pilot_journal.time.sleep", sleeps.append)
+    monkeypatch.setattr("app.storage.provider_journal.time.sleep", sleeps.append)
     busy = {"remaining": 4}
 
     def respond(request):
@@ -717,7 +717,7 @@ def test_provider_overload_is_retried_then_resumable(session, tmp_path, monkeypa
 def test_dropped_connection_is_retried_after_one_then_five_minutes(session, tmp_path, monkeypatch):
     article(session)
     sleeps = []
-    monkeypatch.setattr("app.storage.reenrich_pilot_journal.time.sleep", sleeps.append)
+    monkeypatch.setattr("app.storage.provider_journal.time.sleep", sleeps.append)
     dropped = {"remaining": 2}
 
     def respond(request):
@@ -738,7 +738,7 @@ def test_dropped_connection_is_retried_after_one_then_five_minutes(session, tmp_
 def test_transport_retries_exhausted_fails_day_without_more_dispatch(
         session, tmp_path, monkeypatch):
     article(session)
-    monkeypatch.setattr("app.storage.reenrich_pilot_journal.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr("app.storage.provider_journal.time.sleep", lambda _seconds: None)
     deepseek_calls = []
 
     def respond(request):
