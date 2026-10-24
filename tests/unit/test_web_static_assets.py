@@ -1,3 +1,4 @@
+import asyncio
 import re
 from importlib import import_module
 
@@ -95,3 +96,41 @@ def test_admin_assets_need_a_session_like_admin(monkeypatch, tmp_path) -> None:
     response = client.get("/static/admin/core.js")
     assert response.status_code == 200
     assert "function showPage(name)" in response.text
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/static/css/../admin/core.js",
+        "/static//admin/core.js",
+        "/static/./admin/core.js",
+        "/static/ADMIN/core.js",
+    ],
+)
+def test_admin_assets_check_uses_normalized_path(monkeypatch, tmp_path, path) -> None:
+    app = _client(monkeypatch, tmp_path, auth=True).app
+    sent: list[dict] = []
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message):
+        sent.append(message)
+
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": path,
+        "raw_path": path.encode(),
+        "query_string": b"",
+        "headers": [(b"host", b"testserver")],
+        "scheme": "http",
+        "server": ("testserver", 80),
+        "client": ("testclient", 1),
+        "root_path": "",
+        "http_version": "1.1",
+    }
+    asyncio.run(app(scope, receive, send))
+
+    assert sent[0]["status"] == 303
+    assert (b"location", b"/login") in sent[0]["headers"]

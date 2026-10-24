@@ -1,6 +1,7 @@
 """Web app: builds the shared objects, the auth middleware and the routers of `app.web.routes`."""
 
 import logging
+import posixpath
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -111,7 +112,10 @@ def create_app() -> FastAPI:
             or is_auth_route
             or is_public_news_api
         )
-        is_protected_ui = path == "/admin" or path.startswith("/static/admin/")
+        # Normalized because StaticFiles resolves `..`, `//` and `.` itself;
+        # lower() for case-insensitive file systems.
+        static_path = posixpath.normpath(path).lower()
+        is_protected_ui = path == "/admin" or static_path.startswith("/static/admin/")
         is_protected_api = path.startswith("/api/") and not is_public_news_api
         is_protected = is_protected_api or is_protected_ui
 
