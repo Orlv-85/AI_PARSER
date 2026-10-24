@@ -9,12 +9,10 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
-from app.core.ingestion.pipeline import (
-    _managed_source_to_config,
-    _process_fetched_source_items,
-    _process_html_links_two_stage,
-    run_fetch_cycle,
-)
+from app.core.ingestion.pipeline import run_fetch_cycle
+from app.core.ingestion.pipeline.html_links import _process_html_links_two_stage
+from app.core.ingestion.pipeline.rss import _process_fetched_source_items
+from app.core.ingestion.pipeline.sources import _managed_source_to_config
 from app.core.models import Article
 from app.ingest.html import (
     _build_html_article,
@@ -139,7 +137,7 @@ def test_two_stage_filters_before_limit_and_model_call(monkeypatch) -> None:
     def fetch(**kwargs):
         downloaded.append(kwargs["url"])
         return Article(source_key="example", title="AI launch", url=kwargs["url"])
-    monkeypatch.setattr("app.core.ingestion.pipeline.fetch_html_article", fetch)
+    monkeypatch.setattr("app.core.ingestion.pipeline.html_links.fetch_html_article", fetch)
     with Session(engine) as session:
         source = _source()
         db_source = SourceRepo(session).upsert_source(source)
@@ -197,9 +195,9 @@ def test_html_fetch_cycle_filters_before_download(monkeypatch, tmp_path) -> None
     engine = create_engine(f"sqlite:///{tmp_path}/filter.db")
     Base.metadata.create_all(engine)
     sessions = sessionmaker(bind=engine, autoflush=False)
-    monkeypatch.setattr("app.core.ingestion.pipeline.load_sources", lambda _path: [_source()])
-    monkeypatch.setattr("app.core.ingestion.pipeline.create_all", lambda: None)
-    monkeypatch.setattr("app.core.ingestion.pipeline.SessionLocal", sessions)
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.load_sources", lambda _path: [_source()])
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.create_all", lambda: None)
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.SessionLocal", sessions)
     summary = run_fetch_cycle(settings=Settings(_env_file=None, weekly_v2_enabled=False),
                               logger=getLogger("non-news"))
     assert (summary.errors, summary.new) == (0, 1)

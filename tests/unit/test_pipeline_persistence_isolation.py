@@ -77,11 +77,11 @@ def test_source_savepoint_recovers_after_database_error(
     def fetch_article(*, source, url, **_kwargs):
         return next(item for item in articles[source.id] if str(item.url) == url)
 
-    monkeypatch.setattr("app.core.ingestion.pipeline.load_sources", lambda _path: configs)
-    monkeypatch.setattr("app.core.ingestion.pipeline.create_all", lambda: None)
-    monkeypatch.setattr("app.core.ingestion.pipeline.SessionLocal", sessions)
-    monkeypatch.setattr("app.core.ingestion.pipeline._collect_fetched_items", collect)
-    monkeypatch.setattr("app.core.ingestion.pipeline.fetch_html_article", fetch_article)
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.create_all", lambda: None)
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.SessionLocal", sessions)
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle._collect_fetched_items", collect)
+    monkeypatch.setattr("app.core.ingestion.pipeline.html_links.fetch_html_article", fetch_article)
     settings = Settings(
         article_batch_upsert_enabled=batch, respect_robots_txt=False,
         rss_known_streak_stop=0,
@@ -152,13 +152,15 @@ def _sqlite_run(monkeypatch, tmp_path, configs, *, collect=None, fetch_article=N
     engine = create_engine(f"sqlite:///{tmp_path}/run.db")
     Base.metadata.create_all(engine)
     sessions = sessionmaker(bind=engine, autoflush=False)
-    monkeypatch.setattr("app.core.ingestion.pipeline.load_sources", lambda _path: configs)
-    monkeypatch.setattr("app.core.ingestion.pipeline.create_all", lambda: None)
-    monkeypatch.setattr("app.core.ingestion.pipeline.SessionLocal", sessions)
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.create_all", lambda: None)
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.SessionLocal", sessions)
     if collect is not None:
-        monkeypatch.setattr("app.core.ingestion.pipeline._collect_fetched_items", collect)
+        monkeypatch.setattr("app.core.ingestion.pipeline.cycle._collect_fetched_items", collect)
     if fetch_article is not None:
-        monkeypatch.setattr("app.core.ingestion.pipeline.fetch_html_article", fetch_article)
+        monkeypatch.setattr(
+            "app.core.ingestion.pipeline.html_links.fetch_html_article", fetch_article,
+        )
     return sessions
 
 
@@ -420,7 +422,7 @@ def test_per_row_duplicate_updates_scores_and_category_only(monkeypatch, tmp_pat
     def scorer(*_args):
         yield SimpleNamespace(classify=lambda item: assessments[item.title])
 
-    monkeypatch.setattr("app.core.ingestion.pipeline.jev_relevance_scorer", scorer)
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.jev_relevance_scorer", scorer)
     sessions = _sqlite_run(
         monkeypatch, tmp_path, configs,
         collect=lambda **_kwargs: ({0: _rss_items(batch["items"])}, 0),
@@ -459,7 +461,7 @@ def test_error_outside_source_loop_aborts_without_commit(monkeypatch, tmp_path, 
     def broken(*_args, **_kwargs):
         raise RuntimeError(f"broken {stage}")
 
-    monkeypatch.setattr(f"app.core.ingestion.pipeline.{stage}", broken)
+    monkeypatch.setattr(f"app.core.ingestion.pipeline.cycle.{stage}", broken)
 
     with pytest.raises(RuntimeError, match=f"broken {stage}"):
         run_fetch_cycle(settings=_settings(), logger=getLogger("abort"))

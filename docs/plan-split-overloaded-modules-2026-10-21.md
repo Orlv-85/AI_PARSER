@@ -7,6 +7,7 @@ Step 1 done (2026-10-21): `storage/repos.py` split, branch `refactor/split-stora
 Step 2 done (2026-10-21): `core/sources/onboarding.py` split.
 Step 3 done (2026-10-21): `web/app.py` split into `web/routes/`, branch
 `refactor/split-web-app-20261021`.
+pipeline.py split 2026-10-24 (owner decision), guard test `tests/unit/test_monkeypatch_targets.py`.
 
 ## Method
 

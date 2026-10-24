@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.config.sources import SourceConfig
 from app.core.daily import enrichment as daily
 from app.core.daily.rubric import QUESTIONS
-from app.core.ingestion.pipeline import _build_article_row
+from app.core.ingestion.pipeline.rows import _build_article_row
 from app.core.jev import JevRelevanceScorer
 from app.core.models import Article as CoreArticle
 from app.storage.admission import set_collection_paused

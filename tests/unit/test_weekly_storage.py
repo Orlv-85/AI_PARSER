@@ -263,7 +263,7 @@ def test_api_reads_snapshot_without_provider_calls_and_rejects_old_publisher(
 
 
 def test_monday_v2_trigger_only_enqueues(session, monkeypatch) -> None:
-    module = import_module("app.core.ingestion.pipeline")
+    module = import_module("app.core.ingestion.pipeline.weekly_hooks")
     monkeypatch.setattr(module, "_weekly_report_date_to_publish", lambda _: date(2026, 10, 4))
     module._publish_weekly_analytics_if_due(
         session=session, logger=logging.getLogger("weekly-test"), run_id="test",

@@ -11,11 +11,8 @@ from sqlalchemy.orm import sessionmaker
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
 from app.core.canonicalize import canonical_url_hash
-from app.core.ingestion.pipeline import (
-    PENDING_REPLAY_LIMIT,
-    PENDING_REPLAY_MAX_AGE_DAYS,
-    run_fetch_cycle,
-)
+from app.core.ingestion.pipeline import run_fetch_cycle
+from app.core.ingestion.pipeline.models import PENDING_REPLAY_LIMIT, PENDING_REPLAY_MAX_AGE_DAYS
 from app.core.jev import (
     ADMISSION_CONSECUTIVE_TRANSPORT_LIMIT,
     ADMISSION_TRANSPORT_RETRY_DELAYS,
@@ -71,14 +68,20 @@ class Scenario:  # pylint: disable=too-many-instance-attributes
         self.body_fetches = []
         self.fail_at = None
         self.not_modified = False
-        monkeypatch.setattr("app.core.ingestion.pipeline.load_sources", lambda _path: self.configs)
-        monkeypatch.setattr("app.core.ingestion.pipeline.create_all", lambda: None)
-        monkeypatch.setattr("app.core.ingestion.pipeline.SessionLocal", self.sessions)
-        monkeypatch.setattr("app.core.ingestion.pipeline.jev_relevance_scorer", self.scorer)
-        monkeypatch.setattr("app.core.ingestion.pipeline._collect_fetched_items", self.collect)
-        monkeypatch.setattr("app.core.ingestion.pipeline.fetch_html_article", self.fetch_body)
         monkeypatch.setattr(
-            "app.core.ingestion.pipeline.ai_relevance_score",
+            "app.core.ingestion.pipeline.cycle.load_sources", lambda _path: self.configs,
+        )
+        monkeypatch.setattr("app.core.ingestion.pipeline.cycle.create_all", lambda: None)
+        monkeypatch.setattr("app.core.ingestion.pipeline.cycle.SessionLocal", self.sessions)
+        monkeypatch.setattr("app.core.ingestion.pipeline.cycle.jev_relevance_scorer", self.scorer)
+        monkeypatch.setattr(
+            "app.core.ingestion.pipeline.cycle._collect_fetched_items", self.collect,
+        )
+        monkeypatch.setattr(
+            "app.core.ingestion.pipeline.html_links.fetch_html_article", self.fetch_body,
+        )
+        monkeypatch.setattr(
+            "app.core.ingestion.pipeline.rows.ai_relevance_score",
             lambda *_: pytest.fail("Keyword fallback is forbidden during admission"),
         )
 
@@ -165,7 +168,7 @@ def test_oversized_journal_input_stays_pending_without_pausing_other_articles(
         assert journal.report()["providers"]["jev"]["calls"] == 2
         journal.close()
 
-    monkeypatch.setattr("app.core.ingestion.pipeline.jev_relevance_scorer", scorer)
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.jev_relevance_scorer", scorer)
     first = scenario.run()
     assert first.new == 2 and first.screening_paused == 0
     assert first.semantic_unresolved == 1
@@ -188,7 +191,7 @@ class AdmissionRig:
         self.titles, self.sleeps, self.reports, self.scorers = [], [], [], []
         scenario.settings.daily_enrichment_enabled = True
         monkeypatch.setattr("app.storage.provider_journal.time.sleep", self.sleeps.append)
-        monkeypatch.setattr("app.core.ingestion.pipeline.jev_relevance_scorer", self.scorer)
+        monkeypatch.setattr("app.core.ingestion.pipeline.cycle.jev_relevance_scorer", self.scorer)
 
     def attempts(self, title):
         return self.titles.count(title)
@@ -382,9 +385,10 @@ def test_outage_preserves_verified_and_replays_after_list_rotation(
     scenario.not_modified = not_modified
     old_items = scenario.items
     scenario.items = []
-    monkeypatch.setattr("app.core.ingestion.pipeline.fetch_html_article", lambda *, url, **_: next(
-        item for item in old_items if str(item.url) == url
-    ))
+    monkeypatch.setattr(
+        "app.core.ingestion.pipeline.html_links.fetch_html_article",
+        lambda *, url, **_: next(item for item in old_items if str(item.url) == url),
+    )
     scenario.configs = scenario.configs[:1]
     second = scenario.run()
     assert (second.new, second.screening_paused) == (2, 0)
@@ -472,14 +476,14 @@ def test_html_article_failure_retains_retry_and_continues(
             return None
         return original_fetch(url=url, **kwargs)
 
-    monkeypatch.setattr("app.core.ingestion.pipeline.fetch_html_article", fetch_body)
+    monkeypatch.setattr("app.core.ingestion.pipeline.html_links.fetch_html_article", fetch_body)
     result = scenario.run()
     assert result.new == 2 and result.screening_paused == 0
     assert len(scenario.requests) == 2
     pending = [r for r in scenario.rows(AdmissionDecision) if r.provider_status == "pending"]
     assert len(pending) == 1
     assert json.loads(pending[0].payload)["candidate"]["url"] == first_url
-    monkeypatch.setattr("app.core.ingestion.pipeline.fetch_html_article", original_fetch)
+    monkeypatch.setattr("app.core.ingestion.pipeline.html_links.fetch_html_article", original_fetch)
     scenario.not_modified = True
     assert scenario.run().new == 1
     assert not [r for r in scenario.rows(AdmissionDecision) if r.provider_status == "pending"]
@@ -497,7 +501,9 @@ def test_confirmed_html_exclusion_settles_before_304(monkeypatch, tmp_path, batc
         downloads.append(url)
         return "<h1>AI Platform</h1><h2>Features</h2><a>Request a demo</a>"
 
-    monkeypatch.setattr("app.core.ingestion.pipeline.fetch_html_article", fetch_html_article)
+    monkeypatch.setattr(
+        "app.core.ingestion.pipeline.html_links.fetch_html_article", fetch_html_article,
+    )
     monkeypatch.setattr("app.ingest.fetcher.Fetcher.fetch_text", fetch_text)
     first = scenario.run()
     assert first.new == 0 and first.screening_paused == 0
@@ -548,7 +554,9 @@ def test_redirect_identity_survives_pending_body_replay(monkeypatch, tmp_path):
     scenario.items = scenario.items[:1]
     original = scenario.items[0]
     redirected = original.model_copy(update={"url": "https://example.com/final-story"})
-    monkeypatch.setattr("app.core.ingestion.pipeline.fetch_html_article", lambda **_: redirected)
+    monkeypatch.setattr(
+        "app.core.ingestion.pipeline.html_links.fetch_html_article", lambda **_: redirected,
+    )
     scenario.fail_at = 1
     assert scenario.run().screening_paused == 1
     scenario.fail_at = None
@@ -611,7 +619,7 @@ def test_confident_comparison_answer_sets_material_type(monkeypatch, tmp_path):
             yield JevRelevanceScorer(client, "jev-1.13.0", getLogger("semantic-test"),
                 semantic_admission_enabled=True, daily_enrichment_enabled=True)
 
-    monkeypatch.setattr("app.core.ingestion.pipeline.jev_relevance_scorer", scorer)
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.jev_relevance_scorer", scorer)
     assert scenario.run().new == 3
     material = {row.title: row.material_type for row in scenario.rows(StoredArticle)}
     assert material == {
@@ -727,7 +735,7 @@ def test_admission_coverage_attempt_records_fetch_and_persist_failures(
     scenario = Scenario(tmp_path, monkeypatch, "rss", False)
     if failure == "fetch":
         monkeypatch.setattr(
-            "app.core.ingestion.pipeline._collect_fetched_items", lambda **_kwargs: ({}, 1),
+            "app.core.ingestion.pipeline.cycle._collect_fetched_items", lambda **_kwargs: ({}, 1),
         )
     else:
         with scenario.sessions() as session:
@@ -771,8 +779,8 @@ def test_cycle_cache_hit_after_rolled_back_assessment_keeps_notice(monkeypatch, 
                                      semantic_admission_enabled=True,
                                      daily_enrichment_enabled=daily)
 
-    monkeypatch.setattr("app.core.ingestion.pipeline._collect_fetched_items", collect)
-    monkeypatch.setattr("app.core.ingestion.pipeline.jev_relevance_scorer", scorer)
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle._collect_fetched_items", collect)
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.jev_relevance_scorer", scorer)
     with scenario.sessions() as session:
         set_collection_paused(session)
         session.execute(text(

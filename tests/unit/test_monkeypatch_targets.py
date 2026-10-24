@@ -8,6 +8,7 @@ Checked targets: `monkeypatch.setattr/delattr("app.x.y.NAME", ...)`, `setattr(<m
 """
 import ast
 import importlib.util
+from collections.abc import Iterator
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
@@ -69,8 +70,18 @@ def _imported_module_name(call: ast.Call) -> str | None:
     return None
 
 
-def _aliases(tree: ast.Module) -> dict[str, str]:
-    """Names bound to `app.` modules by imports or `import_module("app...")`."""
+def _scope_nodes(tree: ast.Module, scope: ast.AST) -> Iterator[ast.AST]:
+    """Nodes of one test function, or of the module level outside functions and classes."""
+    if scope is not tree:
+        yield from ast.walk(scope)
+        return
+    for stmt in tree.body:
+        if not isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            yield from ast.walk(stmt)
+
+
+def _aliases(tree: ast.Module, scope: ast.AST) -> dict[str, str]:
+    """Names bound to `app.` modules: imports of the file, `import_module` calls of `scope`."""
     found: dict[str, str] = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -82,7 +93,8 @@ def _aliases(tree: ast.Module) -> dict[str, str]:
                 full = f"{node.module}.{alias.name}"
                 if _is_module(full):
                     found[alias.asname or alias.name] = full
-        elif isinstance(node, ast.Assign) and isinstance(node.value, ast.Call):
+    for node in _scope_nodes(tree, scope):
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call):
             module = _imported_module_name(node.value)
             if module and isinstance(node.targets[0], ast.Name):
                 found[node.targets[0].id] = module
@@ -123,7 +135,6 @@ def _unique(items: list[Target]) -> list[Target]:
 def _targets_in_file(path: Path) -> tuple[list[Target], list[Target]]:
     """(module-attribute targets, object-attribute targets) patched by one test file."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
-    aliases = _aliases(tree)
     shown = path.relative_to(TESTS.parent).as_posix()
     module_targets: list[Target] = []
     object_targets: list[Target] = []
@@ -131,12 +142,8 @@ def _targets_in_file(path: Path) -> tuple[list[Target], list[Target]]:
                  if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
     for function in [tree, *functions]:
         params = _parametrized(function)
-        body_nodes = (
-            ast.walk(function) if function is not tree
-            else (n for stmt in tree.body if not isinstance(stmt, (ast.FunctionDef, ast.ClassDef))
-                  for n in ast.walk(stmt))
-        )
-        for node in body_nodes:
+        aliases = _aliases(tree, function)
+        for node in _scope_nodes(tree, function):
             if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
                     and node.func.attr in PATCH_METHODS and node.args):
                 continue
