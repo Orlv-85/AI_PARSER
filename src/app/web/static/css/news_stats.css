@@ -1,0 +1,174 @@
+      :root {
+        --bg-top: #eef4f7;
+        --bg-bottom: #f8fafc;
+        --surface: #ffffff;
+        --border: #d7e1ea;
+        --text: #102a43;
+        --muted: #5c6f82;
+        --accent: #0f766e;
+        --warning: #b45309;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        color: var(--text);
+        background: linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+      }
+      main {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 48px 20px 64px;
+      }
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
+        padding: 24px;
+      }
+      .panel + .panel {
+        margin-top: 18px;
+      }
+      .hero-nav {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        align-items: center;
+      }
+      .hero-links {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      a {
+        color: var(--accent);
+        font-weight: 600;
+        text-decoration: none;
+      }
+      h1 {
+        margin: 14px 0 8px;
+        font-size: clamp(1.9rem, 3.6vw, 2.8rem);
+      }
+      h2 {
+        margin: 0 0 14px;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .filters {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        align-items: end;
+        margin-top: 18px;
+      }
+      label {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--muted);
+      }
+      input[type="date"] {
+        width: 180px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 11px 12px;
+        font: inherit;
+      }
+      button {
+        border: 0;
+        border-radius: 12px;
+        padding: 12px 16px;
+        background: var(--accent);
+        color: white;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .metric {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 16px;
+      }
+      .metric-value {
+        display: block;
+        margin-top: 8px;
+        font-size: 1.8rem;
+        font-weight: 800;
+      }
+      .chart {
+        display: grid;
+        gap: 10px;
+      }
+      .bar-row {
+        display: grid;
+        grid-template-columns: 104px minmax(0, 1fr) 76px;
+        gap: 12px;
+        align-items: center;
+      }
+      .bar-track {
+        min-width: 0;
+        height: 18px;
+        border-radius: 999px;
+        background: #e5edf4;
+        overflow: hidden;
+      }
+      .bar {
+        height: 100%;
+        min-width: 2px;
+        border-radius: inherit;
+        background: var(--accent);
+      }
+      .bar.zero {
+        min-width: 0;
+        background: var(--warning);
+      }
+      .count {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .table-wrap {
+        overflow-x: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 760px;
+      }
+      th,
+      td {
+        border-bottom: 1px solid var(--border);
+        padding: 10px;
+        text-align: right;
+      }
+      th:first-child,
+      td:first-child {
+        text-align: left;
+      }
+      tr.zero-day td {
+        color: var(--warning);
+        font-weight: 700;
+      }
+      .hidden {
+        display: none;
+      }
+      @media (max-width: 760px) {
+        main {
+          padding-top: 28px;
+        }
+        .hero-nav {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+        .summary-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .bar-row {
+          grid-template-columns: 92px minmax(0, 1fr) 58px;
+        }
+      }

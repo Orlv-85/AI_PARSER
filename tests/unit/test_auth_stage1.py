@@ -332,13 +332,15 @@ def test_login_page_redirects_when_session_valid(monkeypatch, tmp_path) -> None:
     assert page.headers["location"] == "/admin"
 
 
-def test_login_page_renders_login_form_when_not_authenticated(monkeypatch, tmp_path) -> None:
+def test_login_page_renders_login_form_when_not_authenticated(
+    monkeypatch, tmp_path, page_with_assets
+) -> None:
     client = _build_authenticated_client(monkeypatch, tmp_path)
 
     page = client.get("/login")
     assert page.status_code == 200
     assert "<form id=\"login-form\">" in page.text
-    assert 'window.location.assign("/admin")' in page.text
+    assert 'window.location.assign("/admin")' in page_with_assets(client, page)
 
 
 def test_login_api_returns_ok_when_auth_disabled(monkeypatch, tmp_path) -> None:

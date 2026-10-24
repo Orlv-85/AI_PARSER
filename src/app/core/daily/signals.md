@@ -168,7 +168,7 @@ scripts/run_daily_digest_job.sh (02:00 UTC, after the digest)
 
 GET /api/news/daily-signals?date=D               web/routes/common.py: _read_daily_signals (DB reads only)
 GET /?date=D                                     web/signals_view.py: render_signals (server)
-                                                 web/digest.html: renderSignals (client, same markup)
+                                                 web/static/js/digest.js: renderSignals (client, same markup)
 ```
 
 ## Modules
@@ -189,7 +189,7 @@ GET /?date=D                                     web/signals_view.py: render_sig
 | `storage/daily_signals_ledger.py` | `SignalsLedger`: private SQLite of physical POSTs, replay, per-run caps, per-model prices | no |
 | `web/signals_view.py` | Server HTML of the block; `quiet_line`, chips, D3 New list | yes |
 | `web/models.py` | `DailySignalsResponse` and nested API models (only optional fields added after 006) | - |
-| `web/digest.html` | `renderSignals`: client re-render on date change; must match `signals_view.py` | - |
+| `web/static/js/digest.js` | `renderSignals`: client re-render on date change; must match `signals_view.py` | - |
 
 ## Tables
 
@@ -229,7 +229,7 @@ twice; a row with the same hash is reused even when `invalid`.
 | Brief model / prices | setting `daily_signals_brief_model`; `BRIEF_PRICES` | unknown model -> `brief_model_unpriced`, no call |
 | Extraction prompt | `signals_extract.py` | `EXTRACTION_VERSION` bump (paid) |
 | Entity merge rules | `signals_entities.py` | operator overrides for single cases |
-| Block markup | `signals_view.py` and `renderSignals` in `digest.html` | both |
+| Block markup | `signals_view.py` and `renderSignals` in `web/static/js/digest.js` | both |
 | API fields | `web/models.py` | optional fields only |
 
 ## Tests

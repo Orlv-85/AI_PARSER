@@ -27,3 +27,4 @@ Feature docs live next to their main module and are checked by `scripts/check_co
 | Fetch pipeline (001, 002, admission) | `core/ingestion/pipeline.md` |
 | Source onboarding (003, 011) | `core/sources/onboarding.md` |
 | Article archive (016) | `core/archive/capture.md` |
+| Web pages and static assets | `web/pages.md` |

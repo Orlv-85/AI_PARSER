@@ -5,9 +5,12 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
+from starlette.responses import Response
+from starlette.types import Scope
 
 from app.config.settings import get_settings
 from app.storage import SessionLocal, create_all
@@ -27,6 +30,17 @@ _LOGGER = logging.getLogger(__name__)
 _PUBLIC_READ_METHODS = frozenset({"GET", "HEAD"})
 # The machine publish token only grants POST to these paths (least privilege).
 _PUBLISH_API_PATHS = frozenset({"/api/news/digests", "/api/news/weekly-analytics"})
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+
+class _NoCacheStaticFiles(StaticFiles):
+    """`/static/` assets with no-cache: browsers revalidate by ETag, so a deploy never mixes
+    new HTML with old JS."""
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
 
 
 def create_app() -> FastAPI:
@@ -97,7 +111,7 @@ def create_app() -> FastAPI:
             or is_auth_route
             or is_public_news_api
         )
-        is_protected_ui = path == "/admin"
+        is_protected_ui = path == "/admin" or path.startswith("/static/admin/")
         is_protected_api = path.startswith("/api/") and not is_public_news_api
         is_protected = is_protected_api or is_protected_ui
 
@@ -134,6 +148,7 @@ def create_app() -> FastAPI:
         SessionLocal=SessionLocal,
         create_all=create_all,
     )
+    api.mount("/static", _NoCacheStaticFiles(directory=_STATIC_DIR), name="static")
     # Order matters: `/api/news/{article_id}` comes after every fixed `/api/news/<name>` path.
     for router in (
         build_pages_router(deps),

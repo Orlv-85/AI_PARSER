@@ -54,6 +54,10 @@ where = ["src"]
   "news_stats.html",
   "weekly_analytics.html",
   "weekly_analytics_reports.html",
+  "static/admin/*.css",
+  "static/admin/*.js",
+  "static/css/*.css",
+  "static/js/*.js",
 ]
 
 [tool.ruff]
