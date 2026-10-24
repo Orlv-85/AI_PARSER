@@ -1,0 +1,39 @@
+{
+  "title": "Coordinator state for the next session",
+  "created": "2026-10-24",
+  "supersedes": "docs/coordinator-state-2026-10-23.json (owner_rules there still apply; read them)",
+  "role": "Coordinator: plans, writes prompts, dispatches executors, reviews their PRs, merges, tags on the owner's yes, checks prod. Small test/doc/ops fixes itself.",
+  "new_rules_2026_10_24": [
+    "Executors: when no local session is open, the coordinator may start a background subagent itself (Agent tool, model sonnet, prompt from a saved file); verify its report against the diff and CI yourself (twice the executor wrongly said a CI failure was local-only: mypy no-any-return across modules, and check_code_docs needing Docs-Skip).",
+    "Move-only refactor review: independent ast.get_source_segment compare of every top-level definition; tests/unit/test_monkeypatch_targets.py (guard) must pass with KNOWN_NO_READER empty; probe the guard with a no-effect patch if in doubt.",
+    "On prod, `docker compose run app` without APP_IMAGE uses a stale local :latest (2026-03-15). Always `export APP_IMAGE=$(cat .last_deploy_image)` first (docs/deploy.md 'Article archive').",
+    "Before tagging run `git fetch --tags` and take the next free number (v0.1.125 was tagged by another session).",
+    "Owner decision 2026-10-24: very large modules (~800+ lines) are split even if the plan said leave; guard test makes it safe."
+  ],
+  "state": {
+    "master": "218eaa6 (PR #107)",
+    "prod": "v0.1.126 deploy started 2026-10-24 09:22 UTC (run 40081695444): check it finished green and the app is healthy (`.last_deploy_image`, `docker ps`, `ai-news archive status` with APP_IMAGE).",
+    "open_prs": "none",
+    "released_2026_10_23_24": "v0.1.121 archive tables + archive-before-prune (#92); v0.1.122 archive capture/status/purge (#93), prod seed done: 7000 documents, 2959 with text; v0.1.123 archive import-db (#94) + db_maintenance uses .last_deploy_image (#95); v0.1.124 archive downloads with retries (#96) + nightly archive job 03:00 UTC (#97); v0.1.125 (other session) summary details rule (#104); v0.1.126 move-only: pilot modules renamed to storage/provider_journal.py and core/daily/provider_requests.py, re-enrichment scripts removed (#105), core/ingestion/pipeline.py split into a package + monkeypatch guard (#106), signals_compute.py split into signals_{model,stories,lines,naming,history}.py (#107).",
+    "pruned_79": "The 79 articles (published 2017) pruned by the v0.1.118 deploy are in no backup: the 2026-10-22 dump holds nothing older than 2024-08-21. They were collected and pruned within a day. Closed; import-db stays as a tool.",
+    "archive": "Spec 016 phases 1-4 live. First night 2026-10-24: 36 downloads, 14 pages archived, 22 http_403 (retry schedule), window coverage 95.5%, 25.6 MB. Phase 5 (admin stats) only on owner request.",
+    "rising_cooling": "Live on / since the 2026-10-23 snapshot (checked 2026-10-24).",
+    "nightly_health": "Runs on schedule (2026-10-23 08:15, 2026-10-24 07:53 UTC), green.",
+    "data_range": "Collection since 2026-07-03; 7000 articles; publication 2024-08-21..2026-10-31 (two Alan Turing feed items dated in the future, backlog).",
+    "sessions": "No executor sessions open. ai-parser-ca closed. 'Limit resets' is a Claude Desktop session, not ours."
+  },
+  "next": [
+    {"id": "DEPLOY-126", "title": "Confirm v0.1.126 deploy green and the next nightly fetch/digest/archive (2026-10-25 logs) are fine after the pipeline split", "status": "todo"},
+    {"id": "OPENAI-check", "title": "2026-10-26: unresolved share of new openai_news and TLDR candidates after #86/#88 (was 79% and 33/170); confirm ~1000 stale pending rows settled (admission_decisions reason stale_pending)", "status": "todo"},
+    {"id": "ARCHIVE-week", "title": "~2026-10-30: `ai-news archive status` (with APP_IMAGE): coverage_pct >= 90 over 7 nights (SC-002), gave_up counts, top hosts without text", "status": "todo"},
+    {"id": "B2", "title": "Weekly/monthly analytics on 006 data. No spec exists: only backlog B2, old spec 010 (weekly v2, off in prod) and 006 goal G5. Proposed to owner: a planner session writes specs/017-weekly-monthly-signals (first: keep or delete weekly v2, ~2350 lines); product/money questions to owner. Waiting for owner's go.", "status": "proposed"},
+    {"id": "S-onb", "title": "Onboarding behavior changes left: HTML candidate validated by a single link; three URL normalizations (normalize_candidate_url, _url_key, canonicalize)", "status": "backlog"},
+    {"id": "F1", "title": "Pipeline findings: 'fetched' counts, missing source_fetch_finished on failed fetch with admission off, FetchSummary.source_count after pause, fetch_failure as complete coverage", "status": "backlog"},
+    {"id": "UA", "title": "Fetcher/archive DEFAULT_USER_AGENT imitates a browser; decide an honest bot UA (legal/policy)", "status": "backlog"},
+    {"id": "small", "title": "docs/backlog/backlog-todo.json small_followups: future publication dates, db_maintenance size loop vs archive, archive timeouts not seen as outage", "status": "backlog"}
+  ],
+  "carried_unverified": [
+    "Ledger vs real bills (DeepSeek, Jev): owner watches; compare at end of October.",
+    "Weekly v2 frozen runs cannot resume after #105 (code_hashes path changed); accepted, weekly is off."
+  ]
+}
