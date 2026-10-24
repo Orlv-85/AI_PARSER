@@ -31,7 +31,7 @@ flowchart LR
 ```
 
 Rules name their limits; the numbers live in the code: fields of `Thresholds` in
-`signals_compute.py`, constants of the extract and brief modules. Each rule lists the tests
+`signals_model.py`, constants of the extract and brief modules. Each rule lists the tests
 that check it.
 
 **Scope and days**
@@ -178,7 +178,12 @@ GET /?date=D                                     web/signals_view.py: render_sig
 | `core/daily/signals.py` | Run orchestration, brief step, operator entity commands (`merge_entities`, `alias_entity`) | no |
 | `core/daily/signals_extract.py` | Extraction prompt, request body, answer validation (`EXTRACTION_VERSION`) | yes |
 | `core/daily/signals_entities.py` | Deterministic entity identity: keys, vendor classes, reconciliation, overrides | yes |
-| `core/daily/signals_compute.py` | Snapshot of one day (`compute_snapshot`, `Thresholds`, `one_liner`, folding, quiet flag) | yes |
+| `core/daily/signals_compute.py` | Snapshot of one day (`compute_snapshot`, `_Snapshot`, `METHODOLOGY_VERSION`, `payload_hash`, folding, quiet flag); re-exports the input records for the repo | yes |
+| `core/daily/signals_model.py` | `Thresholds`, `ArticleObs`, `EntityMention`, `DayCoverage`, `SnapshotInput`, event labels and display orders | yes |
+| `core/daily/signals_stories.py` | Story clustering (`cluster`, `Story`), `links`, `linked_articles` | yes |
+| `core/daily/signals_lines.py` | `one_liner` of a New item, sentence split | yes |
+| `core/daily/signals_naming.py` | `specific_variant`, `same_vendor`, `unit_key`, `proper_name`, `FAMILY_STOPWORDS` | yes |
+| `core/daily/signals_history.py` | `LexicalHistory`: earliest lexical mention before D | yes |
 | `core/daily/signals_brief.py` | Brief packet, prompt, request body, validation rules 1-9, O1 review marker | yes |
 | `storage/daily_signals.py` | `DailySignalRepo`: membership, extractions, evidence, entities, overrides, snapshots, briefs | no |
 | `storage/daily_signals_ledger.py` | `SignalsLedger`: private SQLite of physical POSTs, replay, per-run caps, per-model prices | no |
@@ -216,8 +221,8 @@ twice; a row with the same hash is reused even when `invalid`.
 
 | Change | Place | Also |
 | --- | --- | --- |
-| New/Top/Spike/Rising thresholds | `Thresholds` in `signals_compute.py` | bump `METHODOLOGY_VERSION` |
-| Family words for `variant of` | `FAMILY_STOPWORDS` in `signals_compute.py` | methodology bump |
+| New/Top/Spike/Rising thresholds | `Thresholds` in `signals_model.py` | bump `METHODOLOGY_VERSION` |
+| Family words for `variant of` | `FAMILY_STOPWORDS` in `signals_naming.py` | methodology bump |
 | Hard event types (chips, brief order) | `HARD_EVENTS` in `signals_brief.py` | view uses the same tuple |
 | Review marker (O1) | `REVIEW_TITLE`, `REVIEW_SHARE` in `signals_brief.py` | `BRIEF_VERSION` bump |
 | Brief prompt / rules | `BRIEF_PROMPT`, `parse_brief` in `signals_brief.py` | `BRIEF_VERSION` bump, fixtures |

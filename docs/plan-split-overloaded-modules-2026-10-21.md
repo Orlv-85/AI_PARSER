@@ -35,7 +35,7 @@ General rules for every split PR:
 | 2 | `core/sources/onboarding.py` | 1005 | split in three |
 | 3 | `web/app.py` | 1374 | split into routers |
 | - | `core/ingestion/pipeline.py` | 1446 | leave |
-| - | `core/daily/signals_compute.py` | 799 | leave |
+| - | `core/daily/signals_compute.py` | 799 | split 2026-10-24 (owner decision) |
 | - | `storage/daily_signals.py` | 602 | leave |
 | - | `web/service.py` | 574 | leave |
 | - | `storage/models_sql.py` | 562 | leave |
@@ -135,7 +135,7 @@ factory signature) than the first two; the design question goes to the reviewing
   those names from `pipeline`. Cost and silent-patch risk are high for little gain. Revisit when a
   behavior change touches the HTML two-stage path (`_process_html_links_two_stage`, ~170 lines),
   the one block that could become `ingestion/html_links.py` with its fetch functions.
-- `core/daily/signals_compute.py` (799) - one concern (snapshot of one day); half is the
+- `core/daily/signals_compute.py` (799) - signals_compute.py split 2026-10-24 (owner decision). Earlier note: one concern (snapshot of one day); half is the
   `_Snapshot` class. Covered by `core/daily/signals.md` and pinned fixtures; splitting would only
   move helpers. The `too-many-instance-attributes` disables are on plain dataclasses.
 - `storage/daily_signals.py` (602) - one repository of one feature (`too-many-public-methods`

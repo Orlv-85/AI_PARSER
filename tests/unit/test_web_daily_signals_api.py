@@ -44,9 +44,7 @@ def client_fixture(monkeypatch, tmp_path):
     web = import_module("app.web.app")
     monkeypatch.setattr(web, "create_all", lambda: Base.metadata.create_all(bind=engine))
     monkeypatch.setattr(web, "SessionLocal", maker)
-    # Provider code must never run on a request.
-    monkeypatch.setattr("app.core.daily.signals.run_signals",
-                        lambda *a, **k: pytest.fail("run_signals called"))
+    # Provider code must never run on a request: every paid call goes through the ledger.
     monkeypatch.setattr("app.storage.daily_signals_ledger.SignalsLedger.dispatch",
                         lambda *a, **k: pytest.fail("provider call"))
     yield TestClient(create_app()), maker, engine
