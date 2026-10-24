@@ -7,7 +7,7 @@ Prompt: `docs/prompt-offsite-backups-2026-10-21.md`.
 ## 1. What exists now (checked read-only on prod, 2026-10-21)
 
 - Schedule: `.github/workflows/db-maintenance.yml` (cron `20 2 * * *`, starts ~07:00-08:00 UTC)
-  runs `scripts/db_maintenance.sh && scripts/db_backup.sh` over SSH (sshpass, root). No server
+  runs `scripts/db_maintenance.sh && scripts/db_backup.sh` over SSH. No server
   cron or systemd timer runs a backup (`crontab -l` empty; timers: only `ai-news-daily-fetch`,
   `ai-news-daily-digest`, system `dpkg-db-backup`).
 - `scripts/db_backup.sh`: `pg_dump | gzip > backups/postgres_<UTC>.sql.gz`, deletes copies older
@@ -86,7 +86,7 @@ Failure modes per target:
 
 Recommended: **a new step in `db-maintenance.yml`, on the GitHub runner**, after the backup step:
 
-1. `scp` the newest `backups/postgres_*.sql.gz` from the server to the runner (same sshpass login
+1. `scp` the newest `backups/postgres_*.sql.gz` from the server to the runner (same SSH login
    as today; the file name is printed by `db_backup.sh`).
 2. Verify: `gzip -t`, last line is `-- PostgreSQL database dump complete`, size > minimum.
 3. `age -r "$BACKUP_AGE_RECIPIENT"` -> `.sql.gz.age`.
@@ -97,7 +97,7 @@ Recommended: **a new step in `db-maintenance.yml`, on the GitHub runner**, after
 Why the runner and not the server:
 - Nothing is installed or configured on the production server (no `.env` change, no new timer).
 - Bucket credentials live only in GitHub secrets; a compromised server cannot read or delete the
-  off-site copies. The runner already has root on the server (`SERVER_PASSWORD`), so seeing the
+  off-site copies. The runner already has full access to the server, so seeing the
   plaintext dump adds no new trust.
 - Failures show up as a failed workflow run, which GitHub e-mails.
 - The repo is public, so run logs are public: the step prints only object names and sizes, never
