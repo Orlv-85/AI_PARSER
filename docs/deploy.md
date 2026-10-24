@@ -53,7 +53,7 @@ docker compose up -d --build
 
 Repository Variables:
 - `DEPLOY_HOST` (example: `5kzt.l.time4vps.cloud`)
-- `DEPLOY_USER` (example: `root`)
+- `DEPLOY_USER` (the non-root login user, `deploy`)
 - `DEPLOY_APP_DIR` (optional, default `/opt/ai-news`)
 - `AINEWS_AUTH_USERNAME` (optional, default `operator`)
 - `AINEWS_AUTH_ENABLED` (optional, default `true`)
@@ -64,7 +64,8 @@ Repository Variables:
 
 Repository Secrets:
 - `DS_API_KEY` (DeepSeek key, required for digest generation)
-- `SERVER_PASSWORD`
+- `SERVER_SSH_KEY` (private key of the CI-only key pair; the server accepts it for `DEPLOY_USER`)
+- `SERVER_KNOWN_HOSTS` (pinned `known_hosts` line of the server host key)
 - `OFFSITE_B2_KEY_ID`, `OFFSITE_B2_APPLICATION_KEY` (B2 application key limited to the backup
   bucket, read and write)
 - `AINEWS_AUTH_PASSWORD_HASH`
@@ -90,6 +91,22 @@ value edited by hand on the server is overwritten. To rotate or disable the toke
 change the secret and redeploy (see
 [Configuration](configuration.md#publish-api-token)).
 Set `CADDY_SITE_ADDRESS` to your public domain/host (for example `5kzt.l.time4vps.cloud`).
+
+### Server access (SSH keys, `deploy` user)
+
+- Login is by key only, as the user `deploy` (group `docker`, owns `/opt/ai-news`); password
+  login and root login are disabled in `/etc/ssh/sshd_config.d/10-hardening.conf`. Root is
+  reachable only through the hosting provider's console.
+- Two separate keys: one in the `SERVER_SSH_KEY` secret (CI), one on the operator machine.
+  `deploy` has no general sudo. `/etc/sudoers.d/ai-news-deploy` allows without password exactly
+  the calls `scripts/deploy_prod.sh` and `scripts/install_daily_timers.sh` make as root:
+  `install -m 0644` of the six `ai-news-daily-*` unit files from `/var/tmp/ai-news-units/` into
+  `/etc/systemd/system/`, `systemctl daemon-reload`, and `systemctl enable --now` or
+  `disable --now` of the `ai-news-daily-*` timers. Members of group `docker` can still start
+  root containers, so the file limits mistakes, not a stolen CI key.
+- The server's `origin` is `https://github.com/Orlv-85/AI_PARSER.git` (public repo, no key).
+- fail2ban (sshd jail) bans repeated failed logins.
+- Setup, verification and rollback steps: `docs/work/plan-ssh-deploy-user-2026-10-24.md`.
 
 ### Daily digest generation (DeepSeek)
 
@@ -185,12 +202,14 @@ Create repository variables/secrets:
 - `DEPLOY_HOST` (repo variable)
 - `DEPLOY_USER` (repo variable)
 - `DEPLOY_APP_DIR` (repo variable, optional, default `/opt/ai-news`)
-- `SERVER_PASSWORD` (repo secret)
+- `SERVER_SSH_KEY`, `SERVER_KNOWN_HOSTS` (repo secrets)
 - `AINEWS_AUTH_PASSWORD_HASH` (repo secret)
 - `AINEWS_AUTH_SECRET` (repo secret)
 
 Notes:
-- Deploy workflow authenticates by server password (`SERVER_PASSWORD`) via `sshpass`.
+- All four SSH workflows log in as `DEPLOY_USER` with the key `SERVER_SSH_KEY` and check the
+  host against `SERVER_KNOWN_HOSTS` (`StrictHostKeyChecking=yes`, `BatchMode=yes`); there are no
+  passwords. See "Server access" below.
 - Deploy workflow updates auth keys in server-side `.env` at `${DEPLOY_APP_DIR}` from secrets.
 - Keep DB secrets (for example `POSTGRES_PASSWORD`) in server-side `.env`.
 
