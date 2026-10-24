@@ -14,6 +14,7 @@ Specs in `specs/` are the history of how a feature got there.
 | Fetch pipeline (001, 002, admission) | [src/app/core/ingestion/pipeline.md](../src/app/core/ingestion/pipeline.md) | `src/app/core/ingestion/pipeline.py` |
 | Source onboarding (003, 011) | [src/app/core/sources/onboarding.md](../src/app/core/sources/onboarding.md) | `src/app/core/sources/onboarding.py` |
 | Article archive (016) | [src/app/core/archive/capture.md](../src/app/core/archive/capture.md) | `src/app/core/archive/capture.py` |
+| Web pages and static assets | [src/app/web/pages.md](../src/app/web/pages.md) | `src/app/web/routes/pages.py` |
 
 ## General
 

@@ -400,7 +400,7 @@ scripts/sources_onboarding_helper.py db-bootstrap | db-review | db-validate | db
 | --- | --- | --- |
 | URL normalization, tracking parameters | `normalize_candidate_url` | `_url_key` in `web/source_intake.py` builds on it; the pipeline uses `canonicalize_url` separately |
 | Overlap rules | `_overlap_reason`, `_TOPIC_SEGMENTS`, `_ROOT_SEGMENTS`, `_REVIEW_REASON_PRIORITIES` | tests in `test_source_onboarding_dedupe.py` |
-| JSON limits | `_json_source_records` | the size hint and check in `web/index.html` |
+| JSON limits | `_json_source_records` | the size hint in `web/index.html`, the check in `web/static/admin/sources.js` |
 | Probe bounds, evidence brief | `_read_source`, `_MAX_RESPONSE_BYTES`, `SourceProbe.brief` | bump `_PROMPT_VERSION` when the brief changes |
 | Model questions, thresholds, budget | `SourceReviewer` | bump `_PROMPT_VERSION`; paid calls |
 | Defaults of a new source | `SourceRepo.create_from_candidate` | |

@@ -699,7 +699,9 @@ def test_weekly_ai_analytics_api_defaults_to_latest_published_report_date(
     }
 
 
-def test_public_digest_page_renders_weekly_ai_analytics_section(monkeypatch, tmp_path) -> None:
+def test_public_digest_page_renders_weekly_ai_analytics_section(
+    monkeypatch, tmp_path, page_with_assets
+) -> None:
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()
 
@@ -734,7 +736,7 @@ def test_public_digest_page_renders_weekly_ai_analytics_section(monkeypatch, tmp
     assert 'id="weekly-analytics-preview"' in response.text
     assert "Weekly Management View" in response.text
     assert "Summary" in response.text
-    assert "/api/news/weekly-analytics?date=" in response.text
+    assert "/api/news/weekly-analytics?date=" in page_with_assets(client, response)
 
 
 def test_weekly_ai_analytics_api_uses_prior_week_only_for_trending_down_baseline(

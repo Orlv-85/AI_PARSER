@@ -1,4 +1,7 @@
-"""HTML pages, health, collection status and login/logout."""
+"""HTML pages, health, collection status and login/logout.
+
+Behavior, decisions, invariants and code map: `src/app/web/pages.md`.
+"""
 
 import logging
 import re

@@ -46,6 +46,7 @@ Index of all docs: [docs/README.md](docs/README.md). Code docs live next to the 
 - [Fetch pipeline](src/app/core/ingestion/pipeline.md) - ingestion: sources, page filter, admission, scoring.
 - [Source onboarding](src/app/core/sources/onboarding.md) - candidate import, check, review, approval into collection.
 - [Article archive](src/app/core/archive/capture.md) - private archive of article text; prune archives before delete.
+- [Web pages](src/app/web/pages.md) - pages, access, placeholders, static CSS/JS assets.
 
 General:
 

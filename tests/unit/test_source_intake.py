@@ -327,10 +327,13 @@ def test_upload_api_returns_immediately_health_and_progress_remain_available(
         assert client.post("/api/source-onboarding/batches/999/approve-ready").status_code == 409
 
 
-def test_admin_shows_upload_latest_batch_and_bulk_connection(monkeypatch, tmp_path) -> None:
+def test_admin_shows_upload_latest_batch_and_bulk_connection(
+    monkeypatch, tmp_path, page_with_assets
+) -> None:
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()
-    text = TestClient(create_app()).get("/admin").text
+    client = TestClient(create_app())
+    text = page_with_assets(client, client.get("/admin"))
     assert 'id="onboarding-json-file"' in text
     assert 'id="approve-ready-sources"' in text
     assert "loadLatestSourceBatch();" in text

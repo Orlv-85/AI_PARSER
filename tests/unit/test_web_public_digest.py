@@ -19,9 +19,18 @@ from app.web.routes import common as common_routes
 from app.web.routes import pages as pages_routes
 from app.web.signals_view import AI_NOTE, SINGULAR, event_label
 
+_WEB_DIR = Path(__file__).resolve().parents[2] / "src/app/web"
+_DIGEST_JS = _WEB_DIR / "static/js/digest.js"
+
+
+def _digest_source() -> str:
+    """The public page as shipped: template, its stylesheet and its script."""
+    return "".join((_WEB_DIR / name).read_text()
+                   for name in ("digest.html", "static/css/digest.css", "static/js/digest.js"))
+
 
 def test_public_digest_page_renders_digest_shell_with_yesterday_selected(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, page_with_assets
 ) -> None:
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()
@@ -51,7 +60,7 @@ def test_public_digest_page_renders_digest_shell_with_yesterday_selected(
     assert 'type="date"' in response.text
     assert 'value="2026-02-28"' in response.text
     assert 'href="/news-stats"' in response.text
-    assert "/api/news/links?date=" in response.text
+    assert "/api/news/links?date=" in page_with_assets(client, response)
 
 
 def test_public_digest_page_shows_clean_empty_state_when_digest_missing(
@@ -84,7 +93,9 @@ def test_public_digest_page_shows_clean_empty_state_when_digest_missing(
     assert "No digest has been published for this date yet." in response.text
 
 
-def test_public_digest_page_keeps_explicit_query_date_selected(monkeypatch, tmp_path) -> None:
+def test_public_digest_page_keeps_explicit_query_date_selected(
+    monkeypatch, tmp_path, page_with_assets
+) -> None:
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()
 
@@ -113,8 +124,9 @@ def test_public_digest_page_keeps_explicit_query_date_selected(monkeypatch, tmp_
     assert 'value="2026-02-27"' in response.text
     assert '"?date=2026-02-27"' in response.text
     assert '"2026-02-28"' in response.text
-    assert "history.replaceState" in response.text
-    assert "updateHeroTitle" in response.text
+    text = page_with_assets(client, response)
+    assert "history.replaceState" in text
+    assert "updateHeroTitle" in text
 
 
 def test_public_digest_page_stays_public_when_auth_is_enabled(monkeypatch, tmp_path) -> None:
@@ -257,7 +269,7 @@ def test_signals_read_error_keeps_page(monkeypatch, tmp_path) -> None:
 
 
 def test_signals_client_rendering_hooks() -> None:
-    template = (Path(__file__).resolve().parents[2] / "src/app/web/digest.html").read_text()
+    template = _digest_source()
     assert "/api/news/daily-signals?date=" in template
     assert "function renderSignals(payload)" in template
     assert "if (dateInput.value !== selectedDate) return;" in template
@@ -271,7 +283,7 @@ def test_event_labels_singular_and_plural() -> None:
     assert event_label(2, "product launches") == "2 product launches"
     assert event_label(1, "analysis") == "1 analysis"
     assert set(SINGULAR) <= set(EVENT_LABELS.values())
-    template = (Path(__file__).resolve().parents[2] / "src/app/web/digest.html").read_text()
+    template = _digest_source()
     for plural, singular in SINGULAR.items():
         assert f'"{plural}": "{singular}"' in template
 
@@ -317,8 +329,7 @@ def test_placeholders_in_digest_text_are_not_substituted(monkeypatch, tmp_path) 
 def test_signals_reload_on_date_change_independent_of_digest() -> None:
     # F16: the block is reset while loading, loaded even if the digest request fails, and an
     # error answer says "temporarily unavailable" rather than "not available yet".
-    template = (Path(__file__).resolve().parents[2] / "src/app/web/digest.html").read_text()
-    script = template.split("<script>", 1)[1]
+    script = _DIGEST_JS.read_text()
     change = script.split('dateInput.addEventListener("change"', 1)[1].split("});", 1)[0]
     assert "loadSignals(" in change and change.index("loadSignals(") < change.index("loadDigest(")
     load_digest = script.split("async function loadDigest", 1)[1].split("\n      }\n", 1)[0]
@@ -449,7 +460,7 @@ def test_page_200_with_a_corrupt_brief_row(monkeypatch, tmp_path) -> None:
 
 
 def test_client_renderer_matches_server_classes() -> None:
-    template = (Path(__file__).resolve().parents[2] / "src/app/web/digest.html").read_text()
+    template = _digest_source()
     script = template.split("function renderSignals(payload)", 1)[0]
     for marker in ('class="signal-brief-block"><h3>In brief</h3>', 'class="signal-brief"',
                    'class="signal-ref"', 'rel="noreferrer">[${i + 1}]</a>', 'class="signal-quiet"',

@@ -551,7 +551,9 @@ def test_news_template_has_network_error_handling_and_safe_row_rendering(
     assert "__REPORT_DATE__" not in page.text
 
 
-def test_public_digest_template_has_selected_date_loading_hooks(monkeypatch, tmp_path) -> None:
+def test_public_digest_template_has_selected_date_loading_hooks(
+    monkeypatch, tmp_path, page_with_assets
+) -> None:
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()
 
@@ -584,9 +586,10 @@ def test_public_digest_template_has_selected_date_loading_hooks(monkeypatch, tmp
     assert page.status_code == 200
     assert 'id="digest-results"' in page.text
     assert 'id="digest-empty-state"' in page.text
-    assert "async function loadDigest" in page.text
-    assert "/api/news/digests?date=" in page.text
-    assert 'addEventListener("change", async' in page.text
+    text = page_with_assets(client, page)
+    assert "async function loadDigest" in text
+    assert "/api/news/digests?date=" in text
+    assert 'addEventListener("change", async' in text
 
 
 def test_admin_route_is_protected_and_public_root_stays_open(monkeypatch, tmp_path) -> None:

@@ -285,7 +285,7 @@ def test_news_daily_stats_api_returns_zero_days_and_fetch_counts(monkeypatch, tm
     }
 
 
-def test_news_stats_page_renders_public_shell(monkeypatch, tmp_path) -> None:
+def test_news_stats_page_renders_public_shell(monkeypatch, tmp_path, page_with_assets) -> None:
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()
 
@@ -304,7 +304,7 @@ def test_news_stats_page_renders_public_shell(monkeypatch, tmp_path) -> None:
     assert "News Stats" in response.text
     assert 'value="2026-03-03"' in response.text
     assert 'value="2026-05-01"' in response.text
-    assert "/api/news/stats/daily?" in response.text
+    assert "/api/news/stats/daily?" in page_with_assets(client, response)
 
 
 def test_news_digests_rejects_blank_group_titles_and_item_summaries(monkeypatch, tmp_path) -> None:

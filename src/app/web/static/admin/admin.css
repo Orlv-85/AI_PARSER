@@ -1,0 +1,166 @@
+      :root {
+        --bg: #f4f6f8;
+        --panel: #132238;
+        --panel-accent: #1d3656;
+        --text: #0f172a;
+        --muted: #64748b;
+        --surface: #ffffff;
+        --border: #dbe3ec;
+        --primary: #0d9488;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        color: var(--text);
+        background: linear-gradient(135deg, #eef3f8, #f9fbfc);
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 240px 1fr;
+        min-height: 100vh;
+      }
+      .sidebar {
+        background: linear-gradient(180deg, var(--panel), #0f1c2f);
+        color: #e2e8f0;
+        padding: 24px 16px;
+      }
+      .brand {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 24px;
+      }
+      .nav-btn {
+        width: 100%;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        background: transparent;
+        color: #cbd5e1;
+        padding: 12px;
+        margin: 0 0 10px;
+        text-align: left;
+        cursor: pointer;
+      }
+      .nav-btn.active {
+        background: var(--panel-accent);
+        color: #f8fafc;
+        border-color: #27486f;
+      }
+      .content {
+        padding: 20px;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 16px;
+        margin-bottom: 16px;
+      }
+      .hidden { display: none; }
+      .row {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .field label {
+        font-size: 13px;
+        color: var(--muted);
+        display: block;
+        margin-bottom: 6px;
+      }
+      .field input {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px;
+      }
+      .field textarea,
+      .field select {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px;
+        font: inherit;
+      }
+      .btn {
+        border: none;
+        border-radius: 10px;
+        padding: 10px 14px;
+        cursor: pointer;
+        margin-right: 10px;
+      }
+      .btn-primary { background: var(--primary); color: #fff; }
+      .btn-secondary { background: #e2e8f0; color: #1e293b; }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      th, td {
+        text-align: left;
+        padding: 10px 8px;
+        border-bottom: 1px solid var(--border);
+      }
+      .status { color: var(--muted); font-size: 14px; }
+      .status.error { color: #b91c1c; }
+      .status.success { color: #047857; }
+      .status-box {
+        margin-top: 12px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px;
+        background: #f8fafc;
+      }
+      .field small {
+        display: block;
+        margin-top: 6px;
+        min-height: 18px;
+        color: #b91c1c;
+      }
+      .empty {
+        padding: 12px;
+        border-radius: 10px;
+        border: 1px dashed var(--border);
+        color: var(--muted);
+        margin-top: 12px;
+      }
+      .pill {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: #ecfeff;
+        color: #155e75;
+        font-size: 12px;
+      }
+      .mini-input,
+      .mini-select {
+        width: 100%;
+        margin-top: 6px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 7px 8px;
+        font: inherit;
+        font-size: 13px;
+      }
+      .note {
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 12px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .action-group {
+        min-width: 240px;
+      }
+      #onboarding-table { table-layout: fixed; }
+      #onboarding-table td { overflow-wrap: anywhere; vertical-align: top; }
+      #onboarding-table .action-group { min-width: 0; }
+      #onboarding-summary-box { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+      #source-review-filters { margin-top: 16px; }
+      #source-review-filters summary { cursor: pointer; color: var(--muted); }
+      .btn:disabled { opacity: 0.5; cursor: wait; }
+      @media (max-width: 900px) {
+        .layout { grid-template-columns: 1fr; }
+        .sidebar { padding: 12px; }
+        .row { grid-template-columns: 1fr; }
+      }
