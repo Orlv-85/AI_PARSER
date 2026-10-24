@@ -1,0 +1,27 @@
+{
+  "title": "Tooling backlog: how agents build this repo (not product features)",
+  "created": "2026-10-24",
+  "status": "backlog",
+  "items": [
+    {
+      "id": "T1",
+      "title": "Spec pipeline: tester -> coder -> reviewer loop driven by a script",
+      "status": "deferred",
+      "decided": "Owner 2026-10-24: good idea, later.",
+      "idea": "A script takes a spec folder (specs/NNN-name/) and walks tasks.md. Per task: tester writes failing tests from the spec; a test reviewer checks them against the spec (optional); coder edits code until tests and linters are green; a code reviewer checks the code against the spec and sends findings back to the coder; the tester then strengthens the tests (edge cases) and red tests go back to the coder; commit, next task; one PR per spec, reviewed by the coordinator.",
+      "design_notes": [
+        "Location: scripts/agents/ (entry point scripts/agents/run_spec.sh specs/NNN-name/).",
+        "Roles run as headless Claude Code (claude -p) with a model per role (e.g. coder DeepSeek, reviewer Sonnet); same mechanism as the DeepSeek runs of 2026-10-24.",
+        "The script, not the model, enforces role limits by git diff: a coder change under tests/ or a tester change under src/ is rolled back.",
+        "Tests before code need named interfaces: specs written for the pipeline list exact modules, functions and signatures.",
+        "Hard caps per task (iterations) and per run (tokens or money; proposed $2 per spec for paid models); on a cap the script stops and reports.",
+        "Prior art to reuse: .codex/skills/multi-agent-orchestration/scripts/run_executor_reviewer.sh (Codex executor/reviewer, not in use).",
+        "First run: a small backlog item (F1 pipeline findings) to measure cost and how many findings the coordinator's review still finds."
+      ],
+      "open_questions": [
+        "Budget per run (proposed $2 for DeepSeek) - owner.",
+        "Spec number: next free under specs/ when started."
+      ]
+    }
+  ]
+}

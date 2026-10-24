@@ -32,6 +32,7 @@ Specs in `specs/` are the history of how a feature got there.
 - [backlog-todo.json](backlog/backlog-todo.json) - product backlog after 007
 - [article-archive-todo.json](backlog/article-archive-todo.json) - off-site backups, full-text archive
 - [jev-novelty-second-opinion-todo.json](backlog/jev-novelty-second-opinion-todo.json) - Jev for New
+- [tooling-todo.json](backlog/tooling-todo.json) - agent tooling (spec pipeline), not product
 
 ## Work in progress
 
