@@ -60,7 +60,8 @@ class _Snapshot:
         return self.data.entities[key]
 
     def entity_id(self, key: str) -> int:
-        return self.data.entity_ids.get(key, 0)
+        entity_id: int = self.data.entity_ids.get(key, 0)
+        return entity_id
 
     # New ------------------------------------------------------------------------------------
     def new_items(self) -> tuple[list[dict[str, Any]], set[str]]:
@@ -209,7 +210,8 @@ class _Snapshot:
             org = self.entity(spike["_key"]).type_group == "org"
 
             def share(other: set[int], ids: set[int] = ids) -> bool:
-                return len(ids & other) >= self.t.fold_share * len(ids)
+                shared: bool = len(ids & other) >= self.t.fold_share * len(ids)
+                return shared
 
             target = self._fold_target(spike, org=org, share=share, shown=shown, new=new,
                                        kept=kept)

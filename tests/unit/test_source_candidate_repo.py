@@ -223,7 +223,7 @@ def test_save_review_update_supports_dict_and_object_inputs() -> None:
         raise AssertionError("save_review_update should reject unknown candidates")
 
 
-def test_find_overlap_groups_and_summarize_batch_cover_review_helpers(monkeypatch) -> None:
+def test_find_overlap_groups_and_summarize_batch_cover_review_helpers() -> None:
     session = _session()
     repo = SourceCandidateRepo(session)
     batch = SourceImportBatchRepo(session).create_batch(raw_text="seed")
@@ -256,7 +256,7 @@ def test_find_overlap_groups_and_summarize_batch_cover_review_helpers(monkeypatc
     assert groups[0].reason == "same_host_path_prefix"
 
     # The third candidate is not requested, so it stays out of every group.
-    assert repo.find_overlap_groups(batch_id=batch.id, candidate_ids=[third.id]) == []
+    assert not repo.find_overlap_groups(batch_id=batch.id, candidate_ids=[third.id])
 
     summary = repo.summarize_batch(batch_id=batch.id)
     assert summary == {
