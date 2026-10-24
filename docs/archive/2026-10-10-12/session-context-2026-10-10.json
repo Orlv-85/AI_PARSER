@@ -62,7 +62,7 @@
     "weekly_deferred": "Existing pilot has weak coverage/event grouping and Russian text on English site. Weekly v2 measures topic attention rather than desired industry briefing; do not restart this work during cleanup."
   },
   "ops": {
-    "ssh": "root@5kzt.l.time4vps.cloud; private SERVER_PASSWORD in local .env. Never print credentials/full environments; use sshpass -e.",
+    "ssh": "Access details are private (not in the repo). Never print credentials/full environments.",
     "helper": "tmp/enable_semantic_admission_production.py inspect can read safe status. Do not rerun activation/fetch automatically.",
     "backup": "/opt/ai-news/backups/semantic-admission-enable-20261010T213941Z/"
   },
