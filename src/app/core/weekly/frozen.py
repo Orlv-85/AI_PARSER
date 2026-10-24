@@ -30,7 +30,7 @@ from app.core.weekly.worker import build_snapshot
 from app.storage.journal_files import fingerprint as journal_fingerprint
 from app.storage.journal_files import private_write
 from app.storage.models_sql import Base, WeeklyJob, WeeklySnapshot
-from app.storage.reenrich_pilot_journal import PilotJournal, PilotStopped
+from app.storage.provider_journal import PilotJournal, PilotStopped
 from app.storage.weekly import WeeklyStore, encoded, fingerprint
 from app.web.models import WeeklyAnalyticsResponse
 
@@ -44,7 +44,7 @@ def code_hashes() -> dict:
     names = ("core/weekly/frozen.py", "core/weekly/input.py", "core/weekly/analytics.py",
              "core/weekly/enrichment.py", "core/weekly/worker.py", "core/weekly/topics.py",
              "core/weekly/narrative.py", "storage/weekly.py",
-             "storage/reenrich_pilot_journal.py", "web/models.py")
+             "storage/provider_journal.py", "web/models.py")
     return {name: file_hash(app_root / name) for name in names}
 
 

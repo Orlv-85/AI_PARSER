@@ -5,7 +5,7 @@ import httpx
 import pytest
 
 from app.core.weekly.enrichment import BudgetExhausted
-from app.storage.reenrich_pilot_journal import PilotJournal, PilotStopped
+from app.storage.provider_journal import PilotJournal, PilotStopped
 
 
 def journal_at(path, review=True):
@@ -123,7 +123,7 @@ def test_reviewed_reservations_still_count_against_cumulative_cap(tmp_path):
 
 def test_configured_delays_extend_the_attempt_chain_and_survive_restart(tmp_path, monkeypatch):
     sleeps = []
-    monkeypatch.setattr("app.storage.reenrich_pilot_journal.time.sleep", sleeps.append)
+    monkeypatch.setattr("app.storage.provider_journal.time.sleep", sleeps.append)
     path = tmp_path / "journal"
 
     def open_journal():

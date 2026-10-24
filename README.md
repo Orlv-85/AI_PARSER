@@ -53,7 +53,7 @@ General:
 - [Configuration](docs/configuration.md) - environment variables, Jev admission, `sources.yaml` and source management.
 - [CLI usage](docs/cli.md) - web onboarding, fetch/cron, rollout knobs, search, prune.
 - [Weekly attention analytics v2](docs/weekly-analytics.md) - worker, budgets, audit export, rollback.
-- [Article re-enrichment](docs/article-reenrichment.md) - implementation and operator guide.
+- [Article re-enrichment](docs/archive/2026-10/article-reenrichment.md) - archived implementation guide (re-enrichment finished 2026-10-11).
 - [Daily AI Signals operator guide](docs/daily-signals.md) - operator commands, costs, rollback.
 - [Troubleshooting](docs/troubleshooting.md) - known failures (flaky tests, local env) with causes and fixes.
 
@@ -74,7 +74,7 @@ timestamps are `null`; known calendar dates remain available without an invented
 time. News APIs also expose publication status/precision and optional material
 type/comparison metadata. Migration `a42b750d0c44` is required for these fields.
 
-See [the implementation and operator guide](docs/article-reenrichment.md) for
+See [the implementation and operator guide](docs/archive/2026-10/article-reenrichment.md) for
 the module map, API changes, private cache, provider journal, apply/restore and
 the limits of daily automation. The ten re-enrichment topics are readable and
 filterable; the ordinary JEV rubric and daily digest process remain separate.

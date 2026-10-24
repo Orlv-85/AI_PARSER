@@ -239,7 +239,7 @@ class SourceCandidateRepo:
                 summary["rejected_review_count"] += 1
             if candidate.status == "duplicate":
                 summary["duplicate_count"] += 1
-            if candidate.status in {"draft", "validated"}:
+            if candidate.status == "draft":
                 summary["pending_review_count"] += 1
         return summary
 

@@ -35,7 +35,7 @@ from app.storage.models_sql import (
     WeeklyInputObservation,
 )
 from app.storage.models_sql import Article as StoredArticle
-from app.storage.reenrich_pilot_journal import PilotJournal
+from app.storage.provider_journal import PilotJournal
 
 # Scenario dates stay inside PENDING_REPLAY_MAX_AGE_DAYS whatever the run date.
 RECENT = datetime.now(UTC).replace(microsecond=0) - timedelta(days=1)
@@ -187,7 +187,7 @@ class AdmissionRig:
         self.behavior, self.reviewed, self.path = behavior, reviewed, tmp_path / "journal.sqlite3"
         self.titles, self.sleeps, self.reports, self.scorers = [], [], [], []
         scenario.settings.daily_enrichment_enabled = True
-        monkeypatch.setattr("app.storage.reenrich_pilot_journal.time.sleep", self.sleeps.append)
+        monkeypatch.setattr("app.storage.provider_journal.time.sleep", self.sleeps.append)
         monkeypatch.setattr("app.core.ingestion.pipeline.jev_relevance_scorer", self.scorer)
 
     def attempts(self, title):

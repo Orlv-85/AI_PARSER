@@ -25,8 +25,6 @@ Specs in `specs/` are the history of how a feature got there.
 | [troubleshooting.md](troubleshooting.md) | Known failures with cause and fix (JSON cases) |
 | [daily-signals.md](daily-signals.md) | Daily AI Signals operator guide: commands, cost, deploy note, rollback |
 | [weekly-analytics.md](weekly-analytics.md) | Weekly attention analytics v2: worker, budgets, rollback |
-| [article-reenrichment.md](article-reenrichment.md) | Article dates and re-enrichment operator guide |
-| [article-source-cache.md](article-source-cache.md) | Unpaid article source evidence cache |
 
 ## Backlog
 

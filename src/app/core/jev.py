@@ -159,7 +159,7 @@ class JevRelevanceScorer:  # pylint: disable=too-many-instance-attributes
             return None
         if state in self.cache:
             return self.cache[state]
-        journal_module = import_module("app.storage.reenrich_pilot_journal")
+        journal_module = import_module("app.storage.provider_journal")
         exhausted_error = journal_module.TransportAttemptsExhausted
         try:
             body = {"model": self.model, "state": state, "questions": self.questions()}
@@ -278,7 +278,7 @@ def jev_relevance_scorer(
         journal = None
         if daily:
             # Initialize the shared pilot journal only after provider modules are loaded.
-            journal_class = import_module("app.storage.reenrich_pilot_journal").PilotJournal
+            journal_class = import_module("app.storage.provider_journal").PilotJournal
             root = Path("data/daily-admission") / datetime.now(UTC).date().isoformat()
             root.mkdir(parents=True, exist_ok=True, mode=0o700)
             journal = journal_class(root / "journal.sqlite3", {"version": "daily-admission-1"},

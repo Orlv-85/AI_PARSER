@@ -3,7 +3,7 @@ from datetime import date
 
 import pytest
 
-from app.core.daily.reenrich_pilot import DEEPSEEK_MODEL
+from app.core.daily.provider_requests import DEEPSEEK_MODEL
 from app.core.daily.signals_extract import (
     EXTRACTION_VERSION,
     MAX_INPUT_BYTES,
