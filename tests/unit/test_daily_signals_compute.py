@@ -7,20 +7,20 @@ import pytest
 
 from app.core.daily.signals_compute import (
     METHODOLOGY_VERSION,
+    compute_snapshot,
+    payload_hash,
+)
+from app.core.daily.signals_entities import Mention, Override, reconcile
+from app.core.daily.signals_history import LexicalHistory
+from app.core.daily.signals_lines import one_liner, sentences
+from app.core.daily.signals_model import (
     ArticleObs,
     DayCoverage,
     EntityMention,
-    LexicalHistory,
     SnapshotInput,
     Thresholds,
-    cluster,
-    compute_snapshot,
-    links,
-    one_liner,
-    payload_hash,
-    sentences,
 )
-from app.core.daily.signals_entities import Mention, Override, reconcile
+from app.core.daily.signals_stories import cluster, links
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "daily_signals"
 COMPARABLE_FROM = date(2026, 10, 10)

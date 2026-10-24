@@ -1,299 +1,37 @@
-"""Daily AI Signals snapshot computation (plan Decisions 3 and 5). Pure and deterministic."""
-import re
-import unicodedata
+"""Daily AI Signals snapshot computation (plan Decisions 3 and 5). Pure and deterministic.
+
+Feature doc: signals.md. The helpers live in signals_model, signals_stories, signals_lines,
+signals_naming and signals_history; the names below are re-exported for importers.
+"""
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import asdict, dataclass, field
-from datetime import date, datetime, timedelta
+from dataclasses import asdict
+from datetime import date, timedelta
 from typing import Any
 
-from app.core.daily.signals_brief import HARD_EVENTS, cut, norm
-from app.core.daily.signals_entities import (
-    TOKEN,
-    Entity,
-    clean,
-    company_tokens,
-    is_stopped,
-    same_family,
-    token_prefix,
-    tokens,
-    vendor_tokens,
+from app.core.daily.signals_entities import Entity, same_family, token_prefix
+from app.core.daily.signals_history import LexicalHistory
+from app.core.daily.signals_lines import name_key, one_liner
+from app.core.daily.signals_model import (
+    CONFIRMED_TYPE_ORDER,
+    EARLY_TYPE_ORDER,
+    EVENT_LABELS,
+    ArticleObs,
+    DayCoverage,
+    EntityMention,
+    SnapshotInput,
+    Thresholds,
 )
-from app.core.ingestion.dedup import hamming_distance, simhash64
+from app.core.daily.signals_naming import proper_name, same_vendor, specific_variant, unit_key
+from app.core.daily.signals_stories import Story, _article_order, cluster, linked_articles, links
 from app.storage.journal_files import fingerprint
 
+__all__ = [
+    "METHODOLOGY_VERSION", "ArticleObs", "DayCoverage", "EntityMention", "LexicalHistory",
+    "SnapshotInput", "Thresholds", "compute_snapshot", "payload_hash",
+]
+
 METHODOLOGY_VERSION = "daily-signals-3"
-EVENT_LABELS = {
-    "model_release": "model releases", "product_launch": "product launches",
-    "funding": "funding rounds", "acquisition": "acquisitions", "partnership": "partnerships",
-    "infrastructure_deal": "infrastructure deals", "hardware": "hardware",
-    "regulation_policy": "regulation & policy", "legal": "legal",
-    "security_incident": "security incidents", "people_move": "people moves",
-    "benchmark_result": "benchmark results", "research": "research",
-    "opinion_analysis": "analysis", "other": "other",
-}
-EVENT_FAMILY = {"model_release": "launch", "product_launch": "launch"}
-# Display order of New items within a level (CP1, gate finding 6).
-EARLY_TYPE_ORDER = ("model", "hardware", "benchmark", "dataset", "technology", "company", "product",
-                    "policy")
-CONFIRMED_TYPE_ORDER = ("model", "product", "hardware", "company", "technology", "policy",
-                        "benchmark", "dataset")
-TITLE_STOP = frozenset("""a an the and or of to in on for with by from at as is are be its it this
-that new how why what who your you we our their into over after about vs via than more can will now
-just says say said could would may first using use launch launches launched releases release
-released announces announced update updates""".split())
-TITLE_TOKEN = re.compile(r"[a-z0-9]+(?:[.-][a-z0-9]+)*")
-# `variant of X` only for a specific earlier entity, never a bare family word (007 noise rule 2).
-FAMILY_STOPWORDS = frozenset({"gpt", "claude", "gemini", "llama", "muse", "grok", "qwen", "clef",
-                              "nemotron"})
-# One-liners (007 plan "One-liners"): sentence split, abbreviations, launch / "is a" verbs.
-SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"'])")
-ABBREVIATION = re.compile(r"(?:\b[A-Z]\.|\b(?:Inc|Corp|Ltd|Co|Mr|Ms|Dr|vs|St|No|U\.S|e\.g|i\.e|"
-                          r"Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\.)$")
-WHAT_VERB = re.compile(r"\b(launch\w*|releas\w*|introduc\w*|announc\w*|unveil\w*|debut\w*|"
-                       r"open-sourc\w*|formed|founded|(?<!-)built|"
-                       r"(?:is|are) (?:an?|the|its|their) )",
-                       re.IGNORECASE)
-SHORT_QUOTE_WORDS = 8
-ONE_LINER_MIN_WORDS = 3  # words besides the item name; fewer says nothing ("llm-echo 0.5")
-
-
-@dataclass(frozen=True)
-class Thresholds:  # pylint: disable=too-many-instance-attributes
-    new_max: int = 8
-    confirmed_publishers: int = 2
-    history_note_days: int = 30
-    top_max: int = 5
-    top_min_publishers: int = 2
-    links_max: int = 3
-    complete_ratio: float = 0.9
-    spike_min_articles: int = 3
-    spike_min_publishers: int = 2
-    spike_ratio: float = 3.0
-    spike_mean_floor: float = 1 / 3
-    spike_trailing_days: int = 7
-    spike_min_trailing_days: int = 3
-    spike_trailing_min_items: int = 10
-    quiet_items: int = 20
-    one_liner_max: int = 140
-    fold_share: float = 0.5
-    diffuse_story_min: int = 2
-    chip_hard_events: tuple[str, ...] = HARD_EVENTS
-    window_days: int = 7
-    window_min_complete: int = 6
-    rising_min_current: int = 4
-    rising_min_delta: int = 3
-    rising_ratio: float = 1.5
-    rising_min_publishers: int = 2
-    rising_max: int = 6
-    cooling_min_previous: int = 5
-    cooling_min_delta: int = 3
-    cooling_ratio: float = 0.5
-    cooling_min_publishers: int = 2
-    cooling_max: int = 4
-
-
-@dataclass(frozen=True)
-class EntityMention:
-    entity_key: str
-    type_group: str
-    base_key: str
-    role: str
-    is_new: bool = False
-    novelty_quote: str | None = None
-
-
-@dataclass(frozen=True)
-class ArticleObs:  # pylint: disable=too-many-instance-attributes
-    article_id: int
-    scope_day: date
-    title: str
-    url: str
-    publisher: str
-    published_at: datetime | None
-    event_type: str
-    mentions: tuple[EntityMention, ...] = ()
-    summary: str = ""  # the digest item summary of this day's item URL
-
-
-@dataclass(frozen=True)
-class DayCoverage:  # pylint: disable=too-many-instance-attributes
-    day: date
-    kind: str  # signals | history
-    published: bool
-    items: int = 0
-    matched: int = 0
-    extracted: int = 0
-    failed: int = 0
-    skipped: int = 0
-
-    @property
-    def pending(self) -> int:
-        return max(0, self.matched - self.extracted - self.failed - self.skipped)
-
-    def complete(self, ratio: float = 0.9) -> bool:
-        return self.published and (self.items == 0 or self.extracted >= ratio * self.items)
-
-
-@dataclass
-class Story:
-    members: list[ArticleObs]
-    label: str = ""
-    event_type: str = "other"
-    entity_keys: list[str] = field(default_factory=list)
-
-    @property
-    def publishers(self) -> int:
-        return len({m.publisher for m in self.members})
-
-    @property
-    def earliest(self) -> str:
-        return min(_time_key(m) for m in self.members)
-
-
-def _time_key(article: ArticleObs) -> str:
-    return article.published_at.isoformat() if article.published_at else "9999"
-
-
-def _article_order(article: ArticleObs) -> tuple[bool, str, int]:
-    return article.published_at is None, _time_key(article), article.article_id
-
-
-def title_tokens(title: str) -> frozenset[str]:
-    words = TITLE_TOKEN.findall(unicodedata.normalize("NFKC", title).casefold())
-    return frozenset(w for w in words if w not in TITLE_STOP and (len(w) > 2 or w.isdigit()))
-
-
-def cluster(articles: Sequence[ArticleObs]) -> list[Story]:
-    """Greedy strict-majority linkage over one day's articles (plan Decision 3)."""
-    order = sorted(articles, key=_article_order)
-    info = {}
-    for a in order:
-        primary = {(m.type_group, m.base_key): m.type_group for m in a.mentions
-                   if m.role == "primary"}
-        info[a.article_id] = (primary, title_tokens(a.title), simhash64(a.title),
-                              EVENT_FAMILY.get(a.event_type, a.event_type))
-
-    def edge(x: ArticleObs, y: ArticleObs) -> bool:
-        px, tx, hx, fx = info[x.article_id]
-        py, ty, hy, fy = info[y.article_id]
-        if fx != fy:
-            return False
-        shared = px.keys() & py.keys()
-        if any(px[k] != "org" for k in shared):
-            return True
-        if shared and len(tx & ty) / max(1, len(tx | ty)) >= 0.20:
-            return True
-        return bool(hamming_distance(hx, hy) <= 6)
-
-    stories: list[Story] = []
-    for a in order:
-        best_score: tuple[float, int, int] | None = None
-        best_story: Story | None = None
-        for index, story in enumerate(stories):
-            linked = sum(1 for m in story.members if edge(a, m))
-            ratio = linked / len(story.members)
-            score = (ratio, len(story.members), -index)
-            if ratio > 0.5 and (best_score is None or score > best_score):
-                best_score, best_story = score, story
-        if best_story is None:
-            stories.append(Story(members=[a]))
-        else:
-            best_story.members.append(a)
-    for story in stories:
-        _describe(story)
-    return stories
-
-
-def _describe(story: Story) -> None:
-    members = story.members
-    toks = [title_tokens(m.title) for m in members]
-
-    def label_key(i: int) -> tuple[int, int, int]:
-        overlap = sum(len(toks[i] & toks[k]) for k in range(len(members)) if k != i)
-        return -overlap, len(members[i].title), members[i].article_id
-
-    story.label = members[min(range(len(members)), key=label_key)].title
-    events = Counter(m.event_type for m in members)
-    story.event_type = sorted(events.items(), key=lambda kv: (-kv[1], kv[0]))[0][0]
-    primary = Counter(k for m in members for k in {
-        x.entity_key for x in m.mentions if x.role == "primary" and x.type_group != "org"})
-    story.entity_keys = sorted(k for k, n in primary.items() if n > len(members) / 2)
-
-
-def linked_articles(articles: Iterable[ArticleObs], limit: int) -> list[ArticleObs]:
-    """Up to `limit` articles: distinct publishers first, then earliest."""
-    ordered = sorted({a.article_id: a for a in articles}.values(), key=_article_order)
-    first: list[ArticleObs] = []
-    rest: list[ArticleObs] = []
-    seen: set[str] = set()
-    for a in ordered:
-        (rest if a.publisher in seen else first).append(a)
-        seen.add(a.publisher)
-    return (first + rest)[:limit]
-
-
-def links(articles: Iterable[ArticleObs], limit: int) -> list[dict[str, str]]:
-    return [{"title": a.title, "url": a.url, "publisher": a.publisher}
-            for a in linked_articles(articles, limit)]
-
-
-def sentences(text: str) -> list[str]:
-    parts: list[str] = []
-    buffer = ""
-    for piece in SENTENCE_END.split(norm(text)):
-        buffer = f"{buffer} {piece}".strip()
-        if not ABBREVIATION.search(buffer):
-            parts.append(buffer)
-            buffer = ""
-    if buffer:
-        parts.append(buffer)
-    return parts
-
-
-def name_key(text: str) -> str:
-    return re.sub(r"[\s.\-_]+", " ", norm(text).casefold()).strip()
-
-
-def one_liner(name: str, quote: str | None, summaries: Iterable[str],
-              limit: int = 140) -> tuple[str | None, str | None]:
-    """(line, source) for a New item: a digest-summary sentence that names the item and says what
-    it is or that it launched; a naming sentence when the novelty quote is a short fragment; else
-    the novelty quote (`quote`, rendered in quotation marks). Never generated; (None, None) when
-    the line would only repeat the name."""
-    line, source = _one_liner(name, quote, summaries, limit)
-    if len(name_key(line).replace(name_key(name), " ").split()) < ONE_LINER_MIN_WORDS:
-        return None, None
-    return line, source
-
-
-def _one_liner(name: str, quote: str | None, summaries: Iterable[str],
-               limit: int) -> tuple[str, str]:
-    key = name_key(name)
-    named = [s for text in summaries for s in sentences(text) if key in name_key(s)]
-    for sentence in named:
-        if WHAT_VERB.search(sentence):
-            return cut(sentence, limit), "summary"
-    text = norm(quote)
-    if named and len(text.split()) < SHORT_QUOTE_WORDS:
-        return cut(named[0], limit), "summary"
-    return cut(text, limit), "quote"
-
-
-def specific_variant(older: Entity, newer: Entity) -> bool:
-    """`variant of` names a specific earlier entity of the same type (007 noise rule 2)."""
-    if older.entity_type != newer.entity_type:
-        return False
-    vendor = set(vendor_tokens(newer.vendor)) | set(tokens(newer.vendor or ""))
-    rest = [t for t in tokens(older.display_name) if t not in vendor]
-    if not rest or " ".join(rest) in FAMILY_STOPWORDS:
-        return False
-    return len(rest) > 1 or any(ch.isdigit() for ch in "".join(rest))
-
-
-def same_vendor(vendor: str | None, org: str) -> bool:
-    parts = vendor_tokens(vendor)
-    return bool(parts) and parts == vendor_tokens(org)
 
 
 def payload_hash(payload: Mapping[str, Any]) -> str:
@@ -302,115 +40,6 @@ def payload_hash(payload: Mapping[str, Any]) -> str:
 
 def _r(value: float) -> float:
     return round(value, 3)
-
-
-def unit_key(entity_key: str) -> str:
-    """Counting unit: vendor-split automatic entities count together (plan Decision 2)."""
-    parts = entity_key.split(":")
-    return ":".join(parts[:3]) if parts[0] == "auto" else entity_key
-
-
-def proper_name(name: str) -> bool:
-    """F22: a New item needs a name shape: an uppercase letter or digit, or one hyphen/dot-joined
-    token ("agent-engineer"). "dynamic workflows" is a description, not a name."""
-    value = name.strip()
-    return any(ch.isupper() or ch.isdigit() for ch in value) or \
-        (" " not in value and any(ch in value for ch in "-."))
-
-
-def _contains(seq: Sequence[str], sub: Sequence[str]) -> bool:
-    n = len(sub)
-    return any(tuple(seq[i:i + n]) == tuple(sub) for i in range(len(seq) - n + 1))
-
-
-# F19 decision: a text that frames the entity as not yet released is not a "seen before" hit
-# ("mentioned before" is not "released before"; GA after a preview stays New, OD1).
-NOT_RELEASED = re.compile(r"\b(previews?|previewed|beta|alpha|waitlist|early access|roadmap|"
-                          r"plans to|will release|will launch|coming soon|upcoming)\b",
-                          re.IGNORECASE)
-SNIPPET_MAX = 200
-
-
-def _snippet(raw: str, word: str) -> str:
-    if len(raw) <= SNIPPET_MAX:
-        return raw
-    start = max(0, raw.casefold().find(word) - 80)
-    return raw[start:start + SNIPPET_MAX]
-
-
-class LexicalHistory:
-    """F19: earliest day a name occurs in published digest text (item title and summary) before D,
-    the gate's lexical rule.
-
-    A multi-token or digit-bearing name matches as a token run. A single common-word token needs
-    its exact capitalization and the entity's vendor name (or its alias) as a token run in the same
-    item; without a vendor it never suppresses (V02). The not-released check and the snippet use
-    the raw text, parentheses included (V01). Built once per recompute; results are cached per
-    entity as (day, matched words, text snippet)."""
-
-    def __init__(self, texts: Iterable[tuple[date, str]]):
-        self.rows: list[tuple[date, str, tuple[str, ...]]] = []
-        self.index: dict[str, list[int]] = defaultdict(list)
-        for day, raw in sorted((d, re.sub(r"\s+", " ", unicodedata.normalize("NFKC", t)).strip())
-                               for d, t in texts):
-            toks = tokens(raw)
-            for token in set(toks):
-                self.index[token].append(len(self.rows))
-            self.rows.append((day, raw, toks))
-        self.cache: dict[str, tuple[date, str, str] | None] = {}
-
-    def first(self, entity: Entity, before: date) -> tuple[date, str, str] | None:
-        if entity.entity_key not in self.cache:
-            self.cache[entity.entity_key] = self._earliest(entity)
-        found = self.cache[entity.entity_key]
-        return found if found is not None and found[0] < before else None
-
-    def _single_word_hit(self, entity: Entity, word: str, raw: str,
-                         toks: tuple[str, ...]) -> bool:
-        vendors = {v for v in (company_tokens(tokens(entity.vendor or "")),
-                               vendor_tokens(entity.vendor)) if v}
-        if not vendors or not any(_contains(toks, v) for v in vendors):
-            return False
-        exact = [t for t in TOKEN.findall(clean(entity.display_name)) if t.casefold() == word]
-        cased = exact[0] if exact else word[:1].upper() + word[1:]
-        return re.search(r"(?<!\w)" + re.escape(cased) + r"(?!\w)", raw) is not None
-
-    def _earliest(self, entity: Entity) -> tuple[date, str, str] | None:
-        parts = tokens(entity.display_name)
-        candidates = {company_tokens(parts) if entity.type_group == "org" else parts,
-                      entity.base_tokens}
-        best: tuple[date, str, str] | None = None
-        limit = date.max
-        for words in sorted(c for c in candidates if c and not is_stopped(c)):
-            ids = sorted(set.intersection(*(set(self.index.get(w, ())) for w in words)))
-            for i in ids:
-                day, raw, toks = self.rows[i]
-                if day >= limit:
-                    break
-                if NOT_RELEASED.search(raw):
-                    continue
-                if len(words) > 1 or any(ch.isdigit() for ch in words[0]):
-                    hit = _contains(toks, words)
-                else:
-                    hit = self._single_word_hit(entity, words[0], raw, toks)
-                if hit:
-                    best, limit = (day, " ".join(words), _snippet(raw, words[0])), day
-                    break
-        return best
-
-
-@dataclass(frozen=True)
-class SnapshotInput:  # pylint: disable=too-many-instance-attributes
-    day: date
-    observations: Mapping[date, Sequence[ArticleObs]]
-    coverage: Mapping[date, DayCoverage]
-    entities: Mapping[str, Entity]
-    entity_ids: Mapping[str, int]
-    extraction_version: str
-    generated_at: datetime
-    comparable_from: date
-    thresholds: Thresholds = Thresholds()
-    history: LexicalHistory | None = None
 
 
 class _Snapshot:
