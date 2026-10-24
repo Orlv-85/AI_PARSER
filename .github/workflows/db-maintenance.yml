@@ -15,20 +15,23 @@ jobs:
         run: |
           test -n "${{ vars.DEPLOY_HOST }}"
           test -n "${{ vars.DEPLOY_USER }}"
-          test -n "${{ secrets.SERVER_PASSWORD }}"
+          test -n "${{ secrets.SERVER_SSH_KEY }}"
+          test -n "${{ secrets.SERVER_KNOWN_HOSTS }}"
 
-      - name: Install sshpass, age, rclone
+      - name: Install age, rclone
         run: |
           sudo apt-get update
-          sudo apt-get install -y sshpass age rclone
+          sudo apt-get install -y age rclone
 
-      - name: Trust server host key
+      - name: Configure SSH key and pinned host key
+        env:
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SERVER_KNOWN_HOSTS: ${{ secrets.SERVER_KNOWN_HOSTS }}
         run: |
+          umask 077
           mkdir -p ~/.ssh
-          for _ in 1 2 3; do
-            ssh-keyscan -T 5 -H "${{ vars.DEPLOY_HOST }}" >> ~/.ssh/known_hosts && break
-            sleep 2
-          done
+          printf '%s\n' "${SERVER_SSH_KEY}" > ~/.ssh/deploy_key
+          printf '%s\n' "${SERVER_KNOWN_HOSTS}" > ~/.ssh/known_hosts
 
       - name: Run maintenance and backup
         env:
@@ -36,16 +39,14 @@ jobs:
           DEPLOY_USER: ${{ vars.DEPLOY_USER }}
           DEPLOY_APP_DIR: ${{ vars.DEPLOY_APP_DIR || '/opt/ai-news' }}
           RETENTION_DAYS: ${{ vars.RETENTION_DAYS || '800' }}
-          SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
         run: |
-          sshpass -p "${SERVER_PASSWORD}" ssh -o StrictHostKeyChecking=accept-new "${DEPLOY_USER}@${DEPLOY_HOST}" "cd '${DEPLOY_APP_DIR}' && RETENTION_DAYS='${RETENTION_DAYS}' ./scripts/db_maintenance.sh && ./scripts/db_backup.sh"
+          ssh -i "$HOME/.ssh/deploy_key" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}" "cd '${DEPLOY_APP_DIR}' && RETENTION_DAYS='${RETENTION_DAYS}' ./scripts/db_maintenance.sh && ./scripts/db_backup.sh"
 
       - name: Upload backup off-site
         env:
           DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
           DEPLOY_USER: ${{ vars.DEPLOY_USER }}
           DEPLOY_APP_DIR: ${{ vars.DEPLOY_APP_DIR || '/opt/ai-news' }}
-          SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
           OFFSITE_B2_BUCKET: ${{ vars.OFFSITE_B2_BUCKET }}
           BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
           OFFSITE_B2_KEY_ID: ${{ secrets.OFFSITE_B2_KEY_ID }}
@@ -54,8 +55,8 @@ jobs:
         run: |
           test -n "${OFFSITE_B2_BUCKET}" && test -n "${BACKUP_AGE_RECIPIENT}"
           test -n "${OFFSITE_B2_KEY_ID}" && test -n "${OFFSITE_B2_APPLICATION_KEY}"
-          remote_file="$(sshpass -p "${SERVER_PASSWORD}" ssh "${DEPLOY_USER}@${DEPLOY_HOST}" "ls -1t '${DEPLOY_APP_DIR}'/backups/postgres_*.sql.gz | head -n 1")"
+          remote_file="$(ssh -i "$HOME/.ssh/deploy_key" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}" "ls -1t '${DEPLOY_APP_DIR}'/backups/postgres_*.sql.gz | head -n 1")"
           test -n "${remote_file}"
-          sshpass -p "${SERVER_PASSWORD}" scp "${DEPLOY_USER}@${DEPLOY_HOST}:${remote_file}" "${RUNNER_TEMP}/"
+          scp -i "$HOME/.ssh/deploy_key" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}:${remote_file}" "${RUNNER_TEMP}/"
           ./scripts/db_offsite_upload.sh "${RUNNER_TEMP}/$(basename "${remote_file}")"
           rm -f "${RUNNER_TEMP}"/postgres_*.sql.gz

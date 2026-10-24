@@ -3,6 +3,18 @@ set -eu
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 UNIT_DIR="${AINEWS_SYSTEMD_UNIT_DIR:-/etc/systemd/system}"
 command -v systemctl >/dev/null || { echo 'systemd is required for UTC scheduling' >&2; exit 1; }
+# A non-root deploy user stages the units and installs them with sudo (see the sudoers file in
+# docs/deploy.md). An explicit AINEWS_SYSTEMD_UNIT_DIR always writes directly.
+SUDO=""
+STAGE_DIR=""
+if [ "$(id -u)" -ne 0 ] && [ -z "${AINEWS_SYSTEMD_UNIT_DIR:-}" ]; then
+  SUDO="sudo -n"
+  STAGE_DIR=/var/tmp/ai-news-units
+  rm -rf "$STAGE_DIR"
+  mkdir -m 700 "$STAGE_DIR"
+  FINAL_DIR="$UNIT_DIR"
+  UNIT_DIR="$STAGE_DIR"
+fi
 mkdir -p "$UNIT_DIR"
 for job in fetch digest; do
   case "$job" in fetch) hour=01;; digest) hour=02;; esac
@@ -54,6 +66,12 @@ Persistent=false
 [Install]
 WantedBy=timers.target
 EOF
-systemctl daemon-reload
-systemctl enable --now ai-news-daily-fetch.timer ai-news-daily-digest.timer
-systemctl enable --now ai-news-daily-archive.timer
+if [ -n "$STAGE_DIR" ]; then
+  for unit in "$STAGE_DIR"/*; do
+    $SUDO install -m 0644 "$unit" "$FINAL_DIR/$(basename "$unit")"
+  done
+  rm -rf "$STAGE_DIR"
+fi
+$SUDO systemctl daemon-reload
+$SUDO systemctl enable --now ai-news-daily-fetch.timer ai-news-daily-digest.timer
+$SUDO systemctl enable --now ai-news-daily-archive.timer

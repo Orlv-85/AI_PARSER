@@ -77,7 +77,7 @@ def test_deploy_transports_deepseek_secret_privately(
     assert values["AINEWS_JEV_ENABLED"] == "true"
     assert values["AINEWS_SEMANTIC_ADMISSION_ENABLED"] == "true"
     assert stat.S_IMODE(env_path.stat().st_mode) == 0o600
-    deploy = next(step for step in steps if "retry sshpass" in step.get("run", ""))
+    deploy = next(step for step in steps if "retry ssh " in step.get("run", ""))
     assert "|DS_API_KEY|AINEWS_DIGEST_MODEL|RETENTION_DAYS)=" in deploy["run"]
     assert "chmod 600 .env.next" in deploy["run"]
     assert "AINEWS_WEEKLY_CRON_ENABLED=0 APP_IMAGE=" in deploy["run"]
@@ -135,7 +135,7 @@ def test_deploy_transports_publish_api_token(workflow, secret, expected, tmp_pat
         assert secret not in result.stdout + result.stderr
     assert f"AINEWS_PUBLISH_API_TOKEN={expected}\n" in env_path.read_text(encoding="utf-8")
 
-    deploy = next(step for step in steps if "retry sshpass" in step.get("run", ""))
+    deploy = next(step for step in steps if "retry ssh " in step.get("run", ""))
     pattern = re.search(r"grep -vE '([^']+)'", deploy["run"])
     assert pattern is not None
     previous_env = tmp_path / "previous.env"

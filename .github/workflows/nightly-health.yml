@@ -13,20 +13,25 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - name: Install sshpass
+      - name: Configure SSH key and pinned host key
+        env:
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SERVER_KNOWN_HOSTS: ${{ secrets.SERVER_KNOWN_HOSTS }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y sshpass
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "${SERVER_SSH_KEY}" > ~/.ssh/deploy_key
+          printf '%s\n' "${SERVER_KNOWN_HOSTS}" > ~/.ssh/known_hosts
 
       - name: Check nightly jobs over SSH
         env:
-          SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
           DEPLOY_USER: ${{ vars.DEPLOY_USER }}
           DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
           DEPLOY_APP_DIR: ${{ vars.DEPLOY_APP_DIR || '/opt/ai-news' }}
         run: |
-          sshpass -p "${SERVER_PASSWORD}" ssh \
-            -o StrictHostKeyChecking=accept-new \
+          ssh -i "$HOME/.ssh/deploy_key" \
+            -o IdentitiesOnly=yes -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
             "${DEPLOY_USER}@${DEPLOY_HOST}" \
             "DEPLOY_APP_DIR='${DEPLOY_APP_DIR}' bash -s" <<'REMOTE'
           set +e
@@ -60,20 +65,19 @@ jobs:
             failed=1
           fi
 
-          digest_status="$(MIN_DIGEST_SCOPE=5 python3 -c '
+          digest_status="$(docker exec ai-news-app cat "data/daily-enrichment/$yesterday/report.json" 2>/dev/null | MIN_DIGEST_SCOPE=5 python3 -c '
           import json
           import os
           import sys
-          from pathlib import Path
           try:
-              report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+              report = json.load(sys.stdin)
               ok = (isinstance(report, dict)
                     and str(report.get("state", "")).startswith("published")
                     and int(report.get("scope_count", -1)) >= int(os.environ["MIN_DIGEST_SCOPE"]))
           except (OSError, ValueError, TypeError):
               ok = False
           print("ok" if ok else "failed")
-          ' "data/daily-enrichment/$yesterday/report.json" 2>/dev/null)"
+          ' 2>/dev/null)"
           if [ "$?" -eq 0 ] && [ "$digest_status" = "ok" ]; then
             echo "yesterday_digest_published_with_scope: ok"
           else

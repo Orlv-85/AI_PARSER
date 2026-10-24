@@ -272,12 +272,17 @@ install_auto_update_cron
 install_daily_digest_cron
 install_weekly_analytics_cron
 if [ "$AINEWS_DAILY_SCHEDULER" = systemd ]; then
+  # The deploy user is not root; the sudoers file allows exactly these systemctl calls.
+  SUDO=""
+  if [ "$(id -u)" -ne 0 ]; then
+    SUDO="sudo -n"
+  fi
   sh "$ROOT_DIR/scripts/install_daily_timers.sh"
   if ! is_enabled "$FETCH_TIMER_ENABLED"; then
-    systemctl disable --now ai-news-daily-fetch.timer
+    $SUDO systemctl disable --now ai-news-daily-fetch.timer
   fi
   if ! is_enabled "$DIGEST_TIMER_ENABLED"; then
-    systemctl disable --now ai-news-daily-digest.timer
+    $SUDO systemctl disable --now ai-news-daily-digest.timer
   fi
 fi
 
