@@ -1,7 +1,7 @@
 <!-- code-doc
-module: src/app/core/ingestion/pipeline.py
+module: src/app/core/ingestion/pipeline/cycle.py
 covers:
-  - src/app/core/ingestion/pipeline.py
+  - src/app/core/ingestion/pipeline/*.py
   - src/app/core/ingestion/admission.py
   - src/app/core/ingestion/scoring.py
   - src/app/core/canonicalize.py
@@ -394,19 +394,19 @@ function. Each rule lists the tests that check it.
 ai-news fetch --once                         cli/main.py: fetch
   scripts/run_daily_fetch_job.sh (01:00 UTC timer), scripts/auto_update_once.sh (cron helper)
 web update (thread or process)               web/service.py: UpdateRunService
-  -> run_fetch_cycle                         core/ingestion/pipeline.py
+  -> run_fetch_cycle                         core/ingestion/pipeline/cycle.py
        load_sources + upsert_source          sources.yaml -> sources; + list_enabled_sources (DB only)
        register_source                       weekly source version per source
        jev_relevance_scorer                  core/jev.py; None + admission -> pause, return
        admission off: _collect_fetched_items thread pool over all sources (_fetch_source_items)
        per source, in a savepoint:
-         admission on: _replay_pending_for_source, then _collect_fetched_items for this source
-         _process_source_result
+         admission on: _replay_pending_for_source (replay.py), then _collect_fetched_items (fetch.py)
+         _process_source_result              source_result.py
            _persist_fetch_state_if_present   validators; 304 -> not_modified, stop
-           HTML links -> _process_html_links_two_stage (filter, cap, known check, download)
-           items      -> _process_fetched_source_items (filter, known/streak check)
-             _screen_candidate (admission)   cache key, pending row, Jev, record_decision
-             _build_article_row              dates, relevance, freshness, rank, provenance
+           HTML links -> _process_html_links_two_stage   html_links.py (filter, cap, known check, download)
+           items      -> _process_fetched_source_items   rss.py (filter, known/streak check)
+             _screen_candidate (admission)   screening.py: cache key, pending row, Jev, record_decision
+             _build_article_row              rows.py: dates, relevance, freshness, rank, provenance
              insert_article / upsert_articles_batch
          record_attempt                      weekly coverage outcome
        clear_collection_paused if a fresh success; _publish_weekly_analytics_if_due; commit
@@ -417,7 +417,18 @@ web update (thread or process)               web/service.py: UpdateRunService
 
 | File | Role | Pure |
 | --- | --- | --- |
-| `core/ingestion/pipeline.py` | Run orchestration, fetch dispatch, per-source processing, admission flow, row building | no |
+| `core/ingestion/pipeline/__init__.py` | Re-exports `run_fetch_cycle` only; everything else is imported from its module | no |
+| `core/ingestion/pipeline/cycle.py` | `run_fetch_cycle`: run loop, savepoint per source, weekly attempts, `FetchSummary` | no |
+| `core/ingestion/pipeline/models.py` | `FetchSummary`, `SourceMetrics`, `AdmissionState`, `EnabledSource`, `FetchResult`, replay and comparison constants | yes |
+| `core/ingestion/pipeline/sources.py` | `_managed_source_to_config`, fetch-state persist and validator clear | no |
+| `core/ingestion/pipeline/fetch.py` | Network fetch of enabled sources: validators, execution groups, thread pool | no |
+| `core/ingestion/pipeline/source_result.py` | `_process_source_result` (HTML or items path), `_log_source_metrics` | no |
+| `core/ingestion/pipeline/html_links.py` | `_process_html_links_two_stage`: list page links to stored articles | no |
+| `core/ingestion/pipeline/rss.py` | `_process_fetched_source_items`: feed items to stored articles | no |
+| `core/ingestion/pipeline/screening.py` | `_screen_candidate`, cached-decision reuse, admission counters snapshot and restore | no |
+| `core/ingestion/pipeline/replay.py` | Pending admission candidates replayed before a source's fresh fetch | no |
+| `core/ingestion/pipeline/rows.py` | Candidate payloads, `_build_article_row`, exclusion reason, batch upsert | no |
+| `core/ingestion/pipeline/weekly_hooks.py` | Weekly observation and Monday publish hooks (weekly v2, deferred; moved as is) | no |
 | `core/ingestion/admission.py` | Admission choice mapping, `bounded_evidence`, `evidence_hash`, `admission_cache_key` | yes |
 | `core/ingestion/scoring.py` | `ai_relevance_score`, `freshness_score`, `rank_score` | yes |
 | `core/canonicalize.py` | `canonicalize_url`, `canonical_url_hash` (also used by signals, weekly, cleanup) | yes |
@@ -478,9 +489,13 @@ Per rule: see Behavior and Invariants. Files: `tests/unit/test_pipeline_runtime.
 `test_ingest_html_additional.py`, `test_fetcher.py`, `test_canonicalize.py`, `test_scoring.py`,
 `test_jev.py`, `test_article_evidence_cache.py` (date evidence), `tests/integration/test_pipeline.py`.
 Tests never call a network or provider (`httpx.MockTransport`, fake `Fetcher.request`, fake fetch
-functions). Runtime tests replace module attributes of `core/ingestion/pipeline.py` (fetch functions, repos,
+functions). Runtime tests replace module attributes of the pipeline modules (fetch functions, repos,
 `SessionLocal`) with fakes of the real interfaces and run with real `Settings`; a fake must offer
 every method and field the real object offers (fetch fakes return `RssItemList` or
 `HtmlListPageResult`). Weekly hooks run only with a real SQLAlchemy `Session`
 (`isinstance` checks in `run_fetch_cycle` and `_record_weekly_observation`), so runtime tests with a
 fake session do not record weekly rows; SQLite tests do.
+A patch must name the module that reads the name (`cycle.py` reads `SessionLocal`, `load_sources`,
+`SourceRepo`, `ArticleRepo`; `fetch.py` the fetch functions and `Fetcher`; `html_links.py`
+`fetch_html_article`; `rows.py` the scoring functions; `rss.py` and `html_links.py` the
+canonicalizers): `test_every_monkeypatch_hits_a_module_that_reads_the_name` fails otherwise.

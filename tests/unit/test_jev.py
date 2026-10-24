@@ -13,7 +13,8 @@ from app.config.sources import SourceConfig
 from app.core.categories import CATEGORY_CRITERIA
 from app.core.daily.provider_requests import source_state
 from app.core.ingestion.admission import bounded_evidence, evidence_hash
-from app.core.ingestion.pipeline import _build_article_row, run_fetch_cycle
+from app.core.ingestion.pipeline import run_fetch_cycle
+from app.core.ingestion.pipeline.rows import _build_article_row
 from app.core.ingestion.scoring import ai_relevance_score
 from app.core.jev import JevAssessment, JevRelevanceScorer, jev_relevance_scorer
 from app.core.models import Article
@@ -200,13 +201,14 @@ def test_ingestion_persists_jev_score_or_heuristic_on_failure(
         return next(item for item in articles if str(item.url) == url)
 
     monkeypatch.setattr("app.core.jev.httpx.Client", create_client)
-    monkeypatch.setattr("app.core.ingestion.pipeline.load_sources", lambda _path: [config])
-    monkeypatch.setattr("app.core.ingestion.pipeline.create_all", lambda: None)
-    monkeypatch.setattr("app.core.ingestion.pipeline.SessionLocal", sessions)
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.load_sources", lambda _path: [config])
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.create_all", lambda: None)
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.SessionLocal", sessions)
     monkeypatch.setattr(
-        "app.core.ingestion.pipeline._collect_fetched_items", lambda **_kwargs: ({0: result}, 0),
+        "app.core.ingestion.pipeline.cycle._collect_fetched_items",
+        lambda **_kwargs: ({0: result}, 0),
     )
-    monkeypatch.setattr("app.core.ingestion.pipeline.fetch_html_article", fetch_article)
+    monkeypatch.setattr("app.core.ingestion.pipeline.html_links.fetch_html_article", fetch_article)
     monkeypatch.delenv("JEV_API_KEY", raising=False)
     monkeypatch.delenv("AINEWS_JEV_API_KEY", raising=False)
     settings = Settings(

@@ -6,17 +6,17 @@ from types import SimpleNamespace
 
 import pytest
 
-import app.core.ingestion.pipeline as pipeline_module
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
-from app.core.ingestion.pipeline import (
+from app.core.ingestion.pipeline.fetch import (
     _fetch_source_items,
-    _persist_fetch_state_if_present,
-    _process_html_links_two_stage,
     _profiled_source_groups,
     _source_group_max_workers,
-    _upsert_article_rows,
 )
+from app.core.ingestion.pipeline.html_links import _process_html_links_two_stage
+from app.core.ingestion.pipeline.models import AdmissionState
+from app.core.ingestion.pipeline.rows import _upsert_article_rows
+from app.core.ingestion.pipeline.sources import _persist_fetch_state_if_present
 from app.core.models import Article
 from app.ingest.html import HtmlListPageResult
 
@@ -112,7 +112,7 @@ def _fetch(settings: Settings, fetch_state: dict[str, object | None] | None = No
 
 def test_fetch_source_items_html_list_and_conditional_paths(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.core.ingestion.pipeline.fetch_html_links",
+        "app.core.ingestion.pipeline.fetch.fetch_html_links",
         lambda *_args, **_kwargs: ["https://example.com/news/1"],
     )
     two_stage = _fetch(_settings())
@@ -120,7 +120,7 @@ def test_fetch_source_items_html_list_and_conditional_paths(monkeypatch) -> None
     assert two_stage.links == ["https://example.com/news/1"]
 
     monkeypatch.setattr(
-        "app.core.ingestion.pipeline.fetch_html_links_with_metadata",
+        "app.core.ingestion.pipeline.fetch.fetch_html_links_with_metadata",
         lambda *_args, **_kwargs: HtmlListPageResult(
             links=["https://example.com/news/2"],
             status_code=200,
@@ -150,11 +150,11 @@ def test_fetch_source_items_html_conditional_default_path(monkeypatch) -> None:
         )
 
     monkeypatch.setattr(
-        "app.core.ingestion.pipeline.fetch_html_links",
+        "app.core.ingestion.pipeline.fetch.fetch_html_links",
         lambda *_args, **_kwargs: pytest.fail("conditional HTML must use the metadata fetch"),
     )
     monkeypatch.setattr(
-        "app.core.ingestion.pipeline.fetch_html_links_with_metadata", _fetch_with_metadata,
+        "app.core.ingestion.pipeline.fetch.fetch_html_links_with_metadata", _fetch_with_metadata,
     )
 
     conditional = _fetch(
@@ -171,11 +171,11 @@ def test_fetch_source_items_html_conditional_default_path(monkeypatch) -> None:
 
 def test_fetch_source_items_html_two_stage_default_nonconditional_path(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.core.ingestion.pipeline.fetch_html_links",
+        "app.core.ingestion.pipeline.fetch.fetch_html_links",
         lambda *_args, **_kwargs: ["https://example.com/news/4"],
     )
     monkeypatch.setattr(
-        "app.core.ingestion.pipeline.fetch_html_links_with_metadata",
+        "app.core.ingestion.pipeline.fetch.fetch_html_links_with_metadata",
         lambda *_args, **_kwargs: pytest.fail("conditional HTML is off"),
     )
 
@@ -194,7 +194,7 @@ def test_fetch_source_items_html_two_stage_default_nonconditional_path(monkeypat
         return HtmlListPageResult(links=[], status_code=304, not_modified=True)
 
     monkeypatch.setattr(
-        "app.core.ingestion.pipeline.fetch_html_links_with_metadata",
+        "app.core.ingestion.pipeline.fetch.fetch_html_links_with_metadata",
         _fake_fetch_html_links_with_metadata,
     )
 
@@ -219,7 +219,7 @@ class _SpyFetcher:
 
 def test_fetch_source_items_closes_fetcher_after_success_and_error(monkeypatch) -> None:
     _SpyFetcher.instances = []
-    monkeypatch.setattr("app.core.ingestion.pipeline.Fetcher", _SpyFetcher)
+    monkeypatch.setattr("app.core.ingestion.pipeline.fetch.Fetcher", _SpyFetcher)
     seen_fetchers: list[object] = []
 
     def _fetch_links_ok(*_args, fetcher, **_kwargs):
@@ -231,10 +231,10 @@ def test_fetch_source_items_closes_fetcher_after_success_and_error(monkeypatch) 
         seen_fetchers.append(fetcher)
         raise RuntimeError("fetch_failed")
 
-    monkeypatch.setattr("app.core.ingestion.pipeline.fetch_html_links", _fetch_links_ok)
+    monkeypatch.setattr("app.core.ingestion.pipeline.fetch.fetch_html_links", _fetch_links_ok)
     assert _fetch(_settings()).links == ["https://example.com/news/item"]
 
-    monkeypatch.setattr("app.core.ingestion.pipeline.fetch_html_links", _fetch_links_fails)
+    monkeypatch.setattr("app.core.ingestion.pipeline.fetch.fetch_html_links", _fetch_links_fails)
     with pytest.raises(RuntimeError, match="fetch_failed"):
         _fetch(_settings())
 
@@ -246,7 +246,7 @@ def test_process_html_links_two_stage_closes_fetcher_when_placeholder_loop_raise
     monkeypatch,
 ) -> None:
     _SpyFetcher.instances = []
-    monkeypatch.setattr("app.core.ingestion.pipeline.Fetcher", _SpyFetcher)
+    monkeypatch.setattr("app.core.ingestion.pipeline.html_links.Fetcher", _SpyFetcher)
 
     def _upsert_pending_fails(*_args, **_kwargs):
         raise RuntimeError("placeholder write failed")
@@ -254,9 +254,11 @@ def test_process_html_links_two_stage_closes_fetcher_when_placeholder_loop_raise
     def _fetch_html_article_unexpected(**_kwargs):
         raise AssertionError("article stage must not run")
 
-    monkeypatch.setattr("app.core.ingestion.pipeline.upsert_pending", _upsert_pending_fails)
     monkeypatch.setattr(
-        "app.core.ingestion.pipeline.fetch_html_article", _fetch_html_article_unexpected,
+        "app.core.ingestion.pipeline.html_links.upsert_pending", _upsert_pending_fails,
+    )
+    monkeypatch.setattr(
+        "app.core.ingestion.pipeline.html_links.fetch_html_article", _fetch_html_article_unexpected,
     )
 
     with pytest.raises(RuntimeError, match="placeholder write failed"):
@@ -270,7 +272,7 @@ def test_process_html_links_two_stage_closes_fetcher_when_placeholder_loop_raise
                 semantic_admission_policy_version="policy",
                 semantic_admission_prompt_version="prompt",
             ),
-            admission_state=pipeline_module.AdmissionState(enabled=True),
+            admission_state=AdmissionState(enabled=True),
         )
 
     assert len(_SpyFetcher.instances) == 1
@@ -328,13 +330,17 @@ def test_process_html_links_two_stage_covers_non_batch_edge_paths(monkeypatch) -
             return None
         return article_by_url[url]
 
-    monkeypatch.setattr("app.core.ingestion.pipeline.Fetcher", _FakeFetcher)
-    monkeypatch.setattr("app.core.ingestion.pipeline.canonicalize_url", lambda url: url)
-    monkeypatch.setattr("app.core.ingestion.pipeline.canonical_url_hash", _canonical_hash)
-    monkeypatch.setattr("app.core.ingestion.pipeline.fetch_html_article", _fake_fetch_html_article)
-    monkeypatch.setattr("app.core.ingestion.pipeline.ai_relevance_score", lambda _item: 0.5)
-    monkeypatch.setattr("app.core.ingestion.pipeline.freshness_score", lambda _published: 0.5)
-    monkeypatch.setattr("app.core.ingestion.pipeline.rank_score", lambda **_kwargs: 1.0)
+    monkeypatch.setattr("app.core.ingestion.pipeline.html_links.Fetcher", _FakeFetcher)
+    monkeypatch.setattr("app.core.ingestion.pipeline.html_links.canonicalize_url", lambda url: url)
+    monkeypatch.setattr(
+        "app.core.ingestion.pipeline.html_links.canonical_url_hash", _canonical_hash,
+    )
+    monkeypatch.setattr(
+        "app.core.ingestion.pipeline.html_links.fetch_html_article", _fake_fetch_html_article,
+    )
+    monkeypatch.setattr("app.core.ingestion.pipeline.rows.ai_relevance_score", lambda _item: 0.5)
+    monkeypatch.setattr("app.core.ingestion.pipeline.rows.freshness_score", lambda _published: 0.5)
+    monkeypatch.setattr("app.core.ingestion.pipeline.rows.rank_score", lambda **_kwargs: 1.0)
 
     fetched, new_count, duplicates, skipped, early_stop = _process_html_links_two_stage(
         links=links,
@@ -360,11 +366,13 @@ def test_process_html_links_two_stage_batch_mode(monkeypatch) -> None:
             published_at=datetime(2026, 2, 28, tzinfo=UTC),
         )
 
-    monkeypatch.setattr("app.core.ingestion.pipeline.Fetcher", _FakeFetcher)
-    monkeypatch.setattr("app.core.ingestion.pipeline.fetch_html_article", _fake_fetch_html_article)
-    monkeypatch.setattr("app.core.ingestion.pipeline.ai_relevance_score", lambda _item: 0.5)
-    monkeypatch.setattr("app.core.ingestion.pipeline.freshness_score", lambda _published: 0.5)
-    monkeypatch.setattr("app.core.ingestion.pipeline.rank_score", lambda **_kwargs: 1.0)
+    monkeypatch.setattr("app.core.ingestion.pipeline.html_links.Fetcher", _FakeFetcher)
+    monkeypatch.setattr(
+        "app.core.ingestion.pipeline.html_links.fetch_html_article", _fake_fetch_html_article,
+    )
+    monkeypatch.setattr("app.core.ingestion.pipeline.rows.ai_relevance_score", lambda _item: 0.5)
+    monkeypatch.setattr("app.core.ingestion.pipeline.rows.freshness_score", lambda _published: 0.5)
+    monkeypatch.setattr("app.core.ingestion.pipeline.rows.rank_score", lambda **_kwargs: 1.0)
     repo = _Repo()
 
     fetched, new_count, duplicates, skipped, early_stop = _process_html_links_two_stage(

@@ -1,3 +1,4 @@
+# pylint: disable=too-many-lines
 """run_fetch_cycle with fake sessions, repos and fetch functions; real Settings."""
 from contextlib import nullcontext
 from datetime import UTC, date, datetime
@@ -10,7 +11,9 @@ import pytest
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
-from app.core.ingestion.pipeline import FetchSummary, _managed_source_to_config, run_fetch_cycle
+from app.core.ingestion.pipeline import run_fetch_cycle
+from app.core.ingestion.pipeline.models import FetchSummary
+from app.core.ingestion.pipeline.sources import _managed_source_to_config
 from app.core.models import Article
 from app.ingest import rss as rss_module
 from app.ingest.html import HtmlListPageResult
@@ -145,23 +148,39 @@ def _run(
     source_repo: type = _SourceRepo, article_repo: type = _ArticleRepo,
     session: _Session | None = None, logger: _Logger | None = None, **patches: object,
 ) -> FetchSummary:
-    """Run one cycle; `patches` replace app.core.ingestion.pipeline attributes (fetch functions)."""
+    """Run one cycle; `patches` replace fetch functions (pipeline.fetch, pipeline.html_links)."""
     current = session or _Session()
-    defaults = {name: _no_fetch(name) for name in (
+    fetchers = {name: patches.get(name) or _no_fetch(name) for name in (
         "fetch_rss", "fetch_html_links", "fetch_html_links_with_metadata", "fetch_html_article",
     )}
-    for name, value in {**defaults, **patches}.items():
-        monkeypatch.setattr(f"app.core.ingestion.pipeline.{name}", value)
-    monkeypatch.setattr("app.core.ingestion.pipeline.load_sources", lambda _path: configs)
-    monkeypatch.setattr("app.core.ingestion.pipeline.create_all", lambda: None)
-    monkeypatch.setattr("app.core.ingestion.pipeline.SessionLocal", lambda: current)
-    monkeypatch.setattr("app.core.ingestion.pipeline.SourceRepo", source_repo)
-    monkeypatch.setattr("app.core.ingestion.pipeline.ArticleRepo", article_repo)
-    monkeypatch.setattr("app.core.ingestion.pipeline.canonicalize_url", lambda u: f"c:{u}")
-    monkeypatch.setattr("app.core.ingestion.pipeline.canonical_url_hash", lambda u: f"h:{u}")
-    monkeypatch.setattr("app.core.ingestion.pipeline.ai_relevance_score", lambda _item: 0.5)
-    monkeypatch.setattr("app.core.ingestion.pipeline.freshness_score", lambda _dt: 0.5)
-    monkeypatch.setattr("app.core.ingestion.pipeline.rank_score", lambda **_kwargs: 0.5)
+    mp = monkeypatch
+    for name in ("fetch_rss", "fetch_html_links", "fetch_html_links_with_metadata"):
+        mp.setattr(f"app.core.ingestion.pipeline.fetch.{name}", fetchers[name])
+    mp.setattr(
+        "app.core.ingestion.pipeline.html_links.fetch_html_article", fetchers["fetch_html_article"],
+    )
+    mp.setattr("app.core.ingestion.pipeline.cycle.load_sources", lambda _path: configs)
+    mp.setattr("app.core.ingestion.pipeline.cycle.create_all", lambda: None)
+    mp.setattr("app.core.ingestion.pipeline.cycle.SessionLocal", lambda: current)
+    mp.setattr("app.core.ingestion.pipeline.cycle.SourceRepo", source_repo)
+    mp.setattr("app.core.ingestion.pipeline.cycle.ArticleRepo", article_repo)
+    mp.setattr("app.core.ingestion.pipeline.html_links.canonicalize_url", lambda u: f"c:{u}")
+    mp.setattr("app.core.ingestion.pipeline.html_links.canonical_url_hash", lambda u: f"h:{u}")
+    mp.setattr("app.core.ingestion.pipeline.rss.canonicalize_url", lambda u: f"c:{u}")
+    mp.setattr("app.core.ingestion.pipeline.rss.canonical_url_hash", lambda u: f"h:{u}")
+    if "datetime" in patches:  # every module that calls datetime.now()
+        mp.setattr("app.core.ingestion.pipeline.cycle.datetime", patches["datetime"])
+        mp.setattr("app.core.ingestion.pipeline.replay.datetime", patches["datetime"])
+        mp.setattr("app.core.ingestion.pipeline.sources.datetime", patches["datetime"])
+        mp.setattr("app.core.ingestion.pipeline.weekly_hooks.datetime", patches["datetime"])
+    if "WeeklyAnalyticsRepo" in patches:
+        mp.setattr(
+            "app.core.ingestion.pipeline.weekly_hooks.WeeklyAnalyticsRepo",
+            patches["WeeklyAnalyticsRepo"],
+        )
+    mp.setattr("app.core.ingestion.pipeline.rows.ai_relevance_score", lambda _item: 0.5)
+    mp.setattr("app.core.ingestion.pipeline.rows.freshness_score", lambda _dt: 0.5)
+    mp.setattr("app.core.ingestion.pipeline.rows.rank_score", lambda **_kwargs: 0.5)
     return run_fetch_cycle(settings=settings or _settings(), logger=logger or _Logger())
 
 
@@ -194,9 +213,9 @@ def _inline_fetches(monkeypatch) -> tuple[list[str], list[int]]:
         order.append(config.id)
         return _rss_result([]) if config.type == "rss" else HtmlListPageResult(links=[])
 
-    monkeypatch.setattr("app.core.ingestion.pipeline._fetch_source_items", fetch)
-    monkeypatch.setattr("app.core.ingestion.pipeline.ThreadPoolExecutor", _Executor)
-    monkeypatch.setattr("app.core.ingestion.pipeline.as_completed", list)
+    monkeypatch.setattr("app.core.ingestion.pipeline.fetch._fetch_source_items", fetch)
+    monkeypatch.setattr("app.core.ingestion.pipeline.fetch.ThreadPoolExecutor", _Executor)
+    monkeypatch.setattr("app.core.ingestion.pipeline.fetch.as_completed", list)
     return order, workers
 
 

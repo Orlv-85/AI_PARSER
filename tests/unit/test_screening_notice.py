@@ -31,9 +31,9 @@ def test_missing_provider_pauses_with_exact_notice(tmp_path, monkeypatch, jev_en
     engine = create_engine("sqlite:///" + str(tmp_path / "notice.db"))
     Base.metadata.create_all(engine)
     sessions = sessionmaker(bind=engine, autoflush=False)
-    monkeypatch.setattr("app.core.ingestion.pipeline.create_all", lambda: None)
-    monkeypatch.setattr("app.core.ingestion.pipeline.SessionLocal", sessions)
-    monkeypatch.setattr("app.core.ingestion.pipeline.load_sources", lambda _path: [])
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.create_all", lambda: None)
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.SessionLocal", sessions)
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.load_sources", lambda _path: [])
     settings = Settings(
         _env_file=None,
         semantic_admission_enabled=True,
