@@ -24,7 +24,9 @@ When working in this repo, optimize for small, testable changes that preserve ex
 - `specs/<NNN>-<name>/` - feature specs (`spec.md`, `plan.md`, `tasks.md`) and `records/` (prompts, reviews, reports of that feature)
 - `.specify/` - Spec Kit: `templates/` is the format of new specs; `scripts/` and `memory/constitution.md`
   are Codex-era history, not current rules; no specs here
-- `docs/` - general docs and operator guides; `docs/backlog/` - backlog JSON; `docs/archive/` - old records
+- `docs/` - operator guides only (deploy, configuration, cli, troubleshooting, feature guides);
+  `docs/work/` - open process files (coordinator state, active prompts); `docs/backlog/` - backlog
+  JSON; `docs/archive/<YYYY-MM>/` - finished prompts, plans, reports, old states
 - `README.md` - setup, run, deploy, and operator commands
 
 ## Local Environment
@@ -135,7 +137,7 @@ When editing `sources.yaml`:
 ## Multi-Agent Workflow
 
 Codex multi-agent scripts (`scripts/run_multiagent.sh` and related; not in active use): see
-`codex_multi_agent_guide.md`, including its smoke tests.
+`docs/archive/2026-10/codex_multi_agent_guide.md`, including its smoke tests.
 
 ## Troubleshooting
 
@@ -166,6 +168,8 @@ in progress; once the feature ships it is history and is not kept current.
 
 - Save every prompt for another session to a file before giving it to the user, and link it.
 - Feature with a spec: `specs/<NNN>-<name>/records/prompt-<task>-<YYYY-MM-DD>.md`; reviews and
-  reports of that feature go to the same `records/`. Other prompts: `docs/prompt-<task>-<YYYY-MM-DD>.md`,
-  moved to `docs/archive/<YYYY-MM>/` when done. Never overwrite earlier prompts.
+  reports of that feature go to the same `records/`. Other prompts: `docs/work/prompt-<task>-<YYYY-MM-DD>.md`
+  (git-ignored while open), copied to `docs/archive/<YYYY-MM>/` in a docs PR when done. Plans and
+  reports without a spec go the same way (`docs/work/`, then `docs/archive/`). Nothing dated stays
+  in the root of `docs/`. Never overwrite earlier prompts.
 - Keep this rule in handoff artifacts so future sessions follow it.
