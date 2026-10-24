@@ -169,6 +169,20 @@ the Troubleshooting section of `README.md`.
       "cause": "publish_day did not read collection status, so it treated the partial stored day as ready to publish.",
       "fix": "publish_day now writes held_collection_paused without provider calls or replacing the previous digest. After a successful fetch, the digest job publishes held days in the last DAILY_CATCH_UP_DAYS (3) completed UTC days, oldest first, and runs their signals.",
       "verification": "tests/unit/test_daily_enrichment.py: test_paused_collection_holds_day_without_paid_calls, test_catch_up_publishes_held_days_oldest_first, test_catch_up_keeps_days_held_while_paused, test_catch_up_ignores_days_older_than_limit; tests/unit/test_cli_daily_publish.py: test_daily_publish_exits_two_for_held_collection; tests/unit/test_deepseek_digest.py: test_digest_job_held_skips_signals_and_exits_zero, test_digest_job_catch_up_runs_signals_for_each_published_day, test_fetch_job_runs_catch_up_only_after_success_with_recent_hold."
+    },
+    {
+      "id": "fail2ban-sshd-jail-sees-nothing",
+      "date": "2026-10-24",
+      "area": "prod server (fail2ban)",
+      "symptom": "After `apt-get install fail2ban` on the prod server (Ubuntu 24.04) the sshd jail reports `Total failed: 0` while /var/log/auth.log has hundreds of failed SSH logins.",
+      "evidence": [
+        "fail2ban-client status sshd: Journal matches _SYSTEMD_UNIT=sshd.service + _COMM=sshd",
+        "journalctl has no sshd failure lines on this server; /var/log/auth.log has them"
+      ],
+      "cause": "The Debian default (jail.d/defaults-debian.conf) sets backend = systemd and matches the sshd.service unit; on this server sshd runs as ssh.service and its lines reach only /var/log/auth.log.",
+      "fix": "/etc/fail2ban/jail.d/ai-news-sshd.local: [sshd] backend = auto, logpath = /var/log/auth.log; then fail2ban-client -t and systemctl restart fail2ban.",
+      "verification": "fail2ban-client status sshd shows File list: /var/log/auth.log. Bans not yet observed at the time of writing (the jail reads only new lines).",
+      "if_it_recurs": "Check `fail2ban-client status sshd` (File list vs Journal matches) and where sshd writes: `grep -c 'Invalid user' /var/log/auth.log` vs `journalctl -g 'Invalid user'`."
     }
   ]
 }
