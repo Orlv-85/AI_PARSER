@@ -19,3 +19,6 @@ logs/
 backups/
 .idea/
 *.iml
+
+# Open prompts for other sessions (AGENTS.md "Prompts For Other Sessions")
+docs/work/prompt-*.md

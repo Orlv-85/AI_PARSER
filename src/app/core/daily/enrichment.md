@@ -62,7 +62,7 @@ flowchart LR
 - 2026-10-22 (agent): nightly health requires a digest scope of at least 5,
   based on the observed scope of 11-100 on 2026-10-10..20 and 1 on the broken night.
 - 2026-10-24 (owner): the first summary request keeps every detail inside its quote (pilots 1-3,
-  `docs/report-summary-grounding-pilot-2026-10-24.md`); a stricter review gate was rejected because
+  `docs/archive/2026-10/report-summary-grounding-pilot-2026-10-24.md`); a stricter review gate was rejected because
   it held ~20% of the digest.
 
 ## Invariants

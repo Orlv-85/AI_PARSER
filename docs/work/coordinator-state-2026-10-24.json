@@ -1,13 +1,14 @@
 {
   "title": "Coordinator state for the next session",
   "created": "2026-10-24",
-  "supersedes": "docs/coordinator-state-2026-10-23.json (owner_rules there still apply; read them)",
+  "supersedes": "docs/archive/2026-10/coordinator-state-2026-10-23.json (owner_rules there still apply; read them)",
   "role": "Coordinator: plans, writes prompts, dispatches executors, reviews their PRs, merges, tags on the owner's yes, checks prod. Small test/doc/ops fixes itself.",
   "new_rules_2026_10_24": [
     "Executors: when no local session is open, the coordinator may start a background subagent itself (Agent tool, model sonnet, prompt from a saved file); verify its report against the diff and CI yourself (twice the executor wrongly said a CI failure was local-only: mypy no-any-return across modules, and check_code_docs needing Docs-Skip).",
     "Move-only refactor review: independent ast.get_source_segment compare of every top-level definition; tests/unit/test_monkeypatch_targets.py (guard) must pass with KNOWN_NO_READER empty; probe the guard with a no-effect patch if in doubt.",
     "On prod, `docker compose run app` without APP_IMAGE uses a stale local :latest (2026-03-15). Always `export APP_IMAGE=$(cat .last_deploy_image)` first (docs/deploy.md 'Article archive').",
     "Before tagging run `git fetch --tags` and take the next free number (v0.1.125 was tagged by another session).",
+    "Docs layout 2026-10-24: docs/ root holds operator guides only; open process files (this state, active prompts as docs/work/prompt-*.md, git-ignored) live in docs/work/; finished ones are copied to docs/archive/<YYYY-MM>/ in a docs PR (AGENTS.md).",
     "Owner decision 2026-10-24: very large modules (~800+ lines) are split even if the plan said leave; guard test makes it safe."
   ],
   "state": {

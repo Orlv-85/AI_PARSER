@@ -32,15 +32,21 @@ Specs in `specs/` are the history of how a feature got there.
 - [article-archive-todo.json](backlog/article-archive-todo.json) - off-site backups, full-text archive
 - [jev-novelty-second-opinion-todo.json](backlog/jev-novelty-second-opinion-todo.json) - Jev for New
 
+## Work in progress
+
+[work/](work/) - open process files: the coordinator state and, git-ignored, active prompts for
+other sessions (`work/prompt-<task>-<date>.md`).
+
 ## History
 
-Dated records (`prompt-<task>-<date>.md`, `*-review-*`, `*-results-*`, `*-report-*`,
-`*-checkpoint-*`) are history, not references:
+Dated records (prompts, plans, reports, reviews, old coordinator states) are history, not
+references. Nothing dated stays in the root of `docs/`:
 
 - records of a feature live next to its spec: `specs/<NNN>-<name>/records/`;
-- other records: `docs/prompt-<task>-<date>.md` while open, then `archive/<YYYY-MM>/`;
-- [archive/2026-10/](archive/2026-10/) - re-enrichment, semantic admission, cleanups, audits;
-  [archive/2026-10-10-12/](archive/2026-10-10-12/README.md) - session materials of Oct 10-12.
+- other records: `work/` while open, then `archive/<YYYY-MM>/`;
+- [archive/2026-10/](archive/2026-10/) - re-enrichment, semantic admission, cleanups, audits,
+  module split plans, summary pilots (Jev entailment, repair, grounding), the Codex multi-agent
+  guide; [archive/2026-10-10-12/](archive/2026-10-10-12/README.md) - session materials of Oct 10-12.
 
 Feature specs live in `specs/` (one root); `.specify/` holds the Spec Kit templates (format of new
 specs) and Codex-era tooling kept for history.

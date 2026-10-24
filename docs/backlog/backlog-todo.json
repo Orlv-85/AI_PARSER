@@ -81,6 +81,7 @@
     "Check the real DeepSeek bill for deepseek-v4-pro against the ledger (flash was ~4.5x below the ledger).",
     "Future publication dates: on 2026-10-23 two articles of raw-githubusercontent-com-alan-turing-institute-ai-rss-feed-5 have published_at 2026-10-31 (8 days ahead). Check whether the feed gives event dates or the parser misreads them; decide clamp/reject of future dates in ingestion.",
     "db_maintenance.sh size loop: above DB_MAX_SIZE_GB it lowers retention step by step, but pruned rows now move into the archive, so the DB does not shrink and the loop prunes down to 1 day. DB is 146 MB vs 5 GB (2026-10-23), years away; fix before the archive grows (count archive tables out, or stop the loop).",
-    "016 capture: timeouts on every host (ConnectTimeout/ReadTimeout) are not seen as an outage by the shared SourcePageDownloader, so they count as attempts; four such nights give up a document. Fix in the shared downloader if it happens."
+    "016 capture: timeouts on every host (ConnectTimeout/ReadTimeout) are not seen as an outage by the shared SourcePageDownloader, so they count as attempts; four such nights give up a document. Fix in the shared downloader if it happens.",
+    "Storage layout: storage modules without a doc owner (article_repo, source_repo, digest_repo, cleanup modules) get added to a feature doc when next changed; see docs/archive/2026-10/plan-storage-layout-2026-10-21.md."
   ]
 }
