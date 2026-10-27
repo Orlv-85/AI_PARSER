@@ -48,6 +48,8 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
     optimization_not_modified_sources = 0
     optimization_skipped_known_html_links = 0
     optimization_early_stop_hits = 0
+    examined_count = 0
+    sources_fetched = 0
     full_text_semaphore = (
         BoundedSemaphore(settings.rss_full_text_concurrency_limit)
         if settings.rss_full_text_concurrency_limit
@@ -125,6 +127,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
             if admission_state.paused:
                 break
             source_metrics = SourceMetrics(source_id=config.id, source_type=config.type)
+            sources_fetched += 1
             snapshot = _admission_snapshot(admission_state)
             fetch_result: FetchResult | None = None
             fetch_failed = False
@@ -154,6 +157,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                             error_count += errors
                             fetch_result = fetched.get(idx)
                             fetch_failed = fetch_result is None
+                            source_metrics.errors += int(fetch_failed)
                             if fetch_result is not None:
                                 fresh_metrics = SourceMetrics(
                                     source_id=config.id, source_type=config.type,
@@ -170,6 +174,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                                     admission_state=admission_state,
                                 )
                                 source_metrics.fetched_items += fresh_metrics.fetched_items
+                                source_metrics.examined_items += fresh_metrics.examined_items
                                 source_metrics.new_items += fresh_metrics.new_items
                                 source_metrics.duplicate_items += fresh_metrics.duplicate_items
                                 source_metrics.skipped_known_items += (
@@ -197,6 +202,13 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                                 interval=config.fetch_interval_minutes,
                                 outcome="fetch_failure", complete=True, now=datetime.now(UTC),
                             )
+                        source_metrics.errors = 1
+                        _log_source_metrics(
+                            logger=logger,
+                            run_id=run_id,
+                            metrics=source_metrics,
+                            enabled=settings.fetch_emit_source_metrics,
+                        )
                         continue
                     with session.begin_nested():
                         _process_source_result(
@@ -242,6 +254,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
             run_semantic_unresolved += source_metrics.semantic_unresolved
             run_semantic_cache_hits += source_metrics.semantic_cache_hits
             fetched_count += source_metrics.fetched_items
+            examined_count += source_metrics.examined_items
             if isinstance(session, Session):
                 outcome = (
                     "fetch_failure" if fetch_failed else "persist_failure"
@@ -297,6 +310,8 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
         {
             "run_id": run_id,
             "fetched": fetched_count,
+            "examined": examined_count,
+            "sources_fetched": sources_fetched,
             "new": new_count,
             "duplicates": duplicate_count,
             "errors": error_count,
@@ -319,4 +334,6 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
         semantic_unresolved=run_semantic_unresolved,
         semantic_cache_hits=run_semantic_cache_hits,
         screening_paused=int(admission_state.paused),
+        examined=examined_count,
+        sources_fetched=sources_fetched,
     )

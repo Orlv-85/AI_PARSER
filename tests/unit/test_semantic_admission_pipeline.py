@@ -814,3 +814,16 @@ def test_cycle_cache_hit_after_rolled_back_assessment_keeps_notice(monkeypatch, 
     assert (result.errors, result.new, result.screening_paused) == (1, 1, 0)
     assert len(scenario.requests) == 1
     assert scenario.rows(CollectionStatus)[0].paused
+
+
+def test_source_count_stays_enabled_count_and_sources_fetched_stops_at_pause(
+    monkeypatch, tmp_path,
+):
+    scenario = Scenario(tmp_path, monkeypatch, "rss", False)
+    scenario.configs.append(SourceConfig(
+        id="s2", name="s2", type="rss", url="https://other.example/feed",
+    ))
+    scenario.fail_at = 2
+    summary = scenario.run()
+    assert scenario.fetches == ["s1"]
+    assert (summary.screening_paused, summary.source_count, summary.sources_fetched) == (1, 2, 1)

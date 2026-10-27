@@ -31,6 +31,7 @@ def _log_source_metrics(
             "source_id": metrics.source_id,
             "source_type": metrics.source_type,
             "fetched_items": metrics.fetched_items,
+            "examined_items": metrics.examined_items,
             "new_items": metrics.new_items,
             "duplicate_items": metrics.duplicate_items,
             "skipped_known_items": metrics.skipped_known_items,
@@ -85,6 +86,7 @@ def _process_source_result(
             quality_flags=quality_flags,
             admission_state=admission_state,
         )
+        metrics.examined_items = metrics.fetched_items
         metrics.acquisition_stopped = bool(admission_state and admission_state.paused)
         metrics.coverage_complete = not quality_flags
         return
@@ -107,4 +109,5 @@ def _process_source_result(
         settings=settings,
         relevance_scorer=relevance_scorer,
         admission_state=admission_state,
+        metrics=metrics,
     )
