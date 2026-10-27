@@ -307,3 +307,15 @@ def test_robots_redirect_to_private_address_is_never_fetched(tmp_path):
 def test_non_public_urls_and_credentials_are_not_followed(url):
     with pytest.raises(ValueError):
         validate_source_url(url)
+
+
+@pytest.mark.parametrize(("agent", "blocked"), [("ai-news-collector", True), ("Googlebot", False)])
+def test_robots_matches_the_bot_token(tmp_path, agent, blocked):
+    def transport(request):
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text=f"User-agent: {agent}\nDisallow: /\n")
+        return httpx.Response(200, text="<html></html>")
+
+    cache = PageCache(tmp_path / "run")
+    _fetch(cache, transport, ["https://example.com/a"], respect_robots=True)
+    assert (cache.status(["https://example.com/a"])["states"] == {"blocked": 1}) is blocked

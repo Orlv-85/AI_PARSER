@@ -42,6 +42,13 @@ def ensure_src_path() -> None:
         sys.path.insert(0, src_root)
 
 
+def bot_user_agent() -> str:
+    ensure_src_path()
+    from app.ingest.fetcher import DEFAULT_USER_AGENT
+
+    return DEFAULT_USER_AGENT
+
+
 def db_ids_arg(value: str | None) -> list[int]:
     if not value:
         return []
@@ -268,7 +275,7 @@ def cmd_probe(args: argparse.Namespace) -> int:
 
     ids: list[str] = [x.strip() for x in args.ids.split(",") if x.strip()] if args.ids else ids_in_section(text, args.section)
 
-    client = httpx.Client(timeout=args.timeout, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0"})
+    client = httpx.Client(timeout=args.timeout, follow_redirects=True, headers={"User-Agent": bot_user_agent()})
     try:
         for source_id in ids:
             src = s_map.get(source_id)
@@ -375,7 +382,7 @@ def cmd_suggest_patch(args: argparse.Namespace) -> int:
     s_map = source_map(data)
     ids = [x.strip() for x in args.ids.split(",") if x.strip()] if args.ids else ids_in_section(text, args.section)
 
-    client = httpx.Client(timeout=args.timeout, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0"})
+    client = httpx.Client(timeout=args.timeout, follow_redirects=True, headers={"User-Agent": bot_user_agent()})
     try:
         for source_id in ids:
             src = s_map.get(source_id)
@@ -454,7 +461,7 @@ def cmd_apply_suggested(args: argparse.Namespace) -> int:
 
     updated_text = text
     applied = 0
-    client = httpx.Client(timeout=args.timeout, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0"})
+    client = httpx.Client(timeout=args.timeout, follow_redirects=True, headers={"User-Agent": bot_user_agent()})
     try:
         for source_id in ids:
             # Recompute spans each iteration because line ranges shift after edits.

@@ -1,3 +1,4 @@
+import importlib.metadata
 import json
 import time
 from dataclasses import dataclass, field
@@ -5,11 +6,18 @@ from typing import Literal
 
 import httpx
 
-DEFAULT_USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/122.0.0.0 Safari/537.36"
-)
+BOT_TOKEN = "ai-news-collector"
+BOT_INFO_URL = "https://5kzt.l.time4vps.cloud/"
+
+
+def _bot_version() -> str:
+    try:
+        return importlib.metadata.version("ai-news-collector")
+    except importlib.metadata.PackageNotFoundError:
+        return "0"
+
+
+DEFAULT_USER_AGENT = f"{BOT_TOKEN}/{_bot_version()} (+{BOT_INFO_URL})"
 
 
 # pylint: disable=too-many-instance-attributes

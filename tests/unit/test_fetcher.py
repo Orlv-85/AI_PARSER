@@ -4,7 +4,9 @@ from typing import Any, cast
 import httpx
 import pytest
 
-from app.ingest.fetcher import Fetcher
+from app.core.sources.review import source_http_client
+from app.ingest.fetcher import BOT_TOKEN, DEFAULT_USER_AGENT, Fetcher
+from app.storage.article_evidence_cache import make_http_client
 
 
 class _Response:
@@ -380,3 +382,17 @@ def test_context_manager_closes_client(monkeypatch) -> None:
     assert result.text == "ok"
     assert len(factory.instances) == 1
     assert factory.instances[0].close_calls == 1
+
+
+def test_every_client_sends_the_bot_user_agent() -> None:
+    assert DEFAULT_USER_AGENT.startswith(BOT_TOKEN + "/")
+    assert "Mozilla" not in DEFAULT_USER_AGENT
+    fetcher = Fetcher()
+    try:
+        assert fetcher._get_client().headers["User-Agent"] == DEFAULT_USER_AGENT  # pylint: disable=protected-access
+    finally:
+        fetcher.close()
+    probe = source_http_client()
+    probe.close()
+    assert probe.headers["User-Agent"] == DEFAULT_USER_AGENT
+    assert make_http_client().headers["User-Agent"] == DEFAULT_USER_AGENT
