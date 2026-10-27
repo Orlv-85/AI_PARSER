@@ -291,6 +291,10 @@ function. Each rule lists the tests that check it.
   replayed as above. Tests: `test_stale_pending_candidate_is_settled_without_screening`,
   `test_recent_and_undated_pending_candidates_are_still_replayed`,
   `test_stale_pending_does_not_use_the_replay_limit`.
+- A row settled as `stale_pending` is not reopened by the same feed listing the item again
+  (`upsert_pending` leaves it settled); an item that is still screened gets its decision as usual.
+  Without this a feed with a long archive (OpenAI) reopened its old rows every night. Tests:
+  `test_settled_stale_pending_is_not_reopened_by_the_feed`.
 - HTML: each unknown link gets a pending placeholder before download; an exclusion, a decision or a
   known hash settles it; a temporary download or parse failure keeps it pending. Tests:
   `test_html_article_failure_retains_retry_and_continues`, `test_confirmed_html_exclusion_settles_before_304`.
@@ -358,6 +362,7 @@ function. Each rule lists the tests that check it.
 | Screening outage pauses collection, no keyword fallback | an outage is "screening unavailable", not an article decision (admission spec); a keyword score must not pass for a semantic check, the ledger replays instead (admission prompt 2026-10-10, `docs/archive/`) |
 | Durable pending ledger, replayed before the fresh fetch | unchecked candidates must not be lost; after a 304 or list rotation the feed no longer shows them (`docs/configuration.md`) |
 | Stale pending candidates are settled without screening | a feed such as OpenAI lists its archive since 2015; replaying 50 old pending rows per run was a paid Jev call each for articles no digest (built by publication day) will show, and delayed fresh ones; decided 2026-10-23 (agent) |
+| `upsert_pending` does not reopen a `stale_pending` row | the fresh feed pass upserts every unknown listed item before screening, so the archive rows were reopened nightly (attempts 17 by 2026-10-27); smallest guard, no age check in the fresh path; decided 2026-10-27 (agent) |
 | Feed description is admission evidence only when there is no content | decided 2026-10-23 (agent): without it Jev decides on the title alone (openai.com answers 403; 23 of 29 OpenAI candidates unresolved); the summary is dropped elsewhere because a stored summary may be generated, but at ingestion it is the publisher's feed text. Cached decisions are kept so the feed archive is not re-screened |
 | Cache rejects and unresolved by evidence, model, policy, prompt | the same candidate is not paid for again while nothing changed (admission spec) |
 | Notice clears only after a fresh successful assessment | a cache-only or empty run does not prove the provider works (admission spec) |

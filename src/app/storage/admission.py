@@ -84,6 +84,12 @@ def upsert_pending(
     else:
         if not force_pending and row.provider_status == "ok" and row.decision is not None:
             return
+        if (
+            not force_pending
+            and row.provider_status == "settled"
+            and row.reason == "stale_pending"
+        ):
+            return
         row.source_id = source_id
         row.payload = json.dumps({"candidate": payload}, ensure_ascii=True)
         row.decision = None

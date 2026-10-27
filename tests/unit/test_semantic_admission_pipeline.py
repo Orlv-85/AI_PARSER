@@ -710,6 +710,25 @@ def test_stale_pending_does_not_use_the_replay_limit(monkeypatch, tmp_path):
     reasons = [r.reason for r in scenario.rows(AdmissionDecision)]
     assert reasons.count("stale_pending") == PENDING_REPLAY_LIMIT + 2
 
+def test_settled_stale_pending_is_not_reopened_by_the_feed(monkeypatch, tmp_path):
+    scenario = Scenario(tmp_path, monkeypatch, "rss", False)
+    scenario.items = _aged_items([1, PENDING_REPLAY_MAX_AGE_DAYS + 1])
+    scenario.fail_at = 2
+    assert scenario.run().screening_paused == 1
+    scenario.fail_at = None
+    scenario.items, kept = [], scenario.items
+    scenario.not_modified = True
+    scenario.run()
+    assert [r.reason for r in scenario.rows(AdmissionDecision)].count("stale_pending") == 1
+    scenario.items, scenario.not_modified = kept, False
+    scenario.settings.rss_known_streak_stop = 1
+    scenario.requests.clear()
+    scenario.run()
+    assert not scenario.requests
+    assert not _pending(scenario)
+    assert [r.reason for r in scenario.rows(AdmissionDecision)].count("stale_pending") == 1
+
+
 def test_rss_records_known_items_as_weekly_observations(monkeypatch, tmp_path):
     scenario = Scenario(tmp_path, monkeypatch, "rss", False)
     known = scenario.items[0]
