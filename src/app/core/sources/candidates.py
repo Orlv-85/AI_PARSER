@@ -7,6 +7,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from app.core.canonicalize import canonicalize_url
+
 _MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\((https?://[^\s)]+)\)", re.IGNORECASE)
 
 _PLAIN_URL_RE = re.compile(r"https?://[^\s<>\])]+", re.IGNORECASE)
@@ -126,6 +128,14 @@ def normalize_candidate_url(raw_url: str) -> str:
     ]
     query = urlencode(filtered_query, doseq=True)
     return urlunsplit((scheme, netloc, path, query, ""))
+
+def candidate_url_key(raw_url: str) -> str:
+    """Key for "is this source already known": the pipeline's canonical URL on top of the
+    onboarding cleanup, https, no ``www.``. Not stored; ``normalized_url`` stays unchanged."""
+    parts = urlsplit(canonicalize_url(normalize_candidate_url(raw_url)))
+    host = (parts.hostname or "").removeprefix("www.")
+    netloc = host if parts.port in {None, 80, 443} else f"{host}:{parts.port}"
+    return str(urlunsplit(("https", netloc, parts.path, parts.query, "")))
 
 def parse_source_candidates(raw_text: str) -> tuple[list[NormalizedSourceCandidate], int, int]:
     records = _json_source_records(raw_text)

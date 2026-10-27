@@ -10,6 +10,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import Settings, get_settings
+from app.core.canonicalize import canonicalize_url
 from app.core.sources.onboarding import import_source_candidates
 from app.core.sources.review import SourceProbe
 from app.storage.models_sql import Base, Source, SourceCandidate
@@ -339,3 +340,27 @@ def test_admin_shows_upload_latest_batch_and_bulk_connection(
     assert "loadLatestSourceBatch();" in text
     assert 'id="onboarding-batch-id" type="number" min="1"' in text
     assert "source_review" in text
+
+
+def test_url_key_agrees_with_the_pipeline_canonical_url() -> None:
+    # The same page, spelled the way the pipeline canonicalizes it, must give one key.
+    spellings = [
+        "https://example.com/blog?a=1&b=2",
+        "http://www.Example.com/blog/?b=2&a=1&spm=nav&yclid=7",
+        "https://example.com:443//blog/?utm_source=x&ref_src=y&a=1&b=2#top",
+    ]
+    assert len({source_intake._url_key(url) for url in spellings}) == 1
+    assert source_intake._url_key(spellings[1]) == canonicalize_url(spellings[0])
+
+
+def test_registry_duplicate_uses_the_pipeline_canonical_key(intake, monkeypatch) -> None:
+    with intake.session_factory() as session:
+        session.add(Source(source_key="known", name="Known", type="html",
+                           url="https://known.example/blog?b=2&a=1&spm=x", enabled=True,
+                           fetch_interval_minutes=30, source_weight=1))
+        session.commit()
+    batch = _batch(intake, ["http://www.known.example/blog/?a=1&b=2"])
+    monkeypatch.setattr(source_intake.SourceReviewer, "review",
+                        lambda *_a: pytest.fail("No AI calls"))
+    intake._run(batch)
+    assert _reviews(intake, batch)[0][1] == "duplicate"

@@ -12,7 +12,7 @@ import httpx
 from lxml import html as lxml_html
 
 from app.config.settings import Settings
-from app.core.sources.candidates import normalize_candidate_url
+from app.core.sources.candidates import candidate_url_key
 from app.ingest.fetcher import DEFAULT_USER_AGENT
 
 _MAX_RESPONSE_BYTES = 1_000_000
@@ -112,7 +112,7 @@ def probe_source(client: httpx.Client, url: str) -> SourceProbe:
         link = urljoin(final_url, node.get("href", ""))
         title = " ".join(node.text_content().split())
         if (not title or urlsplit(link).scheme not in {"http", "https"}
-                or normalize_candidate_url(link) == normalize_candidate_url(final_url)
+                or candidate_url_key(link) == candidate_url_key(final_url)
                 or link in seen):
             continue
         seen.add(link)

@@ -108,14 +108,21 @@ check it.
   (`validate_rss_candidate`): the feed is fetched with the ingestion `Fetcher` and
   `fetch_rss_with_metadata`; at least one entry: `validated` with `entry_count`, none: `failed`.
   HTML (`validate_html_candidate`): the page is fetched, links are extracted with link selector `a`
-  and no list selector (links in `nav`/`footer` and URLs excluded by ingestion are skipped); at
-  least one link: `validated` with `link_count` and a few `sample_links`, none: `warning`. Any page
-  with one such link passes; the 003 plan asks for article links scored for quality (code differs:
-  `_extract_links_with_ingest`, validation.py:183, see PR #75 review). Another type: `failed`. Tests:
+  and no list selector (links in `nav`/`footer` and URLs excluded by ingestion are skipped). Fewer
+  than `HTML_MIN_LINKS` links: `warning`. Otherwise the first `HTML_SAMPLE_LINKS` links are fetched
+  (plain HTTP, no model) and each must pass `html_exclusion_reason` (the ingestion article check);
+  all pass: `validated` with `link_count` and a few `sample_links`; a sampled link that fails the
+  check or cannot be fetched: `warning` naming that link (a manual override stays possible).
+  The check does not call a paid model, so it adds no cost; it adds at most `HTML_SAMPLE_LINKS`
+  page fetches per HTML candidate. Another type: `failed`. Tests:
   `test_validate_rss_candidate_marks_candidate_valid_when_feed_has_entries`,
   `test_validate_rss_candidate_fails_when_feed_has_no_entries`,
   `test_validate_html_candidate_marks_candidate_valid_when_article_links_are_extractable`,
   `test_validate_html_candidate_warns_when_page_loads_but_has_no_article_links`,
+  `test_validate_html_candidate_checks_several_links_and_all_must_pass`,
+  `test_validate_html_candidate_warns_when_a_sampled_link_is_not_an_article`,
+  `test_validate_html_candidate_warns_when_a_sampled_link_cannot_be_fetched`,
+  `test_validate_html_candidate_warns_when_listing_has_too_few_links`,
   `test_run_source_validation_infers_unknown_candidate_type_and_records_result`,
   `test_run_source_validation_returns_failed_result_for_unsupported_candidate_type`,
   `test_run_source_validation_executes_html_path_and_batch_wrapper`,
@@ -151,12 +158,15 @@ check it.
   `test_upload_api_returns_immediately_health_and_progress_remain_available`,
   `test_worker_failure_does_not_report_success_and_bad_details_are_safe`,
   `test_background_reviews_commit_results_cache_repeats_and_bulk_connect`.
-- Registry duplicates: URLs are compared by `_url_key` (normalized, https, no `www.`). A candidate
+- Registry duplicates: URLs are compared by `_url_key` (`candidate_url_key`): `normalize_candidate_url`, then the pipeline's
+  `canonicalize_url` (sorted query, `spm`/`yclid` also dropped), https, no `www.`. A candidate
   whose key matches any `sources` row (enabled or not) or an earlier draft of the batch gets
   `warning`, decision `duplicate` and status `duplicate`, without network or model calls; so does a
   candidate whose probe redirects to an existing source. Tests:
   `test_existing_urls_and_same_host_families_never_use_models`,
-  `test_failures_and_redirect_duplicates_stay_out_of_approval`; the earlier-draft case: no test.
+  `test_failures_and_redirect_duplicates_stay_out_of_approval`,
+  `test_url_key_agrees_with_the_pipeline_canonical_url`, `test_registry_duplicate_uses_the_pipeline_canonical_key`;
+  the earlier-draft case: no test.
 - Probe (`probe_source`): reads only the candidate URL, public addresses only on every hop
   (`_ensure_public_url`: http/https, no credentials, every resolved address global), redirects
   followed by hand up to the loop bound in `_read_source`, body capped by `_MAX_RESPONSE_BYTES`,
@@ -313,6 +323,8 @@ check it.
 | Exact duplicates by normalized URL, unique column | duplicate sources add fetch cost and noise (003 US2, FR-005) |
 | Overlaps are advisory groups, never automatic rejects | heuristic false positives (003 plan, risk 2); one host can hold distinct sections (011) |
 | HTML page without links is `warning`, not `failed` | bot protection and unstable sites; manual override kept (003 plan, risk 3) |
+| HTML candidate is validated by `HTML_SAMPLE_LINKS` (3) article pages, not one | a listing whose first link works could pass with non-article rest; three is a few fetches yet more than a lucky link (decided 2026-10-28, agent) |
+| `_url_key` runs `canonicalize_url` after `normalize_candidate_url`; stored `normalized_url` is not changed | onboarding and the pipeline must agree on "same URL"; changing stored `normalized_url` would break its unique column and old rows (decided 2026-10-28, agent) |
 | JSON import reads only each record's `url` | research reports carried evidence article links that became candidates (011, PR #8) |
 | Check runs in one background job, commits per candidate | health stays responsive and work is not repeated on a small VPS (011) |
 | Probe reads only the listing page, size and redirect bounds, public addresses only | no archive crawling; no requests into the private network (011, PR #8) |
@@ -398,7 +410,7 @@ scripts/sources_onboarding_helper.py db-bootstrap | db-review | db-validate | db
 
 | Change | Place | Also |
 | --- | --- | --- |
-| URL normalization, tracking parameters | `normalize_candidate_url` | `_url_key` in `web/source_intake.py` builds on it; the pipeline uses `canonicalize_url` separately |
+| URL normalization, tracking parameters | `normalize_candidate_url` | `candidate_url_key` (used by `_url_key` in `web/source_intake.py` and by the probe self-link check) applies `canonicalize_url` on top of it (one key with the pipeline); the stored `normalized_url` stays `normalize_candidate_url` output |
 | Overlap rules | `_overlap_reason`, `_TOPIC_SEGMENTS`, `_ROOT_SEGMENTS`, `_REVIEW_REASON_PRIORITIES` | tests in `test_source_onboarding_dedupe.py` |
 | JSON limits | `_json_source_records` | the size hint in `web/index.html`, the check in `web/static/admin/sources.js` |
 | Probe bounds, evidence brief | `_read_source`, `_MAX_RESPONSE_BYTES`, `SourceProbe.brief` | bump `_PROMPT_VERSION` when the brief changes |
