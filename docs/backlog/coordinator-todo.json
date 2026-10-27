@@ -15,27 +15,30 @@
     },
     {
       "id": "ARCHIVE-week",
-      "title": "`ai-news archive status` (with APP_IMAGE): coverage_pct >= 90 over 7 nights (SC-002), gave_up counts, top hosts without text; find why the archive pending count stays at 4014 since 2026-10-24",
+      "title": "`ai-news archive status` (with APP_IMAGE): coverage_pct >= 90 over 7 nights (SC-002), gave_up counts (22 openai.com documents fail with http_403 and are expected to give up), top hosts without text",
       "due": "2026-10-30",
       "priority": "P1",
       "status": "todo",
-      "source": "specs/016-article-archive"
+      "source": "specs/016-article-archive",
+      "note": "The 4014 pending archive documents are the old articles of the 2026-10-24 seed (capture --all --no-download); only documents first seen within ARCHIVE_LOOKBACK_DAYS are due, so they stay pending by design. Decided 2026-10-27 (agent): no one-off download of them."
     },
     {
       "id": "DB-SIZE-LOOP",
       "title": "scripts/db_maintenance.sh size loop: above DB_MAX_SIZE_GB it lowers retention step by step, but pruned rows now move into the archive, so the DB does not shrink and the loop may prune far more than needed",
       "priority": "P1",
-      "status": "todo",
-      "executor": "background agent (Sonnet), own PR",
-      "source": "backlog-todo.json small_followups"
+      "status": "done",
+      "source": "backlog-todo.json small_followups",
+      "done": "2026-10-27",
+      "result": "PR #120 (v0.1.130): the size loop stops when a prune does not reduce the DB size. Prod DB 179 MB of the 5 GB limit; the loop has never fired."
     },
     {
       "id": "ARCHIVE-TIMEOUTS",
       "title": "016 capture: timeouts on every host (ConnectTimeout/ReadTimeout) are not seen as an outage by the shared SourcePageDownloader, so they count as attempts; a few such nights make articles give up for good",
       "priority": "P1",
-      "status": "todo",
-      "executor": "background agent (Sonnet), own PR",
-      "source": "backlog-todo.json small_followups"
+      "status": "done",
+      "source": "backlog-todo.json small_followups",
+      "done": "2026-10-27",
+      "result": "PR #118 (v0.1.130): httpx timeouts count toward the downloader outage (OUTAGE_HOSTS = 10) like ConnectError, also for daily-publish."
     },
     {
       "id": "F1",
@@ -48,26 +51,10 @@
       "id": "FUTURE-DATES",
       "title": "Articles with a publication date in the future (two alan-turing-institute ai-rss-feed-5 items dated 2026-10-31 on 2026-10-23). Proposal: store the collection time instead of a future date. Reader-visible",
       "priority": "P2",
-      "status": "waiting_owner",
-      "question": "Replace a future publication date with the collection time? (recommended: yes)",
-      "source": "backlog-todo.json small_followups"
-    },
-    {
-      "id": "BRIEF-1014",
-      "title": "The 2026-10-14 brief is stored as invalid (quote_not_found, sentence_count); regenerating needs deleting that row on prod",
-      "priority": "P3",
-      "status": "waiting_owner",
-      "question": "Leave it as is? (recommended: yes, the day is old)",
-      "source": "backlog-todo.json small_followups"
-    },
-    {
-      "id": "BILLS",
-      "title": "Compare the real DeepSeek (deepseek-v4-pro) and Jev bills with the ledger (flash was about 4.5x below the ledger)",
-      "due": "2026-10-31",
-      "priority": "P2",
-      "status": "waiting_owner",
-      "question": "Owner checks the provider bills; coordinator gives the ledger totals",
-      "source": "backlog-todo.json small_followups; carried_unverified"
+      "status": "done",
+      "source": "backlog-todo.json small_followups",
+      "done": "2026-10-27",
+      "result": "PR #119 (v0.1.130): a publication date more than FUTURE_DATE_TOLERANCE (24 h) ahead becomes the collection time; the original is kept in date_provenance. Owner 2026-10-27: the 45 stored articles with published_at > discovered_at + 24 h are not changed."
     },
     {
       "id": "FIREWALL",
