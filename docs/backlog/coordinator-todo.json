@@ -1,0 +1,145 @@
+{
+  "title": "Coordinator todo: checks, fixes and open decisions",
+  "created": "2026-10-27",
+  "updated": "2026-10-27",
+  "status": "active",
+  "how_to_use": "The coordinator keeps this list current (docs PR). Product ideas live in backlog-todo.json, agent tooling in tooling-todo.json; items here may point to them. Statuses: todo, waiting_owner, backlog, deferred, done. Done items stay one week, then are removed.",
+  "items": [
+    {
+      "id": "PENDING-check",
+      "title": "After the v0.1.129 nightly fetch: admission_decisions pending falls from 516 to about 70; the 445 openai_news rows are settled as stale_pending and their attempts stop growing; nightly fetch, digest and archive green",
+      "due": "2026-10-28",
+      "priority": "P1",
+      "status": "todo",
+      "source": "PR #116"
+    },
+    {
+      "id": "ARCHIVE-week",
+      "title": "`ai-news archive status` (with APP_IMAGE): coverage_pct >= 90 over 7 nights (SC-002), gave_up counts, top hosts without text; find why the archive pending count stays at 4014 since 2026-10-24",
+      "due": "2026-10-30",
+      "priority": "P1",
+      "status": "todo",
+      "source": "specs/016-article-archive"
+    },
+    {
+      "id": "DB-SIZE-LOOP",
+      "title": "scripts/db_maintenance.sh size loop: above DB_MAX_SIZE_GB it lowers retention step by step, but pruned rows now move into the archive, so the DB does not shrink and the loop may prune far more than needed",
+      "priority": "P1",
+      "status": "todo",
+      "executor": "background agent (Sonnet), own PR",
+      "source": "backlog-todo.json small_followups"
+    },
+    {
+      "id": "ARCHIVE-TIMEOUTS",
+      "title": "016 capture: timeouts on every host (ConnectTimeout/ReadTimeout) are not seen as an outage by the shared SourcePageDownloader, so they count as attempts; a few such nights make articles give up for good",
+      "priority": "P1",
+      "status": "todo",
+      "executor": "background agent (Sonnet), own PR",
+      "source": "backlog-todo.json small_followups"
+    },
+    {
+      "id": "F1",
+      "title": "Pipeline findings: 'fetched' counts; missing source_fetch_finished on a failed fetch with admission off; FetchSummary.source_count after a pause; fetch_failure treated as complete coverage",
+      "priority": "P2",
+      "status": "todo",
+      "executor": "background agent (Sonnet), own PR"
+    },
+    {
+      "id": "FUTURE-DATES",
+      "title": "Articles with a publication date in the future (two alan-turing-institute ai-rss-feed-5 items dated 2026-10-31 on 2026-10-23). Proposal: store the collection time instead of a future date. Reader-visible",
+      "priority": "P2",
+      "status": "waiting_owner",
+      "question": "Replace a future publication date with the collection time? (recommended: yes)",
+      "source": "backlog-todo.json small_followups"
+    },
+    {
+      "id": "BRIEF-1014",
+      "title": "The 2026-10-14 brief is stored as invalid (quote_not_found, sentence_count); regenerating needs deleting that row on prod",
+      "priority": "P3",
+      "status": "waiting_owner",
+      "question": "Leave it as is? (recommended: yes, the day is old)",
+      "source": "backlog-todo.json small_followups"
+    },
+    {
+      "id": "BILLS",
+      "title": "Compare the real DeepSeek (deepseek-v4-pro) and Jev bills with the ledger (flash was about 4.5x below the ledger)",
+      "due": "2026-10-31",
+      "priority": "P2",
+      "status": "waiting_owner",
+      "question": "Owner checks the provider bills; coordinator gives the ledger totals",
+      "source": "backlog-todo.json small_followups; carried_unverified"
+    },
+    {
+      "id": "FIREWALL",
+      "title": "Firewall (SSH runbook phase 6, rules listed, not applied): allow only 22, 80, 443 and the Amnezia UDP ports 33488 and 33218; test the VPN before enabling",
+      "priority": "P2",
+      "status": "backlog",
+      "needs": "owner yes (prod write)",
+      "source": "docs/archive/2026-10/plan-ssh-deploy-user-2026-10-24.md"
+    },
+    {
+      "id": "UA",
+      "title": "Fetcher and archive DEFAULT_USER_AGENT imitates a browser; decide an honest bot user agent (site policies, legal)",
+      "priority": "P3",
+      "status": "backlog",
+      "needs": "owner decision"
+    },
+    {
+      "id": "S-onb",
+      "title": "Source onboarding: an HTML candidate is validated by a single link; three URL normalizations (normalize_candidate_url, _url_key, canonicalize_url)",
+      "priority": "P3",
+      "status": "backlog"
+    },
+    {
+      "id": "ATTRIBUTION",
+      "title": "007: single-source posts can be attributed to the hosting site ('According to Hugging Face, IBM released...', 2026-10-15); revisit if it recurs",
+      "priority": "P3",
+      "status": "backlog",
+      "source": "backlog-todo.json small_followups"
+    },
+    {
+      "id": "STORAGE-DOCS",
+      "title": "Storage modules without a doc owner (article_repo, source_repo, digest_repo, cleanup modules) join a feature doc when next changed",
+      "priority": "P3",
+      "status": "backlog",
+      "source": "docs/archive/2026-10/plan-storage-layout-2026-10-21.md"
+    },
+    {
+      "id": "BACKLOG-STATUS",
+      "title": "Refresh stale statuses: backlog-todo.json B3 (phases 1-4 live, phase 5 only on owner request) and article-archive-todo.json tasks A0, A1, A3 (done by spec 016), A2 (partly: 7000-document seed)",
+      "priority": "P3",
+      "status": "todo",
+      "executor": "DeepSeek docs PR"
+    },
+    {
+      "id": "B2",
+      "title": "Weekly and monthly analytics on the 006 data (backlog-todo.json B2)",
+      "status": "deferred",
+      "decided": "Owner 2026-10-24: not now, smaller items first"
+    },
+    {
+      "id": "T1",
+      "title": "Spec pipeline tester -> coder -> reviewer (tooling-todo.json T1)",
+      "status": "deferred",
+      "decided": "Owner 2026-10-24: later"
+    },
+    {
+      "id": "DEPLOY-127",
+      "title": "v0.1.126-v0.1.128 deploys green; nightly fetch, digest and archive green on 2026-10-25..27 (digests 24-26 Oct: 16, 21, 84 articles)",
+      "status": "done",
+      "done": "2026-10-27"
+    },
+    {
+      "id": "SSH-check",
+      "title": "nightly-health and db-maintenance green by key on 2026-10-25..27; no password logins since 2026-10-24; fail2ban banned 2 IPs (243 failures); owner changed the root password; SERVER_PASSWORD removed from GitHub and the local .env",
+      "status": "done",
+      "done": "2026-10-27"
+    },
+    {
+      "id": "OPENAI-check",
+      "title": "New candidates since 2026-10-24: openai_news unresolved 1 of 10 (was 79%), TLDR 0 of 36 (was 19%), all sources 1 of 457; 763 stale rows settled; the 445 rows reopened every night led to PR #116 (v0.1.129)",
+      "status": "done",
+      "done": "2026-10-27"
+    }
+  ]
+}
