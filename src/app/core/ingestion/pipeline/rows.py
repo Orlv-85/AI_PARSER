@@ -1,6 +1,6 @@
 """Candidate payloads and article row building."""
 import json
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from hashlib import sha256
 from typing import Any, cast
 
@@ -16,12 +16,24 @@ from app.ingest.page_filter import (
 )
 from app.storage.article_repo import ArticleRepo
 
+# A publication time further ahead than this is not a timezone skew; it is replaced.
+FUTURE_DATE_TOLERANCE = timedelta(hours=24)
+
+
+def _clamp_future(value: datetime | None, now: datetime | None = None) -> datetime | None:
+    """Return the collection time for a date beyond `FUTURE_DATE_TOLERANCE` ahead."""
+    if value is None:
+        return None
+    now = now or datetime.now(UTC)
+    aware = value if value.tzinfo else value.replace(tzinfo=UTC)
+    return now if aware - now > FUTURE_DATE_TOLERANCE else value
+
 
 def _candidate_payload(
     item: object, config: SourceConfig, canonical_url: str | None = None,
 ) -> dict[str, object]:
-    published = getattr(item, "published_at", None)
-    evidence_at = getattr(item, "publication_evidence_at", None)
+    published = _clamp_future(getattr(item, "published_at", None))
+    evidence_at = _clamp_future(getattr(item, "publication_evidence_at", None))
     modified = getattr(item, "modified_at", None)
     return {
         "kind": "article",
@@ -101,6 +113,11 @@ def _build_article_row(
     if getattr(item, "publication_date_kind", "published") != "published":
         published = None
     published = published or getattr(item, "publication_evidence_at", None)
+    original = published
+    published = _clamp_future(published)
+    provenance = getattr(item, "date_evidence", None)
+    if published is not original and original is not None:
+        provenance = {**(provenance or {}), "future_date_replaced": original.isoformat()}
     dates = getattr(item, "date_evidence", None) or {}
     resolution = dates.get("published", {})
     if resolution.get("status") in {"unknown", "conflict"}:
@@ -127,7 +144,7 @@ def _build_article_row(
         "publication_precision": selected_date.get("precision") or (
             dates.get("precision") or "normalized_source_timestamp"
             if published is not None else None),
-        "date_provenance": json.dumps(getattr(item, "date_evidence", None)),
+        "date_provenance": json.dumps(provenance),
         "summary": getattr(item, "summary", None),
         "content": getattr(item, "content", None),
         "ai_relevance_score": relevance,

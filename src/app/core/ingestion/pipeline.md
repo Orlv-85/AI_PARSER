@@ -189,6 +189,12 @@ function. Each rule lists the tests that check it.
 - On the row (`_build_article_row`): unknown or conflicting evidence stores `published_at` empty,
   `publication_status` `unknown` / `conflict` and a zero freshness; the evidence goes to
   `date_provenance`. Tests: `test_unknown_or_conflicting_publication_has_zero_freshness`.
+- A publication time more than `FUTURE_DATE_TOLERANCE` ahead of the collection time is replaced by
+  the collection time (`_clamp_future` in `_candidate_payload` for admission and the pending ledger,
+  and in `_build_article_row` for the stored row), for RSS and HTML alike. The kind and status stay
+  `published` / `confirmed`; the original goes to `date_provenance` as `future_date_replaced`.
+  Smaller skews are kept. Tests: `test_future_publication_becomes_collection_time`,
+  `test_future_date_within_tolerance_is_kept`, `test_candidate_payload_replaces_future_date`.
 - Day-precision evidence without a time sets `publication_day` instead of `published_at`. Tests:
   `test_day_precision_evidence_sets_publication_day_not_published_at`.
 
@@ -354,6 +360,7 @@ function. Each rule lists the tests that check it.
 | Exact path segments, not substrings; dates never decide eligibility | article slugs contain words like "about"; undated news must stay (same record) |
 | `MANAGED_LINK_SELECTORS` in code | DB-managed sources do not persist CSS options (same record) |
 | Publication date only from evidence; unknown stays unknown | the fallback to discovery time created fake publication bursts (same record) |
+| A future publication date becomes the collection time | owner 2026-10-27: two Turing Institute feed items carried a date 8 days ahead on 2026-10-23; `FUTURE_DATE_TOLERANCE` is 24 h so timezone skew is not "future" (decided 2026-10-27, agent); kind stays `published` so freshness, digest day and archive see one consistent date, the original is kept in provenance |
 | Canonical URL hash is the only identity; no similarity dedup or aliases | decided 2026-10-20 (agent): stories are grouped at read time (006 FR-005, `simhash64`), which needs one row per publisher; admission and its cache are keyed by the canonical hash |
 | Weights of `rank_score`, half-life of `freshness_score` | values from 001 FR-5, no reason stated; decided 2026-10-20 (agent): keep, recency first for a news list, no labeled data to tune them |
 | Scores computed once at ingestion | decided 2026-10-20 (agent): one stored, indexed sort key (`ix_articles_rank_score_desc`), old rows never rewritten; stored freshness reflects ingestion delay, not current age |
