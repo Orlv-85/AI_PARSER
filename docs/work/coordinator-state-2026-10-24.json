@@ -13,8 +13,8 @@
     "Owner decision 2026-10-24: very large modules (~800+ lines) are split even if the plan said leave; guard test makes it safe."
   ],
   "state": {
-    "master": "d789ede (PR #114)",
-    "prod": "v0.1.128 (2026-10-24 14:24 UTC, first deploy by key as user deploy, green). SSH since 2026-10-24: password login off, root by key only (owner chose to keep root by key), CI and operators as deploy (docker group, narrow sudoers), SERVER_PASSWORD secret deleted, fail2ban sshd jail on /var/log/auth.log. Owner to change the root password in the time4vps panel (console only).",
+    "master": "dbf824d (PR #116)",
+    "prod": "v0.1.129 (2026-10-27 20:55 UTC, PR #116: stale_pending rows are not reopened by the feed). SSH since 2026-10-24: password login off, root by key only, CI and operators as deploy (docker group, narrow sudoers), fail2ban sshd jail on /var/log/auth.log; owner changed the root password 2026-10-27 (time4vps console only); SERVER_PASSWORD removed from GitHub and the local .env.",
     "open_prs": "none",
     "released_2026_10_23_24": "v0.1.121 archive tables + archive-before-prune (#92); v0.1.122 archive capture/status/purge (#93), prod seed done: 7000 documents, 2959 with text; v0.1.123 archive import-db (#94) + db_maintenance uses .last_deploy_image (#95); v0.1.124 archive downloads with retries (#96) + nightly archive job 03:00 UTC (#97); v0.1.125 (other session) summary details rule (#104); v0.1.126 move-only: pilot modules renamed to storage/provider_journal.py and core/daily/provider_requests.py, re-enrichment scripts removed (#105), core/ingestion/pipeline.py split into a package + monkeypatch guard (#106), signals_compute.py split into signals_{model,stories,lines,naming,history}.py (#107); v0.1.127 move-only: inline CSS/JS of digest, admin, news_stats and login moved to src/app/web/static/ (no-cache, /static/admin/ needs a session, checked on the normalized path), code doc src/app/web/pages.md (#110). Docs: docs/ root holds guides only, docs/work/ for open process files (#109); access details removed from the archive (#112); tooling backlog docs/backlog/tooling-todo.json with T1 spec pipeline, deferred (#114). v0.1.128: CI logs in by key as deploy, sshpass removed (#113); runbook docs/archive/2026-10/plan-ssh-deploy-user-2026-10-24.md.",
     "pruned_79": "The 79 articles (published 2017) pruned by the v0.1.118 deploy are in no backup: the 2026-10-22 dump holds nothing older than 2024-08-21. They were collected and pruned within a day. Closed; import-db stays as a tool.",
@@ -24,18 +24,7 @@
     "data_range": "Collection since 2026-07-03; 7000 articles; publication 2024-08-21..2026-10-31 (two Alan Turing feed items dated in the future, backlog).",
     "sessions": "ai-parser-1e and ai-parser-d4 are the owner's sessions, not executors. 'Limit resets' / dispatcher diagnostics are Claude Desktop sessions, not ours."
   },
-  "next": [
-    {"id": "DEPLOY-127", "title": "Confirm the v0.1.127 deploy finished green and the next nightly fetch/digest/archive (2026-10-25 logs) are fine after the pipeline split (v0.1.126) and the static split (v0.1.127); no browser check (owner)", "status": "todo"},
-    {"id": "SSH-check", "title": "2026-10-25: fail2ban bans appear (fail2ban-client status sshd), nightly-health and db-maintenance green by key; owner changed the root password", "status": "todo"},
-    {"id": "FIREWALL", "title": "Firewall (runbook phase 6, rules listed, not applied): only 22, 80, 443 and the Amnezia UDP ports; test the VPN before enabling; owner yes", "status": "backlog"},
-    {"id": "OPENAI-check", "title": "2026-10-26: unresolved share of new openai_news and TLDR candidates after #86/#88 (was 79% and 33/170); confirm ~1000 stale pending rows settled (admission_decisions reason stale_pending)", "status": "todo"},
-    {"id": "ARCHIVE-week", "title": "~2026-10-30: `ai-news archive status` (with APP_IMAGE): coverage_pct >= 90 over 7 nights (SC-002), gave_up counts, top hosts without text", "status": "todo"},
-    {"id": "B2", "title": "Weekly/monthly analytics on 006 data. No spec exists: only backlog B2, old spec 010 (weekly v2, off in prod) and 006 goal G5. Proposed to owner: a planner session writes specs/017-weekly-monthly-signals (first: keep or delete weekly v2, ~2350 lines); product/money questions to owner. Owner 2026-10-24: not now, smaller items first.", "status": "deferred"},
-    {"id": "S-onb", "title": "Onboarding behavior changes left: HTML candidate validated by a single link; three URL normalizations (normalize_candidate_url, _url_key, canonicalize)", "status": "backlog"},
-    {"id": "F1", "title": "Pipeline findings: 'fetched' counts, missing source_fetch_finished on failed fetch with admission off, FetchSummary.source_count after pause, fetch_failure as complete coverage", "status": "backlog"},
-    {"id": "UA", "title": "Fetcher/archive DEFAULT_USER_AGENT imitates a browser; decide an honest bot UA (legal/policy)", "status": "backlog"},
-    {"id": "small", "title": "docs/backlog/backlog-todo.json small_followups: future publication dates, db_maintenance size loop vs archive, archive timeouts not seen as outage", "status": "backlog"}
-  ],
+  "next": "docs/backlog/coordinator-todo.json (kept current by the coordinator)",
   "carried_unverified": [
     "Ledger vs real bills (DeepSeek, Jev): owner watches; compare at end of October.",
     "Weekly v2 frozen runs cannot resume after #105 (code_hashes path changed); accepted, weekly is off."
