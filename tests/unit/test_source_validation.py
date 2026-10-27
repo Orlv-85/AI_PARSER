@@ -74,7 +74,7 @@ def test_validate_html_candidate_marks_candidate_valid_when_article_links_are_ex
 
     result = validate_html_candidate(
         candidate,
-        fetch_html=lambda url: "<html><body>ok</body></html>",
+        fetch_html=lambda url: _ARTICLE,
         extract_links=lambda html, base_url: [
             f"{base_url}/posts/1",
             f"{base_url}/posts/2",
@@ -268,8 +268,8 @@ def test_run_source_validation_executes_html_path_and_batch_wrapper(monkeypatch)
     html_result = source_validation.run_source_validation(
         candidate_id=21,
         session=object(),
-        fetch_html=lambda _url: "<html/>",
-        extract_links=lambda _html, base_url: [f"{base_url}/a"],
+        fetch_html=lambda _url: _ARTICLE,
+        extract_links=lambda _html, base_url: [f"{base_url}/a", f"{base_url}/b"],
     )
     assert html_result.detected_type == "html"
     assert html_result.status == "validated"
@@ -287,3 +287,69 @@ def test_run_source_validation_executes_html_path_and_batch_wrapper(monkeypatch)
 
     assert calls == [21, 22]
     assert [result.candidate_id for result in results] == [21, 22]
+
+
+def _html_candidate():
+    return SimpleNamespace(id=30, normalized_url="https://example.com/blog", candidate_type="html")
+
+
+_ARTICLE = (
+    '<html><head><script type="application/ld+json">{"@type":"NewsArticle"}</script>'
+    "</head><body>post</body></html>"
+)
+
+
+def test_validate_html_candidate_checks_several_links_and_all_must_pass() -> None:
+    fetched: list[str] = []
+
+    def fetch(url: str) -> str:
+        fetched.append(url)
+        return _ARTICLE if url != "https://example.com/blog" else "<html/>"
+
+    links = [f"https://example.com/blog/p{i}" for i in range(6)]
+    result = source_validation.validate_html_candidate(
+        _html_candidate(), fetch_html=fetch, extract_links=lambda _h, _b: links
+    )
+    assert result.status == "validated"
+    assert fetched[1:] == links[: source_validation.HTML_SAMPLE_LINKS]
+    assert result.link_count == 6
+
+
+def test_validate_html_candidate_warns_when_a_sampled_link_is_not_an_article() -> None:
+    links = ["https://example.com/blog/p1", "https://example.com/pricing", "https://example.com/blog/p3"]
+
+    def fetch(url: str) -> str:
+        if url.endswith("/pricing"):
+            return "<html><body><h1>Pricing</h1></body></html>"
+        return _ARTICLE if url in links else "<html/>"
+
+    result = source_validation.validate_html_candidate(
+        _html_candidate(), fetch_html=fetch, extract_links=lambda _h, _b: links
+    )
+    assert result.status == "warning"
+    assert "pricing" in str(result.validation_error)
+
+
+def test_validate_html_candidate_warns_when_a_sampled_link_cannot_be_fetched() -> None:
+    links = ["https://example.com/blog/p1", "https://example.com/blog/p2"]
+
+    def fetch(url: str) -> str:
+        if url.endswith("/p2"):
+            raise RuntimeError("boom")
+        return _ARTICLE if url in links else "<html/>"
+
+    result = source_validation.validate_html_candidate(
+        _html_candidate(), fetch_html=fetch, extract_links=lambda _h, _b: links
+    )
+    assert result.status == "warning"
+    assert "p2" in str(result.validation_error)
+
+
+def test_validate_html_candidate_warns_when_listing_has_too_few_links() -> None:
+    result = source_validation.validate_html_candidate(
+        _html_candidate(),
+        fetch_html=lambda _u: _ARTICLE,
+        extract_links=lambda _h, _b: ["https://example.com/blog/p1"],
+    )
+    assert result.status == "warning"
+    assert result.link_count == 1

@@ -8,8 +8,13 @@ from sqlalchemy.orm import Session
 from app.core.sources.candidates import _candidate_value, _infer_candidate_type
 from app.ingest.fetcher import Fetcher
 from app.ingest.html import extract_links_from_html
+from app.ingest.page_filter import html_exclusion_reason
 from app.ingest.rss import fetch_rss_with_metadata
 from app.storage.source_candidate_repo import SourceCandidateRepo
+
+# A listing is judged by a few of its pages, not by one link that happens to work.
+HTML_MIN_LINKS = 2
+HTML_SAMPLE_LINKS = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +101,20 @@ def validate_html_candidate(
             link_count=0,
             sample_links=[],
         )
+    problem = (
+        f"HTML page has {link_count} article link, at least {HTML_MIN_LINKS} are needed"
+        if link_count < HTML_MIN_LINKS
+        else _sampled_link_problem(links[:HTML_SAMPLE_LINKS], fetch_html_fn)
+    )
+    if problem:
+        return ValidationResult(
+            candidate_id=candidate_id,
+            status="warning",
+            detected_type="html",
+            validation_error=problem,
+            link_count=link_count,
+            sample_links=links[:5],
+        )
 
     return ValidationResult(
         candidate_id=candidate_id,
@@ -105,6 +124,17 @@ def validate_html_candidate(
         link_count=link_count,
         sample_links=links[:5],
     )
+
+def _sampled_link_problem(sample: list[str], fetch_html_fn: Any) -> str | None:
+    for link in sample:
+        try:
+            reason = html_exclusion_reason(link, str(fetch_html_fn(link)))
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            return f"Sampled link {link} could not be checked: {_format_validation_error(exc)}"
+        if reason:
+            return f"Sampled link {link} is not an article ({reason})"
+    return None
+
 
 def run_source_validation(
     *,

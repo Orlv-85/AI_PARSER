@@ -3,13 +3,13 @@ import threading
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urlsplit
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config.settings import Settings
-from app.core.sources.candidates import normalize_candidate_url
+from app.core.sources.candidates import candidate_url_key
 from app.core.sources.review import (
     SourceReviewer,
     evidence_fingerprint,
@@ -22,10 +22,7 @@ from app.web.source_onboarding import SourceOnboardingService
 
 
 def _url_key(url: str) -> str:
-    parts = urlsplit(normalize_candidate_url(url))
-    host = (parts.hostname or "").removeprefix("www.")
-    netloc = host if parts.port in {None, 80, 443} else f"{host}:{parts.port}"
-    return str(urlunsplit(("https", netloc, parts.path, parts.query, "")))
+    return str(candidate_url_key(url))
 
 
 def _reusable_review(review: dict[str, Any]) -> bool:
