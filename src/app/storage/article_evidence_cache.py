@@ -18,7 +18,7 @@ from lxml import html as lxml_html
 from lxml.etree import LxmlError  # pylint: disable=no-name-in-module
 
 from app.ingest.date_evidence import extract_date_evidence
-from app.ingest.fetcher import DEFAULT_USER_AGENT
+from app.ingest.fetcher import BOT_TOKEN, DEFAULT_USER_AGENT
 from app.ingest.html import extract_article_text
 from app.ingest.page_filter import url_exclusion_reason
 from app.storage.journal_files import fingerprint, private_write
@@ -293,12 +293,12 @@ class SourcePageDownloader:  # pylint: disable=too-many-instance-attributes
                     parser.parse(["User-agent: *", "Disallow: /"])
                 self.robots[origin] = parser
             parser = self.robots[origin]
-            delay = parser.crawl_delay(DEFAULT_USER_AGENT)
+            delay = parser.crawl_delay(BOT_TOKEN)
             if delay:
                 host = (parts.hostname or "").removeprefix("www.")
                 self.next_allowed[host] = max(self.next_allowed.get(host, 0),
                                               time.monotonic() + float(delay))
-            return parser.can_fetch(DEFAULT_USER_AGENT, url)
+            return parser.can_fetch(BOT_TOKEN, url)
 
     async def fetch_one(self, url: str) -> None:  # pylint: disable=too-many-branches,too-many-statements
         attempt = self.cache.attempt(url)

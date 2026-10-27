@@ -317,6 +317,7 @@ check it.
 
 | Decision | Why |
 | --- | --- |
+| Probes, validation and `scripts/sources_onboarding_helper.py` send the declared bot `DEFAULT_USER_AGENT` | decided by the owner 2026-10-28; same agent as ingestion, so a probe sees what the fetcher sees |
 | The database is the operational source registry; `sources.yaml` is seed and export | YAML editing did not scale to curated batches (003 problem, FR-001, FR-014..016; `docs/configuration.md`) |
 | Drafts stay apart from `sources` until an explicit approval; approval needs `validated` | broken or noisy sources must not reach fetch runs (003 plan "Design choice", FR-009/010); nothing is enabled automatically (011) |
 | Search wrappers rejected at import | the 50-source batch contained Google wrapper links (003 plan, domain findings) |

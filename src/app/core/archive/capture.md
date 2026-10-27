@@ -65,7 +65,8 @@ flowchart LR
   (`DAILY_CACHE_ROOT`) gets that text as an `origin = source_page` version without a request. The
   capture only reads that cache. Tests: `test_capture_reuses_daily_publish_page`.
 - The rest is downloaded through `SourcePageDownloader` on `ARCHIVE_CACHE_ROOT` (robots.txt, crawl
-  delay, per-host pacing, redirects, body limit, 429/503 pause, fetcher user agent) with
+  delay, per-host pacing, redirects, body limit, 429/503 pause, the declared bot user agent `DEFAULT_USER_AGENT`; robots.txt rules are
+  matched against `BOT_TOKEN`, so `User-agent: ai-news-collector` and `*` groups apply) with
   `ARCHIVE_DOWNLOAD_CONCURRENCY` workers. An extracted page of at least `ARCHIVE_MIN_TEXT_CHARS`
   becomes an `origin = source_page` version with `EXTRACTION_VERSION`, final URL and HTTP status;
   the document is `archived`. Tests: `test_capture_downloads_and_archives_page`.
@@ -132,6 +133,11 @@ flowchart LR
 
 ## Decisions
 
+- decided by the owner 2026-10-28: one declared bot user agent (`DEFAULT_USER_AGENT`, product token
+  `BOT_TOKEN`) instead of a browser string, for fetch, archive, evidence, robots.txt and the source
+  probe. Measured: no blocked host got worse; www.intel.com answered 403 to the Chrome string and
+  200 to the bot. Tests: `test_every_client_sends_the_bot_user_agent`,
+  `test_robots_matches_the_bot_token`.
 - Same database, two tables, no foreign key to `articles` or `sources`: backups already cover the
   database, and documents must outlive their articles (plan.md, "Where the archive lives").
 - Stored content is copied under `ARTICLE_CONTENT_VERSION`, because ingestion does not record which

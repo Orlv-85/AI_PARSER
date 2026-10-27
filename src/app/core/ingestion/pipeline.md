@@ -106,6 +106,9 @@ function. Each rule lists the tests that check it.
   `test_request_reuses_single_client_across_multiple_calls`, `test_request_builds_client_with_limits_when_configured`,
   `test_fetch_source_items_closes_fetcher_after_success_and_error`,
   `test_process_html_links_two_stage_closes_fetcher_when_placeholder_loop_raises`.
+- Every request of the `Fetcher` sends `DEFAULT_USER_AGENT`, a declared bot string
+  (`ai-news-collector/<version> (+site URL)`), never a browser string. Tests:
+  `test_every_client_sends_the_bot_user_agent`.
 
 **Page eligibility (non-news filter)**
 - Pages are excluded by exact path rules, never by substrings of a slug (`url_exclusion_reason`):
@@ -358,6 +361,7 @@ function. Each rule lists the tests that check it.
 
 | Decision | Why |
 | --- | --- |
+| Declared bot user agent instead of a browser string | decided by the owner 2026-10-28; measured: no blocked host got worse, www.intel.com 403 to Chrome string, 200 to bot |
 | `fetched_items` keeps its meaning; `examined_items` / `sources_fetched` are added | operators and logs read the old names; a new field is safer than a changed meaning (decided 2026-10-27, agent) |
 | A `fetch_failure` attempt stays `complete` | open owner question: a failed fetch is not coverage, but `complete=False` would mark that publisher/day incomplete in weekly coverage (`WeeklyStore._coverage`), which can change weekly input quality; not changed in F1 (decided 2026-10-27, agent: stop and ask) |
 | Conditional requests; 304 is a successful no-op | repeated polling of unchanged sources was the largest avoidable cost (002 US2) |
