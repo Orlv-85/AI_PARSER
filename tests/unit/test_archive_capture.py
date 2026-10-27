@@ -251,6 +251,36 @@ def test_capture_outage_keeps_attempts(tmp_path) -> None:
     assert not any((tmp_path / "archive" / "pages").iterdir())
 
 
+def test_capture_timeouts_are_an_outage(tmp_path) -> None:
+    session = _session()
+    urls = [_article(session, "a", host=f"host{i}.org") for i in range(12)]
+
+    def time_out(request):
+        raise httpx.ConnectTimeout("network down", request=request)
+    summary = capture(session, cache_root=tmp_path / "archive",
+                      daily_cache_root=tmp_path / "daily", host_interval=0,
+                      client_factory=lambda: httpx.AsyncClient(
+                          transport=httpx.MockTransport(time_out)))
+    assert summary["outage"] is True
+    assert summary["outage_kept"] == summary["downloads"] > 0
+    assert summary["failed"] == {} and summary["gave_up"] == 0
+    for url in urls:
+        document = _document(session, url)
+        assert (document.state, document.attempts, document.next_attempt_at) == (
+            "pending", 0, None)
+
+
+def test_capture_few_timeouts_are_per_document(tmp_path) -> None:
+    session = _session()
+    url = _article(session, "slow", host="slow.org")
+    other = _article(session, "fine", host="fine.org")
+    summary = _capture(session, tmp_path, {url: httpx.ReadTimeout})
+    assert summary["outage"] is False
+    assert summary["failed"] == {"ReadTimeout": 1}
+    assert _document(session, url).attempts == 1
+    assert _document(session, other).state == "archived"
+
+
 def test_capture_deletes_old_raw_pages(tmp_path) -> None:
     session = _session()
     old_url = _article(session, "old")
