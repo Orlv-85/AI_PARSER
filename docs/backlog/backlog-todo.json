@@ -43,7 +43,8 @@
       "title": "Jev as a second opinion for New",
       "where": "docs/backlog/jev-novelty-second-opinion-todo.json",
       "priority": 4,
-      "status": "todo"
+      "status": "dropped",
+      "status_note": "Owner 2026-10-27 after J1: keep New as it is (recall over precision). Report: specs/006-daily-ai-signals/records/report-jev-novelty-j1-2026-10-27.md."
     },
     {
       "id": "B5",

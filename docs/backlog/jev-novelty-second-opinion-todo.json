@@ -1,7 +1,7 @@
 {
   "title": "Jev as a second opinion for novelty in Daily AI Signals",
   "created": "2026-10-19",
-  "status": "backlog",
+  "status": "dropped",
   "depends_on": [
     "PR #39 (006-daily-ai-signals) merged and running in production",
     "Phase 7 validation numbers recorded in specs/006-daily-ai-signals/dry-run.md"
@@ -39,7 +39,7 @@
         "Also test the per-entity variant on the New candidates only."
       ],
       "done_when": "A short results table in a docs file and a recommendation: adopt (with threshold) or drop.",
-      "status": "todo"
+      "status": "done"
     },
     {
       "id": "J2",
@@ -50,7 +50,7 @@
         "Tie-breaker only: Jev consulted for early (single-publisher) items, confirmed items unchanged."
       ],
       "criteria": "Choose by J1 numbers; precision gain must not cost more than a few points of recall.",
-      "status": "todo"
+      "status": "dropped"
     },
     {
       "id": "J3",
@@ -65,7 +65,7 @@
       "tests": [
         "Gate on/off, threshold boundaries, Jev missing/held/invalid fallback, cache reuse, no Jev call when there is no novelty candidate, snapshot hash changes only with the methodology version."
       ],
-      "status": "todo"
+      "status": "dropped"
     },
     {
       "id": "J4",
@@ -75,7 +75,7 @@
         "Feature flag default off; owner enables after review.",
         "Document in docs/daily-signals.md and the plan."
       ],
-      "status": "todo"
+      "status": "dropped"
     }
   ],
   "risks": [
@@ -87,5 +87,6 @@
   "out_of_scope": [
     "Changing the admission rubric or its pinned version.",
     "Replacing DeepSeek extraction with Jev."
-  ]
+  ],
+  "status_note": "2026-10-27: J1 done (specs/006-daily-ai-signals/records/report-jev-novelty-j1-2026-10-27.md); the gate costs too much recall. Owner: keep New as it is. J2-J4 will not be done."
 }
