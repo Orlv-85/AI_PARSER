@@ -40,6 +40,49 @@ def test_maintenance_default_server_config_and_explicit_override(
     assert "tightening retention" not in result.stdout
 
 
+def _run_size_loop(tmp_path, sizes):
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    script = scripts / "db_maintenance.sh"
+    script.write_text(Path("scripts/db_maintenance.sh").read_text(encoding="utf-8"))
+    binaries = tmp_path / "bin"
+    binaries.mkdir()
+    (tmp_path / "sizes").write_text("\n".join(str(size) for size in sizes) + "\n")
+    docker = binaries / "docker"
+    # Each size query pops the next value; the last one repeats.
+    docker.write_text(
+        '#!/bin/sh\nprintf "%s\\n" "$*" >> "$TEST_LOG"\n'
+        'case "$*" in *pg_database_size*)\n'
+        '  head -n 1 "$TEST_SIZES"\n'
+        '  [ "$(wc -l < "$TEST_SIZES")" -gt 1 ] && sed -i.bak 1d "$TEST_SIZES";;\n'
+        'esac\n')
+    docker.chmod(0o755)
+    environment = {**os.environ, "PATH": f"{binaries}:/usr/bin:/bin",
+                   "TEST_LOG": str(tmp_path / "calls"), "TEST_SIZES": str(tmp_path / "sizes"),
+                   "RETENTION_DAYS": "30"}
+    result = subprocess.run(["sh", str(script)], env=environment, capture_output=True,
+                            text=True, check=False)
+    calls = (tmp_path / "calls").read_text().count("ai-news prune")
+    return result, calls
+
+
+def test_size_loop_stops_when_prune_does_not_reduce_size(tmp_path):
+    gb = 1024 ** 3
+    # Archive-before-prune: the size stays above the limit however far retention is lowered.
+    result, prunes = _run_size_loop(tmp_path, [6 * gb])
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert prunes == 2  # configured retention, then one tightening step
+    assert "did not reduce DB size" in result.stderr
+
+
+def test_size_loop_keeps_tightening_while_size_drops(tmp_path):
+    gb = 1024 ** 3
+    result, prunes = _run_size_loop(tmp_path, [6 * gb, 5 * gb, 3 * gb])
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert prunes == 3
+    assert "did not reduce" not in result.stderr
+
+
 def test_maintenance_prunes_with_last_deployed_image(tmp_path):
     scripts = tmp_path / "scripts"
     scripts.mkdir()

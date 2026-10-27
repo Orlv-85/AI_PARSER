@@ -239,6 +239,8 @@ Size guardrails in `db_maintenance.sh`:
 - if DB reaches `DB_MAX_SIZE_GB` (default `5`)
 - retention is tightened in steps (`DB_RETENTION_STEP_DAYS`, default `7`)
 - until DB is below `DB_TARGET_SIZE_GB` (default `4`) or retention reaches 1 day
+- stops early, with a log line, when a step did not reduce the DB size (pruned rows are archived
+  first, plain VACUUM does not return space), so it does not prune further for nothing
 
 Backup:
 

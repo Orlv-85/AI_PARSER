@@ -69,8 +69,15 @@ if [ "$current_size" -ge "$max_bytes" ]; then
     fi
     apply_prune "$next_retention"
     current_retention="$next_retention"
+    previous_size="$current_size"
     current_size="$(get_db_size_bytes)"
     echo "Current DB size after prune(${current_retention}): ${current_size} bytes"
+    # Pruned rows are archived first and plain VACUUM keeps the file size, so a prune can
+    # leave the size unchanged; more pruning would then delete articles for nothing.
+    if [ "$current_size" -ge "$previous_size" ]; then
+      echo "Prune(${current_retention}) did not reduce DB size; stopping retention tightening." >&2
+      break
+    fi
   done
 fi
 
