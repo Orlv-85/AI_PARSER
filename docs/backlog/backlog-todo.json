@@ -24,17 +24,19 @@
         "Next big spec: planner and implementer in separate sessions."
       ],
       "priority": 2,
-      "status": "todo"
+      "status": "deferred",
+      "status_note": "Owner 2026-10-24: not now, smaller items first."
     },
     {
       "id": "B3",
       "title": "Durable full-text article archive",
       "where": "docs/backlog/article-archive-todo.json",
       "priority": 3,
-      "status": "in_progress",
+      "status": "done",
       "notes": [
         "Spec specs/016-article-archive; phases 1-4 live in v0.1.124 (2026-10-23): archive-before-prune, seed of 7000 documents, nightly capture 03:00 UTC. Phase 5 (admin stats) only on owner request."
-      ]
+      ],
+      "status_note": "Spec 016 phases 1-4 live since v0.1.124 (archive before prune, nightly capture 03:00 UTC, status, purge, import-db); phase 5 (admin stats) only on owner request. Details: docs/backlog/article-archive-todo.json."
     },
     {
       "id": "B4",

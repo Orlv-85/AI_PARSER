@@ -1,7 +1,7 @@
 {
   "title": "Article archive: durable full-text storage for AI news",
   "created": "2026-10-18",
-  "status": "backlog",
+  "status": "in_progress",
   "owner_goal": "Keep the full text of every collected AI article permanently (source pages disappear), so the corpus can later support deeper analytics, RAG and Q&A. Raw material first, interpretation later.",
   "depends_on": [
     "006-daily-ai-signals should merge first (it adds durable mention evidence; the archive must not conflict with it)"
@@ -58,7 +58,8 @@
         "Is raw HTML kept at all? Proposal: keep only for a short window (e.g. 30 days) to allow re-extraction, then drop."
       ],
       "deliverable": "Spec in specs/ with data model, migration, retention and purge rules.",
-      "status": "todo"
+      "status": "done",
+      "status_note": "Spec 016: tables archive_documents and archive_texts, archive before prune; code doc src/app/core/archive/capture.md."
     },
     {
       "id": "A2",
@@ -73,7 +74,8 @@
         "Measure: how many of the ~4000 articles without full text can still be fetched (pages already disappear)."
       ],
       "deliverable": "Resumable CLI backfill command with caps, a per-source success report and a sample quality review.",
-      "status": "todo"
+      "status": "partly",
+      "status_note": "2026-10-24 seed: 7000 documents, 2959 with text. Old seeded documents are not downloaded (only documents first seen within ARCHIVE_LOOKBACK_DAYS are due); decided 2026-10-27 (agent): no one-off download."
     },
     {
       "id": "A3",
@@ -86,7 +88,8 @@
         "Monitoring: daily counts (archived, failed by reason, coverage %) in the job log and on the admin stats page."
       ],
       "deliverable": "Daily archive step with coverage metrics; target >= 90% of admitted articles archived with full text.",
-      "status": "todo"
+      "status": "done",
+      "status_note": "Nightly capture job 03:00 UTC since v0.1.124; network timeouts count as an outage since v0.1.130."
     },
     {
       "id": "A4",
@@ -140,6 +143,16 @@
       "status": "todo"
     }
   ],
-  "suggested_order": ["A0", "A1", "A3", "A2", "A4", "A5", "A7", "A6"],
-  "order_rationale": "Protect existing data first (A0); design storage (A1); start daily capture so no new text is lost (A3); then backfill what is still fetchable (A2); decisions on cleaning and extra fields (A4, A5) refine the design; RAG last."
+  "suggested_order": [
+    "A0",
+    "A1",
+    "A3",
+    "A2",
+    "A4",
+    "A5",
+    "A7",
+    "A6"
+  ],
+  "order_rationale": "Protect existing data first (A0); design storage (A1); start daily capture so no new text is lost (A3); then backfill what is still fetchable (A2); decisions on cleaning and extra fields (A4, A5) refine the design; RAG last.",
+  "status_note": "2026-10-27: A0, A1, A3 done; A2 partly; A4-A7 open."
 }

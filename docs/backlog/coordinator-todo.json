@@ -95,8 +95,9 @@
       "id": "BACKLOG-STATUS",
       "title": "Refresh stale statuses: backlog-todo.json B3 (phases 1-4 live, phase 5 only on owner request) and article-archive-todo.json tasks A0, A1, A3 (done by spec 016), A2 (partly: 7000-document seed)",
       "priority": "P3",
-      "status": "todo",
-      "executor": "DeepSeek docs PR"
+      "status": "done",
+      "done": "2026-10-27",
+      "result": "backlog-todo.json B2 deferred, B3 done; article-archive-todo.json A1, A3 done, A2 partly."
     },
     {
       "id": "B2",
