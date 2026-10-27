@@ -34,6 +34,8 @@ class FetchSummary:  # pylint: disable=too-many-instance-attributes
     semantic_unresolved: int = 0
     semantic_cache_hits: int = 0
     screening_paused: int = 0
+    examined: int = 0
+    sources_fetched: int = 0
 
 
 @dataclass
@@ -41,6 +43,7 @@ class SourceMetrics:  # pylint: disable=too-many-instance-attributes
     source_id: str
     source_type: str
     fetched_items: int = 0
+    examined_items: int = 0
     new_items: int = 0
     duplicate_items: int = 0
     errors: int = 0

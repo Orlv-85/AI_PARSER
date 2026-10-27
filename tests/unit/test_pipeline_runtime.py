@@ -452,6 +452,43 @@ def test_run_fetch_cycle_stops_rss_processing_after_known_streak(monkeypatch) ->
     assert summary.early_stop_hits == 1
 
 
+def test_examined_items_stop_at_rss_early_stop(monkeypatch) -> None:
+    rss_items = [
+        _item("rss_feed", f"https://example.com/old-{n}", f"Old {n}") for n in range(1, 6)
+    ]
+
+    class _AllKnownArticleRepo(_ArticleRepo):
+        known: ClassVar[set[str]] = {f"h:https://example.com/old-{n}" for n in range(1, 6)}
+
+    logger = _Logger()
+    summary = _run(
+        monkeypatch, [_rss("rss_feed")], settings=_settings(rss_known_streak_stop=2),
+        article_repo=_AllKnownArticleRepo, logger=logger,
+        fetch_rss=lambda *_args, **_kwargs: _rss_result(rss_items),
+    )
+
+    assert (summary.fetched, summary.examined, summary.sources_fetched) == (5, 2, 1)
+    source = logger.payload("source_fetch_finished", "rss_feed")
+    assert (source["fetched_items"], source["examined_items"]) == (5, 2)
+    run = logger.payload("fetch_run_finished")
+    assert (run["fetched"], run["examined"], run["sources_fetched"]) == (5, 2, 1)
+
+
+def test_failed_fetch_logs_source_fetch_finished_with_admission_off(monkeypatch) -> None:
+    logger = _Logger()
+
+    def fetch_rss(source_key: str, *_args, **_kwargs):
+        raise RuntimeError("boom")
+
+    summary = _run(
+        monkeypatch, [_rss("rss_fail")], logger=logger, fetch_rss=fetch_rss,
+    )
+
+    assert summary.errors == 1
+    payload = logger.payload("source_fetch_finished", "rss_fail")
+    assert (payload["errors"], payload["fetched_items"]) == (1, 0)
+
+
 def test_run_fetch_cycle_rss_known_streak_stop_does_not_apply_to_html(monkeypatch) -> None:
     rss_items = [
         _item("rss_feed", "https://example.com/rss-old-1", "RSS Old 1"),

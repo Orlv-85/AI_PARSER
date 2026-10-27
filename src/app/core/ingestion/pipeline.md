@@ -321,7 +321,7 @@ function. Each rule lists the tests that check it.
 - One coverage attempt per source per run (`record_attempt`): `fetch_failure`, `persist_failure`,
   `parser_failure` (the source coverage is incomplete), `not_modified`, `success` or `empty`;
   complete only when coverage is complete, acquisition did not stop and HTML did not stop early. A
-  `fetch_failure` is recorded as complete. An admission rejection does not change it. Tests: `test_outage_preserves_verified_and_replays_after_list_rotation`,
+  `fetch_failure` is recorded as complete (open owner question, see Decisions). An admission rejection does not change it. Tests: `test_outage_preserves_verified_and_replays_after_list_rotation`,
   `test_ambiguity_cached_category_independent_and_policy_invalidates`,
   `test_confirmed_html_exclusion_settles_before_304`,
   `test_coverage_attempt_records_fetch_persist_and_parser_failures`,
@@ -335,9 +335,21 @@ function. Each rule lists the tests that check it.
   `test_monday_v2_trigger_only_enqueues`.
 
 **Counters**
+- `fetched` / `fetched_items` is what the source returned, not what was looked at: RSS the feed
+  items after parsing (the whole feed, even when the known streak stops the loop early), HTML the
+  articles downloaded, plus replayed pending candidates. `examined_items` (per source) and
+  `examined` (run) count the items the loop actually looked at: RSS up to and including the item
+  that triggered the early stop, HTML equal to `fetched_items`. Tests:
+  `test_examined_items_stop_at_rss_early_stop`.
+- Every source that is fetched gets one `source_fetch_finished` line when
+  `fetch_emit_source_metrics`, also when its fetch failed (`errors` 1, with admission on or off).
+  Tests: `test_failed_fetch_logs_source_fetch_finished_with_admission_off`.
+- `FetchSummary.source_count` is the number of enabled sources of the run (also after a pause or
+  when screening is unavailable); `sources_fetched` counts the sources whose fetch was started
+  (stops growing at a pause). Tests: `test_source_count_stays_enabled_count_and_sources_fetched_stops_at_pause`.
 - `FetchSummary`: `fetched`, `new`, `duplicates`, `errors`, `not_modified_sources`,
   `skipped_known_html_links`, `early_stop_hits`, `semantic_rejected`, `semantic_unresolved`,
-  `semantic_cache_hits`, `screening_paused`; the same in the `fetch_run_finished` log, and per
+  `semantic_cache_hits`, `screening_paused`, `examined`, `sources_fetched`; the same in the `fetch_run_finished` log, and per
   source in `source_fetch_finished` when `fetch_emit_source_metrics`. Tests:
   `test_run_fetch_cycle_counts_new_duplicates_and_errors`, `test_run_fetch_cycle_html_two_stage_stops_after_known_streak`,
   `test_admission_and_cache_all_ingestion_paths`.
@@ -346,6 +358,8 @@ function. Each rule lists the tests that check it.
 
 | Decision | Why |
 | --- | --- |
+| `fetched_items` keeps its meaning; `examined_items` / `sources_fetched` are added | operators and logs read the old names; a new field is safer than a changed meaning (decided 2026-10-27, agent) |
+| A `fetch_failure` attempt stays `complete` | open owner question: a failed fetch is not coverage, but `complete=False` would mark that publisher/day incomplete in weekly coverage (`WeeklyStore._coverage`), which can change weekly input quality; not changed in F1 (decided 2026-10-27, agent: stop and ask) |
 | Conditional requests; 304 is a successful no-op | repeated polling of unchanged sources was the largest avoidable cost (002 US2) |
 | Conditional HTML list fetch off by default | optional last rollout slice; risky optimizations stay behind flags with conservative defaults (002 plan); decided 2026-10-20 (agent): keep off, two-stage dedup already skips known links, a 304 saves only one list request |
 | A transport failure holds one candidate, not the day | one timeout paused collection for the whole UTC day (incident 2026-10-22); a timeout says nothing about the article, the candidate stays pending and is replayed. A provider error (5xx, auth) or 5 timeouts in a row mean the service is down, so the run pauses (owner, 2026-10-22). One retry after 10 s, timeout 5 s: 3 s was too tight; 3938 journal calls 2026-10-12..22 all took 2 s or less |

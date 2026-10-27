@@ -9,7 +9,7 @@ from app.core.ingestion.admission import (
     bounded_evidence,
     evidence_hash,
 )
-from app.core.ingestion.pipeline.models import AdmissionState
+from app.core.ingestion.pipeline.models import AdmissionState, SourceMetrics
 from app.core.ingestion.pipeline.rows import (
     _build_article_row,
     _candidate_payload,
@@ -38,6 +38,7 @@ def _process_fetched_source_items(
     settings: Settings,
     relevance_scorer: JevRelevanceScorer | None = None,
     admission_state: AdmissionState | None = None,
+    metrics: SourceMetrics | None = None,
 ) -> tuple[int, int, int, bool]:
     new_count = 0
     duplicate_count = 0
@@ -89,6 +90,8 @@ def _process_fetched_source_items(
             )
 
     for item in items:
+        if metrics is not None:
+            metrics.examined_items += 1
         identity_url = getattr(item, "ingestion_canonical_url", None) or str(item.url)
         canonical = canonicalize_url(identity_url)
         canonical_hash = canonical_url_hash(identity_url)
