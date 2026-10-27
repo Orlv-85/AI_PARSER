@@ -1,7 +1,7 @@
 {
   "title": "Coordinator todo: checks, fixes and open decisions",
   "created": "2026-10-27",
-  "updated": "2026-10-27",
+  "updated": "2026-10-28",
   "status": "active",
   "how_to_use": "The coordinator keeps this list current (docs PR). Product ideas live in backlog-todo.json, agent tooling in tooling-todo.json; items here may point to them. Statuses: todo, waiting_owner, backlog, deferred, done. Done items stay one week, then are removed.",
   "items": [
@@ -44,8 +44,9 @@
       "id": "F1",
       "title": "Pipeline findings: 'fetched' counts; missing source_fetch_finished on a failed fetch with admission off; FetchSummary.source_count after a pause; fetch_failure treated as complete coverage",
       "priority": "P2",
-      "status": "todo",
-      "executor": "background agent (Sonnet), own PR"
+      "status": "done",
+      "done": "2026-10-27",
+      "result": "PR #123 (v0.1.131): new log fields examined_items (source_fetch_finished), examined and sources_fetched (fetch_run_finished); source_fetch_finished also for a failed fetch with admission off; old fields unchanged. Finding 4 (fetch_failure counted as complete weekly coverage) not changed: weekly does not run on prod; moved to B2."
     },
     {
       "id": "FUTURE-DATES",
@@ -103,7 +104,8 @@
       "id": "B2",
       "title": "Weekly and monthly analytics on the 006 data (backlog-todo.json B2)",
       "status": "deferred",
-      "decided": "Owner 2026-10-24: not now, smaller items first"
+      "decided": "Owner 2026-10-24: not now, smaller items first",
+      "note": "When weekly work starts, also decide F1 finding 4: a failed source fetch is recorded as complete weekly coverage (cycle.py record_attempt outcome fetch_failure, complete=True); recommended complete=False."
     },
     {
       "id": "T1",
@@ -128,6 +130,13 @@
       "title": "New candidates since 2026-10-24: openai_news unresolved 1 of 10 (was 79%), TLDR 0 of 36 (was 19%), all sources 1 of 457; 763 stale rows settled; the 445 rows reopened every night led to PR #116 (v0.1.129)",
       "status": "done",
       "done": "2026-10-27"
+    },
+    {
+      "id": "B4-J1",
+      "title": "Jev as a second opinion for New: J1 offline experiment (534 Jev calls, $0.035)",
+      "status": "done",
+      "done": "2026-10-27",
+      "result": "Article-level AND gate at t=0.5: displayed precision 85% -> 96%, recall 81% -> 64%. Owner 2026-10-27: keep New as it is, drop the Jev gate. Report: specs/006-daily-ai-signals/records/report-jev-novelty-j1-2026-10-27.md."
     }
   ]
 }
