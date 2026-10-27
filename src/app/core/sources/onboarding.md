@@ -112,7 +112,7 @@ check it.
   than `HTML_MIN_LINKS` links: `warning`. Otherwise the first `HTML_SAMPLE_LINKS` links are fetched
   (plain HTTP, no model) and each must pass `html_exclusion_reason` (the ingestion article check);
   all pass: `validated` with `link_count` and a few `sample_links`; a sampled link that fails the
-  check or cannot be fetched: `warning` naming that link (a manual override stays possible).
+  check or cannot be fetched: `warning` naming that link (a `warning` candidate cannot be approved in the UI or API; an operator can still add the source to `sources.yaml` by hand).
   The check does not call a paid model, so it adds no cost; it adds at most `HTML_SAMPLE_LINKS`
   page fetches per HTML candidate. Another type: `failed`. Tests:
   `test_validate_rss_candidate_marks_candidate_valid_when_feed_has_entries`,
@@ -322,7 +322,7 @@ check it.
 | Search wrappers rejected at import | the 50-source batch contained Google wrapper links (003 plan, domain findings) |
 | Exact duplicates by normalized URL, unique column | duplicate sources add fetch cost and noise (003 US2, FR-005) |
 | Overlaps are advisory groups, never automatic rejects | heuristic false positives (003 plan, risk 2); one host can hold distinct sections (011) |
-| HTML page without links is `warning`, not `failed` | bot protection and unstable sites; manual override kept (003 plan, risk 3) |
+| HTML page without links is `warning`, not `failed` | bot protection and unstable sites; a `warning` candidate cannot be approved in the UI or API, the operator adds the source to `sources.yaml` by hand (003 plan, risk 3) |
 | HTML candidate is validated by `HTML_SAMPLE_LINKS` (3) article pages, not one | a listing whose first link works could pass with non-article rest; three is a few fetches yet more than a lucky link (decided 2026-10-28, agent) |
 | `_url_key` runs `canonicalize_url` after `normalize_candidate_url`; stored `normalized_url` is not changed | onboarding and the pipeline must agree on "same URL"; changing stored `normalized_url` would break its unique column and old rows (decided 2026-10-28, agent) |
 | JSON import reads only each record's `url` | research reports carried evidence article links that became candidates (011, PR #8) |
