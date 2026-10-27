@@ -46,7 +46,8 @@ DAILY_CACHE_ROOT = Path("data/daily-enrichment/source-cache")
 ARCHIVE_ROBOTS_KEEP_HOURS = 20
 PERMANENT_ISSUES = frozenset({"http_404", "http_410", "robots_disallowed_or_unavailable",
                               "non_html_response", "redirect_to_non_article"})
-OUTAGE_ISSUES = frozenset({"download_outage", "ConnectError"})
+OUTAGE_ISSUES = frozenset({"download_outage", "ConnectError", "ConnectTimeout", "ReadTimeout",
+                           "WriteTimeout", "PoolTimeout"})
 ROBOTS_ANSWERED = frozenset({200, 404, 410})
 
 

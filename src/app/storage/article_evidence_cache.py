@@ -195,6 +195,9 @@ class PageCache:
                 "publication_dates": dict(dates), "issues": dict(issues), "model_calls": 0}
 
 
+OUTAGE_HOSTS = 10  # distinct hosts failing to connect, no success between
+
+
 class SourcePageDownloader:  # pylint: disable=too-many-instance-attributes
     """Bounded downloads with per-host pacing, manual redirects and no retry loop."""
 
@@ -357,9 +360,9 @@ class SourcePageDownloader:  # pylint: disable=too-many-instance-attributes
                 self.cache.finish(url, {"state": "failed", "quality": "unresolved",
                                         "issues": ["download_outage"]})
         except (httpx.HTTPError, ValueError, OSError, LookupError) as exc:
-            if isinstance(exc, httpx.ConnectError):
+            if isinstance(exc, (httpx.ConnectError, httpx.TimeoutException)):
                 self.connection_failures.add(urlsplit(current).hostname or "")
-                if len(self.connection_failures) >= 10:
+                if len(self.connection_failures) >= OUTAGE_HOSTS:
                     self.outage = True
             # Exception messages can contain URLs/content. Emit only the exception class.
             self.cache.finish(url, {"state": "failed", "quality": "unresolved",

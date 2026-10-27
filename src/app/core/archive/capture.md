@@ -83,8 +83,13 @@ flowchart LR
   daily-publish cache is never written or cleared. A pending document whose page was downloaded by
   a killed run is recorded from that attempt without a new request. Tests:
   `test_capture_retry_clears_only_archive_cache`, `test_capture_resumes_attempt_of_killed_run`.
-- When the downloader reports an outage, documents without an attempt or failed only by
-  `download_outage` or `ConnectError` keep their state and attempts, and their cache entries are
+- The downloader reports an outage when connection failures (`ConnectError` or any httpx timeout:
+  `ConnectTimeout`, `ReadTimeout`, ...) hit `OUTAGE_HOSTS` different hosts with no successful
+  response in between, so a network or DNS outage that only times out is not told from a few slow
+  hosts by the error type. Tests: `test_capture_timeouts_are_an_outage`,
+  `test_capture_few_timeouts_are_per_document`.
+- When the downloader reports an outage, documents without an attempt or failed only by the
+  `OUTAGE_ISSUES` (`download_outage`, `ConnectError`, the timeout classes) keep their state and attempts, and their cache entries are
   deleted so the next run retries them. Tests: `test_capture_outage_keeps_attempts`.
 - After the downloads the capture deletes page directories in `ARCHIVE_CACHE_ROOT` older than
   `ARCHIVE_RAW_KEEP_DAYS` and robots files older than `ARCHIVE_ROBOTS_KEEP_HOURS`. Tests:
@@ -153,6 +158,9 @@ flowchart LR
   reused (plan.md, "Where in the nightly flow").
 - decided 2026-10-23 (agent): the job removes a leftover `ai-news-archive` container before the
   run, because a container left by a killed run would make `--name` fail every night.
+- decided 2026-10-27 (agent): timeouts count toward the outage like `ConnectError`, because a dead
+  network or DNS often times out instead of refusing; the threshold lives in the shared downloader,
+  so daily-publish gets the same outage stop.
 - decided 2026-10-23 (agent): `ConnectError` results are recorded after all downloads, because only
   then is it known whether they were part of an outage.
 
