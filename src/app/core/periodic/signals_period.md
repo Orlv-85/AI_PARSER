@@ -214,9 +214,9 @@ Flow: `compute_period` -> `coverage_line`, `period_status`, `comparison`, then `
 Not built yet: the page (R3), the brief and its flag and version row (R4), the month kind (R6). The
 `period_signal_briefs` table exists and is empty.
 
-Operator commands, enabling and rollback: `docs/period-signals.md`. The compose file does not pass
-`AINEWS_PERIOD_SIGNALS_ENABLED` to the container (decided by the plan: the operator sets it), so the
-nightly step stays a no-op until the variable reaches the container; see the operator guide.
+Operator commands, enabling and rollback: `docs/period-signals.md`. `docker-compose.prod.yml` passes
+`AINEWS_PERIOD_SIGNALS_ENABLED` from the server `.env` with default `false`, so the nightly step is a
+no-op until the operator sets it (decided 2026-10-28 (coordinator): same path as the daily flag).
 
 ## Tests
 

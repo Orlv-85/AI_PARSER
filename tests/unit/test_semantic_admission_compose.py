@@ -41,3 +41,10 @@ def test_production_compose_enables_daily_signals_by_default():
     assert environment["AINEWS_DAILY_SIGNALS_ENABLED"] == "${AINEWS_DAILY_SIGNALS_ENABLED:-true}"
     assert not any(key.startswith("AINEWS_DAILY_SIGNALS_") and key != "AINEWS_DAILY_SIGNALS_ENABLED"
                    for key in environment)
+
+
+def test_production_compose_passes_period_signals_flag_off_by_default():
+    compose = yaml.safe_load(Path("docker-compose.prod.yml").read_text(encoding="utf-8"))
+    environment = compose["services"]["app"]["environment"]
+    # Off until the operator sets AINEWS_PERIOD_SIGNALS_ENABLED=true in the server .env.
+    assert environment["AINEWS_PERIOD_SIGNALS_ENABLED"] == "${AINEWS_PERIOD_SIGNALS_ENABLED:-false}"

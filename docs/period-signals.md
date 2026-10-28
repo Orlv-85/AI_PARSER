@@ -10,17 +10,17 @@ brief and the monthly view come in later releases. Readers see nothing yet.
 ## Enable
 
 `AINEWS_PERIOD_SIGNALS_ENABLED` (default `false`) gates the command. Off: the command prints
-`{"state": "disabled", ...}`, exits 0 and writes nothing. `docker-compose.prod.yml` does not pass the
-variable to the container, so a value in the server `.env` does not reach it. Until a compose line
-passes it, use `-e` on manual commands; the nightly step in `scripts/run_daily_digest_job.sh` then
-does nothing (it runs the command with the flag off and logs `disabled`).
+`{"state": "disabled", ...}`, exits 0 and writes nothing. `docker-compose.prod.yml` passes the
+variable from the server `.env` (default `false`). Set `AINEWS_PERIOD_SIGNALS_ENABLED=true` there to
+turn on both manual runs and the nightly step in `scripts/run_daily_digest_job.sh`; with it unset
+the nightly step logs `disabled` and does nothing.
 
 After the deploy (the migration runs with `alembic upgrade head` in the deploy script and adds two
 empty tables):
 
 ```bash
 L="flock -w 7200 /tmp/ai-news-auto-update.lock"
-C="docker compose -f docker-compose.prod.yml run --rm -e AINEWS_PERIOD_SIGNALS_ENABLED=true"
+C="docker compose -f docker-compose.prod.yml run --rm"
 
 # backfill the first three weeks (2026-10-12, 10-19, 10-26), oldest first
 $L $C app ai-news period-signals --backfill 3

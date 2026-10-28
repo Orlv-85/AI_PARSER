@@ -101,13 +101,13 @@ AINEWS_DAILY_SIGNALS_BRIEF_MODEL=deepseek-v4-pro  # model of the daily "In brief
 The key is the existing `DS_API_KEY`. The CLI flags `--max-calls`, `--max-seconds` and
 `--max-usd` override the caps for one invocation. Bounds: calls 1-5000, seconds 60-14400.
 
-In production (`docker-compose.prod.yml`) only `AINEWS_DAILY_SIGNALS_ENABLED` is passed to the
-container; the other settings keep their defaults there (the brief uses `deepseek-v4-pro`), so use
+In production (`docker-compose.prod.yml`) only `AINEWS_DAILY_SIGNALS_ENABLED` of the daily signals
+settings is passed to the container; the other settings keep their defaults there (the brief uses `deepseek-v4-pro`), so use
 the CLI flags for caps.
 
 Period AI Signals (feature 017) compute weekly numbers from the stored daily data, with no provider
-calls. `AINEWS_PERIOD_SIGNALS_ENABLED=false` (default) makes `ai-news period-signals` do nothing; it is
-not passed to the container by `docker-compose.prod.yml`. Details: `docs/period-signals.md`.
+calls. `AINEWS_PERIOD_SIGNALS_ENABLED=false` (default) makes `ai-news period-signals` do nothing;
+`docker-compose.prod.yml` passes it from the server `.env` with default `false`. Details: `docs/period-signals.md`.
 
 ```dotenv
 AINEWS_PERIOD_SIGNALS_ENABLED=false         # gates the period-signals command (weekly numbers, $0)
