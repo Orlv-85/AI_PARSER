@@ -40,7 +40,10 @@ flowchart LR
 - `--catch-up` considers the last `DAILY_CATCH_UP_DAYS` completed UTC days, oldest first: days with
   a latest `held_collection_paused` report and yesterday when no report exists. The digest job runs
   signals for days it publishes; the fetch job requests catch-up after a successful fetch when a
-  recent held report exists. Tests: `test_catch_up_publishes_held_days_oldest_first`,
+  recent held report exists. After the daily signals the job runs `ai-news period-signals` (017) under
+  the same lock with its own bounded timeout; its failure never changes the job result. Tests:
+  `test_daily_job_period_signals_failure_keeps_success_and_removes_container`,
+  `test_catch_up_publishes_held_days_oldest_first`,
   `test_catch_up_keeps_days_held_while_paused`, `test_catch_up_ignores_days_older_than_limit`,
   `test_daily_publish_catch_up_exits_two_when_a_day_is_held`,
   `test_digest_job_held_skips_signals_and_exits_zero`,
