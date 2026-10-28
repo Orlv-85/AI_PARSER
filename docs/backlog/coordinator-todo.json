@@ -10,8 +10,10 @@
       "title": "After the v0.1.129 nightly fetch: admission_decisions pending falls from 516 to about 70; the 445 openai_news rows are settled as stale_pending and their attempts stop growing; nightly fetch, digest and archive green",
       "due": "2026-10-28",
       "priority": "P1",
-      "status": "todo",
-      "source": "PR #116"
+      "status": "done",
+      "source": "PR #116",
+      "done": "2026-10-28",
+      "result": "Night of 2026-10-28 on v0.1.132: admission pending 516 -> 72, openai_news pending 0, stale_pending 763 -> 1208; fetch, digest (86 in scope), archive (coverage 95.7%) green; fetch_run_finished shows fetched 4225, examined 1769, sources_fetched 152."
     },
     {
       "id": "ARCHIVE-week",
@@ -69,14 +71,17 @@
       "id": "UA",
       "title": "Fetcher and archive DEFAULT_USER_AGENT imitates a browser; decide an honest bot user agent (site policies, legal)",
       "priority": "P3",
-      "status": "backlog",
-      "needs": "owner decision"
+      "status": "done",
+      "done": "2026-10-28",
+      "result": "PR #127 (v0.1.132): one bot user agent ai-news-collector/<version> (+https://5kzt.l.time4vps.cloud/) for fetch, archive, evidence, robots.txt and probes; robots rules matched on the bot token. Measured before the switch: 88 enabled sources answer the same to both user agents; www.intel.com newsroom 403 -> 200. Note: docs/archive/2026-10/report-ua-options-2026-10-28.md."
     },
     {
       "id": "S-onb",
       "title": "Source onboarding: an HTML candidate is validated by a single link; three URL normalizations (normalize_candidate_url, _url_key, canonicalize_url)",
       "priority": "P3",
-      "status": "backlog"
+      "status": "done",
+      "done": "2026-10-28",
+      "result": "PR #126 (v0.1.132): an HTML candidate is validated by HTML_SAMPLE_LINKS (3) fetched links that all pass the article check (warning otherwise; a warning candidate is added by hand in sources.yaml); onboarding and intake use candidate_url_key, the pipeline's canonical key."
     },
     {
       "id": "ATTRIBUTION",
