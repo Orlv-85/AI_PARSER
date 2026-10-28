@@ -442,3 +442,41 @@ class DailySignalsResponse(BaseModel):
     article_event_types: dict[str, str] = Field(default_factory=dict)
     quiet: bool = False
     brief: DailySignalBrief | None = None
+
+
+class PeriodSignalsResponse(BaseModel):
+    """Stored weekly/monthly signals (017). Nested sections are passed through as stored."""
+    period_kind: Literal["week", "month"]
+    period_start: date | None = None
+    period_end: date | None = None
+    status: Literal["ready", "partial", "building_history", "unavailable"]
+    methodology_version: str | None = None
+    daily_methodology_version: str | None = None
+    extraction_version: str | None = None
+    generated_at: datetime | None = None
+    thresholds: dict[str, Any] = Field(default_factory=dict)
+    coverage: dict[str, Any] = Field(default_factory=dict)
+    quiet: bool = False
+    comparison: dict[str, Any] = Field(default_factory=dict)
+    sections: dict[str, str] = Field(default_factory=dict)
+    top_stories: list[dict[str, Any]] = Field(default_factory=list)
+    top_entities: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
+    new: list[dict[str, Any]] = Field(default_factory=list)
+    rising: list[dict[str, Any]] = Field(default_factory=list)
+    cooling: list[dict[str, Any]] = Field(default_factory=list)
+    trend_source: str | None = None
+    event_mix: dict[str, Any] = Field(default_factory=dict)
+    notes: list[str] = Field(default_factory=list)
+    brief: dict[str, Any] | None = None  # R4 fills it; always null for now
+
+
+class PeriodSignalsIndexItem(BaseModel):
+    period_kind: Literal["week", "month"]
+    period_start: date
+    period_end: date
+    status: Literal["ready", "partial", "building_history", "unavailable"]
+    computed_at: datetime
+
+
+class PeriodSignalsIndexResponse(BaseModel):
+    periods: list[PeriodSignalsIndexItem] = Field(default_factory=list)

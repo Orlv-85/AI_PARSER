@@ -103,4 +103,24 @@ for SIGNAL_DATE in $SIGNAL_DATES; do
       timeout -k 10 60 docker rm -f "$name" >/dev/null 2>&1 || true
     }
 done
+
+# Period (weekly) signals: stored data only, no provider. The command does nothing while
+# AINEWS_PERIOD_SIGNALS_ENABLED is off. A failure never changes the job result.
+remaining=$((BUDGET - ($(date +%s) - AINEWS_DAILY_JOB_START) - 600))
+if [ "$remaining" -lt 300 ]; then
+  echo "period-signals skipped: not enough time left in the job budget" >&2
+  exit 0
+fi
+if [ "$remaining" -gt 600 ]; then remaining=600; fi
+if ! command -v timeout >/dev/null 2>&1; then
+  echo "period-signals skipped: timeout is not installed" >&2
+  exit 0
+fi
+name="ai-news-period-signals"
+timeout -k 30 "$remaining" docker compose -f "$COMPOSE_FILE" run --rm --name "$name" app \
+  ai-news period-signals \
+  || {
+    echo "period-signals failed or timed out; the published digest is unaffected" >&2
+    timeout -k 10 60 docker rm -f "$name" >/dev/null 2>&1 || true
+  }
 exit 0
