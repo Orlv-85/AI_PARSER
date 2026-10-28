@@ -11,6 +11,7 @@ Specs in `specs/` are the history of how a feature got there.
 | System overview | [src/app/README.md](../src/app/README.md) | - |
 | Daily digest enrichment | [src/app/core/daily/enrichment.md](../src/app/core/daily/enrichment.md) | `src/app/core/daily/enrichment.py` |
 | Daily AI Signals (006, 007) | [src/app/core/daily/signals.md](../src/app/core/daily/signals.md) | `src/app/core/daily/signals.py` |
+| Period AI Signals (017) | [src/app/core/periodic/signals_period.md](../src/app/core/periodic/signals_period.md) | `src/app/core/periodic/signals_period.py` |
 | Fetch pipeline (001, 002, admission) | [src/app/core/ingestion/pipeline.md](../src/app/core/ingestion/pipeline.md) | `src/app/core/ingestion/pipeline.py` |
 | Source onboarding (003, 011) | [src/app/core/sources/onboarding.md](../src/app/core/sources/onboarding.md) | `src/app/core/sources/onboarding.py` |
 | Article archive (016) | [src/app/core/archive/capture.md](../src/app/core/archive/capture.md) | `src/app/core/archive/capture.py` |

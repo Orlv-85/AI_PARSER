@@ -24,6 +24,7 @@ from app.core.daily.signals_model import (
 )
 from app.core.daily.signals_naming import proper_name, same_vendor, specific_variant, unit_key
 from app.core.daily.signals_stories import Story, _article_order, cluster, linked_articles, links
+from app.core.daily.signals_trend import trend_delta, trend_windows, unit_articles, window_units
 from app.storage.journal_files import fingerprint
 
 __all__ = [
@@ -148,10 +149,7 @@ class _Snapshot:
 
     # Counts ---------------------------------------------------------------------------------
     def unit_articles(self, day: date) -> dict[str, list[ArticleObs]]:
-        out: dict[str, list[ArticleObs]] = defaultdict(list)
-        for a in self.data.observations.get(day, ()):
-            for unit in sorted({unit_key(m.entity_key) for m in a.mentions}):
-                out[unit].append(a)
+        out: dict[str, list[ArticleObs]] = unit_articles(self.data.observations.get(day, ()))
         return out
 
     def representative(self, unit: str, days: Iterable[date]) -> str:
@@ -258,18 +256,9 @@ class _Snapshot:
         return cov is not None and cov.kind == "signals"
 
     def windows(self) -> tuple[list[date], list[date]] | None:
-        w = self.t.window_days
-        current = [self.day - timedelta(days=i) for i in range(w)]
-        previous = [self.day - timedelta(days=i) for i in range(w, 2 * w)]
-        if min(previous) < self.data.comparable_from:
-            return None
-        cur = [d for d in current if self.complete(d)]
-        prev = [d for d in previous if self.complete(d)]
-        if len(cur) < self.t.window_min_complete or len(prev) < self.t.window_min_complete:
-            return None
-        if not self.extracted(cur) or not self.extracted(prev):
-            return None
-        return cur, prev
+        usable: tuple[list[date], list[date]] | None = trend_windows(
+            self.day, self.data.coverage, self.data.comparable_from, self.t)
+        return usable
 
     def extracted(self, days: Iterable[date]) -> int:
         return sum(self.data.coverage[d].extracted for d in days)
@@ -283,40 +272,32 @@ class _Snapshot:
             rising = [dict(s) for s in kept][:self.t.rising_max]
             return rising, [], False
         cur_days, prev_days = usable
-        ratio = self.extracted(cur_days) / self.extracted(prev_days)
-        cur_units = self._window_units(cur_days)
-        prev_units = self._window_units(prev_days)
-        rising, cooling = [], []
         today = self.unit_articles(self.day)
-        for unit in sorted(set(cur_units) | set(prev_units)):
-            if unit in excluded:
-                continue
-            cur_a, prev_a = cur_units.get(unit, []), prev_units.get(unit, [])
-            cur, prev = len(cur_a), len(prev_a)
-            expected = prev * ratio
-            counts = {"current_7d": cur, "previous_7d": prev, "expected_7d": _r(expected),
-                      "today": len(today.get(unit, ()))}
-            if cur >= self.t.rising_min_current and cur - expected >= self.t.rising_min_delta \
-                    and cur >= self.t.rising_ratio * max(expected, 1) \
-                    and len({a.publisher for a in cur_a}) >= self.t.rising_min_publishers:
-                spike = spike_units.get(unit)
-                item = self.trend_item(unit, cur_days, cur_a, **counts,
-                                       publishers=len({a.publisher for a in cur_a}),
-                                       spike=spike is not None,
+        rising, cooling = [], []
+        for row in trend_delta(self.data.coverage, cur_days, prev_days,
+                               cur_units=window_units(self.data.observations, cur_days),
+                               prev_units=window_units(self.data.observations, prev_days),
+                               excluded=excluded, t=self.t):
+            counts = {"current_7d": row.current, "previous_7d": row.previous,
+                      "expected_7d": _r(row.expected), "today": len(today.get(row.unit, ()))}
+            if row.rising:
+                publishers = len({a.publisher for a in row.current_articles})
+                spike = spike_units.get(row.unit)
+                item = self.trend_item(row.unit, cur_days, row.current_articles, **counts,
+                                       publishers=publishers, spike=spike is not None,
                                        trailing_mean=spike["trailing_mean"] if spike else None)
                 if item is not None and spike is not None and "reason" in spike:
                     item["reason"] = spike["reason"]
                 if item is not None:
-                    item["_unit"] = unit
-                    item["_delta"] = cur - expected
+                    item["_unit"] = row.unit
+                    item["_delta"] = row.rising_delta
                     rising.append(item)
-            if prev >= self.t.cooling_min_previous and expected - cur >= self.t.cooling_min_delta \
-                    and cur <= self.t.cooling_ratio * expected \
-                    and len({a.publisher for a in prev_a}) >= self.t.cooling_min_publishers:
-                item = self.trend_item(unit, prev_days, prev_a, **counts,
-                                       publishers=len({a.publisher for a in prev_a}))
+            if row.cooling:
+                item = self.trend_item(row.unit, prev_days, row.previous_articles, **counts,
+                                       publishers=len({a.publisher
+                                                       for a in row.previous_articles}))
                 if item is not None:
-                    item["_delta"] = expected - cur
+                    item["_delta"] = row.cooling_delta
                     cooling.append(item)
         rising.sort(key=lambda i: (-i["_delta"], -i["current_7d"], i["name"]))
         cooling.sort(key=lambda i: (-i["_delta"], -i["previous_7d"], i["name"]))
@@ -325,13 +306,6 @@ class _Snapshot:
         for item in rising + cooling:
             item.pop("_delta", None)
         return rising[:self.t.rising_max], cooling[:self.t.cooling_max], True
-
-    def _window_units(self, days: Iterable[date]) -> dict[str, list[ArticleObs]]:
-        out: dict[str, list[ArticleObs]] = defaultdict(list)
-        for day in days:
-            for unit, articles in self.unit_articles(day).items():
-                out[unit].extend(articles)
-        return out
 
     # Payload --------------------------------------------------------------------------------
     def build(self) -> dict[str, Any]:

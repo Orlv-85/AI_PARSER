@@ -180,6 +180,7 @@ GET /?date=D                                     web/signals_view.py: render_sig
 | `core/daily/signals_extract.py` | Extraction prompt, request body, answer validation (`EXTRACTION_VERSION`) | yes |
 | `core/daily/signals_entities.py` | Deterministic entity identity: keys, vendor classes, reconciliation, overrides | yes |
 | `core/daily/signals_compute.py` | Snapshot of one day (`compute_snapshot`, `_Snapshot`, `METHODOLOGY_VERSION`, `payload_hash`, folding, quiet flag); re-exports the input records for the repo | yes |
+| `core/daily/signals_trend.py` | Rising/Cooling window rule shared with the period signals (`trend_windows`, `trend_delta`, `TrendRow`, `unit_articles`, `window_units`); the snapshot builds its items from the rows. Window of D includes D | yes |
 | `core/daily/signals_model.py` | `Thresholds`, `ArticleObs`, `EntityMention`, `DayCoverage`, `SnapshotInput`, event labels and display orders | yes |
 | `core/daily/signals_stories.py` | Story clustering (`cluster`, `Story`), `links`, `linked_articles` | yes |
 | `core/daily/signals_lines.py` | `one_liner` of a New item, sentence split | yes |
