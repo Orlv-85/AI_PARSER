@@ -111,9 +111,10 @@
     {
       "id": "B2",
       "title": "Weekly and monthly analytics on the 006 data (backlog-todo.json B2)",
-      "status": "in_progress",
-      "note": "Spec 017: R1 (weekly v2 code and its collection hooks deleted, F1 finding 4 closed by deleting the recorder) live as v0.1.133 on 2026-10-28. Next: R2 numbers, R3 page, R4 briefs, R5 retire legacy weekly, R6 month.",
-      "source": "specs/017-weekly-monthly-signals"
+      "status": "done",
+      "note": "Spec 017 shipped in one day: R1 v2 code deleted (v0.1.133), R2 numbers (v0.1.134), R3 /weekly (v0.1.135), R5 legacy weekly retired, 308 redirects (v0.1.136), R4 weekly and monthly brief (v0.1.137), R6 /monthly (v0.1.138), T041 v2 tables dropped after a verified restore (v0.1.139, DB 182 -> 141 MB). Prod flags AINEWS_PERIOD_SIGNALS_ENABLED and AINEWS_PERIOD_SIGNALS_BRIEF_ENABLED on; first weekly brief (week 2026-10-19) cost $0.008.",
+      "source": "specs/017-weekly-monthly-signals",
+      "done": "2026-10-28"
     },
     {
       "id": "T1",
@@ -152,6 +153,38 @@
       "priority": "P3",
       "status": "todo",
       "source": "coordinator, night of 2026-10-28"
+    },
+    {
+      "id": "PERIOD-1029",
+      "title": "Night of 2026-10-29 on v0.1.139: daily digest job green including the period-signals step (log: week 2026-10-19 unchanged, brief cached, month skipped); fetch writes no weekly_* rows (v2 tables are gone)",
+      "due": "2026-10-29",
+      "priority": "P1",
+      "status": "todo",
+      "source": "specs/017-weekly-monthly-signals"
+    },
+    {
+      "id": "PERIOD-WEEK-1026",
+      "title": "Nights of 2026-11-02/03: week 2026-10-26 stored as ready, its brief ok (cost about $0.01), /weekly shows it",
+      "due": "2026-11-03",
+      "priority": "P1",
+      "status": "todo",
+      "source": "specs/017-weekly-monthly-signals"
+    },
+    {
+      "id": "PERIOD-BRIEF-TRENDS",
+      "title": "Weekly brief retells top stories and says little about trends; review 2-3 weekly briefs, then propose a prompt change (PERIOD_BRIEF_VERSION bump) if it stays so",
+      "due": "2026-11-17",
+      "priority": "P3",
+      "status": "todo",
+      "source": "coordinator 2026-10-28"
+    },
+    {
+      "id": "PERIOD-MONTH-1201",
+      "title": "Night of 2026-12-01: November stored (building_history), its brief ok (cap $0.08), /monthly shows it and the Monthly nav link appears",
+      "due": "2026-12-01",
+      "priority": "P2",
+      "status": "todo",
+      "source": "specs/017-weekly-monthly-signals"
     }
   ]
 }
