@@ -333,7 +333,8 @@ flowchart LR
 | `?week=` that is not a Monday redirects (303) to its Monday; text that is not a date gives the unavailable page (decided 2026-10-28 (agent)) | a shared link with any day of the week still lands on the week; garbage never gives a 422 or 500 page |
 | The nav link and the line on `/` follow the default week of the page (newest `ready` or `building_history`, else newest stored) (decided 2026-10-28 (agent)) | the link text and the page it opens always agree |
 | The page uses `digest.css` plus a small `period.css` and no script (decided 2026-10-28 (agent)) | no client re-render is needed (plan "Web"); the daily classes are reused |
-| The legacy weekly pages, the preview on `/` and the Monday legacy report are retired (owner answer 2026-10-28, 017 R5) | they mostly said "Insufficient comparable source coverage"; the legacy read API, `POST` and tables stay for compatibility, the weekly v2 tables go in a later release |
+| The legacy weekly pages, the preview on `/` and the Monday legacy report are retired (owner answer 2026-10-28, 017 R5) | they mostly said "Insufficient comparable source coverage"; the legacy read API, `POST` and tables stay for compatibility, the weekly v2 tables go in a later release (dropped, next row) |
+| The 8 weekly v2 tables are dropped by migration `a7d3e5b18c94` and their model classes deleted (owner answer Q1, 2026-10-28, 017 T041); downgrade recreates them empty. Restore of the latest dump verified first: `specs/017-weekly-monthly-signals/records/report-t041-restore-2026-10-28.md` | the data was test-only and a restore was proven; the rollback is the dump |
 | The brief reuses the daily brief code, parameterised for sentence counts, prompt, output bound and version (decided 2026-10-28, agent) | one validation for both briefs; the daily prompt, packet, input hash and request key are unchanged (checked once against the daily fixtures: five days, packet, id map, input hash, request body and key identical before and after) |
 | Both briefs are built in one release, week values live and month values defined now; the weekly brief is switched on when it ships, the monthly one runs from 2026-12-01 (owner answer Q2, 2026-10-28) | the month numbers arrive in R6; a month brief is never attempted while no month row exists |
 | A default (nightly) run briefs only the latest completed week; `--with-brief` is the paid backfill (decided 2026-10-28, agent) | the plan calls brief backfill a separate paid flag; the nightly cost stays one brief a week |
@@ -359,7 +360,7 @@ flowchart LR
   `test_payload_hash_is_stable_and_ignores_day_order`.
 - A missing day is never a zero day. Tests: `test_a_missing_day_is_not_zero`,
   `test_coverage_missing_day_is_listed_not_zero`.
-- A period run writes only `period_signal_*` tables; digest, articles, signals and weekly tables stay
+- A period run writes only `period_signal_*` tables; digest, articles, signals and legacy weekly tables stay
   untouched. Tests: `test_a_period_run_writes_only_period_signal_tables`.
 - Only `period_brief_run.py` can reach a provider (through the signals ledger) and only in the brief
   step; the request path (routes, storage, views) imports no provider code. Tests:
@@ -383,6 +384,7 @@ flowchart LR
 | `storage/period_signals.py` | `PeriodSignalRepo`: `context`, `load_input`, `previous`, `save_report`, `get_report`, `latest`, `index`, `digest_items`, `get_brief`, `save_brief` | no |
 | `core/daily/signals_brief.py` | Shared brief code: `ArticleRefs`, `fit_packet`, `parse_brief(counts=)`, `request_body(prompt=, max_output=)`, `input_hash(version)`; daily behavior unchanged | yes |
 | `storage/migrations/versions/f4a9c1d27b83_add_period_signals.py` | the two tables, skip-if-exists, `down_revision` `e7b4c2a9d150` | no |
+| `storage/migrations/versions/a7d3e5b18c94_drop_weekly_v2_tables.py` | drops the 8 weekly v2 tables; tests `tests/unit/test_drop_weekly_v2_migration.py` | no |
 | `web/period_view.py`, `web/period.html`, `web/static/css/period.css` | the `/weekly` HTML, template and styles; `latest_week` and `has_month` (in the route file) feed the nav links and the line on `/`; one template serves `/weekly` and `/monthly` | no |
 | `web/routes/period.py` | the two read routes and the `/weekly` and `/monthly` page routes; response models `PeriodSignalsResponse`, `PeriodSignalsIndexResponse` in `web/models.py` | no |
 | `cli/main.py` `period-signals` | options and flag check; flags `period_signals_enabled`, `period_signals_brief_enabled` and `period_signals_max_usd` in `config/settings.py` | no |

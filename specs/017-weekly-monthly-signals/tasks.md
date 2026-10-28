@@ -97,7 +97,7 @@ rules, names, tests and `covers` globs it ships.
   preview section in `digest.html`/`digest.js`/`digest.css` by the link; `/weekly-ai-analytics*`
   answer 308 to `/weekly`; delete the two legacy pages and nav links; keep the legacy API and tables.
   Update `web/pages.md`, `pipeline.md`, route table test, `docs/README.md`.
-- [ ] T041 [US3] One release later, after a verified restore of the latest dump (record it):
+- [x] T041 [US3] One release later, after a verified restore of the latest dump (record it):
   migration dropping the 8 v2 tables (`IF EXISTS`; downgrade recreates empty), delete their model
   classes. Confirm `create_all()` and the migration chain on SQLite and PostgreSQL.
 
