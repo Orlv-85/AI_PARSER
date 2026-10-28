@@ -3,7 +3,7 @@
   "created": "2026-10-27",
   "updated": "2026-10-28",
   "status": "active",
-  "how_to_use": "The coordinator keeps this list current (docs PR). Product ideas live in backlog-todo.json, agent tooling in tooling-todo.json; items here may point to them. Statuses: todo, waiting_owner, backlog, deferred, done. Done items stay one week, then are removed.",
+  "how_to_use": "The coordinator keeps this list current (docs PR). Product ideas live in backlog-todo.json, agent tooling in tooling-todo.json; items here may point to them. Statuses: todo, in_progress, waiting_owner, backlog, deferred, done. Done items stay one week, then are removed.",
   "items": [
     {
       "id": "PENDING-check",
@@ -20,9 +20,11 @@
       "title": "`ai-news archive status` (with APP_IMAGE): coverage_pct >= 90 over 7 nights (SC-002), gave_up counts (22 openai.com documents fail with http_403 and are expected to give up), top hosts without text",
       "due": "2026-10-30",
       "priority": "P1",
-      "status": "todo",
+      "status": "done",
       "source": "specs/016-article-archive",
-      "note": "The 4014 pending archive documents are the old articles of the 2026-10-24 seed (capture --all --no-download); only documents first seen within ARCHIVE_LOOKBACK_DAYS are due, so they stay pending by design. Decided 2026-10-27 (agent): no one-off download of them."
+      "note": "The 4014 pending archive documents are the old articles of the 2026-10-24 seed (capture --all --no-download); only documents first seen within ARCHIVE_LOOKBACK_DAYS are due, so they stay pending by design. Decided 2026-10-27 (agent): no one-off download of them.",
+      "done": "2026-10-28",
+      "result": "Checked 2026-10-28: coverage 95.7% (600/627), every day >= 91%, gave_up 0, no outage; 29 documents failed http_403 (22 openai.com, expected to give up); the 4020 pending are the old 2026-10-24 seed and stay pending by design."
     },
     {
       "id": "DB-SIZE-LOOP",
@@ -65,7 +67,8 @@
       "priority": "P2",
       "status": "backlog",
       "needs": "owner yes (prod write)",
-      "source": "docs/archive/2026-10/plan-ssh-deploy-user-2026-10-24.md"
+      "source": "docs/archive/2026-10/plan-ssh-deploy-user-2026-10-24.md",
+      "note": "Owner 2026-10-28: later, the current setup is safe enough."
     },
     {
       "id": "UA",
@@ -108,9 +111,9 @@
     {
       "id": "B2",
       "title": "Weekly and monthly analytics on the 006 data (backlog-todo.json B2)",
-      "status": "deferred",
-      "decided": "Owner 2026-10-24: not now, smaller items first",
-      "note": "When weekly work starts, also decide F1 finding 4: a failed source fetch is recorded as complete weekly coverage (cycle.py record_attempt outcome fetch_failure, complete=True); recommended complete=False."
+      "status": "in_progress",
+      "note": "Spec 017: R1 (weekly v2 code and its collection hooks deleted, F1 finding 4 closed by deleting the recorder) live as v0.1.133 on 2026-10-28. Next: R2 numbers, R3 page, R4 briefs, R5 retire legacy weekly, R6 month.",
+      "source": "specs/017-weekly-monthly-signals"
     },
     {
       "id": "T1",
@@ -142,6 +145,13 @@
       "status": "done",
       "done": "2026-10-27",
       "result": "Article-level AND gate at t=0.5: displayed precision 85% -> 96%, recall 81% -> 64%. Owner 2026-10-27: keep New as it is, drop the Jev gate. Report: specs/006-daily-ai-signals/records/report-jev-novelty-j1-2026-10-27.md."
+    },
+    {
+      "id": "ARCHIVE-LOG-DUP",
+      "title": "daily-archive.log writes each nightly summary line twice",
+      "priority": "P3",
+      "status": "todo",
+      "source": "coordinator, night of 2026-10-28"
     }
   ]
 }

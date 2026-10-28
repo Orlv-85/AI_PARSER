@@ -24,8 +24,8 @@
         "Next big spec: planner and implementer in separate sessions."
       ],
       "priority": 2,
-      "status": "deferred",
-      "status_note": "Owner 2026-10-24: not now, smaller items first."
+      "status": "in_progress",
+      "status_note": "Spec specs/017-weekly-monthly-signals (2026-10-28); R1 live as v0.1.133."
     },
     {
       "id": "B3",
