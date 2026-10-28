@@ -22,6 +22,7 @@ PAGE_ASSETS = {
         "/static/admin/sources.js",
     ],
     "/weekly": ["/static/css/digest.css", "/static/css/period.css"],
+    "/monthly": ["/static/css/digest.css", "/static/css/period.css"],
     "/news-stats": ["/static/css/news_stats.css", "/static/js/news_stats.js"],
     "/login": ["/static/css/login.css", "/static/js/login.js"],
 }

@@ -18,6 +18,7 @@ from app.core.daily.signals_entities import Reconciliation, reconcile
 from app.core.daily.signals_extract import EXTRACTION_VERSION
 from app.core.daily.signals_model import DayCoverage
 from app.core.periodic.period_model import (
+    MONTH,
     PeriodInput,
     PreviousPeriod,
     period_days,
@@ -34,7 +35,8 @@ from app.storage.models_sql import (
 
 LOGGER = logging.getLogger(__name__)
 
-# The helper path of the weekly risers needs the 7 days before the period (14 days in total).
+# The helper path of the weekly risers needs the 7 days before the period (14 days in total);
+# a month reads the whole previous month instead.
 LOOKBACK_DAYS = 7
 
 
@@ -100,6 +102,15 @@ class PeriodSignalRepo:
                          row.period_start.isoformat())
             return None
 
+    @staticmethod
+    def _lookback(kind: str, first_day: date) -> list[date]:
+        """Days read before the period: 7 for a week (helper path), the whole previous month for
+        a month (month risers compare month totals)."""
+        if kind == MONTH:
+            days: list[date] = period_days(kind, previous_start(kind, first_day))
+            return days
+        return [first_day - timedelta(days=i) for i in range(LOOKBACK_DAYS, 0, -1)]
+
     def load_input(self, kind: str, start: date, *, ctx: PeriodContext | None = None,
                    generated_at: datetime | None = None) -> PeriodInput:
         """Input of one period: its days plus the 7 days before (helper path), the stored
@@ -110,7 +121,7 @@ class PeriodSignalRepo:
                             generated_at=generated_at or _now(),
                             comparable_from=self.comparable_from)
         days = probe.days
-        wanted = [days[0] - timedelta(days=i) for i in range(LOOKBACK_DAYS, 0, -1)] + days
+        wanted = self._lookback(kind, days[0]) + days
         observations = self.daily.observations(ctx.result, ctx.evidence, wanted)
         return PeriodInput(
             kind=kind, start=start, snapshots=self.snapshots(days),

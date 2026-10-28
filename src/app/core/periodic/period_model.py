@@ -29,6 +29,17 @@ class PeriodThresholds:  # pylint: disable=too-many-instance-attributes
     top_entity_min_publishers: int
     new_period_max: int
     links_max: int = 3
+    # Month risers and coolers (trend_delta over month totals); None for a week.
+    month_rising_min_current: int | None = None
+    month_rising_min_delta: int | None = None
+    month_rising_ratio: float | None = None
+    month_rising_min_publishers: int | None = None
+    month_rising_max: int | None = None
+    month_cooling_min_previous: int | None = None
+    month_cooling_min_delta: int | None = None
+    month_cooling_ratio: float | None = None
+    month_cooling_min_publishers: int | None = None
+    month_cooling_max: int | None = None
 
     @classmethod
     def for_kind(cls, kind: str) -> PeriodThresholds:
@@ -39,7 +50,12 @@ class PeriodThresholds:  # pylint: disable=too-many-instance-attributes
         if kind == MONTH:
             return cls(MONTH, min_complete_days=24, min_items=400, breadth_ratio=0.7,
                        quiet_items=600, top_max=12, top_entity_max=8, top_entity_min_articles=6,
-                       top_entity_min_publishers=3, new_period_max=16)
+                       top_entity_min_publishers=3, new_period_max=16,
+                       month_rising_min_current=12, month_rising_min_delta=8,
+                       month_rising_ratio=1.5, month_rising_min_publishers=3,
+                       month_rising_max=8, month_cooling_min_previous=15,
+                       month_cooling_min_delta=8, month_cooling_ratio=0.5,
+                       month_cooling_min_publishers=3, month_cooling_max=6)
         raise ValueError(f"unknown period kind: {kind}")
 
 
@@ -103,6 +119,11 @@ def period_days(kind: str, day: date) -> list[date]:
 def previous_start(kind: str, start: date) -> date:
     """Start of the period before the one that starts on `start`."""
     return period_bounds(kind, start - timedelta(days=1))[0]
+
+
+def next_start(kind: str, start: date) -> date:
+    """Start of the period after the one that starts on `start`."""
+    return period_bounds(kind, start)[1] + timedelta(days=1)
 
 
 def period_status(limits: PeriodThresholds, *, snapshot_days: int, complete_days: int, items: int,

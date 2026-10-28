@@ -1,6 +1,6 @@
 import json
 from dataclasses import replace
-from datetime import date, timedelta
+from datetime import timedelta
 
 from period_fixtures import (  # pylint: disable=import-error
     WEEK,
@@ -178,15 +178,6 @@ def test_rising_snapshot_without_usable_windows_falls_back_to_the_helper():
     out = compute_period(replace(data, snapshots={**data.snapshots, data.end: spikes_only}))
     assert out["trend_source"] == "helper"
     assert METHODOLOGY_VERSION == sunday["methodology_version"]
-
-
-def test_month_has_no_risers_yet():
-    data = synthetic({date(2026, 11, d): snap() for d in range(1, 31)}, kind="month",
-                     start=date(2026, 11, 1), previous=PreviousPeriod("ready", 0, {}))
-    out = compute_period(data)
-    assert out["comparison"]["state"] == "ready"
-    assert out["rising"] == [] and out["sections"]["rising"] == "not_built"
-    assert out["thresholds"]["min_complete_days"] == 24
 
 
 # Event mix -------------------------------------------------------------------------------------

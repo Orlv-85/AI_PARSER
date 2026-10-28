@@ -1,6 +1,6 @@
 """The /weekly page and its links (017 R3): states, escaping, ?week=, nav link, line on `/`."""
 import json
-from datetime import timedelta
+from datetime import date, timedelta
 from importlib import import_module
 
 import pytest
@@ -12,7 +12,7 @@ from test_web_period_signals_api import W1, W2, W3, computed, store  # pylint: d
 from app.config.settings import get_settings
 from app.storage.models_sql import Base
 from app.web.app import create_app
-from app.web.period_view import week_label
+from app.web.period_view import month_label, week_label
 
 
 @pytest.fixture(name="client")
@@ -163,3 +163,107 @@ def test_home_page_survives_a_period_read_failure(client, monkeypatch):
     response = http.get("/?date=2026-10-16")
     assert response.status_code == 200 and 'href="/weekly"' not in response.text
     assert json.loads('"ok"') == "ok"
+
+
+# Month ---------------------------------------------------------------------------------------
+NOV, DEC = date(2026, 11, 1), date(2026, 12, 1)
+
+
+def computed_month(status=None, start=NOV):
+    payload = computed(status)
+    end = (start.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+    payload.update(period_kind="month", period_start=start.isoformat(), period_end=end.isoformat())
+    payload["rising"] = [{"entity_id": 1, "name": "Alpha", "type": "model", "vendor": None,
+                          "current": 30, "previous": 5, "expected": 5.0, "publishers": 4,
+                          "links": [{"title": "t", "url": "https://x.example/a",
+                                     "publisher": "x.example"}]}]
+    payload["cooling"] = []
+    return payload
+
+
+def store_month(maker, engine, start, payload, *, status="ready"):
+    end = (start.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+    store(maker, engine, start, payload, status=status, kind="month", end=end)
+
+
+def test_month_label():
+    assert month_label(NOV) == "November 2026" and month_label(date(2027, 1, 1)) == "January 2027"
+
+
+def test_ready_month_shows_its_sections_and_month_words(client):
+    http, maker, engine = client
+    store_month(maker, engine, NOV, computed_month())
+    html = http.get("/monthly").text
+    assert "<h2 class=\"period-heading\">November 2026</h2>" in html
+    assert "Monthly AI Signals" in html and 'id="monthly-signals"' in html
+    ids = ["period-stories", "period-entities", "period-new", "period-trends", "period-events"]
+    assert [html.index(f'id="{i}"') for i in ids] == sorted(html.index(f'id="{i}"') for i in ids)
+    assert "New this month" in html and "month: 5 &rarr; 30 (expected 5)" in html
+    assert "7d:" not in html and "Week of" not in html and "this week" not in html
+    assert 'href="/weekly">Weekly</a>' in html and 'href="/monthly">Monthly' not in html
+
+
+def test_month_states_use_month_words(client):
+    http, maker, engine = client
+    assert "Monthly signals are not available yet." in http.get("/monthly").text
+    payload = computed_month("building_history")
+    payload["comparison"] = {"state": "none", "reason": "no_previous_period"}
+    payload["sections"]["rising"] = payload["sections"]["cooling"] = "hidden"
+    payload["quiet"] = True
+    store_month(maker, engine, NOV, payload, status="building_history")
+    html = http.get("/monthly").text
+    assert "First month, no comparison with a previous month." in html
+    assert "Quiet month: only" in html
+    partial = computed_month("partial", DEC)
+    store_month(maker, engine, DEC, partial, status="partial")
+    shown = http.get("/monthly").text
+    assert "November 2026" in shown  # the default skips a newer partial month
+    assert "Partial month" in http.get("/monthly?month=2026-12").text
+    assert "(partial)" in http.get("/monthly?month=2026-12").text
+
+
+def test_month_param_and_picker(client):
+    http, maker, engine = client
+    store_month(maker, engine, NOV, computed_month())
+    store_month(maker, engine, DEC, computed_month(None, DEC))
+    assert "November 2026" in http.get("/monthly?month=2026-11").text
+    moved = http.get("/monthly?month=2026-11-17")
+    assert moved.status_code == 303 and moved.headers["location"] == "/monthly?month=2026-11"
+    latest = http.get("/monthly").text
+    assert "December 2026" in latest and 'rel="prev" href="/monthly?month=2026-11"' in latest
+    assert 'rel="next"' not in latest
+    assert 'rel="next" href="/monthly?month=2026-12"' in http.get("/monthly?month=2026-11").text
+    for odd in ("garbage", "2026-13", "2026-1", "2027-01"):
+        response = http.get(f"/monthly?month={odd}")
+        assert response.status_code == 200 and "not available for this month" in response.text
+        assert "period-picker" in response.text
+
+
+def test_corrupt_month_row_is_200(client):
+    http, maker, engine = client
+    store_month(maker, engine, NOV, '{"period_kind": "month", "status": "ready", "new": [null]}')
+    response = http.get("/monthly?month=2026-11")
+    assert response.status_code == 200 and "Monthly AI Signals" in response.text
+    store_month(maker, engine, DEC, "not json")
+    assert http.get("/monthly?month=2026-12").status_code == 200
+
+
+def test_monthly_nav_link_needs_a_month_row(client):
+    http, maker, engine = client
+    store(maker, engine, W1, computed(None, W1))
+    for path in ("/?date=2026-10-16", "/weekly"):
+        assert 'href="/monthly"' not in http.get(path).text
+    assert 'href="/weekly">Weekly</a>' in http.get("/monthly").text  # back link, no row needed
+    store_month(maker, engine, NOV, computed_month())
+    for path in ("/?date=2026-10-16", "/weekly"):
+        assert '<a class="hero-link" href="/monthly">Monthly</a>' in http.get(path).text
+
+
+def test_monthly_nav_link_is_hidden_when_the_read_fails(client, monkeypatch):
+    http, maker, engine = client
+    store_month(maker, engine, NOV, computed_month())
+    monkeypatch.setattr("app.web.routes.period.PeriodSignalRepo.index",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    response = http.get("/?date=2026-10-16")
+    assert response.status_code == 200 and 'href="/monthly"' not in response.text
+    assert http.get("/monthly").status_code == 200

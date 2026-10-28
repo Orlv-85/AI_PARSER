@@ -4,17 +4,18 @@ Pure and deterministic: no database, no provider, no clock. `generated_at` is an
 """
 import copy
 from collections import Counter, defaultdict
-from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import asdict
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import asdict, replace
 from datetime import date
 from typing import Any
 
 from app.core.daily.signals_brief import HARD_EVENTS
 from app.core.daily.signals_compute import METHODOLOGY_VERSION, payload_hash
-from app.core.daily.signals_model import EVENT_LABELS, ArticleObs
+from app.core.daily.signals_model import EVENT_LABELS, ArticleObs, Thresholds
 from app.core.daily.signals_naming import unit_key
 from app.core.daily.signals_stories import _article_order, links
 from app.core.daily.signals_trend import (
+    TrendRow,
     trend_delta,
     trend_windows,
     unit_articles,
@@ -24,7 +25,9 @@ from app.core.periodic.period_model import (
     MONTH,
     PeriodInput,
     PeriodThresholds,
+    period_days,
     period_status,
+    previous_start,
 )
 
 __all__ = ["PERIOD_METHODOLOGY_VERSION", "compute_period", "payload_hash"]
@@ -168,9 +171,9 @@ def new_this_period(data: PeriodInput) -> list[dict[str, Any]]:
 def risers_and_coolers(data: PeriodInput) -> dict[str, Any]:
     """Week: the daily computation with D = the last day of the week. The Sunday snapshot is used
     when its methodology is current and its Rising was usable, else the shared helper runs over
-    the week bounds. Month: not built here."""
+    the week bounds. Month: the shared rule over month totals against the previous month."""
     if data.kind == MONTH:
-        return {"state": "not_built", "source": None, "rising": [], "cooling": []}
+        return _month_risers(data)
     end = data.end
     snap = data.snapshots.get(end)
     if snap is not None and snap.get("methodology_version") == METHODOLOGY_VERSION:
@@ -188,15 +191,84 @@ def _risers_from_helper(data: PeriodInput) -> dict[str, Any]:
         return {"state": "unavailable", "source": "helper", "rising": [], "cooling": []}
     cur_days, prev_days = usable
     today = unit_articles(data.observations.get(data.end, ()))
-    rising: list[dict[str, Any]] = []
-    cooling: list[dict[str, Any]] = []
     rows = trend_delta(data.coverage, cur_days, prev_days,
                        cur_units=window_units(data.observations, cur_days),
                        prev_units=window_units(data.observations, prev_days),
                        excluded=set(), t=daily)
+
+    def counts(row: TrendRow) -> dict[str, Any]:
+        return {"current_7d": row.current, "previous_7d": row.previous,
+                "expected_7d": _r(row.expected), "today": len(today.get(row.unit, ()))}
+
+    rising, cooling = _ranked(data, rows, cur_days, prev_days, counts_of=counts,
+                              keys=("current_7d", "previous_7d"))
+    return {"state": "ready", "source": "helper", "rising": rising[:daily.rising_max],
+            "cooling": cooling[:daily.cooling_max]}
+
+
+def _month_thresholds(data: PeriodInput) -> Thresholds:
+    """The daily rule with the month minimums of `PeriodThresholds` (counts are month totals)."""
+    t = data.limits
+    return replace(
+        data.daily, rising_min_current=t.month_rising_min_current,
+        rising_min_delta=t.month_rising_min_delta, rising_ratio=t.month_rising_ratio,
+        rising_min_publishers=t.month_rising_min_publishers, rising_max=t.month_rising_max,
+        cooling_min_previous=t.month_cooling_min_previous,
+        cooling_min_delta=t.month_cooling_min_delta, cooling_ratio=t.month_cooling_ratio,
+        cooling_min_publishers=t.month_cooling_min_publishers, cooling_max=t.month_cooling_max)
+
+
+def _month_windows(data: PeriodInput) -> tuple[list[date], list[date]] | None:
+    """Complete days of this month and of the previous one; None when the previous month starts
+    before the comparable range, a month has fewer than `min_complete_days` complete days or no
+    extracted item."""
+    t, daily = data.limits, data.daily
+    before = period_days(MONTH, previous_start(MONTH, data.start))
+    if before[0] < data.comparable_from:
+        return None
+
+    def complete(days: list[date]) -> list[date]:
+        return [d for d in days if d in data.coverage and data.coverage[d].kind == "signals"
+                and data.coverage[d].complete(daily.complete_ratio)]
+
+    cur, prev = complete(data.days), complete(before)
+    if min(len(cur), len(prev)) < t.min_complete_days:
+        return None
+    if not sum(data.coverage[d].extracted for d in cur) or not sum(
+            data.coverage[d].extracted for d in prev):
+        return None
+    return cur, prev
+
+
+def _month_risers(data: PeriodInput) -> dict[str, Any]:
+    windows = _month_windows(data)
+    if windows is None:
+        return {"state": "unavailable", "source": "month_helper", "rising": [], "cooling": []}
+    cur_days, prev_days = windows
+    daily = _month_thresholds(data)
+    rows = trend_delta(data.coverage, cur_days, prev_days,
+                       cur_units=window_units(data.observations, cur_days),
+                       prev_units=window_units(data.observations, prev_days),
+                       excluded=set(), t=daily)
+
+    def counts(row: TrendRow) -> dict[str, Any]:
+        return {"current": row.current, "previous": row.previous, "expected": _r(row.expected)}
+
+    rising, cooling = _ranked(data, rows, cur_days, prev_days, counts_of=counts,
+                              keys=("current", "previous"))
+    return {"state": "ready", "source": "month_helper", "rising": rising[:daily.rising_max],
+            "cooling": cooling[:daily.cooling_max]}
+
+
+def _ranked(data: PeriodInput, rows: Sequence[TrendRow], cur_days: Sequence[date],
+            prev_days: Sequence[date], *, counts_of: Callable[[TrendRow], dict[str, Any]],
+            keys: tuple[str, str]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Rising and cooling items, best first; `keys` are the current and previous count fields."""
+    cur_key, prev_key = keys
+    rising: list[dict[str, Any]] = []
+    cooling: list[dict[str, Any]] = []
     for row in rows:
-        counts = {"current_7d": row.current, "previous_7d": row.previous,
-                  "expected_7d": _r(row.expected), "today": len(today.get(row.unit, ()))}
+        counts = counts_of(row)
         if row.rising:
             item = _trend_item(data, row.unit, cur_days, row.current_articles, counts)
             if item is not None:
@@ -205,12 +277,11 @@ def _risers_from_helper(data: PeriodInput) -> dict[str, Any]:
             item = _trend_item(data, row.unit, prev_days, row.previous_articles, counts)
             if item is not None:
                 cooling.append({**item, "_delta": row.cooling_delta})
-    rising.sort(key=lambda i: (-i["_delta"], -i["current_7d"], i["name"]))
-    cooling.sort(key=lambda i: (-i["_delta"], -i["previous_7d"], i["name"]))
+    rising.sort(key=lambda i: (-i["_delta"], -i[cur_key], i["name"]))
+    cooling.sort(key=lambda i: (-i["_delta"], -i[prev_key], i["name"]))
     for item in rising + cooling:
         item.pop("_delta")
-    return {"state": "ready", "source": "helper", "rising": rising[:daily.rising_max],
-            "cooling": cooling[:daily.cooling_max]}
+    return rising, cooling
 
 
 def _trend_item(data: PeriodInput, unit: str, days: Iterable[date],
@@ -304,7 +375,8 @@ def compute_period(data: PeriodInput) -> dict[str, Any]:
         "daily_methodology_version": METHODOLOGY_VERSION,
         "extraction_version": data.extraction_version,
         "generated_at": data.generated_at.isoformat(),
-        "thresholds": {k: _r(v) if isinstance(v, float) else v for k, v in asdict(t).items()},
+        "thresholds": {k: _r(v) if isinstance(v, float) else v for k, v in asdict(t).items()
+                       if data.kind == MONTH or not k.startswith("month_")},
         "coverage": cov,
         "quiet": cov["quiet"],
         "comparison": cmp_,

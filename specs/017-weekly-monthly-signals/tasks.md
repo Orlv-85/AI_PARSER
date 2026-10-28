@@ -103,7 +103,7 @@ rules, names, tests and `covers` globs it ships.
 
 ## Phase 6: Monthly (US4) (release R6, before 2026-12-01)
 
-- [ ] T050 [US4] Doc first (month rules). Month bounds, `month_*` thresholds, month risers via
+- [x] T050 [US4] Doc first (month rules). Month bounds, `month_*` thresholds, month risers via
   `trend_delta`, month event mix; `--kind month`, nightly default on the 1st; `GET /monthly`, nav
   link when a month exists. Tests for 28/29/30/31-day months, partial October, no comparison
   without a ready previous month.

@@ -5,7 +5,7 @@ step; nothing is written outside `period_signal_*` (signals_period.md).
 """
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -19,7 +19,13 @@ from app.core.periodic.period_compute import (
     compute_period,
     payload_hash,
 )
-from app.core.periodic.period_model import WEEK, period_bounds, week_start
+from app.core.periodic.period_model import (
+    MONTH,
+    WEEK,
+    next_start,
+    period_bounds,
+    previous_start,
+)
 from app.storage.period_signals import PeriodSignalRepo
 
 LOGGER = logging.getLogger(__name__)
@@ -43,50 +49,89 @@ class PeriodRunOptions:  # pylint: disable=too-many-instance-attributes
     cache_dir: Path = Path("data/period-signals")
 
 
+def first_period(kind: str, comparable_from: date) -> date:
+    """First computable period: the first full week (Monday-Sunday) or calendar month inside the
+    comparable range; a period that starts before it is partial and never computed."""
+    start: date = period_bounds(kind, comparable_from)[0]
+    return start if start == comparable_from else next_start(kind, start)
+
+
+def latest_completed(kind: str, today: date) -> date:
+    """Start of the latest period that ended before `today` (UTC)."""
+    start: date = period_bounds(kind, period_bounds(kind, today)[0] - timedelta(days=1))[0]
+    return start
+
+
 def first_week(comparable_from: date) -> date:
-    """First computable week: the first full Monday-Sunday week inside the comparable range."""
-    monday: date = week_start(comparable_from)
-    return monday if monday == comparable_from else monday + timedelta(days=7)
+    return first_period(WEEK, comparable_from)
 
 
 def latest_completed_week(today: date) -> date:
-    """Monday of the latest week that ended before `today` (UTC)."""
-    monday: date = week_start(today)
-    return monday - timedelta(days=7)
+    return latest_completed(WEEK, today)
+
+
+def first_month(comparable_from: date) -> date:
+    return first_period(MONTH, comparable_from)
+
+
+def latest_completed_month(today: date) -> date:
+    return latest_completed(MONTH, today)
+
+
+def _back(kind: str, start: date, count: int) -> date:
+    for _ in range(count):
+        start = previous_start(kind, start)
+    return start
+
+
+def target_periods(options: PeriodRunOptions, *, today: date, comparable_from: date
+                   ) -> tuple[list[date], list[date]]:
+    """(periods to compute oldest first, periods dropped for being before the first one)."""
+    kind = options.kind
+    first, latest = first_period(kind, comparable_from), latest_completed(kind, today)
+    if options.period is not None:
+        end = period_bounds(kind, options.period)[0]
+        if end > latest:
+            raise PeriodRunError(f"only completed {kind}s can be computed")
+        if end < first:
+            raise PeriodRunError(f"{kind}s before {first.isoformat()} are history only")
+    else:
+        end = latest
+    if options.recompute_all:
+        wanted = []
+        cursor = first
+        while cursor <= latest:
+            wanted.append(cursor)
+            cursor = next_start(kind, cursor)
+    else:
+        wanted = [_back(kind, end, i) for i in range(options.backfill - 1, -1, -1)]
+    return [w for w in wanted if w >= first], [w for w in wanted if w < first]
 
 
 def target_weeks(options: PeriodRunOptions, *, today: date, comparable_from: date
                  ) -> tuple[list[date], list[date]]:
-    """(weeks to compute oldest first, weeks dropped for being before the first week)."""
-    first, latest = first_week(comparable_from), latest_completed_week(today)
-    if options.period is not None:
-        end = week_start(options.period)
-        if end > latest:
-            raise PeriodRunError("only completed weeks can be computed")
-        if end < first:
-            raise PeriodRunError(f"weeks before {first.isoformat()} are history only")
-    else:
-        end = latest
-    if options.recompute_all:
-        wanted = [first + timedelta(days=7 * i) for i in range((latest - first).days // 7 + 1)]
-    else:
-        wanted = [end - timedelta(days=7 * i) for i in range(options.backfill - 1, -1, -1)]
-    return [w for w in wanted if w >= first], [w for w in wanted if w < first]
+    return target_periods(replace(options, kind=WEEK), today=today, comparable_from=comparable_from)
 
 
-def brief_targets(options: PeriodRunOptions, weeks: list[date], *, today: date) -> list[date]:
-    """Weeks that get a brief: every run week with `--with-brief`; otherwise only the latest
-    completed week when the run computed it (the nightly default)."""
+def target_months(options: PeriodRunOptions, *, today: date, comparable_from: date
+                  ) -> tuple[list[date], list[date]]:
+    return target_periods(replace(options, kind=MONTH), today=today,
+                          comparable_from=comparable_from)
+
+
+def brief_targets(options: PeriodRunOptions, periods: list[date], *, today: date) -> list[date]:
+    """Periods that get a brief: every run period with `--with-brief`; otherwise only the latest
+    completed one when the run computed it (the nightly default)."""
     if options.with_brief:
-        return weeks
-    latest = latest_completed_week(today)
-    return [latest] if latest in weeks else []
+        return periods
+    latest = latest_completed(options.kind, today)
+    return [latest] if latest in periods else []
 
 
 def run_periods(session: Session, settings: Any, options: PeriodRunOptions, *,
                 now: datetime | None = None, transport: httpx.BaseTransport | None = None
                 ) -> dict[str, Any]:
-    """One run; returns the run report. The flag off or the month kind do nothing."""
+    """One run of one kind; returns the run report. The flag off does nothing."""
     started = time.monotonic()
     moment = now or datetime.now(UTC)
     report: dict[str, Any] = {
@@ -96,15 +141,12 @@ def run_periods(session: Session, settings: Any, options: PeriodRunOptions, *,
     if not settings.period_signals_enabled:
         report["state"] = "disabled"
         return report
-    if options.kind != WEEK:
-        report["state"] = "not_built"
-        return report
-    weeks, early = target_weeks(options, today=moment.date(),
-                                comparable_from=settings.daily_signals_comparable_from)
+    weeks, early = target_periods(options, today=moment.date(),
+                                  comparable_from=settings.daily_signals_comparable_from)
     report["skipped_before_first"] = [w.isoformat() for w in early]
     repo = PeriodSignalRepo(session, comparable_from=settings.daily_signals_comparable_from,
                             publisher_overrides=settings.weekly_publisher_overrides)
-    ctx = repo.context()
+    ctx = repo.context() if weeks else None
     for start in weeks:
         # Oldest first: the next period reads this one as its previous period.
         payload = compute_period(repo.load_input(options.kind, start, ctx=ctx,

@@ -56,7 +56,7 @@ General:
 - [CLI usage](docs/cli.md) - web onboarding, fetch/cron, rollout knobs, search, prune.
 - [Article re-enrichment](docs/archive/2026-10/article-reenrichment.md) - archived implementation guide (re-enrichment finished 2026-10-11).
 - [Daily AI Signals operator guide](docs/daily-signals.md) - operator commands, costs, rollback.
-- [Period AI Signals operator guide](docs/period-signals.md) - weekly signals: enable, backfill, recompute, rollback.
+- [Period AI Signals operator guide](docs/period-signals.md) - weekly and monthly signals: enable, backfill, recompute, rollback.
 - [Troubleshooting](docs/troubleshooting.md) - known failures (flaky tests, local env) with causes and fixes.
 
 ## Publishing digests over HTTP (operators)

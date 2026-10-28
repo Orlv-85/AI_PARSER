@@ -1,11 +1,11 @@
-# Period AI Signals (weekly)
+# Period AI Signals (weekly and monthly)
 
-Feature 017 (`specs/017-weekly-monthly-signals/`). Weekly sums and comparisons of the stored daily
+Feature 017 (`specs/017-weekly-monthly-signals/`). Weekly and monthly sums and comparisons of the stored daily
 signals. Everything is computed from stored data: $0, no provider, page loads never call one. What it
 computes and why: `src/app/core/periodic/signals_period.md`. This guide is for operators only.
 
-State of the feature: numbers, command, nightly step, read API, the `/weekly` page and the paid
-brief exist; the monthly view comes in a later release. The numbers cost $0. The brief is the only
+State of the feature: numbers, command, nightly step, read API, the `/weekly` and `/monthly` pages
+and the paid brief exist for weeks and months. The numbers cost $0. The brief is the only
 paid step and is off by default.
 
 ## Enable
@@ -35,6 +35,28 @@ curl -s "http://127.0.0.1:8010/api/news/period-signals?kind=week&start=2026-10-1
 
 The run report is JSON: `state`, `written` (periods stored), `unchanged`, `periods` (status per
 week), `skipped_before_first` (weeks before the first full comparable week; never computed).
+
+## Months
+
+The same command and the same two flags. A month is a calendar month (UTC), computed only when it
+is complete. The first month is November 2026: October 2026 is partial (data from 2026-10-12) and is
+never computed. The nightly step runs the plain command, which now also takes the latest completed
+month: before 2026-12-01 it does nothing and writes nothing; on 2026-12-01 it stores November
+(`building_history`: there is no October to compare with, so no comparison and no risers) and, with
+the brief flag on, writes its brief (one call, about $0.015-0.03, hard cap $0.08; a payload that
+changes later on the same month is a new input and is briefed again, at the same cost). The first
+month with a comparison is December 2026 (stored on 2027-01-01). Nothing else needs switching.
+
+```bash
+# on or after 2026-12-01: check the month, or compute it by hand
+$L $C app ai-news period-signals --kind month
+curl -s "http://127.0.0.1:8010/api/news/period-signals?kind=month"
+# one month, by hand; --period is any day of a completed month; no brief unless --with-brief
+$L $C app ai-news period-signals --kind month --period 2026-11-15
+```
+
+`/monthly` (and `/monthly?month=2026-11`) shows the stored month; the "Monthly" link appears on `/`
+and `/weekly` once a month row exists.
 
 ## Brief (paid)
 
@@ -78,12 +100,12 @@ Check: `curl -s "http://127.0.0.1:8010/api/news/period-signals?kind=week&start=2
 
 | Command | Does |
 | --- | --- |
-| `ai-news period-signals` | the latest completed week (a week ends on Sunday; from Monday it is complete) |
-| `--backfill N` | N weeks ending at the target, oldest first |
-| `--period YYYY-MM-DD` | the week that contains the date; it must be completed and not before the first week (exit 2 otherwise) |
-| `--recompute-all` | every week from the first one |
-| `--kind month` | reports `not_built`; monthly view is a later release |
-| `--with-brief` | paid: also write the brief of every week of the run (needs the brief flag) |
+| `ai-news period-signals` | the latest completed week (a week ends on Sunday; from Monday it is complete) and, in the same run, the latest completed month (the report has a `month` key) |
+| `--kind week` / `--kind month` | that kind alone |
+| `--backfill N` | N periods (weeks or months) ending at the target, oldest first |
+| `--period YYYY-MM-DD` | the week or month that contains the date; it must be completed and not before the first week (2026-10-12) or first month (2026-11-01) (exit 2 otherwise) |
+| `--recompute-all` | every period of the kind from the first one (with no `--kind`: weeks only) |
+| `--with-brief` | paid: also write the brief of every period of the run (needs the brief flag) |
 | `--max-usd X` | total USD cap of the brief step for the run (default `AINEWS_PERIOD_SIGNALS_MAX_USD`, 0.10) |
 | `--cache-dir DIR` | where the ledger file lives (default `data/period-signals`) |
 

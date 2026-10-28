@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from datetime import date, timedelta
 from typing import Literal
 
@@ -20,8 +21,8 @@ from app.web.models import (
     PeriodSignalsResponse,
 )
 from app.web.period_view import (
-    NOT_FOR_WEEK,
-    NOT_YET,
+    not_for,
+    not_yet,
     render_content,
     render_page,
     render_picker,
@@ -31,6 +32,7 @@ from app.web.routes import WebDeps
 _LOGGER = logging.getLogger(__name__)
 # A default read shows the newest period that carries comparable numbers, else any stored one.
 _SHOWN = ("ready", "building_history")
+_MONTH = re.compile(r"^(\d{4})-(\d{2})$")
 
 
 def _unavailable(kind: str, start: date | None, note: str | None = None) -> PeriodSignalsResponse:
@@ -83,6 +85,56 @@ def latest_week(deps: WebDeps) -> tuple[date, date] | None:
     return (shown.period_start, shown.period_end) if shown is not None else None
 
 
+def has_month(deps: WebDeps) -> bool:
+    """True when any month row is stored (the "Monthly" nav link); a failed read is False."""
+    try:
+        deps.create_all()
+        with deps.SessionLocal() as session:
+            return bool(PeriodSignalRepo(
+                session, comparable_from=get_settings().daily_signals_comparable_from
+            ).index("month"))
+    except Exception as exc:  # any failure: the caller's page stays up
+        _LOGGER.error("period_signals_has_month_failed error=%s", type(exc).__name__)
+        return False
+
+
+def _month_start(text: str) -> tuple[date | None, bool]:
+    """(first day of the month, canonical): `YYYY-MM` is canonical, a date is normalized to its
+    month, anything else is (None, True)."""
+    found = _MONTH.match(text)
+    try:
+        if found:
+            return date(int(found.group(1)), int(found.group(2)), 1), True
+        return date.fromisoformat(text).replace(day=1), False
+    except ValueError:
+        return None, True
+
+
+def _read_page(deps: WebDeps, kind: str, start: date | None, explicit: bool, note: str):
+    """(index, response, note) of the page of one kind; a failure gives the unavailable note."""
+    plural = "Weekly" if kind == "week" else "Monthly"
+    periods: list[tuple[date, date, str]] = []
+    signals = None
+    try:
+        deps.create_all()
+        with deps.SessionLocal() as session:
+            repo = PeriodSignalRepo(
+                session, comparable_from=get_settings().daily_signals_comparable_from)
+            periods = [(r.period_start, r.period_end, r.status) for r in repo.index(kind)]
+            if not explicit:
+                row = repo.latest(kind, _SHOWN) or repo.latest(kind)
+            elif start is not None:
+                row = repo.get_report(kind, start)
+            else:
+                row = None
+            signals = _response(kind, start, row, repo.get_brief(kind, row.period_start)
+                                ) if row is not None else None
+    except Exception as exc:  # unavailable page, never a 500 (plan: Web)
+        _LOGGER.error("period_signals_page_failed error=%s", type(exc).__name__)
+        periods, signals, note = [], None, f"{plural} signals are temporarily unavailable."
+    return periods, signals, note
+
+
 def build_period_router(deps: WebDeps) -> APIRouter:
     router = APIRouter()
 
@@ -99,29 +151,28 @@ def build_period_router(deps: WebDeps) -> APIRouter:
             if start is not None and start.weekday() != 0:
                 monday = start - timedelta(days=start.weekday())
                 return RedirectResponse(url=f"/weekly?week={monday.isoformat()}", status_code=303)
-        weeks: list[tuple[date, date, str]] = []
-        signals = None
-        note = NOT_FOR_WEEK if week is not None else NOT_YET
-        try:
-            deps.create_all()
-            with deps.SessionLocal() as session:
-                repo = PeriodSignalRepo(
-                    session, comparable_from=get_settings().daily_signals_comparable_from)
-                weeks = [(r.period_start, r.period_end, r.status) for r in repo.index("week")]
-                if week is None:
-                    row = repo.latest("week", _SHOWN) or repo.latest("week")
-                elif start is not None:
-                    row = repo.get_report("week", start)
-                else:
-                    row = None
-                signals = _response("week", start, row, repo.get_brief("week", row.period_start)
-                                    ) if row is not None else None
-        except Exception as exc:  # unavailable page, never a 500 (plan: Web)
-            _LOGGER.error("period_signals_page_failed error=%s", type(exc).__name__)
-            weeks, signals, note = [], None, "Weekly signals are temporarily unavailable."
+        note = not_for("week") if week is not None else not_yet("week")
+        weeks, signals, note = _read_page(deps, "week", start, week is not None, note)
         current = signals.period_start if signals is not None else None
         return HTMLResponse(render_page(render_content(signals, note=note),
-                                        render_picker(weeks, current)))
+                                        render_picker(weeks, current),
+                                        monthly=has_month(deps)))
+
+    @router.get("/monthly", response_class=HTMLResponse)
+    def monthly_page(month: str | None = None) -> Response:
+        """Stored month as HTML (no provider, no compute). `?month=YYYY-MM`; a full date
+        redirects (303) to its `YYYY-MM`; text that is neither gives the unavailable page."""
+        start: date | None = None
+        if month is not None:
+            start, canonical = _month_start(month)
+            if start is not None and not canonical:
+                return RedirectResponse(url=f"/monthly?month={start.strftime('%Y-%m')}",
+                                        status_code=303)
+        note = not_for("month") if month is not None else not_yet("month")
+        months, signals, note = _read_page(deps, "month", start, month is not None, note)
+        current = signals.period_start if signals is not None else None
+        return HTMLResponse(render_page(render_content(signals, note=note, kind="month"),
+                                        render_picker(months, current, "month"), "month"))
 
     @router.get("/api/news/period-signals", response_model=PeriodSignalsResponse)
     def get_period_signals(
