@@ -200,6 +200,7 @@ The numbers live in the code: fields of `PeriodThresholds` (by kind) in `period_
 | `?week=` that is not a Monday redirects (303) to its Monday; text that is not a date gives the unavailable page (decided 2026-10-28 (agent)) | a shared link with any day of the week still lands on the week; garbage never gives a 422 or 500 page |
 | The nav link and the line on `/` follow the default week of the page (newest `ready` or `building_history`, else newest stored) (decided 2026-10-28 (agent)) | the link text and the page it opens always agree |
 | The page uses `digest.css` plus a small `period.css` and no script (decided 2026-10-28 (agent)) | no client re-render is needed (plan "Web"); the daily classes are reused |
+| The legacy weekly pages, the preview on `/` and the Monday legacy report are retired (owner answer 2026-10-28, 017 R5) | they mostly said "Insufficient comparable source coverage"; the legacy read API, `POST` and tables stay for compatibility, the weekly v2 tables go in a later release |
 | Month risers and month-only rules are not built here (R6) | bounds and thresholds for months exist; the monthly view ships last |
 
 ## Invariants

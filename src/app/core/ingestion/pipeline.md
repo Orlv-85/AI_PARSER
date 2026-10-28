@@ -35,7 +35,7 @@ flowchart LR
   known --> screen
   screen --> score["Score: relevance, freshness, rank; dates from evidence"]
   score --> store["Articles: insert or batch upsert, per-source savepoint"]
-  store --> summary["FetchSummary + logs; Monday weekly report"]
+  store --> summary["FetchSummary + logs"]
 ```
 
 Rules name their limits; the numbers live in `Settings` (`config/settings.py`) or in the named
@@ -310,11 +310,10 @@ function. Each rule lists the tests that check it.
   `test_public_collection_status_exposes_persisted_pause`,
   `test_cycle_cache_hit_after_rolled_back_assessment_keeps_notice`.
 
-**Weekly hook**
-- On a Monday (UTC) the run saves the legacy weekly report of the previous Monday-Sunday week
-  (`WeeklyAnalyticsRepo.save_weekly_report`); a failure is only logged. The run writes no other
-  `weekly_*` row: no observation, no coverage attempt, no source version. Tests:
-  `test_run_fetch_cycle_publishes_previous_monday_sunday_weekly_report_on_monday`,
+**No weekly rows**
+- The run writes no `weekly_*` row on any weekday: no legacy Monday report, no observation, no
+  coverage attempt, no source version. Tests:
+  `test_run_fetch_cycle_on_monday_creates_no_legacy_weekly_report`,
   `test_fetch_cycle_writes_no_weekly_v2_rows`.
 
 **Counters**
@@ -373,7 +372,7 @@ function. Each rule lists the tests that check it.
 | Oversized input held as unresolved, no pause | one oversized article must not stop collection (commit 01bc4c2) |
 | Jev failure without admission: keyword fallback, no more calls in the cycle | Jev only scores and never discards, keyword scoring stays the default (PR #5); decided 2026-10-20 (agent): stopping avoids a `jev_timeout_seconds` wait per item while the provider is down |
 | RSS full text off in `scripts/auto_update_once.sh`, on in `scripts/run_daily_fetch_job.sh` | the 30-minute cron helper cuts load (commit 07dd008); the daily job feeds grounded daily summaries checked against the full RSS source text (PR #17) |
-| Weekly report trigger inside the fetch run | decided 2026-10-20 (agent): the fetch runs daily, so the Monday report needs no scheduler of its own; a failure is only logged. The legacy report is the only one left; it goes with the legacy pages (017 plan) |
+| No weekly report trigger inside the fetch run | the Monday legacy report hook was removed by 017 R5 (owner answer 2026-10-28) together with the legacy pages; the stored reports, their API and tables stay. The weekly numbers come from the nightly `period-signals` step, not from the fetch run |
 | Weekly v2 collection removed; per-source coverage flags stay | weekly v2 (observations, coverage attempts) was never shown and wrote about 1.3 MB a day; deleted by 017 R1 (owner answer 2026-10-28). `coverage_complete`, `acquisition_stopped` and the HTML `quality_flags` are still computed per source but nothing reads them; removing that plumbing is left for a later cleanup (decided 2026-10-28 (agent): outside the R1 scope, no behavior for readers) |
 
 ## Invariants
@@ -416,7 +415,7 @@ web update (thread or process)               web/service.py: UpdateRunService
              _screen_candidate (admission)   screening.py: cache key, pending row, Jev, record_decision
              _build_article_row              rows.py: dates, relevance, freshness, rank, provenance
              insert_article / upsert_articles_batch
-       clear_collection_paused if a fresh success; _publish_weekly_analytics_if_due (Monday legacy report); commit
+       clear_collection_paused if a fresh success; commit
   -> FetchSummary; logs source_fetch_finished, fetch_run_finished
 ```
 
@@ -435,7 +434,6 @@ web update (thread or process)               web/service.py: UpdateRunService
 | `core/ingestion/pipeline/screening.py` | `_screen_candidate`, cached-decision reuse, admission counters snapshot and restore | no |
 | `core/ingestion/pipeline/replay.py` | Pending admission candidates replayed before a source's fresh fetch | no |
 | `core/ingestion/pipeline/rows.py` | Candidate payloads, `_build_article_row`, exclusion reason, batch upsert | no |
-| `core/ingestion/pipeline/weekly_hooks.py` | Monday legacy weekly report hook | no |
 | `core/ingestion/admission.py` | Admission choice mapping, `bounded_evidence`, `evidence_hash`, `admission_cache_key` | yes |
 | `core/ingestion/scoring.py` | `ai_relevance_score`, `freshness_score`, `rank_score` | yes |
 | `core/canonicalize.py` | `canonicalize_url`, `canonical_url_hash` (also used by signals, weekly, cleanup) | yes |
@@ -457,7 +455,6 @@ web update (thread or process)               web/service.py: UpdateRunService
 | `articles` | new articles; scores and category of duplicates |
 | `admission_decisions` | admission ledger: pending candidates, placeholders, cached decisions |
 | `collection_status` | the single pause-notice row |
-| `weekly_analytics_reports`, `weekly_analytics_items` | Monday legacy weekly report (`save_weekly_report`) |
 
 ## Versions and flags
 

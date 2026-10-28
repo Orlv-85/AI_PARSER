@@ -172,12 +172,6 @@ def _run(
         mp.setattr("app.core.ingestion.pipeline.cycle.datetime", patches["datetime"])
         mp.setattr("app.core.ingestion.pipeline.replay.datetime", patches["datetime"])
         mp.setattr("app.core.ingestion.pipeline.sources.datetime", patches["datetime"])
-        mp.setattr("app.core.ingestion.pipeline.weekly_hooks.datetime", patches["datetime"])
-    if "WeeklyAnalyticsRepo" in patches:
-        mp.setattr(
-            "app.core.ingestion.pipeline.weekly_hooks.WeeklyAnalyticsRepo",
-            patches["WeeklyAnalyticsRepo"],
-        )
     mp.setattr("app.core.ingestion.pipeline.rows.ai_relevance_score", lambda _item: 0.5)
     mp.setattr("app.core.ingestion.pipeline.rows.freshness_score", lambda _dt: 0.5)
     mp.setattr("app.core.ingestion.pipeline.rows.rank_score", lambda **_kwargs: 0.5)
@@ -1011,32 +1005,28 @@ def test_run_fetch_cycle_batch_upsert_does_not_advance_rss_known_streak_for_in_r
     assert summary.early_stop_hits == 0
 
 
-def test_run_fetch_cycle_publishes_previous_monday_sunday_weekly_report_on_monday(
-    monkeypatch,
-) -> None:
+def test_run_fetch_cycle_on_monday_creates_no_legacy_weekly_report(monkeypatch) -> None:
+    """017 R5: the Monday legacy publish is gone; a Monday run never saves a legacy report."""
     session = _Session()
-    publish_calls: list[date] = []
+    saved: list[date] = []
 
     class _FrozenDateTime(datetime):
         @classmethod
         def now(cls, tz=None):
             return cls(2026, 3, 9, 8, 0, tzinfo=tz or UTC)
 
-    class _WeeklyAnalyticsRepo:
-        def __init__(self, current_session) -> None:
-            assert current_session is session
-
-        def save_weekly_report(self, *, report_date: date, **_kwargs) -> None:
-            publish_calls.append(report_date)
+    monkeypatch.setattr(
+        "app.storage.repos.WeeklyAnalyticsRepo.save_weekly_report",
+        lambda _self, *, report_date, **_kwargs: saved.append(report_date),
+    )
 
     summary = _run(
         monkeypatch, [_rss("rss_weekly_publish")], session=session,
-        datetime=_FrozenDateTime, WeeklyAnalyticsRepo=_WeeklyAnalyticsRepo,
+        datetime=_FrozenDateTime,
         fetch_rss=lambda *_args, **_kwargs: _rss_result([]),
     )
 
     assert summary.fetched == 0
-    assert summary.new == 0
-    assert summary.duplicates == 0
     assert summary.errors == 0
-    assert publish_calls == [date(2026, 3, 8)]
+    assert not saved
+

@@ -16,15 +16,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.storage.admission import read_collection_status
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import NewsDigestReport
-from app.storage.repos import WeeklyAnalyticsRepo
 from app.web.auth import verify_password
 from app.web.models import NewsCollectionStatusResponse
 from app.web.period_view import home_line, nav_link
 from app.web.routes import WebDeps
 from app.web.routes.common import (
-    _OPTIONAL_WEEKLY_ANALYTICS_DATE_QUERY,
     _read_daily_signals,
-    _resolve_weekly_default_report_date,
 )
 from app.web.routes.period import latest_week
 from app.web.signals_view import render_signals
@@ -35,8 +32,6 @@ _DIGEST_TEMPLATE = _WEB_DIR / "digest.html"
 _PLACEHOLDER = re.compile(r"__[A-Z_]+__")
 _LOGIN_TEMPLATE = _WEB_DIR / "login.html"
 _NEWS_STATS_TEMPLATE = _WEB_DIR / "news_stats.html"
-_WEEKLY_ANALYTICS_TEMPLATE = _WEB_DIR / "weekly_analytics.html"
-_WEEKLY_ANALYTICS_REPORTS_TEMPLATE = _WEB_DIR / "weekly_analytics_reports.html"
 _LOGGER = logging.getLogger(__name__)
 _OPTIONAL_NEWS_DIGEST_DATE_QUERY = Query(default=None, alias="date")
 
@@ -106,23 +101,6 @@ def _render_news_stats(*, date_from: date, date_to: date) -> str:
     )
 
 
-def _render_weekly_analytics(*, report_date: date) -> str:
-    default_report_date = report_date
-    return (
-        _WEEKLY_ANALYTICS_TEMPLATE.read_text(encoding="utf-8")
-        .replace("__REPORT_DATE__", report_date.isoformat())
-        .replace("__REPORT_DATE_QUERY__", f"?date={report_date.isoformat()}")
-        .replace("__DEFAULT_REPORT_DATE__", default_report_date.isoformat())
-    )
-
-
-def _render_weekly_analytics_reports(*, daily_digest_date: date) -> str:
-    return _WEEKLY_ANALYTICS_REPORTS_TEMPLATE.read_text(encoding="utf-8").replace(
-        "__DAILY_DIGEST_QUERY__",
-        f"?date={daily_digest_date.isoformat()}",
-    )
-
-
 def build_pages_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-many-statements
     settings = deps.settings
     auth_enabled = deps.auth_enabled
@@ -149,28 +127,11 @@ def build_pages_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-many-
         return _render_digest(report_date=report_date, digest=digest, signals_html=signals_html,
                               week=latest_week(deps))
 
-    @router.get("/weekly-ai-analytics", response_class=HTMLResponse)
-    def weekly_ai_analytics(
-        selected_date: date | None = _OPTIONAL_WEEKLY_ANALYTICS_DATE_QUERY,
-    ) -> str:
-        today = datetime.now(UTC).date()
-        try:
-            deps.create_all()
-            with deps.SessionLocal() as session:
-                repo = WeeklyAnalyticsRepo(session)
-                report_date = selected_date or _resolve_weekly_default_report_date(
-                    repo=repo,
-                    today=today,
-                )
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
-        return _render_weekly_analytics(report_date=report_date)
-
-    @router.get("/weekly-ai-analytics/reports", response_class=HTMLResponse)
-    def weekly_ai_analytics_reports() -> str:
-        return _render_weekly_analytics_reports(
-            daily_digest_date=datetime.now(UTC).date() - timedelta(days=1),
-        )
+    # Legacy weekly pages retired (017 R5): permanent redirect, query string dropped.
+    @router.get("/weekly-ai-analytics/reports", include_in_schema=False)
+    @router.get("/weekly-ai-analytics", include_in_schema=False)
+    def legacy_weekly_redirect() -> RedirectResponse:
+        return RedirectResponse(url="/weekly", status_code=308)
 
     @router.get("/news-stats", response_class=HTMLResponse)
     def news_stats_page(

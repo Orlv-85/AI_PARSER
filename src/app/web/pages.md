@@ -10,8 +10,8 @@ covers:
 The HTML pages of the site: the public digest `/`, the public weekly signals `/weekly`, the public
 news stats `/news-stats`, the login page `/login` and the admin page `/admin`. Each page is a template in `src/app/web/` filled by
 `build_pages_router`; its styles and scripts are files under `src/app/web/static/`, served at
-`/static/`. The weekly pages (`/weekly-ai-analytics`, `/weekly-ai-analytics/reports`) keep their
-inline styles and scripts; they show the legacy weekly report and are retired in a later 017 release.
+`/static/`. The legacy weekly pages (`/weekly-ai-analytics`, `/weekly-ai-analytics/reports`) are
+retired: they only redirect to `/weekly`.
 
 ## Behavior
 
@@ -48,9 +48,19 @@ flowchart LR
 - The header link "Weekly" and the line "Week of Oct 19-25: weekly signals" under the daily signals
   block of `/` appear only when at least one stored week exists; both point at `/weekly`. A failed
   read hides them and keeps the page. They are filled by the server (`__WEEKLY_NAV__`,
-  `__WEEKLY_LINE__`), so the client signals renderer never touches them. The legacy weekly
-  preview on `/` is unchanged. Tests: `test_nav_link_and_home_line_follow_stored_weeks`,
+  `__WEEKLY_LINE__`), so the client signals renderer never touches them. They are the only
+  weekly elements on `/`: the legacy "Weekly AI Analytics" preview and the "Weekly Reports" link
+  are gone, and `digest.js` no longer reads `/api/news/weekly-analytics`. Tests:
+  `test_public_digest_page_has_no_legacy_weekly_preview`, `test_nav_link_and_home_line_follow_stored_weeks`,
   `test_home_page_survives_a_period_read_failure`.
+- `GET /weekly-ai-analytics` and `GET /weekly-ai-analytics/reports` answer 308 to `/weekly` (query
+  string dropped), for a logged-out reader too: they are not protected paths, so the auth middleware
+  passes them. The legacy read API (`/api/news/weekly-analytics*`) and the tables stay for
+  compatibility. Tests: `test_legacy_weekly_pages_redirect_308_to_weekly`,
+  `test_legacy_weekly_redirect_works_with_a_session_cookie`, `test_route_table_order_names_and_models_are_pinned`,
+  `test_auth_middleware_coverage_is_pinned`, `test_weekly_ai_analytics_api_returns_report_sections_for_last_7_days`
+  (legacy API still answers with stored data).
+- `/news-stats` has one header link, "Weekly" (`/weekly`), in place of the two legacy weekly links. No test.
 - `/news-stats` defaults to the 60 days ending yesterday; `date_from` after `date_to` is a 422 (no
   test for the 422). Tests: `test_news_stats_page_renders_public_shell`.
 
@@ -88,6 +98,11 @@ flowchart LR
 - Admin assets behind the admin session: the admin code lists every admin API; it stays private
   like the page.
 - `no-cache` with ETag instead of hashed file names: no build step; one revalidation per asset.
+- Legacy weekly pages answer 308, not 410 or a copy (owner answer 2026-10-28; decided 2026-10-28
+  (agent): 308 keeps old bookmarks working and the method; the query string is dropped because
+  `?date=` of the old report means nothing on `/weekly`).
+- `/news-stats` links "Weekly" instead of the two retired links (decided 2026-10-28 (agent)): a link to a
+  redirect would work, but two links to one page is noise.
 - No framework or bundler: the pages are small and server-rendered; classic scripts in one global
   scope keep the old execution order.
 - Admin JS is four classic scripts; an exception in one file no longer stops the files after it
@@ -114,7 +129,7 @@ flowchart LR
 | `period_view.py` | Server HTML of one stored week and the picker (`render_content`, `render_picker`, `render_page`) |
 | `digest.html`, `news_stats.html`, `login.html`, `index.html`, `period.html` | Page markup; the digest also has the inline placeholder script |
 | `static/css/` | `digest.css`, `news_stats.css`, `login.css`, `period.css` |
-| `static/js/` | `digest.js` (digest, signals and weekly preview client), `news_stats.js`, `login.js` |
+| `static/js/` | `digest.js` (digest and signals client), `news_stats.js`, `login.js` |
 | `static/admin/admin.css` | Admin styles |
 | `static/admin/core.js` | Shared state (`const`/`let` of the page), `setStatus`, `showPage`, page buttons |
 | `static/admin/updates.js` | Settings form, run update, run status and polling (`activeScreeningMessage`) |
