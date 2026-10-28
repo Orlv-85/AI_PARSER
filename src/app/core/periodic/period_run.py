@@ -1,14 +1,19 @@
 """Period AI Signals run: pick the periods, compute them from stored data, store changed ones.
 
-No provider is involved and nothing is written outside `period_signal_*` (signals_period.md).
+The numbers involve no provider. The optional brief step (period_brief_run.py) is the only paid
+step; nothing is written outside `period_signal_*` (signals_period.md).
 """
+import logging
 import time
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
+import httpx
 from sqlalchemy.orm import Session
 
+from app.core.periodic.period_brief_run import run_briefs
 from app.core.periodic.period_compute import (
     PERIOD_METHODOLOGY_VERSION,
     compute_period,
@@ -17,7 +22,9 @@ from app.core.periodic.period_compute import (
 from app.core.periodic.period_model import WEEK, period_bounds, week_start
 from app.storage.period_signals import PeriodSignalRepo
 
+LOGGER = logging.getLogger(__name__)
 BACKFILL_MAX = 200
+BRIEF_MAX_SECONDS = 300
 
 
 class PeriodRunError(ValueError):
@@ -25,11 +32,15 @@ class PeriodRunError(ValueError):
 
 
 @dataclass(frozen=True)
-class PeriodRunOptions:
+class PeriodRunOptions:  # pylint: disable=too-many-instance-attributes
     kind: str = WEEK
     period: date | None = None
     backfill: int = 1
     recompute_all: bool = False
+    with_brief: bool = False
+    max_usd: str | None = None
+    max_seconds: int = BRIEF_MAX_SECONDS
+    cache_dir: Path = Path("data/period-signals")
 
 
 def first_week(comparable_from: date) -> date:
@@ -63,14 +74,25 @@ def target_weeks(options: PeriodRunOptions, *, today: date, comparable_from: dat
     return [w for w in wanted if w >= first], [w for w in wanted if w < first]
 
 
+def brief_targets(options: PeriodRunOptions, weeks: list[date], *, today: date) -> list[date]:
+    """Weeks that get a brief: every run week with `--with-brief`; otherwise only the latest
+    completed week when the run computed it (the nightly default)."""
+    if options.with_brief:
+        return weeks
+    latest = latest_completed_week(today)
+    return [latest] if latest in weeks else []
+
+
 def run_periods(session: Session, settings: Any, options: PeriodRunOptions, *,
-                now: datetime | None = None) -> dict[str, Any]:
+                now: datetime | None = None, transport: httpx.BaseTransport | None = None
+                ) -> dict[str, Any]:
     """One run; returns the run report. The flag off or the month kind do nothing."""
     started = time.monotonic()
     moment = now or datetime.now(UTC)
     report: dict[str, Any] = {
         "state": "ok", "kind": options.kind, "methodology_version": PERIOD_METHODOLOGY_VERSION,
-        "periods": {}, "written": [], "unchanged": 0, "skipped_before_first": []}
+        "periods": {}, "written": [], "unchanged": 0, "skipped_before_first": [],
+        "brief": None}
     if not settings.period_signals_enabled:
         report["state"] = "disabled"
         return report
@@ -96,5 +118,26 @@ def run_periods(session: Session, settings: Any, options: PeriodRunOptions, *,
             report["written"].append(start.isoformat())
         else:
             report["unchanged"] += 1
+    if options.with_brief or settings.period_signals_brief_enabled:
+        report["brief"] = _brief_step(session, settings, options, repo,
+                                      brief_targets(options, weeks, today=moment.date()),
+                                      transport=transport)
     report["seconds"] = round(time.monotonic() - started, 1)
     return report
+
+
+def _brief_step(session: Session, settings: Any, options: PeriodRunOptions,
+                repo: PeriodSignalRepo, weeks: list[date], *,
+                transport: httpx.BaseTransport | None) -> dict[str, Any]:
+    """The paid step; a failure never changes the stored numbers or the run result."""
+    try:
+        result: dict[str, Any] = run_briefs(
+            session, repo, settings, [(options.kind, w) for w in weeks],
+            max_usd=options.max_usd or settings.period_signals_max_usd,
+            cache_dir=options.cache_dir, max_seconds=options.max_seconds, transport=transport)
+        return result
+    except Exception as error:  # pylint: disable=broad-exception-caught
+        session.rollback()
+        LOGGER.exception("period_signals_brief_failed")
+        return {"state": "error", "terminal_reason": f"error:{type(error).__name__}",
+                "periods": {}, "run": {"calls": 0, "usd": 0.0}}

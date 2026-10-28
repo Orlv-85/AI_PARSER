@@ -11,9 +11,10 @@ from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.config.settings import get_settings
-from app.storage.models_sql import PeriodSignalReport
+from app.storage.models_sql import PeriodSignalBrief, PeriodSignalReport
 from app.storage.period_signals import PeriodSignalRepo
 from app.web.models import (
+    DailySignalBrief,
     PeriodSignalsIndexItem,
     PeriodSignalsIndexResponse,
     PeriodSignalsResponse,
@@ -37,8 +38,22 @@ def _unavailable(kind: str, start: date | None, note: str | None = None) -> Peri
                                  notes=[note] if note else [])
 
 
-def _response(kind: str, start: date | None, row: PeriodSignalReport | None
-              ) -> PeriodSignalsResponse:
+def _brief(row: PeriodSignalBrief | None) -> DailySignalBrief | None:
+    """The stored `ok` brief as the API model; missing, invalid or unreadable -> None."""
+    if row is None or row.status != "ok":
+        return None
+    try:
+        data = json.loads(row.payload)
+        return DailySignalBrief(sentences=data["sentences"], model=row.model,
+                                brief_version=row.brief_version, generated_at=row.updated_at)
+    except (ValueError, TypeError, KeyError) as exc:
+        _LOGGER.error("period_brief_unreadable kind=%s start=%s error=%s",
+                      row.period_kind, row.period_start.isoformat(), type(exc).__name__)
+        return None
+
+
+def _response(kind: str, start: date | None, row: PeriodSignalReport | None,
+              brief: PeriodSignalBrief | None = None) -> PeriodSignalsResponse:
     """Stored row as the API model; missing or unreadable -> `unavailable` (never an error)."""
     if row is None:
         return _unavailable(kind, start)
@@ -48,7 +63,7 @@ def _response(kind: str, start: date | None, row: PeriodSignalReport | None
         _LOGGER.error("period_signals_payload_unreadable kind=%s start=%s error=%s", kind,
                       row.period_start.isoformat(), type(exc).__name__)
         return _unavailable(kind, row.period_start, "Period signals could not be read.")
-    response.brief = None
+    response.brief = _brief(brief)
     return response
 
 
@@ -99,7 +114,8 @@ def build_period_router(deps: WebDeps) -> APIRouter:
                     row = repo.get_report("week", start)
                 else:
                     row = None
-                signals = _response("week", start, row) if row is not None else None
+                signals = _response("week", start, row, repo.get_brief("week", row.period_start)
+                                    ) if row is not None else None
         except Exception as exc:  # unavailable page, never a 500 (plan: Web)
             _LOGGER.error("period_signals_page_failed error=%s", type(exc).__name__)
             weeks, signals, note = [], None, "Weekly signals are temporarily unavailable."
@@ -120,7 +136,8 @@ def build_period_router(deps: WebDeps) -> APIRouter:
                     session, comparable_from=get_settings().daily_signals_comparable_from)
                 row = repo.get_report(kind, start) if start is not None else (
                     repo.latest(kind, _SHOWN) or repo.latest(kind))
-                return _response(kind, start, row)
+                return _response(kind, start, row, repo.get_brief(kind, row.period_start)
+                                 if row is not None else None)
         except SQLAlchemyError as exc:
             raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
 

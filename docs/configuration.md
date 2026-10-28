@@ -107,10 +107,15 @@ the CLI flags for caps.
 
 Period AI Signals (feature 017) compute weekly numbers from the stored daily data, with no provider
 calls. `AINEWS_PERIOD_SIGNALS_ENABLED=false` (default) makes `ai-news period-signals` do nothing;
-`docker-compose.prod.yml` passes it from the server `.env` with default `false`. Details: `docs/period-signals.md`.
+`docker-compose.prod.yml` passes it from the server `.env` with default `false`. The weekly brief is
+the only paid step: `AINEWS_PERIOD_SIGNALS_BRIEF_ENABLED=false` (default, passed the same way) keeps
+it off. `AINEWS_PERIOD_SIGNALS_MAX_USD` is not passed to the container; production uses the default
+and `--max-usd` overrides it per run. Details: `docs/period-signals.md`.
 
 ```dotenv
 AINEWS_PERIOD_SIGNALS_ENABLED=false         # gates the period-signals command (weekly numbers, $0)
+AINEWS_PERIOD_SIGNALS_BRIEF_ENABLED=false   # gates the paid weekly brief (needs DS_API_KEY)
+AINEWS_PERIOD_SIGNALS_MAX_USD=0.10          # total cap of the brief step per run (--max-usd overrides)
 ```
 
 ### Publish API token

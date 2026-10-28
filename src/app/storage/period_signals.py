@@ -17,11 +17,17 @@ from sqlalchemy.orm import Session
 from app.core.daily.signals_entities import Reconciliation, reconcile
 from app.core.daily.signals_extract import EXTRACTION_VERSION
 from app.core.daily.signals_model import DayCoverage
-from app.core.periodic.period_model import PeriodInput, PreviousPeriod, previous_start
+from app.core.periodic.period_model import (
+    PeriodInput,
+    PreviousPeriod,
+    period_days,
+    previous_start,
+)
 from app.storage.daily_signals import DailySignalRepo
 from app.storage.models_sql import (
     AIEntity,
     DailySignalReport,
+    PeriodSignalBrief,
     PeriodSignalReport,
     SignalMention,
 )
@@ -166,3 +172,39 @@ class PeriodSignalRepo:
             query = query.where(PeriodSignalReport.period_kind == kind)
         return list(self.session.execute(query.order_by(
             PeriodSignalReport.period_start.desc(), PeriodSignalReport.period_kind)))
+
+    # Briefs -------------------------------------------------------------------------------------
+    def digest_items(self, kind: str, start: date) -> list[dict[str, str]]:
+        """Published digest items of the period days, day by day (brief input)."""
+        return [item for day in period_days(kind, start) for item in self.daily.digest_items(day)]
+
+    def get_brief(self, kind: str, start: date) -> PeriodSignalBrief | None:
+        return self.session.scalar(select(PeriodSignalBrief).where(
+            PeriodSignalBrief.period_kind == kind, PeriodSignalBrief.period_start == start))
+
+    def save_brief(self, kind: str, start: date, *, brief_version: str, model: str,
+                   input_hash: str, status: str, payload: Mapping[str, Any],
+                   reason: str | None = None) -> PeriodSignalBrief:
+        """Insert or replace the period's brief row (same upsert pattern as `save_report`)."""
+        if status not in ("ok", "invalid"):
+            raise ValueError(status)
+        values = {"brief_version": brief_version, "model": model, "input_hash": input_hash,
+                  "status": status, "reason": reason,
+                  "payload": json.dumps(dict(payload), sort_keys=True), "updated_at": _now()}
+        row = self.get_brief(kind, start)
+        if row is None:
+            try:
+                with self.session.begin_nested():
+                    row = PeriodSignalBrief(period_kind=kind, period_start=start,
+                                            created_at=_now(), **values)
+                    self.session.add(row)
+                    self.session.flush()
+                return row
+            except IntegrityError:
+                row = self.get_brief(kind, start)
+                if row is None:
+                    raise
+        for key, value in values.items():
+            setattr(row, key, value)
+        self.session.flush()
+        return row

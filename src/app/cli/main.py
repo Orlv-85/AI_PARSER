@@ -147,8 +147,14 @@ def period_signals(
                                  help="Number of periods ending at the target."),
     recompute_all: bool = typer.Option(
         False, "--recompute-all", help="Recompute every period from the first week."),
+    with_brief: bool = typer.Option(
+        False, "--with-brief",
+        help="Paid: also write the brief of every period of the run; needs the brief flag."),
+    max_usd: str | None = typer.Option(
+        None, "--max-usd", help="Total USD cap of the brief step (default 0.10 from settings)."),
+    cache_dir: str = typer.Option("data/period-signals", "--cache-dir"),
 ) -> None:
-    """Compute weekly signals from stored daily data ($0, no provider); needs the flag."""
+    """Compute weekly signals from stored daily data ($0); the brief is paid and flagged."""
     if kind not in KINDS:
         raise typer.BadParameter("kind must be week or month")
     try:
@@ -156,6 +162,11 @@ def period_signals(
     except ValueError as exc:
         raise typer.BadParameter("period must be YYYY-MM-DD") from exc
     settings = get_settings()
+    usd = max_usd if max_usd is not None else settings.period_signals_max_usd
+    try:
+        microdollars(usd)
+    except (ValueError, ArithmeticError) as exc:
+        raise typer.BadParameter("max-usd must be a positive dollar amount") from exc
     if not settings.period_signals_enabled:
         typer.echo(json.dumps({"state": "disabled", "kind": kind, "periods": {},
                                "written": []}, sort_keys=True))
@@ -164,7 +175,8 @@ def period_signals(
     with SessionLocal() as session:
         try:
             result = run_periods(session, settings, PeriodRunOptions(
-                kind=kind, period=target, backfill=backfill, recompute_all=recompute_all))
+                kind=kind, period=target, backfill=backfill, recompute_all=recompute_all,
+                with_brief=with_brief, max_usd=usd, cache_dir=Path(cache_dir)))
         except PeriodRunError as exc:
             raise typer.BadParameter(str(exc)) from exc
     typer.echo(json.dumps(result, sort_keys=True))
