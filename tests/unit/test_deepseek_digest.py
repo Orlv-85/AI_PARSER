@@ -330,7 +330,8 @@ def _daily_job(tmp_path, *, publish_exit=0, signals_exit=0, with_timeout=True, e
                    'printf \'{ "state": "published" }\\n\' > "$report"; done; '
                    'exit "$PUBLISH_EXIT";; '
                    '*daily-publish*) exit "$PUBLISH_EXIT";; '
-                   '*daily-signals*) exit "$SIGNALS_EXIT";; esac\nexit 0\n'),
+                   '*daily-signals*) exit "$SIGNALS_EXIT";; '
+                   '*period-signals*) exit "${PERIOD_EXIT:-0}";; esac\nexit 0\n'),
         "flock": 'printf "flock %s\\n" "$*" >> "$TEST_LOG"\nshift 3\nexec "$@"\n',
     }
     if with_timeout:
@@ -362,15 +363,19 @@ def test_daily_job_publishes_then_runs_signals_under_one_lock(tmp_path, fallback
     flocks = [c for c in calls if c.startswith("flock ")]
     assert len(flocks) == 1 and "-w 7200 /tmp/ai-news-auto-update.lock" in flocks[0]
     docker = [c for c in calls if c.startswith("docker ")]
-    assert len(docker) == 2
+    assert len(docker) == 3
     assert "ai-news daily-publish --report-date 2026-10-03" in docker[0]
     assert all(c.endswith("image=release:tested") for c in docker)
     assert "--name ai-news-signals-2026-10-03 app ai-news daily-signals" in docker[1]
     assert "--report-date 2026-10-03 --max-seconds 2520" in docker[1]
+    # 017: the period step comes last, under the same lock, with its own bounded timeout
+    assert "--name ai-news-period-signals app ai-news period-signals" in docker[2]
     assert [c for c in calls if c.startswith("timeout ")] == [
         "timeout -k 30 2700 docker compose -f docker-compose.prod.yml run --rm --name "
         "ai-news-signals-2026-10-03 app ai-news daily-signals --report-date 2026-10-03 "
-        "--max-seconds 2520"]
+        "--max-seconds 2520",
+        "timeout -k 30 600 docker compose -f docker-compose.prod.yml run --rm --name "
+        "ai-news-period-signals app ai-news period-signals"]
     assert "antigravity" not in " ".join(calls)
     assert "test-only-key" not in " ".join(calls) + result.stdout + result.stderr
 
@@ -419,8 +424,17 @@ def test_daily_job_signals_failure_keeps_success_and_removes_container(tmp_path)
     assert result.returncode == 0
     assert "daily-signals failed or timed out" in result.stderr
     # F17: the cleanup is bounded too.
-    assert calls[-2] == "timeout -k 10 60 docker rm -f ai-news-signals-2026-10-03"
-    assert calls[-1].startswith("docker rm -f ai-news-signals-2026-10-03")
+    removal = [c for c in calls if "docker rm -f" in c]
+    assert removal[0] == "timeout -k 10 60 docker rm -f ai-news-signals-2026-10-03"
+    assert removal[1].startswith("docker rm -f ai-news-signals-2026-10-03")
+
+
+def test_daily_job_period_signals_failure_keeps_success_and_removes_container(tmp_path) -> None:
+    result, calls = _daily_job(tmp_path, env={"PERIOD_EXIT": "124"})
+    assert result.returncode == 0
+    assert "period-signals failed or timed out" in result.stderr
+    assert calls[-2] == "timeout -k 10 60 docker rm -f ai-news-period-signals"
+    assert calls[-1].startswith("docker rm -f ai-news-period-signals")
 
 
 def test_daily_job_skips_signals_when_budget_is_spent(tmp_path) -> None:
@@ -457,13 +471,13 @@ def test_daily_job_ignores_inherited_lock_marker(tmp_path) -> None:
     assert result.returncode == 0, result.stderr
     assert len([c for c in calls if c.startswith("flock ")]) == 1
     assert "daily-publish --report-date 2026-10-03" in calls[1]
-    assert "--max-seconds 2520" in calls[-1]
+    assert any("--max-seconds 2520" in c for c in calls)
 
 
 def test_daily_job_started_by_relative_path(tmp_path) -> None:
     result, calls = _daily_job(tmp_path, from_scripts_dir=True)
     assert result.returncode == 0, result.stderr
-    assert len([c for c in calls if c.startswith("docker ")]) == 2
+    assert len([c for c in calls if c.startswith("docker ")]) == 3
 
 
 def _fetch_job(tmp_path, *, fetch_exit=0, held_report=False, digest_exit=0):

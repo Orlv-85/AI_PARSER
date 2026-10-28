@@ -558,6 +558,46 @@ class DailySignalBrief(Base):  # pylint: disable=too-many-instance-attributes
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
 
 
+class PeriodSignalReport(Base):  # pylint: disable=too-many-instance-attributes
+    """Stored weekly/monthly signals (017): one per (period_kind, period_start), no FK."""
+    __tablename__ = "period_signal_reports"
+    __table_args__ = (UniqueConstraint("period_kind", "period_start",
+                                       name="uq_period_signal_reports_kind_start"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    period_kind: Mapped[str] = mapped_column(String(16))  # week | month
+    period_start: Mapped[date] = mapped_column(Date)
+    period_end: Mapped[date] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(String(32))
+    methodology_version: Mapped[str] = mapped_column(String(64))
+    extraction_version: Mapped[str] = mapped_column(String(64))
+    payload_hash: Mapped[str] = mapped_column(String(64))
+    thresholds: Mapped[str] = mapped_column(Text)
+    payload: Mapped[str] = mapped_column(Text)
+    coverage: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+
+
+class PeriodSignalBrief(Base):  # pylint: disable=too-many-instance-attributes
+    """Generated period brief (017 R4; created empty now). One per (period_kind, period_start)."""
+    __tablename__ = "period_signal_briefs"
+    __table_args__ = (UniqueConstraint("period_kind", "period_start",
+                                       name="uq_period_signal_briefs_kind_start"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    period_kind: Mapped[str] = mapped_column(String(16))
+    period_start: Mapped[date] = mapped_column(Date)
+    brief_version: Mapped[str] = mapped_column(String(64))
+    model: Mapped[str] = mapped_column(String(64))
+    input_hash: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(16))  # ok | invalid
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    payload: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+
+
 class ArchiveDocument(Base):  # pylint: disable=too-many-instance-attributes
     """Archived URL identity (spec 016); no FK to articles or sources so it outlives them."""
     __tablename__ = "archive_documents"

@@ -20,6 +20,8 @@ from app.core.daily.signals import (
     run_signals,
 )
 from app.core.ingestion.pipeline import run_fetch_cycle
+from app.core.periodic.period_model import KINDS, WEEK
+from app.core.periodic.period_run import PeriodRunError, PeriodRunOptions, run_periods
 from app.core.provider_costs import microdollars
 from app.core.sources.onboarding import import_source_candidates
 from app.core.sources.validation import run_source_validation_batch
@@ -133,6 +135,38 @@ def daily_signals(
     create_all()
     with SessionLocal() as session:
         result = run_signals(session, settings, options)
+    typer.echo(json.dumps(result, sort_keys=True))
+
+
+@app.command("period-signals")
+def period_signals(
+    *,
+    kind: str = typer.Option(WEEK, "--kind", help="week (month is not built yet)."),
+    period: str | None = typer.Option(None, "--period", help="YYYY-MM-DD, any day of the period."),
+    backfill: int = typer.Option(1, "--backfill", min=1, max=200,
+                                 help="Number of periods ending at the target."),
+    recompute_all: bool = typer.Option(
+        False, "--recompute-all", help="Recompute every period from the first week."),
+) -> None:
+    """Compute weekly signals from stored daily data ($0, no provider); needs the flag."""
+    if kind not in KINDS:
+        raise typer.BadParameter("kind must be week or month")
+    try:
+        target = date.fromisoformat(period) if period else None
+    except ValueError as exc:
+        raise typer.BadParameter("period must be YYYY-MM-DD") from exc
+    settings = get_settings()
+    if not settings.period_signals_enabled:
+        typer.echo(json.dumps({"state": "disabled", "kind": kind, "periods": {},
+                               "written": []}, sort_keys=True))
+        return
+    create_all()
+    with SessionLocal() as session:
+        try:
+            result = run_periods(session, settings, PeriodRunOptions(
+                kind=kind, period=target, backfill=backfill, recompute_all=recompute_all))
+        except PeriodRunError as exc:
+            raise typer.BadParameter(str(exc)) from exc
     typer.echo(json.dumps(result, sort_keys=True))
 
 

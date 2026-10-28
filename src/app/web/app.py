@@ -19,6 +19,7 @@ from app.web.auth import SessionSigner, verify_bearer_token
 from app.web.routes import WebDeps
 from app.web.routes.news import build_news_article_router, build_news_router
 from app.web.routes.pages import build_pages_router
+from app.web.routes.period import build_period_router
 from app.web.routes.signals import build_signals_router
 from app.web.routes.sources import build_sources_router
 from app.web.routes.updates import build_updates_router
@@ -95,6 +96,8 @@ def create_app() -> FastAPI:
             "/api/news/links",
             "/api/news/digests",
             "/api/news/daily-signals",
+            "/api/news/period-signals",
+            "/api/news/period-signals/index",
             "/api/news/stats/daily",
             "/api/news/weekly-analytics",
             "/api/news/weekly-analytics/reports",
@@ -159,6 +162,7 @@ def create_app() -> FastAPI:
         build_updates_router(deps),
         build_news_router(deps),
         build_signals_router(deps),
+        build_period_router(deps),
         build_weekly_router(deps),
         build_news_article_router(deps),
         build_sources_router(deps),

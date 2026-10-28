@@ -105,10 +105,18 @@ In production (`docker-compose.prod.yml`) only `AINEWS_DAILY_SIGNALS_ENABLED` is
 container; the other settings keep their defaults there (the brief uses `deepseek-v4-pro`), so use
 the CLI flags for caps.
 
+Period AI Signals (feature 017) compute weekly numbers from the stored daily data, with no provider
+calls. `AINEWS_PERIOD_SIGNALS_ENABLED=false` (default) makes `ai-news period-signals` do nothing; it is
+not passed to the container by `docker-compose.prod.yml`. Details: `docs/period-signals.md`.
+
+```dotenv
+AINEWS_PERIOD_SIGNALS_ENABLED=false         # gates the period-signals command (weekly numbers, $0)
+```
+
 ### Publish API token
 
 When web auth is enabled, the public API paths `/api/news/digests`,
-`/api/news/daily-signals` and `/api/news/weekly-analytics` are public for
+`/api/news/daily-signals`, `/api/news/period-signals` (and `/index`) and `/api/news/weekly-analytics` are public for
 `GET`/`HEAD` only. Every other
 method on any `/api/` path (except `/api/auth/login` and `/api/auth/logout`)
 requires authentication. Writes accept either a valid admin session cookie or,
