@@ -7,8 +7,8 @@ covers:
 -->
 # Web pages and static assets
 
-The HTML pages of the site: the public digest `/`, the public news stats `/news-stats`, the login
-page `/login` and the admin page `/admin`. Each page is a template in `src/app/web/` filled by
+The HTML pages of the site: the public digest `/`, the public weekly signals `/weekly`, the public
+news stats `/news-stats`, the login page `/login` and the admin page `/admin`. Each page is a template in `src/app/web/` filled by
 `build_pages_router`; its styles and scripts are files under `src/app/web/static/`, served at
 `/static/`. The weekly pages (`/weekly-ai-analytics`, `/weekly-ai-analytics/reports`) keep their
 inline styles and scripts; they show the legacy weekly report and are retired in a later 017 release.
@@ -27,15 +27,30 @@ flowchart LR
 ```
 
 **Pages and access**
-- `/`, `/news-stats` and `/login` are public; `/admin` needs a session when auth is enabled and
+- `/`, `/weekly`, `/news-stats` and `/login` are public; `/admin` needs a session when auth is enabled and
   redirects to `/login` otherwise; `/login` with a valid session redirects to `/admin`.
   Tests: `test_unauthenticated_root_stays_public`, `test_public_digest_page_stays_public_when_auth_is_enabled`,
   `test_admin_route_is_protected_and_public_root_stays_open`, `test_login_page_redirects_when_session_valid`,
-  `test_login_page_renders_login_form_when_not_authenticated`.
+  `test_login_page_renders_login_form_when_not_authenticated`, `test_route_table_order_names_and_models_are_pinned`
+  (`/weekly` is in the open routes).
 - `/` shows the digest of the requested day (default: yesterday, UTC) and the Daily Signals block
   (`render_signals`); a signals read failure keeps the page. Tests:
   `test_public_digest_page_renders_digest_shell_with_yesterday_selected`,
   `test_public_digest_page_keeps_explicit_query_date_selected`, `test_signals_read_error_keeps_page`.
+- `/weekly` shows one stored week (the page states are in `src/app/core/periodic/signals_period.md`,
+  "Page"); it is rendered by `period_view.py` from the same stored row the API reads, in the template
+  `period.html` with `digest.css` and `period.css` and no script. `?week=` takes a Monday; another
+  day redirects (303) to its Monday; a missing week, text that is not a date, no rows or an unreadable
+  row give the page with a plain reason line and status 200, never 500. A picker of plain links
+  (previous, next, list of stored weeks) sits under the week. Tests: `test_ready_week_shows_sections_in_order`,
+  `test_week_param`, `test_no_rows_is_unavailable_200`, `test_corrupt_row_is_200`,
+  `test_page_references_exactly_its_static_assets`.
+- The header link "Weekly" and the line "Week of Oct 19-25: weekly signals" under the daily signals
+  block of `/` appear only when at least one stored week exists; both point at `/weekly`. A failed
+  read hides them and keeps the page. They are filled by the server (`__WEEKLY_NAV__`,
+  `__WEEKLY_LINE__`), so the client signals renderer never touches them. The legacy weekly
+  preview on `/` is unchanged. Tests: `test_nav_link_and_home_line_follow_stored_weeks`,
+  `test_home_page_survives_a_period_read_failure`.
 - `/news-stats` defaults to the 60 days ending yesterday; `date_from` after `date_to` is a 422 (no
   test for the 422). Tests: `test_news_stats_page_renders_public_shell`.
 
@@ -62,8 +77,9 @@ flowchart LR
   `test_admin_assets_check_uses_normalized_path`.
 - The admin event wiring lives in `static/admin/sources.js` (the last admin script) because it uses
   functions of all admin files. No test.
-- The asset files are package data of `app.web` and ship in the wheel. No test (checked by
-  building the wheel).
+- The asset files are package data of `app.web` and ship in the wheel. Tests:
+  `test_web_package_data_includes_public_templates` (the globs and `period.html`; the wheel itself
+  is not built in tests).
 
 ## Decisions
 
@@ -85,6 +101,8 @@ flowchart LR
 - Concatenating the admin scripts in tag order gives the former admin script block.
 - Server and client renderers of the signals block stay in step (`signals_view.py` and
   `renderSignals` in `src/app/web/static/js/digest.js`). Tests: `test_client_renderer_matches_server_classes`.
+  The weekly page reuses the daily classes and the trend and link markup (`signals_view.py`), but
+  has no client renderer.
 
 ## Code map
 
@@ -92,8 +110,10 @@ flowchart LR
 | --- | --- |
 | `routes/pages.py` | Page routes, template rendering and placeholders, login/logout, health, collection status |
 | `app.py` | `_NoCacheStaticFiles` mount at `/static`, `auth_middleware` (admin assets protected) |
-| `digest.html`, `news_stats.html`, `login.html`, `index.html` | Page markup; the digest also has the inline placeholder script |
-| `static/css/` | `digest.css`, `news_stats.css`, `login.css` |
+| `routes/period.py` | `/weekly` route, `latest_week` (nav link and line on `/`), next to the period API |
+| `period_view.py` | Server HTML of one stored week and the picker (`render_content`, `render_picker`, `render_page`) |
+| `digest.html`, `news_stats.html`, `login.html`, `index.html`, `period.html` | Page markup; the digest also has the inline placeholder script |
+| `static/css/` | `digest.css`, `news_stats.css`, `login.css`, `period.css` |
 | `static/js/` | `digest.js` (digest, signals and weekly preview client), `news_stats.js`, `login.js` |
 | `static/admin/admin.css` | Admin styles |
 | `static/admin/core.js` | Shared state (`const`/`let` of the page), `setStatus`, `showPage`, page buttons |
@@ -110,6 +130,7 @@ stay in the last admin script, because they use functions of every admin file.
 
 - `tests/unit/test_web_static_assets.py`: asset tags per page, serving and no-cache, admin asset
   protection, digest placeholders.
+- `tests/unit/test_web_period_page.py`: the `/weekly` page states, escaping, `?week=`, nav link, line on `/`.
 - `tests/unit/test_web_app.py`, `tests/unit/test_web_public_digest.py`, `tests/unit/test_auth_stage1.py`:
   pages, access, signals client hooks. Tests that check moved code read the page with its assets
   (a fixture in `tests/unit/conftest.py`) or the asset file.

@@ -1,0 +1,37 @@
+.period-stack > .signal-card,
+.period-stack > .signal-grid {
+  margin-top: 14px;
+}
+.period-heading {
+  margin: 0 0 8px;
+  font-size: 1.15rem;
+}
+.period-picker {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.period-prevnext {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 0 10px;
+}
+.period-prevnext a,
+.period-weeks a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+.period-weeks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 0.92rem;
+}
+.signal-meta a {
+  color: var(--accent);
+}

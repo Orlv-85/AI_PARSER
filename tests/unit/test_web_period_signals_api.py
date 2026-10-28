@@ -39,7 +39,8 @@ def store(maker, engine, start, payload, *, status="ready", kind="week"):
     now = datetime.now(UTC)
     with maker() as session:
         session.add(PeriodSignalReport(
-            period_kind=kind, period_start=start, period_end=start, methodology_version="m",
+            period_kind=kind, period_start=start, period_end=start + timedelta(days=6),
+            methodology_version="m",
             extraction_version="e", status=status, payload_hash="x" * 64, thresholds="{}",
             coverage="{}", payload=payload if isinstance(payload, str) else json.dumps(payload),
             created_at=now, updated_at=now))

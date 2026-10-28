@@ -22,7 +22,9 @@ empty tables):
 L="flock -w 7200 /tmp/ai-news-auto-update.lock"
 C="docker compose -f docker-compose.prod.yml run --rm"
 
-# backfill the first three weeks (2026-10-12, 10-19, 10-26), oldest first
+# backfill the last three completed weeks, oldest first (on 2026-10-28 this stored 10-12 and
+# 10-19; 10-05 is before the first computable week and skipped; 10-26 is computed by the
+# nightly step from Monday 2026-11-02)
 $L $C app ai-news period-signals --backfill 3
 
 # check what is stored
