@@ -110,8 +110,6 @@ def create_app() -> FastAPI:
                 "/",
                 "/news-stats",
                 "/weekly",
-                "/weekly-ai-analytics",
-                "/weekly-ai-analytics/reports",
             }
             or is_auth_route
             or is_public_news_api

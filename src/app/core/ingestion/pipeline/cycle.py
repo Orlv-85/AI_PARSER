@@ -21,7 +21,6 @@ from app.core.ingestion.pipeline.replay import _replay_pending_for_source
 from app.core.ingestion.pipeline.screening import _admission_snapshot, _restore_admission
 from app.core.ingestion.pipeline.source_result import _log_source_metrics, _process_source_result
 from app.core.ingestion.pipeline.sources import _clear_source_validators, _managed_source_to_config
-from app.core.ingestion.pipeline.weekly_hooks import _publish_weekly_analytics_if_due
 from app.core.jev import jev_relevance_scorer
 from app.storage import SessionLocal, create_all
 from app.storage.admission import (
@@ -255,7 +254,6 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
 
         if not admission_state.paused and admission_state.fresh_success:
             clear_collection_paused(session)
-        _publish_weekly_analytics_if_due(session=session, logger=logger, run_id=run_id)
         session.commit()
 
     logger.info(

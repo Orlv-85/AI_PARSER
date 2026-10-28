@@ -93,7 +93,7 @@ rules, names, tests and `covers` globs it ships.
 
 ## Phase 5: Retire legacy weekly (US3) (release R5)
 
-- [ ] T040 [US3] Stop the Monday legacy publish: delete `weekly_hooks.py` and its test; replace the
+- [x] T040 [US3] Stop the Monday legacy publish: delete `weekly_hooks.py` and its test; replace the
   preview section in `digest.html`/`digest.js`/`digest.css` by the link; `/weekly-ai-analytics*`
   answer 308 to `/weekly`; delete the two legacy pages and nav links; keep the legacy API and tables.
   Update `web/pages.md`, `pipeline.md`, route table test, `docs/README.md`.

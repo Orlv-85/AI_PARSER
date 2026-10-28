@@ -20,7 +20,6 @@
         padding: 48px 20px 64px;
       }
       .hero,
-      .weekly-preview,
       .digest-group,
       .empty-state {
         background: var(--surface);
@@ -68,7 +67,6 @@
         text-decoration: none;
       }
       .digest-group,
-      .weekly-preview,
       .empty-state {
         margin-top: 18px;
       }
@@ -121,52 +119,6 @@
         color: var(--accent);
         font-weight: 600;
         text-decoration: none;
-      }
-      .weekly-preview {
-        padding: 22px;
-      }
-      .preview-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 16px;
-        margin-top: 18px;
-      }
-      .preview-card {
-        padding: 16px;
-        border: 1px solid var(--border);
-        border-radius: 14px;
-        background: rgba(15, 118, 110, 0.04);
-      }
-      .preview-card h3 {
-        margin: 0 0 10px;
-        font-size: 1rem;
-      }
-      .preview-list {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-      }
-      .preview-list li + li {
-        margin-top: 12px;
-        padding-top: 12px;
-        border-top: 1px solid var(--border);
-      }
-      .preview-list a {
-        color: var(--accent);
-        font-weight: 600;
-        text-decoration: none;
-      }
-      .preview-list p {
-        margin: 6px 0 0;
-        color: var(--muted);
-        display: -webkit-box;
-        -webkit-line-clamp: 6;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-      }
-      .preview-empty {
-        margin: 0;
-        color: var(--muted);
       }
       .signals {
         margin-top: 22px;
@@ -328,7 +280,6 @@
         .hero {
           padding: 22px;
         }
-        .preview-grid,
         .signal-grid,
         .signal-grid.cols-2 {
           grid-template-columns: 1fr;

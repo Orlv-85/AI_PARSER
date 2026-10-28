@@ -31,179 +31,6 @@ def _no_daily_signals(monkeypatch) -> None:
     monkeypatch.setattr(common_routes, "DailySignalRepo", _NoSignalsRepo)
 
 
-def test_public_digest_page_links_to_weekly_ai_analytics(monkeypatch, tmp_path) -> None:
-    monkeypatch.chdir(tmp_path)
-    get_settings.cache_clear()
-
-    class _DummySession:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb) -> None:
-            del exc_type, exc, tb
-
-    def _session_local():
-        return _DummySession()
-
-    class _NewsDigestRepo:
-        def __init__(self, _session) -> None:
-            pass
-
-        def get_digest(self, *, report_date):  # type: ignore[no-untyped-def]
-            del report_date
-
-    web_app_module = import_module("app.web.app")
-    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
-    monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(pages_routes, "NewsDigestRepo", _NewsDigestRepo)
-
-    client = TestClient(create_app())
-
-    response = client.get("/?date=2026-03-07")
-
-    assert response.status_code == 200
-    assert 'href="/weekly-ai-analytics/reports"' in response.text
-    assert "Weekly Reports" in response.text
-
-
-def test_weekly_reports_page_renders(monkeypatch, tmp_path) -> None:
-    monkeypatch.chdir(tmp_path)
-    get_settings.cache_clear()
-
-    class _FrozenDateTime(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return cls(2026, 3, 11, 9, 0, tzinfo=tz or UTC)
-
-    monkeypatch.setattr(pages_routes, "datetime", _FrozenDateTime)
-
-    client = TestClient(create_app())
-
-    response = client.get("/weekly-ai-analytics/reports")
-
-    assert response.status_code == 200
-    assert "Weekly AI Reports" in response.text
-    assert 'href="/?date=2026-03-10"' in response.text
-
-
-def test_weekly_ai_analytics_page_renders_shell_with_requested_date(
-    monkeypatch, tmp_path
-) -> None:
-    monkeypatch.chdir(tmp_path)
-    get_settings.cache_clear()
-
-    class _FrozenDateTime(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return cls(2026, 3, 8, 9, 0, tzinfo=tz or UTC)
-
-    web_app_module = import_module("app.web.app")
-    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
-    monkeypatch.setattr(pages_routes, "datetime", _FrozenDateTime)
-
-    client = TestClient(create_app())
-
-    response = client.get("/weekly-ai-analytics?date=2026-03-07")
-
-    assert response.status_code == 200
-    assert "Weekly AI Analytics" in response.text
-    assert 'value="2026-03-07"' in response.text
-    assert "Summary" in response.text
-    assert "New" in response.text
-    assert "Trending Up" in response.text
-    assert "Trending Down" in response.text
-
-
-def test_weekly_ai_analytics_page_back_link_preserves_requested_report_date(
-    monkeypatch, tmp_path
-) -> None:
-    monkeypatch.chdir(tmp_path)
-    get_settings.cache_clear()
-
-    class _FrozenDateTime(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return cls(2026, 3, 8, 9, 0, tzinfo=tz or UTC)
-
-    web_app_module = import_module("app.web.app")
-    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
-    monkeypatch.setattr(pages_routes, "datetime", _FrozenDateTime)
-
-    client = TestClient(create_app())
-
-    response = client.get("/weekly-ai-analytics?date=2026-03-07")
-
-    assert response.status_code == 200
-    assert 'href="/?date=2026-03-07"' in response.text
-
-
-def test_weekly_ai_analytics_page_back_link_preserves_default_previous_utc_day(
-    monkeypatch, tmp_path
-) -> None:
-    monkeypatch.chdir(tmp_path)
-    get_settings.cache_clear()
-
-    class _FrozenDateTime(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return cls(2026, 3, 8, 9, 0, tzinfo=tz or UTC)
-
-    web_app_module = import_module("app.web.app")
-    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
-    monkeypatch.setattr(pages_routes, "datetime", _FrozenDateTime)
-
-    client = TestClient(create_app())
-
-    response = client.get("/weekly-ai-analytics")
-
-    assert response.status_code == 200
-    assert 'href="/?date=2026-03-07"' in response.text
-
-
-def test_weekly_ai_analytics_page_defaults_to_latest_published_report_date(
-    monkeypatch, tmp_path
-) -> None:
-    monkeypatch.chdir(tmp_path)
-    get_settings.cache_clear()
-
-    class _FrozenDateTime(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            # Wednesday after Monday autopublish of previous Mon-Sun week.
-            return cls(2026, 3, 11, 9, 0, tzinfo=tz or UTC)
-
-    class _WeeklyAnalyticsRepo:
-        def __init__(self, _session) -> None:
-            pass
-
-        def get_latest_report_date(self) -> date:
-            return date(2026, 3, 8)
-
-    class _DummySession:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb) -> None:
-            del exc_type, exc, tb
-
-    def _session_local():
-        return _DummySession()
-
-    web_app_module = import_module("app.web.app")
-    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
-    monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(pages_routes, "datetime", _FrozenDateTime)
-    monkeypatch.setattr(pages_routes, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo)
-
-    client = TestClient(create_app())
-
-    response = client.get("/weekly-ai-analytics")
-
-    assert response.status_code == 200
-    assert 'value="2026-03-08"' in response.text
-    assert 'href="/?date=2026-03-08"' in response.text
-
-
 def test_weekly_ai_analytics_api_returns_report_sections_for_last_7_days(
     monkeypatch, tmp_path
 ) -> None:
@@ -699,7 +526,7 @@ def test_weekly_ai_analytics_api_defaults_to_latest_published_report_date(
     }
 
 
-def test_public_digest_page_renders_weekly_ai_analytics_section(
+def test_public_digest_page_has_no_legacy_weekly_preview(
     monkeypatch, tmp_path, page_with_assets
 ) -> None:
     monkeypatch.chdir(tmp_path)
@@ -712,9 +539,6 @@ def test_public_digest_page_renders_weekly_ai_analytics_section(
         def __exit__(self, exc_type, exc, tb) -> None:
             del exc_type, exc, tb
 
-    def _session_local():
-        return _DummySession()
-
     class _NewsDigestRepo:
         def __init__(self, _session) -> None:
             pass
@@ -724,7 +548,7 @@ def test_public_digest_page_renders_weekly_ai_analytics_section(
 
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
-    monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
+    monkeypatch.setattr(web_app_module, "SessionLocal", _DummySession)
     monkeypatch.setattr(pages_routes, "NewsDigestRepo", _NewsDigestRepo)
 
     client = TestClient(create_app())
@@ -732,11 +556,55 @@ def test_public_digest_page_renders_weekly_ai_analytics_section(
     response = client.get("/")
 
     assert response.status_code == 200
-    assert 'href="/weekly-ai-analytics/reports"' in response.text
-    assert 'id="weekly-analytics-preview"' in response.text
-    assert "Weekly Management View" in response.text
-    assert "Summary" in response.text
-    assert "/api/news/weekly-analytics?date=" in page_with_assets(client, response)
+    assert "Weekly Reports" not in response.text
+    assert "weekly-ai-analytics" not in response.text
+    assert 'id="weekly-analytics-preview"' not in response.text
+    assert "Weekly Management View" not in response.text
+    script = page_with_assets(client, response)
+    assert "/api/news/weekly-analytics" not in script
+    assert "weekly-ai-analytics" not in script
+
+
+@pytest.mark.parametrize("auth_enabled", [False, True])
+@pytest.mark.parametrize("path", ["/weekly-ai-analytics", "/weekly-ai-analytics/reports"])
+def test_legacy_weekly_pages_redirect_308_to_weekly(
+    monkeypatch, tmp_path, path, auth_enabled
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("AINEWS_AUTH_ENABLED", raising=False)
+    if auth_enabled:
+        monkeypatch.setenv("AINEWS_AUTH_USERNAME", "operator")
+        monkeypatch.setenv("AINEWS_AUTH_PASSWORD_HASH",
+                           import_module("app.web.auth").hash_password("s3cret-pass"))
+        monkeypatch.setenv("AINEWS_AUTH_SECRET", "0123456789abcdef0123456789abcdef")
+    get_settings.cache_clear()
+    client = TestClient(create_app())
+
+    response = client.get(path + "?date=2026-03-07", follow_redirects=False)
+
+    assert response.status_code == 308
+    assert response.headers["location"] == "/weekly"
+    get_settings.cache_clear()
+
+
+def test_legacy_weekly_redirect_works_with_a_session_cookie(monkeypatch, tmp_path) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("AINEWS_AUTH_USERNAME", "operator")
+    monkeypatch.setenv("AINEWS_AUTH_PASSWORD_HASH",
+                       import_module("app.web.auth").hash_password("s3cret-pass"))
+    monkeypatch.setenv("AINEWS_AUTH_SECRET", "0123456789abcdef0123456789abcdef")
+    get_settings.cache_clear()
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    client = TestClient(create_app())
+    login = client.post("/api/auth/login", json={"username": "operator", "password": "s3cret-pass"})
+    assert login.status_code == 200
+
+    response = client.get("/weekly-ai-analytics", follow_redirects=False)
+
+    assert response.status_code == 308
+    assert response.headers["location"] == "/weekly"
+    get_settings.cache_clear()
 
 
 def test_weekly_ai_analytics_api_uses_prior_week_only_for_trending_down_baseline(

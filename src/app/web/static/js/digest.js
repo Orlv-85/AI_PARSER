@@ -4,10 +4,6 @@
       const emptyText = document.getElementById("digest-empty-text");
       const dailyLinkList = document.getElementById("daily-link-list");
       const results = document.getElementById("digest-results");
-      const weeklySummary = document.getElementById("weekly-preview-summary");
-      const weeklyNew = document.getElementById("weekly-preview-new");
-      const weeklyTrendingUp = document.getElementById("weekly-preview-trending-up");
-      const weeklyTrendingDown = document.getElementById("weekly-preview-trending-down");
 
       function escapeHtml(value) {
         return String(value)
@@ -216,30 +212,6 @@
         renderSignals(payload);
       }
 
-      function renderWeeklyPreviewList(node, items, message, limit = 3) {
-        if (!items.length) {
-          node.innerHTML = `<li class="preview-empty">${escapeHtml(message)}</li>`;
-          return;
-        }
-
-        node.innerHTML = items.slice(0, limit)
-          .map(
-            (item) => `
-              <li>
-                <a href="${/^https?:\/\//i.test(item.url) ? escapeHtml(item.url) : ""}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>
-                ${item.delta_pp == null ? "" : `<p>Share: ${(100 * Number(item.share_previous)).toFixed(1)}% → ${(100 * Number(item.share_current)).toFixed(1)}% (${Number(item.delta_pp).toFixed(2)} pp)</p>`}
-                <p>${escapeHtml(node.id === "weekly-preview-reviews" ? item.summary.replace(/ Comparable coverage is insufficient to confirm an attention trend\.$/, "") : truncateText(item.summary, 360))}</p>
-              </li>
-            `,
-          )
-          .join("");
-      }
-
-      function truncateText(value, maxLength) {
-        const text = String(value || "").replace(/\s+/g, " ").trim();
-        return text.length > maxLength ? text.slice(0, maxLength - 1) + "…" : text;
-      }
-
       function updateHeroTitle(selectedDate) {
         heroTitle.textContent =
           selectedDate === defaultReportDate
@@ -263,40 +235,6 @@
         } catch (_error) {
           return;
         }
-      }
-
-      async function loadWeeklyPreview(selectedDate) {
-        document.getElementById("weekly-topic-reviews").classList.add("hidden");
-        const response = await fetch("/api/news/weekly-analytics?date=" + encodeURIComponent(selectedDate));
-        if (!response.ok) {
-          weeklySummary.textContent = "Weekly analytics are unavailable right now.";
-          weeklyNew.innerHTML = '<li class="preview-empty">Unavailable.</li>';
-          weeklyTrendingUp.innerHTML = '<li class="preview-empty">Unavailable.</li>';
-          weeklyTrendingDown.innerHTML = '<li class="preview-empty">Unavailable.</li>';
-          return;
-        }
-
-        const payload = await response.json();
-        weeklySummary.textContent = payload.summary;
-        const reviews = ["new", "trending_up", "trending_down", "other_signals"]
-          .flatMap((section) => payload[section] || []).filter((item) => item.claims?.length);
-        if (reviews.length) {
-          document.getElementById("weekly-topic-reviews").classList.remove("hidden");
-          document.getElementById("weekly-reviews-note").textContent =
-            `${reviews.length} topic reviews for ${payload.date_from} to ${payload.date_to}. ` +
-            (payload.status === "insufficient_data"
-              ? "Reported events are available; comparable coverage is insufficient to confirm attention trends."
-              : "Reported events with source evidence; see the full report for attention metrics.");
-          renderWeeklyPreviewList(document.getElementById("weekly-preview-reviews"), reviews, "", 8);
-          document.getElementById("weekly-full-report").href =
-            "/weekly-ai-analytics?date=" + encodeURIComponent(payload.report_date) + "#weekly-reviews-panel";
-        }
-        renderWeeklyPreviewList(weeklyNew, payload.new, payload.section_status?.new?.message
-          || "No confirmed new topics in the observed 28-day history.");
-        renderWeeklyPreviewList(weeklyTrendingUp, payload.trending_up, payload.section_status?.trending_up?.message
-          || "No topics met the growth threshold this week.");
-        renderWeeklyPreviewList(weeklyTrendingDown, payload.trending_down, payload.section_status?.trending_down?.message
-          || "No topics met the decline threshold this week.");
       }
 
       async function loadDailyLinks(selectedDate) {
@@ -333,7 +271,6 @@
         window.history.replaceState({}, "", nextUrl);
         updateHeroTitle(selectedDate);
         renderDigest(payload);
-        await loadWeeklyPreview(selectedDate);
       }
 
       if (window.location.search !== initialDigestUrl) {
@@ -342,7 +279,6 @@
       updateHeroTitle(dateInput.value);
       void loadCollectionStatus();
       setInterval(loadCollectionStatus, 15000);
-      void loadWeeklyPreview(dateInput.value);
       if (!emptyState.classList.contains("hidden")) {
         void loadDailyLinks(dateInput.value);
       }

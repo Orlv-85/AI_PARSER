@@ -239,7 +239,6 @@ def test_signals_block_renders_escaped_states_and_links(monkeypatch, tmp_path) -
     assert "<h3>Spikes</h3>" in block and "today 4 vs 0.25/day" in block
     assert "4 outlets &middot; model release" in block
     assert "Cooling" not in block
-    assert 'id="weekly-analytics-preview"' in html
     assert html.index('id="daily-signals"') < html.index('class="digest-shell"')
 
 

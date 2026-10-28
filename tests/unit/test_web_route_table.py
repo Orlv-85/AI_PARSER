@@ -20,9 +20,9 @@ _PUBLISH_TOKEN = "publish-token-0123456789abcdef0123"
 #  response_model_exclude_unset) in registration order.
 _ROUTE_TABLE = [
     ('GET', '/', 'index', 'str', 'HTMLResponse', None, False),
-    ('GET', '/weekly-ai-analytics', 'weekly_ai_analytics', 'str', 'HTMLResponse', None, False),
-    ('GET', '/weekly-ai-analytics/reports', 'weekly_ai_analytics_reports', 'str', 'HTMLResponse',
-     None, False),
+    ('GET', '/weekly-ai-analytics', 'legacy_weekly_redirect', None, 'JSONResponse', None, False),
+    ('GET', '/weekly-ai-analytics/reports', 'legacy_weekly_redirect', None, 'JSONResponse', None,
+     False),
     ('GET', '/news-stats', 'news_stats_page', 'str', 'HTMLResponse', None, False),
     ('GET', '/admin', 'admin_index', 'str', 'HTMLResponse', None, False),
     ('GET', '/login', 'login_page', None, 'HTMLResponse', None, False),

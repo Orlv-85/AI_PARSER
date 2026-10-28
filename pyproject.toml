@@ -53,8 +53,6 @@ where = ["src"]
   "login.html",
   "news_stats.html",
   "period.html",
-  "weekly_analytics.html",
-  "weekly_analytics_reports.html",
   "static/admin/*.css",
   "static/admin/*.js",
   "static/css/*.css",
