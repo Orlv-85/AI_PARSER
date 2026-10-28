@@ -24,8 +24,8 @@
         "Next big spec: planner and implementer in separate sessions."
       ],
       "priority": 2,
-      "status": "in_progress",
-      "status_note": "Spec specs/017-weekly-monthly-signals (2026-10-28); R1 live as v0.1.133."
+      "status": "done",
+      "status_note": "Spec specs/017-weekly-monthly-signals shipped 2026-10-28 (v0.1.133-v0.1.139): /weekly and /monthly with briefs."
     },
     {
       "id": "B3",
