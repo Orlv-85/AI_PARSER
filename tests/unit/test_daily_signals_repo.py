@@ -591,3 +591,12 @@ def test_save_brief_upserts_by_day(session, repo):
     assert json.loads(row.payload)["sentences"][0]["quote"] == "q"
     with pytest.raises(ValueError):
         repo.save_brief(D, brief_version="v", model="m", input_hash="h", status="bad", payload={})
+
+
+def test_publisher_group_uses_registrable_domain_and_overrides() -> None:
+    group = module.publisher_group
+    assert group("https://blog.example.com/a", {}) == "example.com"
+    assert group("https://news.bbc.co.uk/a", {}) == "bbc.co.uk"
+    assert group("https://www.example.com/a", {"www.example.com": "Example"}) == "Example"
+    assert group("https://blog.example.com/a", {"example.com": "Example"}) == "Example"
+    assert group("not a url", {}) == "unknown"
