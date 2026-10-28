@@ -312,6 +312,15 @@
       .signal-list li.signal-confirmed + li.signal-muted {
         border-top-style: dashed;
       }
+      .period-line {
+        margin: 14px 0 0;
+        font-size: 0.95rem;
+      }
+      .period-line a {
+        color: var(--accent);
+        font-weight: 600;
+        text-decoration: none;
+      }
       @media (max-width: 700px) {
         main {
           padding-top: 28px;

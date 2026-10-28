@@ -10,5 +10,7 @@ def test_web_package_data_includes_public_templates() -> None:
 
     assert "digest.html" in package_data
     assert "news_stats.html" in package_data
+    assert "period.html" in package_data
+    assert "static/css/*.css" in package_data
     assert "weekly_analytics.html" in package_data
     assert "weekly_analytics_reports.html" in package_data

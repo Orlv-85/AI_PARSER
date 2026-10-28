@@ -109,6 +109,7 @@ def create_app() -> FastAPI:
                 "/health",
                 "/",
                 "/news-stats",
+                "/weekly",
                 "/weekly-ai-analytics",
                 "/weekly-ai-analytics/reports",
             }

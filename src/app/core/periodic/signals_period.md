@@ -5,14 +5,16 @@ covers:
   - src/app/storage/period_signals*.py
   - src/app/storage/migrations/versions/*period_signal*.py
   - src/app/web/routes/period.py
+  - src/app/web/period_view.py
 -->
 # Period AI Signals
 
 Weekly (and later monthly) view of the AI signals: sums and comparisons of the stored daily data
 (`core/daily/signals.md`) over a completed period. Everything is deterministic and costs $0; no
 provider is involved. Shipped: the pure rules (bounds, thresholds, status, compute), storage, the
-command `ai-news period-signals`, the nightly step and the read API, all behind
-`AINEWS_PERIOD_SIGNALS_ENABLED` (default off). The page and the paid brief come in later releases.
+command `ai-news period-signals`, the nightly step, the read API and the `/weekly` page; the numbers
+are computed behind `AINEWS_PERIOD_SIGNALS_ENABLED` (default off), pages and API only read stored
+rows. The paid brief comes in a later release.
 
 This file is the intended current behavior of 017. `specs/017-weekly-monthly-signals/` is the process
 and history.
@@ -151,6 +153,27 @@ The numbers live in the code: fields of `PeriodThresholds` (by kind) in `period_
   `test_auth_middleware_coverage_is_pinned`.
 - No provider code is imported on the request path. Tests: `test_request_path_does_not_import_provider_code`.
 
+**Page** (`GET /weekly`, `GET /weekly?week=YYYY-MM-DD`; stored data only, no provider, no compute)
+- Without `week` the page shows the week the API picks by default; with `week` that Monday. Sections
+  in order: coverage line (days complete, items, publishers, extracted share, missing days, the
+  "Partial week" line when `partial`, the "Quiet week" line when `quiet`), top stories, top entities
+  by group, New this week, Rising and Cooling, event types with the delta. Tests:
+  `test_ready_week_shows_sections_in_order`, `test_partial_and_quiet_lines`.
+- A section that has nothing, or whose comparison is hidden, shows one plain reason line instead of a
+  list: "First week, no comparison with a previous week." (comparison `none`, status
+  `building_history`) and the low publisher coverage line (comparison `suppressed`). Event deltas
+  are shown only when stored. Tests: `test_building_history_says_first_week`,
+  `test_suppressed_comparison_gives_a_reason_not_a_chart`.
+- No stored week, a missing week or an unreadable or odd payload gives a 200 page with a plain
+  "not available" line, never 500; the week picker (previous, next, list) is plain links built from
+  the index. A `week` that is not a Monday redirects (303) to its Monday. Tests: `test_no_rows_is_unavailable_200`,
+  `test_corrupt_row_is_200`, `test_week_param`, `test_default_skips_a_newer_partial_week`.
+- Stored text is escaped; only `http(s)` links are rendered; days link to `/?date=YYYY-MM-DD`.
+  Tests: `test_text_is_escaped_and_only_http_links`, `test_week_label_across_months`.
+- The header link "Weekly" and the line under the daily block on `/` show only when a stored week
+  exists. Tests: `test_nav_link_and_home_line_follow_stored_weeks`,
+  `test_home_page_survives_a_period_read_failure`.
+
 ## Decisions
 
 | Decision | Why |
@@ -174,6 +197,9 @@ The numbers live in the code: fields of `PeriodThresholds` (by kind) in `period_
 | The default API read prefers the newest `ready` or `building_history` period over a newer `partial` one (decided 2026-10-28, agent) | a reader should see numbers that can be trusted; a partial week is still served by `start` or when nothing else exists |
 | The run reconciles evidence in memory and reads entity ids from `ai_entities`; it does not persist reconciliation (decided 2026-10-28, agent) | the period run writes only its own tables; an entity not yet stored has id 0 until the daily run stores it |
 | A period run is a function in `period_run.py`, the command only parses options (decided 2026-10-28, agent) | testable without the CLI, same split as the daily run |
+| `?week=` that is not a Monday redirects (303) to its Monday; text that is not a date gives the unavailable page (decided 2026-10-28 (agent)) | a shared link with any day of the week still lands on the week; garbage never gives a 422 or 500 page |
+| The nav link and the line on `/` follow the default week of the page (newest `ready` or `building_history`, else newest stored) (decided 2026-10-28 (agent)) | the link text and the page it opens always agree |
+| The page uses `digest.css` plus a small `period.css` and no script (decided 2026-10-28 (agent)) | no client re-render is needed (plan "Web"); the daily classes are reused |
 | Month risers and month-only rules are not built here (R6) | bounds and thresholds for months exist; the monthly view ships last |
 
 ## Invariants
@@ -198,7 +224,8 @@ The numbers live in the code: fields of `PeriodThresholds` (by kind) in `period_
 | `period_run.py` | `run_periods`, `target_weeks`, `first_week`, `latest_completed_week`: pick periods, compute, store | no |
 | `storage/period_signals.py` | `PeriodSignalRepo`: `context`, `load_input`, `previous`, `save_report`, `get_report`, `latest`, `index` | no |
 | `storage/migrations/versions/f4a9c1d27b83_add_period_signals.py` | the two tables, skip-if-exists, `down_revision` `e7b4c2a9d150` | no |
-| `web/routes/period.py` | the two read routes; response models `PeriodSignalsResponse`, `PeriodSignalsIndexResponse` in `web/models.py` | no |
+| `web/period_view.py`, `web/period.html`, `web/static/css/period.css` | the `/weekly` HTML, template and styles; `latest_week` (in the route file) feeds the nav link and the line on `/` | no |
+| `web/routes/period.py` | the two read routes and the `/weekly` page route; response models `PeriodSignalsResponse`, `PeriodSignalsIndexResponse` in `web/models.py` | no |
 | `cli/main.py` `period-signals` | options and flag check; flag `period_signals_enabled` in `config/settings.py` | no |
 | `core/daily/signals_trend.py` | Shared Rising/Cooling rule: `trend_windows`, `trend_delta`, `TrendRow` | yes |
 
@@ -211,7 +238,7 @@ Flow: `compute_period` -> `coverage_line`, `period_status`, `comparison`, then `
 | A section rule | `period_compute.py` | bump `PERIOD_METHODOLOGY_VERSION` |
 | What Rising means | `signals_trend.py` and daily `Thresholds` | bump the daily `METHODOLOGY_VERSION` and the period one |
 
-Not built yet: the page (R3), the brief and its flag and version row (R4), the month kind (R6). The
+Not built yet: the brief and its flag and version row (R4), the month kind (R6). The
 `period_signal_briefs` table exists and is empty.
 
 Operator commands, enabling and rollback: `docs/period-signals.md`. `docker-compose.prod.yml` passes
@@ -222,7 +249,8 @@ no-op until the operator sets it (decided 2026-10-28 (coordinator): same path as
 
 Per rule: see Behavior. Files: `tests/unit/test_period_model.py`, `tests/unit/test_period_compute.py`,
 `tests/unit/test_period_signals_repo.py`, `tests/unit/test_period_signals_migration.py`,
-`tests/unit/test_cli_period_signals.py`, `tests/unit/test_web_period_signals_api.py`; fixture weeks
+`tests/unit/test_cli_period_signals.py`, `tests/unit/test_web_period_signals_api.py`,
+`tests/unit/test_web_period_page.py`; fixture weeks
 are built by `tests/unit/period_fixtures.py` from `tests/fixtures/daily_signals/` (the previous week is
 the same days shifted back, thinned) and database weeks by `tests/unit/period_db.py`. No test calls
 a provider.

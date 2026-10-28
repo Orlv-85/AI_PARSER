@@ -2,10 +2,11 @@
 
 import json
 import logging
-from datetime import date
+from datetime import date, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -16,6 +17,13 @@ from app.web.models import (
     PeriodSignalsIndexItem,
     PeriodSignalsIndexResponse,
     PeriodSignalsResponse,
+)
+from app.web.period_view import (
+    NOT_FOR_WEEK,
+    NOT_YET,
+    render_content,
+    render_page,
+    render_picker,
 )
 from app.web.routes import WebDeps
 
@@ -44,8 +52,60 @@ def _response(kind: str, start: date | None, row: PeriodSignalReport | None
     return response
 
 
+def latest_week(deps: WebDeps) -> tuple[date, date] | None:
+    """Start and end of the week `/weekly` shows by default; None when no week is stored or the
+    read fails (the nav link and the line on `/` then stay hidden)."""
+    try:
+        deps.create_all()
+        with deps.SessionLocal() as session:
+            rows = PeriodSignalRepo(
+                session, comparable_from=get_settings().daily_signals_comparable_from
+            ).index("week")
+    except Exception as exc:  # any failure: the caller's page stays up
+        _LOGGER.error("period_signals_latest_failed error=%s", type(exc).__name__)
+        return None
+    shown = next((r for r in rows if r.status in _SHOWN), rows[0] if rows else None)
+    return (shown.period_start, shown.period_end) if shown is not None else None
+
+
 def build_period_router(deps: WebDeps) -> APIRouter:
     router = APIRouter()
+
+    @router.get("/weekly", response_class=HTMLResponse)
+    def weekly_page(week: str | None = None) -> Response:
+        """Stored week as HTML (no provider, no compute). `?week=` is a Monday; another day
+        redirects to its Monday; text that is not a date gives the unavailable page."""
+        start: date | None = None
+        if week is not None:
+            try:
+                start = date.fromisoformat(week)
+            except ValueError:
+                start = None
+            if start is not None and start.weekday() != 0:
+                monday = start - timedelta(days=start.weekday())
+                return RedirectResponse(url=f"/weekly?week={monday.isoformat()}", status_code=303)
+        weeks: list[tuple[date, date, str]] = []
+        signals = None
+        note = NOT_FOR_WEEK if week is not None else NOT_YET
+        try:
+            deps.create_all()
+            with deps.SessionLocal() as session:
+                repo = PeriodSignalRepo(
+                    session, comparable_from=get_settings().daily_signals_comparable_from)
+                weeks = [(r.period_start, r.period_end, r.status) for r in repo.index("week")]
+                if week is None:
+                    row = repo.latest("week", _SHOWN) or repo.latest("week")
+                elif start is not None:
+                    row = repo.get_report("week", start)
+                else:
+                    row = None
+                signals = _response("week", start, row) if row is not None else None
+        except Exception as exc:  # unavailable page, never a 500 (plan: Web)
+            _LOGGER.error("period_signals_page_failed error=%s", type(exc).__name__)
+            weeks, signals, note = [], None, "Weekly signals are temporarily unavailable."
+        current = signals.period_start if signals is not None else None
+        return HTMLResponse(render_page(render_content(signals, note=note),
+                                        render_picker(weeks, current)))
 
     @router.get("/api/news/period-signals", response_model=PeriodSignalsResponse)
     def get_period_signals(
