@@ -121,73 +121,55 @@ def kept_spikes(payload: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     return [i for i in _items(payload, "rising") if i.get("spike")]
 
 
-def brief_packet(payload: Mapping[str, Any], digest_items: Iterable[Mapping[str, Any]]
-                 ) -> tuple[dict[str, Any], dict[str, dict[str, str]]]:
-    """(packet, id map) for one day from its stored snapshot and published digest items.
+class ArticleRefs:
+    """Article ids `a1..aN` in order of first reference, from the published digest items.
 
-    Digest items carry title, summary, url and optionally publisher. Ids `a1..aN` follow the first
-    reference: top stories, New items, kept spikes, then (quiet day) the digest itself."""
-    by_url: dict[str, Mapping[str, Any]] = {}
-    ordered = []
-    for item in digest_items:
-        url = str(item.get("url") or "")
-        if url and url not in by_url:
-            by_url[url] = item
-            ordered.append(item)
-    link_publisher: dict[str, str] = {}
-    for group in ("top_stories", "new", "rising"):
-        for item in _items(payload, group):
-            for link in item.get("links") or []:
-                link_publisher.setdefault(link["url"], link.get("publisher") or "")
-    ids: dict[str, str] = {}
-    articles: dict[str, dict[str, str]] = {}
-    id_map: dict[str, dict[str, str]] = {}
+    `groups` are the payload item lists whose links tell the publisher of a digest url."""
 
-    def ref(url: str) -> str | None:
-        item = by_url.get(url)
+    def __init__(self, digest_items: Iterable[Mapping[str, Any]],
+                 groups: Iterable[Iterable[Mapping[str, Any]]]):
+        self.by_url: dict[str, Mapping[str, Any]] = {}
+        self.ordered: list[Mapping[str, Any]] = []
+        for item in digest_items:
+            url = str(item.get("url") or "")
+            if url and url not in self.by_url:
+                self.by_url[url] = item
+                self.ordered.append(item)
+        self.link_publisher: dict[str, str] = {}
+        for group in groups:
+            for item in group:
+                for link in item.get("links") or []:
+                    self.link_publisher.setdefault(link["url"], link.get("publisher") or "")
+        self.ids: dict[str, str] = {}
+        self.articles: dict[str, dict[str, str]] = {}
+        self.id_map: dict[str, dict[str, str]] = {}
+
+    def ref(self, url: str) -> str | None:
+        item = self.by_url.get(url)
         if item is None:
             return None
-        if url not in ids:
-            key = f"a{len(ids) + 1}"
-            ids[url] = key
+        if url not in self.ids:
+            key = f"a{len(self.ids) + 1}"
+            self.ids[url] = key
             article = {"title": norm(str(item.get("title") or "")),
                        "summary": cut(digest_summary(item.get("summary")), SUMMARY_MAX)}
-            publisher = item.get("publisher") or link_publisher.get(url)
+            publisher = item.get("publisher") or self.link_publisher.get(url)
             if publisher:
                 article["publisher"] = str(publisher)
-            articles[key] = article
-            id_map[key] = {"title": article["title"], "url": url,
-                           "publisher": str(publisher or "")}
-        return ids[url]
+            self.articles[key] = article
+            self.id_map[key] = {"title": article["title"], "url": url,
+                                "publisher": str(publisher or "")}
+        return self.ids[url]
 
-    def refs(item: Mapping[str, Any]) -> list[str]:
-        return [x for link in (item.get("links") or [])[:LINKS_PER_ITEM]
-                if (x := ref(link["url"])) is not None]
+    def of(self, item: Mapping[str, Any], limit: int = LINKS_PER_ITEM) -> list[str]:
+        return [x for link in (item.get("links") or [])[:limit]
+                if (x := self.ref(link["url"])) is not None]
 
-    coverage = payload.get("coverage") or {}
-    quiet = bool(payload.get("quiet"))
-    stories = []
-    for story in _items(payload, "top_stories"):
-        entry: dict[str, Any] = {"label": norm(story["label"]), "outlets": story["publishers"],
-                                 "event": story["event_type"], "articles": refs(story)}
-        if is_review([norm(link["title"]) for link in story.get("links") or []]):
-            entry["kind"] = "review"
-        stories.append(entry)
-    new = [{"name": n["name"], "type": n["type"], "vendor": n.get("vendor"),
-            "outlets": n["publishers"], "what": n.get("one_liner") or n.get("novelty_quote") or "",
-            "articles": refs(n)} for n in _items(payload, "new")]
-    spikes = [{"name": s["name"], "today": s["today"], "usual_per_day": s.get("trailing_mean"),
-               "articles": refs(s)} for s in kept_spikes(payload)]
-    packet: dict[str, Any] = {
-        "day": payload["report_date"], "quiet": quiet, "digest_items": coverage.get("items", 0),
-        "stories": stories, "new": new, "spikes": spikes,
-        "event_counts": {e["label"]: e["stories"] for e in _items(payload, "event_counts")
-                         if e["event_type"] in HARD_EVENTS and e["stories"]}}
-    if quiet:
-        for item in ordered[:QUIET_ARTICLES_MAX]:
-            ref(str(item["url"]))
-    packet["articles"] = articles
-    while len(encoded(packet).encode()) > PACKET_MAX_BYTES:
+
+def fit_packet(packet: Mapping[str, Any], max_bytes: int) -> None:
+    """Shorten every article summary (down to SUMMARY_FLOOR) until the packet fits."""
+    articles = packet["articles"]
+    while len(encoded(packet).encode()) > max_bytes:
         changed = False
         for article in articles.values():
             shorter = cut(article["summary"],
@@ -196,24 +178,62 @@ def brief_packet(payload: Mapping[str, Any], digest_items: Iterable[Mapping[str,
             article["summary"] = shorter
         if not changed:
             raise PacketTooLarge(str(len(encoded(packet).encode())))
-    return packet, id_map
 
 
-def input_hash(packet: Mapping[str, Any], model: str) -> str:
-    return str(fingerprint({"packet": packet, "version": BRIEF_VERSION, "model": model}))
+def brief_packet(payload: Mapping[str, Any], digest_items: Iterable[Mapping[str, Any]]
+                 ) -> tuple[dict[str, Any], dict[str, dict[str, str]]]:
+    """(packet, id map) for one day from its stored snapshot and published digest items.
+
+    Digest items carry title, summary, url and optionally publisher. Ids `a1..aN` follow the first
+    reference: top stories, New items, kept spikes, then (quiet day) the digest itself."""
+    refs = ArticleRefs(digest_items, [_items(payload, g) for g in ("top_stories", "new", "rising")])
+    ref = refs.ref
+
+    coverage = payload.get("coverage") or {}
+    quiet = bool(payload.get("quiet"))
+    stories = []
+    for story in _items(payload, "top_stories"):
+        entry: dict[str, Any] = {"label": norm(story["label"]), "outlets": story["publishers"],
+                                 "event": story["event_type"], "articles": refs.of(story)}
+        if is_review([norm(link["title"]) for link in story.get("links") or []]):
+            entry["kind"] = "review"
+        stories.append(entry)
+    new = [{"name": n["name"], "type": n["type"], "vendor": n.get("vendor"),
+            "outlets": n["publishers"], "what": n.get("one_liner") or n.get("novelty_quote") or "",
+            "articles": refs.of(n)} for n in _items(payload, "new")]
+    spikes = [{"name": s["name"], "today": s["today"], "usual_per_day": s.get("trailing_mean"),
+               "articles": refs.of(s)} for s in kept_spikes(payload)]
+    packet: dict[str, Any] = {
+        "day": payload["report_date"], "quiet": quiet, "digest_items": coverage.get("items", 0),
+        "stories": stories, "new": new, "spikes": spikes,
+        "event_counts": {e["label"]: e["stories"] for e in _items(payload, "event_counts")
+                         if e["event_type"] in HARD_EVENTS and e["stories"]}}
+    if quiet:
+        for item in refs.ordered[:QUIET_ARTICLES_MAX]:
+            ref(str(item["url"]))
+    packet["articles"] = refs.articles
+    fit_packet(packet, PACKET_MAX_BYTES)
+    return packet, refs.id_map
 
 
-def request_body(packet: Mapping[str, Any], model: str,
-                 recovery: str | None = None) -> dict[str, Any]:
-    system = BRIEF_PROMPT + (RECOVERY.format(reason=recovery) if recovery else "")
+def input_hash(packet: Mapping[str, Any], model: str, version: str | None = None) -> str:
+    return str(fingerprint({"packet": packet, "version": version or BRIEF_VERSION,
+                            "model": model}))
+
+
+def request_body(packet: Mapping[str, Any], model: str, recovery: str | None = None, *,
+                 prompt: str = BRIEF_PROMPT, max_output: int = MAX_OUTPUT) -> dict[str, Any]:
+    """The provider request; the period brief passes its own prompt and output bound."""
+    system = prompt + (RECOVERY.format(reason=recovery) if recovery else "")
     return {"model": model, "temperature": 0, "thinking": {"type": "disabled"},
-            "max_tokens": MAX_OUTPUT, "response_format": {"type": "json_object"},
+            "max_tokens": max_output, "response_format": {"type": "json_object"},
             "messages": [{"role": "system", "content": system},
                          {"role": "user", "content": encoded(packet)}]}
 
 
-def request_key(body: Mapping[str, Any]) -> str:
-    return str(fingerprint({"provider": "deepseek", "body": body, "version": BRIEF_VERSION}))
+def request_key(body: Mapping[str, Any], version: str | None = None) -> str:
+    return str(fingerprint({"provider": "deepseek", "body": body,
+                            "version": version or BRIEF_VERSION}))
 
 
 def _content(data: Any, model: str) -> list[Any]:
@@ -243,15 +263,15 @@ class _Context:
         self.whats: dict[str, list[str]] = {}
         self.names: dict[str, list[str]] = {}
         self.outlets: dict[str, set[str]] = {}
-        for group in ("stories", "new", "spikes"):
-            for item in packet[group]:
+        for group in ("stories", "new", "spikes", "risers"):
+            for item in packet.get(group) or []:
                 for a in item["articles"]:
                     if item.get("what"):
                         self.whats.setdefault(a, []).append(norm(item["what"]))
                     self.names.setdefault(a, []).extend(
                         norm(str(x)) for x in (item.get("name"), item.get("label"),
                                                item.get("vendor")) if x)
-                    if group != "spikes":
+                    if group in ("stories", "new"):
                         self.outlets.setdefault(a, set()).add(str(item["outlets"]))
         for a, article in self.articles.items():
             if article.get("publisher"):
@@ -313,10 +333,13 @@ def _sentence(raw: Any, ctx: _Context, seen: set[Any]) -> Sentence:
                     quote=quote["span"].strip())
 
 
-def parse_brief(data: Any, packet: Mapping[str, Any], model: str) -> list[Sentence]:
-    """Validate one provider answer against the packet (plan validation rules 1-9)."""
+def parse_brief(data: Any, packet: Mapping[str, Any], model: str, *,
+                counts: tuple[int, int] | None = None) -> list[Sentence]:
+    """Validate one provider answer against the packet (plan validation rules 1-9).
+
+    `counts` is the allowed (low, high) sentence count; the daily default depends on `quiet`."""
     raw = _content(data, model)
-    low, high = (1, 2) if packet["quiet"] else (3, 5)
+    low, high = counts or ((1, 2) if packet["quiet"] else (3, 5))
     if not low <= len(raw) <= high:
         raise BriefInvalid("sentence_count")
     ctx = _Context(packet)

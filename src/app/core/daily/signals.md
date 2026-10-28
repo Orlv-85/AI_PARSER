@@ -186,7 +186,7 @@ GET /?date=D                                     web/signals_view.py: render_sig
 | `core/daily/signals_lines.py` | `one_liner` of a New item, sentence split | yes |
 | `core/daily/signals_naming.py` | `specific_variant`, `same_vendor`, `unit_key`, `proper_name`, `FAMILY_STOPWORDS` | yes |
 | `core/daily/signals_history.py` | `LexicalHistory`: earliest lexical mention before D | yes |
-| `core/daily/signals_brief.py` | Brief packet, prompt, request body, validation rules 1-9, O1 review marker | yes |
+| `core/daily/signals_brief.py` | Brief packet, prompt, request body, validation rules 1-9, O1 review marker; `ArticleRefs`, `fit_packet`, and the optional `counts`, `prompt`, `max_output` and `version` arguments are shared with the period brief (`core/periodic/signals_period.md`) and default to the daily values | yes |
 | `storage/daily_signals.py` | `publisher_group`, `DailySignalRepo`: membership, extractions, evidence, entities, overrides, snapshots, briefs | no |
 | `storage/daily_signals_ledger.py` | `SignalsLedger`: private SQLite of physical POSTs, replay, per-run caps, per-model prices | no |
 | `web/signals_view.py` | Server HTML of the block; `quiet_line`, chips, D3 New list | yes |

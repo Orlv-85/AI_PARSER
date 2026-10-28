@@ -104,7 +104,8 @@ for SIGNAL_DATE in $SIGNAL_DATES; do
     }
 done
 
-# Period (weekly) signals: stored data only, no provider. The command does nothing while
+# Period (weekly) signals: stored data; the only provider call is the weekly brief, which runs only
+# when AINEWS_PERIOD_SIGNALS_BRIEF_ENABLED is on. The command does nothing while
 # AINEWS_PERIOD_SIGNALS_ENABLED is off. A failure never changes the job result.
 remaining=$((BUDGET - ($(date +%s) - AINEWS_DAILY_JOB_START) - 600))
 if [ "$remaining" -lt 300 ]; then

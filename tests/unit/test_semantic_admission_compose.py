@@ -48,3 +48,12 @@ def test_production_compose_passes_period_signals_flag_off_by_default():
     environment = compose["services"]["app"]["environment"]
     # Off until the operator sets AINEWS_PERIOD_SIGNALS_ENABLED=true in the server .env.
     assert environment["AINEWS_PERIOD_SIGNALS_ENABLED"] == "${AINEWS_PERIOD_SIGNALS_ENABLED:-false}"
+
+
+def test_production_compose_passes_period_brief_flag_off_by_default():
+    compose = yaml.safe_load(Path("docker-compose.prod.yml").read_text(encoding="utf-8"))
+    environment = compose["services"]["app"]["environment"]
+    # The paid weekly brief stays off until the operator sets the variable in the server .env.
+    assert environment["AINEWS_PERIOD_SIGNALS_BRIEF_ENABLED"] == \
+        "${AINEWS_PERIOD_SIGNALS_BRIEF_ENABLED:-false}"
+    assert "AINEWS_PERIOD_SIGNALS_MAX_USD" not in environment

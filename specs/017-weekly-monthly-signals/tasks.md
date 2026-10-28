@@ -81,10 +81,10 @@ rules, names, tests and `covers` globs it ships.
 
 ## Phase 4: Brief (US2) (release R4, after Q2 = yes)
 
-- [ ] T030 [US2] Doc first (Behavior for the brief, cost, flags). Parameterise packet and
+- [x] T030 [US2] Doc first (Behavior for the brief, cost, flags). Parameterise packet and
   `parse_brief` in `signals_brief.py` for sentence counts without changing daily behavior (daily tests
   unchanged). `period_brief.py` packet (cap), prompt, `PERIOD_BRIEF_VERSION`, input hash.
-- [ ] T031 [US2] Brief step in the CLI under `AINEWS_PERIOD_SIGNALS_BRIEF_ENABLED`, through
+- [x] T031 [US2] Brief step in the CLI under `AINEWS_PERIOD_SIGNALS_BRIEF_ENABLED`, through
   `SignalsLedger` with its own run id, `--max-usd`, per-brief cap, unpriced-model skip; tests with
   `MockTransport` (ok, invalid after one recovery, cached by hash, cap, flag off creates no provider).
   Page/API show the brief with numbered links and the AI note.

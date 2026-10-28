@@ -63,6 +63,8 @@ class Settings(BaseSettings):
     daily_signals_max_usd: str = "0.50"
     daily_signals_brief_model: str = "deepseek-v4-pro"
     period_signals_enabled: bool = False
+    period_signals_brief_enabled: bool = False
+    period_signals_max_usd: str = "0.10"
     respect_robots_txt: bool = True
     auth_enabled: bool = False
     auth_username: str | None = None

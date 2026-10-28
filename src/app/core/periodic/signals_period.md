@@ -10,11 +10,13 @@ covers:
 # Period AI Signals
 
 Weekly (and later monthly) view of the AI signals: sums and comparisons of the stored daily data
-(`core/daily/signals.md`) over a completed period. Everything is deterministic and costs $0; no
-provider is involved. Shipped: the pure rules (bounds, thresholds, status, compute), storage, the
-command `ai-news period-signals`, the nightly step, the read API and the `/weekly` page; the numbers
-are computed behind `AINEWS_PERIOD_SIGNALS_ENABLED` (default off), pages and API only read stored
-rows. The paid brief comes in a later release.
+(`core/daily/signals.md`) over a completed period, plus one short AI-written brief per period. The
+numbers are deterministic and cost $0; no provider is involved. The brief is the only paid step,
+off by default behind its own flag. Shipped: the pure rules (bounds, thresholds, status, compute),
+storage, the command `ai-news period-signals`, the nightly step, the read API, the `/weekly` page and
+the brief step (week; the month kind reuses it when the monthly release stores month rows). The
+numbers are computed behind `AINEWS_PERIOD_SIGNALS_ENABLED` (default off), the brief behind
+`AINEWS_PERIOD_SIGNALS_BRIEF_ENABLED` (default off); pages and API only read stored rows.
 
 This file is the intended current behavior of 017. `specs/017-weekly-monthly-signals/` is the process
 and history.
@@ -109,7 +111,8 @@ The numbers live in the code: fields of `PeriodThresholds` (by kind) in `period_
 **Storage**
 - Two tables, no foreign keys: `period_signal_reports` (one row per `period_kind` and `period_start`:
   end, status, versions, `payload_hash`, thresholds, payload, coverage JSON) and
-  `period_signal_briefs` (created empty; filled by the brief release). Tests:
+  `period_signal_briefs` (one row per `period_kind` and `period_start`: `brief_version`, model,
+  `input_hash`, status `ok` or `invalid`, reason, payload). Tests:
   `test_upgrade_matches_models_and_downgrade_drops_only_period_tables`,
   `test_upgrade_after_create_all_keeps_existing_tables`, `test_single_head_and_chain`.
 - A period is stored only when its `payload_hash` differs from the stored one; the second run
@@ -139,14 +142,88 @@ The numbers live in the code: fields of `PeriodThresholds` (by kind) in `period_
 - The nightly step in `scripts/run_daily_digest_job.sh` runs the default command after the daily
   signals with a time-budget guard; its failure never changes the job result. Tests: none (shell;
   checked by `bash -n`).
+- Command options of the brief: `--with-brief`, `--max-usd X` (total of the run, default
+  `AINEWS_PERIOD_SIGNALS_MAX_USD`, 0.10), `--cache-dir` (the ledger file). A zero or malformed
+  `--max-usd` exits 2. Tests: `test_command_options_pass_to_the_run`,
+  `test_command_rejects_a_bad_max_usd_and_flag_off_stays_disabled`.
 
-**API** (stored data only; `brief` is always null for now)
+**Brief** (paid; `core/periodic/period_brief.py`, `period_brief_run.py`)
+
+```mermaid
+flowchart LR
+  row["Stored period row: ready or building_history, not quiet"] --> packet["Packet: top stories, New, risers + digest titles and summaries"]
+  packet --> hash{"Same input hash stored?"}
+  hash -->|yes, ok or invalid| cached["cached: no call"]
+  hash -->|no| ledger["Ledger: own run id, per-brief cap, reservation at the byte cap"]
+  ledger --> call["One call"]
+  call --> check{"Validation (daily rules, period sentence counts)"}
+  check -->|ok| ok["Store ok"]
+  check -->|rejected| recovery["One recovery call with the reason"]
+  recovery --> check2{"Validation"}
+  check2 -->|ok| ok
+  check2 -->|rejected| invalid["Store invalid, no brief"]
+```
+
+- The step runs only when `AINEWS_PERIOD_SIGNALS_BRIEF_ENABLED` is on and a DeepSeek key is set. Flag
+  off, or no key: no ledger and no provider object exists and nothing is written. An unpriced model
+  (`BRIEF_PRICES`, model `daily_signals_brief_model`) makes no call. Tests:
+  `test_flag_off_creates_no_provider_and_no_brief`,
+  `test_unpriced_model_flag_off_and_no_key_make_no_call`.
+- Targets: a period row whose status is `ready` or `building_history` and whose payload is not
+  quiet; any other status, a missing row or an unreadable payload is skipped with a reason. A
+  default run (the nightly step) briefs only the latest completed week, and only when the run
+  computed it; `--with-brief` briefs every period of the run (a paid backfill). A month brief is
+  never attempted while no month row exists. Tests:
+  `test_only_ready_or_building_history_periods_without_a_brief_are_attempted`,
+  `test_targets_nightly_default_and_with_brief`, `test_nightly_default_briefs_the_latest_week_once`,
+  `test_with_brief_covers_every_week_of_the_run_within_the_cap`,
+  `test_a_month_brief_needs_a_month_row_and_uses_month_values`.
+- Packet: stories, New items and risers (when the comparison is shown) of the stored payload with
+  the digest title and summary of up to `PERIOD_LINKS_PER_ITEM` linked articles each; ids `a1..aN`
+  by first reference; hard-event counts. It is cut to `PERIOD_PACKET_MAX_BYTES` (week 16,000, month
+  24,000): summaries shrink first, then New and risers lose their tail (`_TRIMS`); stories that
+  alone do not fit skip the period (`packet_too_large`). A link without a digest item is not cited.
+  Tests: `test_period_packet_has_stories_new_risers_and_digest_articles`,
+  `test_risers_are_left_out_when_the_comparison_is_hidden`,
+  `test_a_link_without_a_digest_item_is_not_cited`,
+  `test_packet_is_cut_to_the_cap_of_its_kind_and_loses_its_tail_before_failing`.
+- Request and validation: the daily rules of `signals.md` (ids, exact quote, numbers and names
+  grounded in the cited text, no URLs or markup, one sentence per story) with the sentence counts
+  of the kind (`PERIOD_SENTENCES`: week 4-6, month 5-8) and the output bound of the kind
+  (`PERIOD_MAX_OUTPUT`). One recovery attempt with the rejection reason, then `invalid` and no
+  brief. Tests: `test_request_body_by_kind`, `test_validation_uses_the_sentence_counts_of_the_kind`,
+  `test_validation_keeps_the_daily_rules`, `test_recovery_attempt_then_ok`.
+- Cache: the `input_hash` covers the packet, `PERIOD_BRIEF_VERSION` and the model. A stored row with
+  the same hash (`ok` or `invalid`) is never paid again; a changed payload, a version bump or a
+  model change makes a new hash. Tests: `test_ok_brief_is_stored_then_cached_by_input_hash`,
+  `test_invalid_after_one_recovery_is_never_paid_twice`,
+  `test_period_input_hash_changes_with_packet_version_and_model`.
+- Money: each brief has its own ledger and run id (`<run>-brief-<kind>:<start>`) and a cap of its
+  kind, `PERIOD_BRIEF_MAX_USD` (week 0.05, month 0.08), also limited by what is left of the run
+  total (`--max-usd`, default 0.10). The reservation of an attempt is the encoded request bytes
+  priced as input tokens plus the output bound priced as output tokens, so it is the worst case at
+  the byte cap: about $0.028 (week) and $0.040 (month) per attempt. A stop (cap, deadline, provider
+  failure) is a terminal reason in the report; the remaining periods are skipped and nothing is
+  stored for the stopped one. Tests: `test_per_brief_cap_stops_before_the_call`,
+  `test_the_reservation_of_a_full_packet_fits_the_default_caps`,
+  `test_run_cap_limits_the_second_brief`, `test_run_budget_exhausted_skips_without_a_call`,
+  `test_run_cap_max_usd_stops_the_step`, `test_a_stop_is_a_terminal_reason_and_stores_nothing`,
+  `test_the_ledger_has_its_own_run_id`.
+- A brief failure of any kind never changes the stored numbers or the run result; the step writes
+  only `period_signal_briefs`. Tests: `test_a_brief_failure_keeps_the_numbers`,
+  `test_no_table_but_the_brief_row_is_written`.
+
+**API** (stored data only)
 - `GET /api/news/period-signals?kind=week&start=YYYY-MM-DD`; without `start` the newest `ready` or
   `building_history` period, else the newest stored one. A missing row or an unreadable payload gives
-  200 with status `unavailable`, never 500. Tests: `test_ready_week`,
+  200 with status `unavailable`, never 500. `brief` is the stored `ok` brief of that period (sentences
+  with their source links, model, version, time) or null for a missing, `invalid` or unreadable row.
+  Tests: `test_ready_week`,
   `test_partial_week_is_served_with_its_status`, `test_default_is_the_latest_ready_or_building_period`,
   `test_default_falls_back_to_a_partial_week`, `test_missing_row_is_unavailable_200`,
-  `test_corrupt_row_is_unavailable_200`, `test_invalid_query_is_422`.
+  `test_corrupt_row_is_unavailable_200`, `test_invalid_query_is_422`,
+  `test_page_and_api_without_a_brief`, `test_page_and_api_with_a_brief_on_top`,
+  `test_an_invalid_or_unreadable_brief_shows_nothing`, `test_the_brief_belongs_to_its_week`.
 - `GET /api/news/period-signals/index[?kind=]`: stored periods newest first (kind, start, end,
   status, computed time); no payload is read. Both routes are public like the daily one. Tests:
   `test_index_lists_newest_first_without_payloads`, `test_empty_index`,
@@ -155,8 +232,8 @@ The numbers live in the code: fields of `PeriodThresholds` (by kind) in `period_
 
 **Page** (`GET /weekly`, `GET /weekly?week=YYYY-MM-DD`; stored data only, no provider, no compute)
 - Without `week` the page shows the week the API picks by default; with `week` that Monday. Sections
-  in order: coverage line (days complete, items, publishers, extracted share, missing days, the
-  "Partial week" line when `partial`, the "Quiet week" line when `quiet`), top stories, top entities
+  in order: the brief ("In brief", only when a stored `ok` brief exists), coverage line (days
+  complete, items, publishers, extracted share, missing days, the "Partial week" line when `partial`, the "Quiet week" line when `quiet`), top stories, top entities
   by group, New this week, Rising and Cooling, event types with the delta. Tests:
   `test_ready_week_shows_sections_in_order`, `test_partial_and_quiet_lines`.
 - A section that has nothing, or whose comparison is hidden, shows one plain reason line instead of a
@@ -169,7 +246,9 @@ The numbers live in the code: fields of `PeriodThresholds` (by kind) in `period_
   the index. A `week` that is not a Monday redirects (303) to its Monday. Tests: `test_no_rows_is_unavailable_200`,
   `test_corrupt_row_is_200`, `test_week_param`, `test_default_skips_a_newer_partial_week`.
 - Stored text is escaped; only `http(s)` links are rendered; days link to `/?date=YYYY-MM-DD`.
-  Tests: `test_text_is_escaped_and_only_http_links`, `test_week_label_across_months`.
+  The brief shows its sentences with numbered source links and the same AI note as the daily brief
+  (`AI_NOTE`). Tests: `test_text_is_escaped_and_only_http_links`, `test_week_label_across_months`,
+  `test_page_and_api_with_a_brief_on_top`, `test_brief_text_is_escaped_and_only_http_links_are_rendered`.
 - The header link "Weekly" and the line under the daily block on `/` show only when a stored week
   exists. Tests: `test_nav_link_and_home_line_follow_stored_weeks`,
   `test_home_page_survives_a_period_read_failure`.
@@ -201,6 +280,16 @@ The numbers live in the code: fields of `PeriodThresholds` (by kind) in `period_
 | The nav link and the line on `/` follow the default week of the page (newest `ready` or `building_history`, else newest stored) (decided 2026-10-28 (agent)) | the link text and the page it opens always agree |
 | The page uses `digest.css` plus a small `period.css` and no script (decided 2026-10-28 (agent)) | no client re-render is needed (plan "Web"); the daily classes are reused |
 | The legacy weekly pages, the preview on `/` and the Monday legacy report are retired (owner answer 2026-10-28, 017 R5) | they mostly said "Insufficient comparable source coverage"; the legacy read API, `POST` and tables stay for compatibility, the weekly v2 tables go in a later release |
+| The brief reuses the daily brief code, parameterised for sentence counts, prompt, output bound and version (decided 2026-10-28, agent) | one validation for both briefs; the daily prompt, packet, input hash and request key are unchanged (checked once against the daily fixtures: five days, packet, id map, input hash, request body and key identical before and after) |
+| Both briefs are built in one release, week values live and month values defined now; the weekly brief is switched on when it ships, the monthly one runs from 2026-12-01 (owner answer Q2, 2026-10-28) | the month numbers arrive in R6; a month brief is never attempted while no month row exists |
+| A default (nightly) run briefs only the latest completed week; `--with-brief` is the paid backfill (decided 2026-10-28, agent) | the plan calls brief backfill a separate paid flag; the nightly cost stays one brief a week |
+| The nightly command needs no new argument: the flag decides (decided 2026-10-28, agent) | the shell script stays unchanged; flag off means no provider object |
+| One ledger per brief, with its own run id and the cap of its kind (decided 2026-10-28, agent) | the ledger caps a run, so one ledger per brief makes the per-brief cap exact; the run total is the sum, limited by `--max-usd` |
+| The model is `daily_signals_brief_model`, prices come from `BRIEF_PRICES` (decided 2026-10-28, agent) | one model and one price table for both briefs; the plan names `deepseek-v4-pro`; an unknown model never calls |
+| Output bound by kind, week 1,100 tokens and month 1,500, against 900 for the daily brief (decided 2026-10-28, agent) | 4-6 and 5-8 sentences with a quote each do not fit 900; the bound is part of the reservation, so the per-attempt reservations above stay under the caps |
+| A quiet period (below `quiet_items`) gets no brief (decided 2026-10-28, agent) | the daily quiet rule (1-2 sentences, digest in the packet) has no period meaning; a quiet ready week is rare and its sections still show |
+| The packet loses the tail of New and risers before it gives up (decided 2026-10-28, agent) | a week with ten New items and linked articles can exceed 16,000 bytes at the summary floor; stories are the part worth keeping |
+| The prompt tells the model not to name days (decided 2026-10-28, agent) | day numbers would be rejected as unsupported numbers; the packet carries no day list |
 | Month risers and month-only rules are not built here (R6) | bounds and thresholds for months exist; the monthly view ships last |
 
 ## Invariants
@@ -211,6 +300,11 @@ The numbers live in the code: fields of `PeriodThresholds` (by kind) in `period_
   `test_coverage_missing_day_is_listed_not_zero`.
 - A period run writes only `period_signal_*` tables; digest, articles, signals and weekly tables stay
   untouched. Tests: `test_a_period_run_writes_only_period_signal_tables`.
+- Only `period_brief_run.py` can reach a provider (through the signals ledger) and only in the brief
+  step; the request path (routes, storage, views) imports no provider code. Tests:
+  `test_request_path_does_not_import_provider_code`, `test_flag_off_creates_no_provider_and_no_brief`.
+- The same input hash is never paid twice; a brief step never exceeds `PERIOD_BRIEF_MAX_USD` per
+  brief or `--max-usd` per run. Tests: see Brief.
 - The daily snapshot payload hashes do not change by the extraction of the shared helper. Checked
   once when it moved (before and after table in the PR); the daily tests remain the guard
   (`test_rising_and_cooling_with_usable_windows`, `test_windows_need_six_complete_days_and_comparable_range`).
@@ -222,12 +316,15 @@ The numbers live in the code: fields of `PeriodThresholds` (by kind) in `period_
 | `signals_period.py` | Public entry: re-exports `compute_period`, `PeriodInput`, `PeriodThresholds`, `payload_hash` | yes |
 | `period_model.py` | Bounds (`period_bounds`, `period_days`, `previous_start`), `PeriodThresholds`, `PeriodInput`, `PreviousPeriod`, `period_status` | yes |
 | `period_compute.py` | `compute_period` and one function per section; `PERIOD_METHODOLOGY_VERSION` | yes |
-| `period_run.py` | `run_periods`, `target_weeks`, `first_week`, `latest_completed_week`: pick periods, compute, store | no |
-| `storage/period_signals.py` | `PeriodSignalRepo`: `context`, `load_input`, `previous`, `save_report`, `get_report`, `latest`, `index` | no |
+| `period_run.py` | `run_periods`, `target_weeks`, `brief_targets`, `first_week`, `latest_completed_week`: pick periods, compute, store, then call the brief step | no |
+| `period_brief.py` | `PERIOD_BRIEF_VERSION`, values by kind, `period_packet`, `period_body`, `period_input_hash`, `parse_period_brief` | yes |
+| `period_brief_run.py` | `run_briefs`: targets, cache by hash, ledger per brief, attempts, store | no |
+| `storage/period_signals.py` | `PeriodSignalRepo`: `context`, `load_input`, `previous`, `save_report`, `get_report`, `latest`, `index`, `digest_items`, `get_brief`, `save_brief` | no |
+| `core/daily/signals_brief.py` | Shared brief code: `ArticleRefs`, `fit_packet`, `parse_brief(counts=)`, `request_body(prompt=, max_output=)`, `input_hash(version)`; daily behavior unchanged | yes |
 | `storage/migrations/versions/f4a9c1d27b83_add_period_signals.py` | the two tables, skip-if-exists, `down_revision` `e7b4c2a9d150` | no |
 | `web/period_view.py`, `web/period.html`, `web/static/css/period.css` | the `/weekly` HTML, template and styles; `latest_week` (in the route file) feeds the nav link and the line on `/` | no |
 | `web/routes/period.py` | the two read routes and the `/weekly` page route; response models `PeriodSignalsResponse`, `PeriodSignalsIndexResponse` in `web/models.py` | no |
-| `cli/main.py` `period-signals` | options and flag check; flag `period_signals_enabled` in `config/settings.py` | no |
+| `cli/main.py` `period-signals` | options and flag check; flags `period_signals_enabled`, `period_signals_brief_enabled` and `period_signals_max_usd` in `config/settings.py` | no |
 | `core/daily/signals_trend.py` | Shared Rising/Cooling rule: `trend_windows`, `trend_delta`, `TrendRow` | yes |
 
 Flow: `compute_period` -> `coverage_line`, `period_status`, `comparison`, then `top_stories`,
@@ -238,20 +335,37 @@ Flow: `compute_period` -> `coverage_line`, `period_status`, `comparison`, then `
 | Thresholds, caps, minimums | `PeriodThresholds.for_kind` | bump `PERIOD_METHODOLOGY_VERSION` |
 | A section rule | `period_compute.py` | bump `PERIOD_METHODOLOGY_VERSION` |
 | What Rising means | `signals_trend.py` and daily `Thresholds` | bump the daily `METHODOLOGY_VERSION` and the period one |
+| Brief prompt, packet or validation | `period_brief.py` (or the shared code in `signals_brief.py`) | bump `PERIOD_BRIEF_VERSION` (and `BRIEF_VERSION` if the daily request changes); a backfill is paid and capped |
+| Brief caps, sentence counts, output bound | `PERIOD_BRIEF_MAX_USD`, `PERIOD_SENTENCES`, `PERIOD_MAX_OUTPUT` | money changes go to the owner; bump `PERIOD_BRIEF_VERSION` for counts and bound |
 
-Not built yet: the brief and its flag and version row (R4), the month kind (R6). The
-`period_signal_briefs` table exists and is empty.
+**Versions**
+
+| Constant | Bump when | Effect of a bump |
+| --- | --- | --- |
+| `PERIOD_METHODOLOGY_VERSION` | numbers: thresholds, a section rule | `ai-news period-signals --recompute-all` ($0) |
+| `PERIOD_BRIEF_VERSION` | brief prompt, packet or validation | new input hashes: the next run pays for new briefs (nightly: the latest week; `--with-brief`: a capped backfill) |
+
+Not built yet: the month kind (R6): month rows, month risers, the monthly page. The brief code
+already takes the month values (`PERIOD_PACKET_MAX_BYTES`, `PERIOD_SENTENCES`, `PERIOD_MAX_OUTPUT`,
+`PERIOD_BRIEF_MAX_USD`), so R6 only stores month rows.
 
 Operator commands, enabling and rollback: `docs/period-signals.md`. `docker-compose.prod.yml` passes
-`AINEWS_PERIOD_SIGNALS_ENABLED` from the server `.env` with default `false`, so the nightly step is a
-no-op until the operator sets it (decided 2026-10-28 (coordinator): same path as the daily flag).
+`AINEWS_PERIOD_SIGNALS_ENABLED` and `AINEWS_PERIOD_SIGNALS_BRIEF_ENABLED` from the server `.env`
+with default `false`, so the nightly step is a no-op and never pays until the operator sets them
+(decided 2026-10-28 (coordinator): same path as the daily flag). `AINEWS_PERIOD_SIGNALS_MAX_USD`
+(default 0.10) is not in the compose file, so production uses the default; `--max-usd` overrides it
+per run.
+Tests: `test_production_compose_passes_period_signals_flag_off_by_default`,
+`test_production_compose_passes_period_brief_flag_off_by_default`.
 
 ## Tests
 
 Per rule: see Behavior. Files: `tests/unit/test_period_model.py`, `tests/unit/test_period_compute.py`,
 `tests/unit/test_period_signals_repo.py`, `tests/unit/test_period_signals_migration.py`,
 `tests/unit/test_cli_period_signals.py`, `tests/unit/test_web_period_signals_api.py`,
-`tests/unit/test_web_period_page.py`; fixture weeks
+`tests/unit/test_web_period_page.py`, `tests/unit/test_period_brief.py`,
+`tests/unit/test_period_brief_flow.py`, `tests/unit/period_brief_db.py` (hand-made period payload,
+digest items and a fake provider); fixture weeks
 are built by `tests/unit/period_fixtures.py` from `tests/fixtures/daily_signals/` (the previous week is
 the same days shifted back, thinned) and database weeks by `tests/unit/period_db.py`. No test calls
-a provider.
+a real provider.

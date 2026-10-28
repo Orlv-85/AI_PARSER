@@ -13,7 +13,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from app.web.models import DailySignalTrendItem, PeriodSignalsResponse
-from app.web.signals_view import _trend, event_label
+from app.web.signals_view import AI_NOTE, _trend, event_label
 
 _TEMPLATE = Path(__file__).resolve().parent / "period.html"
 _PLACEHOLDER = re.compile(r"__[A-Z_]+__")
@@ -223,8 +223,25 @@ def _risers(signals: PeriodSignalsResponse) -> str:
     return _card("Rising and Cooling", "period-trends", "", note)
 
 
+def _brief(signals: PeriodSignalsResponse) -> str:
+    """"In brief": the stored sentences with numbered http(s) source links and the AI note."""
+    items = []
+    for sentence in signals.brief.sentences if signals.brief else []:
+        refs = "".join(
+            f' <a class="signal-ref" href="{escape(link.url, quote=True)}" '
+            f'title="{escape(link.title, quote=True)}" target="_blank" rel="noreferrer">'
+            f"[{n}]</a>"
+            for n, link in enumerate((x for x in sentence.links if _HTTP.match(x.url)), start=1))
+        items.append(f"<li>{escape(sentence.text)}{refs}</li>")
+    if not items:
+        return ""
+    return ('<div class="signal-brief-block"><h3>In brief</h3>'
+            f'<ul class="signal-brief">{"".join(items)}</ul>'
+            f'<p class="signal-ai-note">{escape(AI_NOTE)}</p></div>')
+
+
 def render_week(signals: PeriodSignalsResponse) -> str:
-    """Inner HTML of the week: coverage line and the sections in plan order."""
+    """Inner HTML of the week: the brief, the coverage line and the sections in plan order."""
     types = [_dict(t) for t in _list(signals.event_mix.get("types"))]
     labels = {str(t.get("event_type")): event_label(1, str(t.get("label"))).split(" ", 1)[1]
               for t in types}
@@ -233,8 +250,8 @@ def render_week(signals: PeriodSignalsResponse) -> str:
                     None, "No story was covered by more than one publisher.")
     new = _card("New this week", "period-new", "".join(_new(_dict(i)) for i in signals.new),
                 None, "Nothing was first seen in our corpus this week.")
-    return (f'<div class="period-stack">{_coverage(signals)}{stories}{_entities(signals)}{new}'
-            f"{_risers(signals)}{_event_mix(signals)}</div>")
+    return (f'<div class="period-stack">{_brief(signals)}{_coverage(signals)}{stories}'
+            f"{_entities(signals)}{new}{_risers(signals)}{_event_mix(signals)}</div>")
 
 
 def render_picker(weeks: Sequence[tuple[date, date, str]], current: date | None) -> str:

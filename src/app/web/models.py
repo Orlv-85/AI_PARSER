@@ -467,7 +467,7 @@ class PeriodSignalsResponse(BaseModel):
     trend_source: str | None = None
     event_mix: dict[str, Any] = Field(default_factory=dict)
     notes: list[str] = Field(default_factory=list)
-    brief: dict[str, Any] | None = None  # R4 fills it; always null for now
+    brief: DailySignalBrief | None = None  # the stored `ok` brief; null when missing
 
 
 class PeriodSignalsIndexItem(BaseModel):
