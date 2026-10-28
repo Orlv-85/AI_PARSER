@@ -117,9 +117,11 @@ def test_changed_input_rewrites_only_that_period(maker):
     assert again["written"] == ["2026-10-19"]
 
 
-def test_month_and_flag_off_do_nothing(maker):
+def test_month_before_the_first_month_and_flag_off_do_nothing(maker):
     seed_weeks(maker, W1, W2)
-    assert run(maker, kind="month")["state"] == "not_built"
+    before = run(maker, kind="month")  # NOW is in October: the first month is November
+    assert (before["state"], before["written"], before["skipped_before_first"]) == (
+        "ok", [], ["2026-09-01"])
     with maker() as session:
         off = run_periods(session, Settings(_env_file=None, period_signals_enabled=False),
                           PeriodRunOptions(), now=NOW)

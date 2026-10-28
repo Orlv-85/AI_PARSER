@@ -80,12 +80,25 @@ def test_backfill_period_and_recompute_all(tmp_path, monkeypatch):
     engine.dispose()
 
 
-def test_month_is_reported_not_built_and_writes_nothing(tmp_path, monkeypatch):
+def test_month_before_the_first_month_writes_nothing(tmp_path, monkeypatch):
     engine, maker = make_factory(tmp_path, monkeypatch, enabled=True)
     seed_weeks(maker, LATEST, comparable_from=FROM)
     code, output = invoke("--kind", "month")
-    assert (code, json.loads(output)["state"]) == (0, "not_built")
+    report = json.loads(output)
+    assert (code, report["state"], report["written"]) == (0, "ok", [])
+    assert report["kind"] == "month" and report["periods"] == {}
     assert stored(maker) == []
+    engine.dispose()
+
+
+def test_plain_run_adds_the_month_report_and_a_kind_does_not(tmp_path, monkeypatch):
+    engine, maker = make_factory(tmp_path, monkeypatch, enabled=True)
+    seed_weeks(maker, PREVIOUS, LATEST, comparable_from=FROM)
+    plain = json.loads(invoke()[1])
+    assert plain["kind"] == "week" and plain["written"] == [LATEST.isoformat()]
+    assert plain["month"]["kind"] == "month" and plain["month"]["written"] == []
+    assert "month" not in json.loads(invoke("--kind", "week")[1])
+    assert "month" not in json.loads(invoke("--backfill", "2")[1])
     engine.dispose()
 
 

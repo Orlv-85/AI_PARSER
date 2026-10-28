@@ -7,7 +7,7 @@ covers:
 -->
 # Web pages and static assets
 
-The HTML pages of the site: the public digest `/`, the public weekly signals `/weekly`, the public
+The HTML pages of the site: the public digest `/`, the public weekly signals `/weekly` and monthly signals `/monthly`, the public
 news stats `/news-stats`, the login page `/login` and the admin page `/admin`. Each page is a template in `src/app/web/` filled by
 `build_pages_router`; its styles and scripts are files under `src/app/web/static/`, served at
 `/static/`. The legacy weekly pages (`/weekly-ai-analytics`, `/weekly-ai-analytics/reports`) are
@@ -27,12 +27,12 @@ flowchart LR
 ```
 
 **Pages and access**
-- `/`, `/weekly`, `/news-stats` and `/login` are public; `/admin` needs a session when auth is enabled and
+- `/`, `/weekly`, `/monthly`, `/news-stats` and `/login` are public; `/admin` needs a session when auth is enabled and
   redirects to `/login` otherwise; `/login` with a valid session redirects to `/admin`.
   Tests: `test_unauthenticated_root_stays_public`, `test_public_digest_page_stays_public_when_auth_is_enabled`,
   `test_admin_route_is_protected_and_public_root_stays_open`, `test_login_page_redirects_when_session_valid`,
   `test_login_page_renders_login_form_when_not_authenticated`, `test_route_table_order_names_and_models_are_pinned`
-  (`/weekly` is in the open routes).
+  (`/weekly` and `/monthly` are in the open routes).
 - `/` shows the digest of the requested day (default: yesterday, UTC) and the Daily Signals block
   (`render_signals`); a signals read failure keeps the page. Tests:
   `test_public_digest_page_renders_digest_shell_with_yesterday_selected`,
@@ -45,6 +45,11 @@ flowchart LR
   (previous, next, list of stored weeks) sits under the week. Tests: `test_ready_week_shows_sections_in_order`,
   `test_week_param`, `test_no_rows_is_unavailable_200`, `test_corrupt_row_is_200`,
   `test_page_references_exactly_its_static_assets`.
+- `/monthly` shows one stored month with the same template, view code and rules as `/weekly`
+  (`?month=YYYY-MM`; a full date redirects 303 to `YYYY-MM`; the picker lists stored months). Its
+  header links back to `/weekly`; `/weekly` links to `/monthly` only when a month row exists.
+  Tests: `test_ready_month_shows_its_sections_and_month_words`, `test_month_param_and_picker`,
+  `test_monthly_nav_link_needs_a_month_row`, `test_page_references_exactly_its_static_assets`.
 - The header link "Weekly" and the line "Week of Oct 19-25: weekly signals" under the daily signals
   block of `/` appear only when at least one stored week exists; both point at `/weekly`. A failed
   read hides them and keeps the page. They are filled by the server (`__WEEKLY_NAV__`,
@@ -52,7 +57,9 @@ flowchart LR
   weekly elements on `/`: the legacy "Weekly AI Analytics" preview and the "Weekly Reports" link
   are gone, and `digest.js` no longer reads `/api/news/weekly-analytics`. Tests:
   `test_public_digest_page_has_no_legacy_weekly_preview`, `test_nav_link_and_home_line_follow_stored_weeks`,
-  `test_home_page_survives_a_period_read_failure`.
+  `test_home_page_survives_a_period_read_failure`. The header link "Monthly" next to it appears
+  only when a month row exists (placeholder `__WEEKLY_NAV__`); a failed read hides it. Tests:
+  `test_monthly_nav_link_needs_a_month_row`, `test_monthly_nav_link_is_hidden_when_the_read_fails`.
 - `GET /weekly-ai-analytics` and `GET /weekly-ai-analytics/reports` answer 308 to `/weekly` (query
   string dropped), for a logged-out reader too: they are not protected paths, so the auth middleware
   passes them. The legacy read API (`/api/news/weekly-analytics*`) and the tables stay for
@@ -125,8 +132,8 @@ flowchart LR
 | --- | --- |
 | `routes/pages.py` | Page routes, template rendering and placeholders, login/logout, health, collection status |
 | `app.py` | `_NoCacheStaticFiles` mount at `/static`, `auth_middleware` (admin assets protected) |
-| `routes/period.py` | `/weekly` route, `latest_week` (nav link and line on `/`), next to the period API |
-| `period_view.py` | Server HTML of one stored week and the picker (`render_content`, `render_picker`, `render_page`) |
+| `routes/period.py` | `/weekly` and `/monthly` routes, `latest_week` and `has_month` (nav links and line on `/`), next to the period API |
+| `period_view.py` | Server HTML of one stored week or month and the picker (`render_content`, `render_picker`, `render_page`) |
 | `digest.html`, `news_stats.html`, `login.html`, `index.html`, `period.html` | Page markup; the digest also has the inline placeholder script |
 | `static/css/` | `digest.css`, `news_stats.css`, `login.css`, `period.css` |
 | `static/js/` | `digest.js` (digest and signals client), `news_stats.js`, `login.js` |
@@ -145,7 +152,7 @@ stay in the last admin script, because they use functions of every admin file.
 
 - `tests/unit/test_web_static_assets.py`: asset tags per page, serving and no-cache, admin asset
   protection, digest placeholders.
-- `tests/unit/test_web_period_page.py`: the `/weekly` page states, escaping, `?week=`, nav link, line on `/`.
+- `tests/unit/test_web_period_page.py`: the `/weekly` and `/monthly` page states, escaping, `?week=`, `?month=`, nav links, line on `/`.
 - `tests/unit/test_web_app.py`, `tests/unit/test_web_public_digest.py`, `tests/unit/test_auth_stage1.py`:
   pages, access, signals client hooks. Tests that check moved code read the page with its assets
   (a fixture in `tests/unit/conftest.py`) or the asset file.

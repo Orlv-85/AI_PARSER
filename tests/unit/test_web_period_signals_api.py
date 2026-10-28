@@ -34,12 +34,12 @@ def client_fixture(monkeypatch, tmp_path):
     get_settings.cache_clear()
 
 
-def store(maker, engine, start, payload, *, status="ready", kind="week"):
+def store(maker, engine, start, payload, *, status="ready", kind="week", end=None):
     Base.metadata.create_all(bind=engine)
     now = datetime.now(UTC)
     with maker() as session:
         session.add(PeriodSignalReport(
-            period_kind=kind, period_start=start, period_end=start + timedelta(days=6),
+            period_kind=kind, period_start=start, period_end=end or start + timedelta(days=6),
             methodology_version="m",
             extraction_version="e", status=status, payload_hash="x" * 64, thresholds="{}",
             coverage="{}", payload=payload if isinstance(payload, str) else json.dumps(payload),
@@ -140,3 +140,22 @@ def test_request_path_does_not_import_provider_code():
     for text in (source, storage):
         for name in ("httpx", "ledger", "signals_brief", "DS_API_KEY", "ds_api_key"):
             assert name not in text, name
+
+
+def test_month_rows_are_served_by_kind_and_listed_in_the_index(client):
+    http, maker, engine = client
+    store(maker, engine, W1, computed())
+    month = computed()
+    month.update(period_kind="month", period_start="2026-11-01", period_end="2026-11-30")
+    store(maker, engine, date(2026, 11, 1), month, kind="month", end=date(2026, 11, 30))
+    body = http.get("/api/news/period-signals?kind=month").json()
+    assert (body["period_kind"], body["period_start"], body["period_end"]) == (
+        "month", "2026-11-01", "2026-11-30")
+    assert http.get("/api/news/period-signals?kind=week").json()["period_start"] == "2026-10-12"
+    gone = http.get("/api/news/period-signals?kind=month&start=2026-12-01").json()
+    assert gone["status"] == "unavailable"
+    kinds = [(r["period_kind"], r["period_start"]) for r in
+             http.get("/api/news/period-signals/index").json()["periods"]]
+    assert kinds == [("month", "2026-11-01"), ("week", "2026-10-12")]
+    only = http.get("/api/news/period-signals/index?kind=month").json()["periods"]
+    assert [r["period_end"] for r in only] == ["2026-11-30"]

@@ -18,12 +18,12 @@ from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import NewsDigestReport
 from app.web.auth import verify_password
 from app.web.models import NewsCollectionStatusResponse
-from app.web.period_view import home_line, nav_link
+from app.web.period_view import home_line, month_nav_link, nav_link
 from app.web.routes import WebDeps
 from app.web.routes.common import (
     _read_daily_signals,
 )
-from app.web.routes.period import latest_week
+from app.web.routes.period import has_month, latest_week
 from app.web.signals_view import render_signals
 
 _WEB_DIR = Path(__file__).resolve().parent.parent
@@ -41,7 +41,8 @@ def _render_index() -> str:
 
 
 def _render_digest(*, report_date: date, digest: NewsDigestReport | None,
-                   signals_html: str = "", week: tuple[date, date] | None = None) -> str:
+                   signals_html: str = "", week: tuple[date, date] | None = None,
+                   monthly: bool = False) -> str:
     default_report_date = datetime.now(UTC).date() - timedelta(days=1)
     hero_title = (
         "Yesterday's Digest"
@@ -80,7 +81,7 @@ def _render_digest(*, report_date: date, digest: NewsDigestReport | None,
         "__EMPTY_STATE_CLASS__": empty_state_class,
         "__DIGEST_CONTENT__": digest_content,
         "__SIGNALS_CONTENT__": signals_html,
-        "__WEEKLY_NAV__": nav_link() if week else "",
+        "__WEEKLY_NAV__": (nav_link() if week else "") + (month_nav_link() if monthly else ""),
         "__WEEKLY_LINE__": home_line(*week) if week else "",
     }
     # One pass: placeholder names inside inserted digest or signals text stay literal (N1).
@@ -125,7 +126,7 @@ def build_pages_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-many-
                           report_date.isoformat(), type(exc).__name__)
             signals_html = render_signals(None, read_error=True)
         return _render_digest(report_date=report_date, digest=digest, signals_html=signals_html,
-                              week=latest_week(deps))
+                              week=latest_week(deps), monthly=has_month(deps))
 
     # Legacy weekly pages retired (017 R5): permanent redirect, query string dropped.
     @router.get("/weekly-ai-analytics/reports", include_in_schema=False)

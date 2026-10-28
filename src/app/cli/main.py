@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
@@ -20,7 +21,7 @@ from app.core.daily.signals import (
     run_signals,
 )
 from app.core.ingestion.pipeline import run_fetch_cycle
-from app.core.periodic.period_model import KINDS, WEEK
+from app.core.periodic.period_model import KINDS, MONTH, WEEK
 from app.core.periodic.period_run import PeriodRunError, PeriodRunOptions, run_periods
 from app.core.provider_costs import microdollars
 from app.core.sources.onboarding import import_source_candidates
@@ -141,12 +142,15 @@ def daily_signals(
 @app.command("period-signals")
 def period_signals(
     *,
-    kind: str = typer.Option(WEEK, "--kind", help="week (month is not built yet)."),
+    kind: str | None = typer.Option(
+        None, "--kind",
+        help="week or month. Without it: the latest completed week and, in a plain run, the "
+        "latest completed month."),
     period: str | None = typer.Option(None, "--period", help="YYYY-MM-DD, any day of the period."),
     backfill: int = typer.Option(1, "--backfill", min=1, max=200,
                                  help="Number of periods ending at the target."),
     recompute_all: bool = typer.Option(
-        False, "--recompute-all", help="Recompute every period from the first week."),
+        False, "--recompute-all", help="Recompute every period from the first one."),
     with_brief: bool = typer.Option(
         False, "--with-brief",
         help="Paid: also write the brief of every period of the run; needs the brief flag."),
@@ -154,8 +158,9 @@ def period_signals(
         None, "--max-usd", help="Total USD cap of the brief step (default 0.10 from settings)."),
     cache_dir: str = typer.Option("data/period-signals", "--cache-dir"),
 ) -> None:
-    """Compute weekly signals from stored daily data ($0); the brief is paid and flagged."""
-    if kind not in KINDS:
+    """Compute weekly and monthly signals from stored daily data ($0); the brief is paid and
+    flagged."""
+    if kind is not None and kind not in KINDS:
         raise typer.BadParameter("kind must be week or month")
     try:
         target = date.fromisoformat(period) if period else None
@@ -168,17 +173,26 @@ def period_signals(
     except (ValueError, ArithmeticError) as exc:
         raise typer.BadParameter("max-usd must be a positive dollar amount") from exc
     if not settings.period_signals_enabled:
-        typer.echo(json.dumps({"state": "disabled", "kind": kind, "periods": {},
+        typer.echo(json.dumps({"state": "disabled", "kind": kind or WEEK, "periods": {},
                                "written": []}, sort_keys=True))
         return
     create_all()
     with SessionLocal() as session:
+        options = PeriodRunOptions(
+            kind=kind or WEEK, period=target, backfill=backfill, recompute_all=recompute_all,
+            with_brief=with_brief, max_usd=usd, cache_dir=Path(cache_dir))
         try:
-            result = run_periods(session, settings, PeriodRunOptions(
-                kind=kind, period=target, backfill=backfill, recompute_all=recompute_all,
-                with_brief=with_brief, max_usd=usd, cache_dir=Path(cache_dir)))
+            result = run_periods(session, settings, options)
         except PeriodRunError as exc:
             raise typer.BadParameter(str(exc)) from exc
+        if kind is None and target is None and backfill == 1 and not recompute_all:
+            # The plain (nightly) run: the latest completed month too; it does nothing until the
+            # first month is complete, and a failure keeps the week report.
+            try:
+                result["month"] = run_periods(session, settings, replace(options, kind=MONTH))
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                session.rollback()
+                result["month"] = {"state": "error", "error": type(exc).__name__}
     typer.echo(json.dumps(result, sort_keys=True))
 
 
