@@ -11,7 +11,6 @@ from app.core.ingestion.pipeline.rows import (
     _upsert_article_rows,
 )
 from app.core.ingestion.pipeline.screening import _html_placeholder_key, _screen_candidate
-from app.core.ingestion.pipeline.weekly_hooks import _record_weekly_observation
 from app.core.jev import JevRelevanceScorer
 from app.ingest.fetcher import Fetcher
 from app.ingest.html import (
@@ -136,7 +135,6 @@ def _process_html_links_two_stage(
                     settle_pending(article_repo.session, key=ph_key)
                 continue
             fetched_articles += 1
-            _record_weekly_observation(article_repo, db_source_id, item)
             if (item.published_at is None and item.publication_evidence_at is None
                     and quality_flags is not None):
                 quality_flags.append("unknown_publication_date")

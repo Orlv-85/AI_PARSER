@@ -25,7 +25,6 @@ Specs in `specs/` are the history of how a feature got there.
 | [cli.md](cli.md) | CLI commands, fetch/cron, search, prune |
 | [troubleshooting.md](troubleshooting.md) | Known failures with cause and fix (JSON cases) |
 | [daily-signals.md](daily-signals.md) | Daily AI Signals operator guide: commands, cost, deploy note, rollback |
-| [weekly-analytics.md](weekly-analytics.md) | Weekly attention analytics v2: worker, budgets, rollback |
 
 ## Backlog
 

@@ -198,7 +198,7 @@ def test_html_fetch_cycle_filters_before_download(monkeypatch, tmp_path) -> None
     monkeypatch.setattr("app.core.ingestion.pipeline.cycle.load_sources", lambda _path: [_source()])
     monkeypatch.setattr("app.core.ingestion.pipeline.cycle.create_all", lambda: None)
     monkeypatch.setattr("app.core.ingestion.pipeline.cycle.SessionLocal", sessions)
-    summary = run_fetch_cycle(settings=Settings(_env_file=None, weekly_v2_enabled=False),
+    summary = run_fetch_cycle(settings=Settings(_env_file=None),
                               logger=getLogger("non-news"))
     assert (summary.errors, summary.new) == (0, 1)
     assert calls == ["https://example.com/blog", "https://example.com/blog/launch"]

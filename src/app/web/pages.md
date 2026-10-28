@@ -11,7 +11,7 @@ The HTML pages of the site: the public digest `/`, the public news stats `/news-
 page `/login` and the admin page `/admin`. Each page is a template in `src/app/web/` filled by
 `build_pages_router`; its styles and scripts are files under `src/app/web/static/`, served at
 `/static/`. The weekly pages (`/weekly-ai-analytics`, `/weekly-ai-analytics/reports`) keep their
-inline styles and scripts: weekly v2 is off and their fate is decided later.
+inline styles and scripts; they show the legacy weekly report and are retired in a later 017 release.
 
 ## Behavior
 

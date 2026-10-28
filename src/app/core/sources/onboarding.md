@@ -339,7 +339,7 @@ check it.
 | An edit resets validation; a running check never overwrites a candidate whose URL or raw input changed | old evidence must not approve a changed URL (PR #8) |
 | Deterministic validation, API, CLI and helper kept beside the check | existing API/CLI behavior preserved (011) |
 | Individual approve accepts any `validated` candidate, bulk only `ready` | the operator overrides model decisions; bulk rechecks readiness (011) |
-| New source: interval 30 minutes, weight 1.0 | no source states it; decided 2026-10-21 (agent): keep the `SourceConfig` field defaults, so a new source ranks like a YAML source without a weight (1.0 is the top of the clamp in `rank_score`); the interval skips no fetch and only sets expected attempts of weekly coverage (`pipeline.md`) |
+| New source: interval 30 minutes, weight 1.0 | no source states it; decided 2026-10-21 (agent): keep the `SourceConfig` field defaults, so a new source ranks like a YAML source without a weight (1.0 is the top of the clamp in `rank_score`); the interval skips no fetch (`pipeline.md`) |
 | Approved HTML sources carry no selectors; `MANAGED_LINK_SELECTORS` in code | DB rows store no CSS options (non-news record, see `pipeline.md` decisions) |
 | InfoQ named as broad media | the provided 50-source batch (003 plan, domain finding 3; fixture `qa_ai_sources.txt`) |
 

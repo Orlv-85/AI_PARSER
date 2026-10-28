@@ -17,7 +17,6 @@ from app.core.ingestion.pipeline.rows import (
     _upsert_article_rows,
 )
 from app.core.ingestion.pipeline.screening import _screen_candidate
-from app.core.ingestion.pipeline.weekly_hooks import _record_weekly_observation
 from app.core.jev import JevRelevanceScorer
 from app.ingest.page_filter import (
     log_exclusion,
@@ -59,9 +58,6 @@ def _process_fetched_source_items(
         else:
             accepted_items.append(item)
     items = accepted_items
-
-    for item in items:
-        _record_weekly_observation(article_repo, db_source_id, item)
 
     if admission_enabled:
         for item in items:

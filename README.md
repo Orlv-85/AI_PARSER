@@ -53,7 +53,6 @@ General:
 - [Docker and production deploy](docs/deploy.md) - Docker, CI/CD, server setup, daily digest jobs, maintenance, systemd.
 - [Configuration](docs/configuration.md) - environment variables, Jev admission, `sources.yaml` and source management.
 - [CLI usage](docs/cli.md) - web onboarding, fetch/cron, rollout knobs, search, prune.
-- [Weekly attention analytics v2](docs/weekly-analytics.md) - worker, budgets, audit export, rollback.
 - [Article re-enrichment](docs/archive/2026-10/article-reenrichment.md) - archived implementation guide (re-enrichment finished 2026-10-11).
 - [Daily AI Signals operator guide](docs/daily-signals.md) - operator commands, costs, rollback.
 - [Troubleshooting](docs/troubleshooting.md) - known failures (flaky tests, local env) with causes and fixes.

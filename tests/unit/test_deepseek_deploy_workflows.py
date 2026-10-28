@@ -47,7 +47,7 @@ def test_deploy_transports_deepseek_secret_privately(
     assert "secrets.DS_API_KEY" not in validate["run"]
     payload = next(step for step in steps if step["name"] == "Prepare runtime env payload")
     assert payload["env"]["DS_API_KEY"] == "${{ secrets.DS_API_KEY }}"
-    assert payload["env"]["AINEWS_WEEKLY_V2_ENABLED"] == "false"
+    assert "AINEWS_WEEKLY_V2_ENABLED" not in payload["env"]
     assert payload["env"]["AINEWS_JEV_ENABLED"] == "true"
     assert payload["env"]["AINEWS_SEMANTIC_ADMISSION_ENABLED"] == "true"
     assert not any(
@@ -60,7 +60,6 @@ def test_deploy_transports_deepseek_secret_privately(
         **dict.fromkeys(payload["env"], "test-only-value"),
         "DS_API_KEY": "test-only-secret",
         "AINEWS_DIGEST_MODEL": "deepseek-flash",
-        "AINEWS_WEEKLY_V2_ENABLED": "false",
         "AINEWS_JEV_ENABLED": "true",
         "AINEWS_SEMANTIC_ADMISSION_ENABLED": "true",
         "RETENTION_DAYS": "800",
@@ -73,14 +72,16 @@ def test_deploy_transports_deepseek_secret_privately(
     values = dict(line.split("=", 1) for line in env_path.read_text(encoding="utf-8").splitlines())
     assert values["DS_API_KEY"] == "test-only-secret"
     assert values["AINEWS_DIGEST_MODEL"] == "deepseek-flash"
-    assert values["AINEWS_WEEKLY_V2_ENABLED"] == "false"
+    assert "AINEWS_WEEKLY_V2_ENABLED" not in values
     assert values["AINEWS_JEV_ENABLED"] == "true"
     assert values["AINEWS_SEMANTIC_ADMISSION_ENABLED"] == "true"
     assert stat.S_IMODE(env_path.stat().st_mode) == 0o600
     deploy = next(step for step in steps if "retry ssh " in step.get("run", ""))
     assert "|DS_API_KEY|AINEWS_DIGEST_MODEL|RETENTION_DAYS)=" in deploy["run"]
     assert "chmod 600 .env.next" in deploy["run"]
-    assert "AINEWS_WEEKLY_CRON_ENABLED=0 APP_IMAGE=" in deploy["run"]
+    assert "AINEWS_WEEKLY_CRON_ENABLED" not in deploy["run"]
+    # The strip pattern keeps the retired name so an old value on the server is removed.
+    assert "|AINEWS_WEEKLY_V2_ENABLED|" in deploy["run"]
     assert "POCKETPAW_ENABLED=" not in deploy["run"]
     assert "POCKETPAW_VERSION=" not in deploy["run"]
     pattern = re.search(r"grep -vE '([^']+)'", deploy["run"])
@@ -94,20 +95,19 @@ def test_deploy_transports_deepseek_secret_privately(
                               capture_output=True, text=True, check=True)
     merged = filtered.stdout + env_path.read_text(encoding="utf-8")
     for name, value in {
-        "AINEWS_WEEKLY_V2_ENABLED": "false",
         "AINEWS_JEV_ENABLED": "true",
         "AINEWS_SEMANTIC_ADMISSION_ENABLED": "true",
         "RETENTION_DAYS": "800",
     }.items():
         assert merged.count(name + "=") == 1
         assert f"{name}={value}\n" in merged
+    assert "AINEWS_WEEKLY_V2_ENABLED" not in merged
     assert "JEV_API_KEY=test-only-jev\n" in merged
 
 
-def test_production_compose_passes_weekly_v2_flag_to_all_app_commands() -> None:
+def test_production_compose_has_no_weekly_v2_flag() -> None:
     compose = yaml.safe_load(Path("docker-compose.prod.yml").read_text(encoding="utf-8"))
-    assert compose["services"]["app"]["environment"]["AINEWS_WEEKLY_V2_ENABLED"] == (
-        "${AINEWS_WEEKLY_V2_ENABLED:-false}")
+    assert "AINEWS_WEEKLY_V2_ENABLED" not in compose["services"]["app"]["environment"]
 
 
 @pytest.mark.parametrize("workflow", ["deploy-release.yml", "deploy-by-tag.yml"])

@@ -10,7 +10,6 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
-from app.core.canonicalize import canonical_url_hash
 from app.core.ingestion.pipeline import run_fetch_cycle
 from app.core.ingestion.pipeline.models import PENDING_REPLAY_LIMIT, PENDING_REPLAY_MAX_AGE_DAYS
 from app.core.jev import (
@@ -28,8 +27,6 @@ from app.storage.models_sql import (
     Base,
     CollectionStatus,
     Source,
-    WeeklyCoverageAttempt,
-    WeeklyInputObservation,
 )
 from app.storage.models_sql import Article as StoredArticle
 from app.storage.provider_journal import PilotJournal
@@ -46,7 +43,7 @@ class Scenario:  # pylint: disable=too-many-instance-attributes
         self.source_type = source_type
         self.settings = Settings(
             _env_file=None, jev_enabled=True, jev_api_key="test-key",
-            semantic_admission_enabled=True, weekly_v2_enabled=False,
+            semantic_admission_enabled=True,
             auth_enabled=False, respect_robots_txt=False,
             rss_known_streak_stop=0, html_known_streak_stop=0,
             article_batch_upsert_enabled=batch,
@@ -345,7 +342,6 @@ def test_admission_and_cache_all_ingestion_paths(monkeypatch, tmp_path, batch, s
         }
     first = scenario.run()
     assert (first.new, first.semantic_rejected, first.screening_paused) == (1, 2, 0)
-    assert len(scenario.rows(WeeklyInputObservation)) == 3
     assert len(scenario.requests) == 3
     second = scenario.run()
     assert (second.new, second.semantic_rejected, second.semantic_cache_hits) == (0, 2, 2)
@@ -375,12 +371,6 @@ def test_outage_preserves_verified_and_replays_after_list_rotation(
     assert source.etag is None and source.last_modified is None
     status = scenario.rows(CollectionStatus)[0]
     assert status.paused and status.message == PAUSED_MESSAGE
-    expected_observed = 2 if source_type == "two_stage_html" else 3
-    assert len(scenario.rows(WeeklyInputObservation)) == expected_observed
-    attempt = scenario.rows(WeeklyCoverageAttempt)[0]
-    # Weekly coverage describes raw acquisition, independently of articles admission.
-    assert attempt.complete is (source_type != "two_stage_html")
-    assert attempt.outcome == "success"
     scenario.fail_at = None
     scenario.not_modified = not_modified
     old_items = scenario.items
@@ -396,7 +386,6 @@ def test_outage_preserves_verified_and_replays_after_list_rotation(
     assert len(scenario.requests) == 4
     assert not [r for r in scenario.rows(AdmissionDecision) if r.provider_status == "pending"]
     assert not scenario.rows(CollectionStatus)[0].paused
-    assert len(scenario.rows(WeeklyInputObservation)) == 3
 
 
 def test_ambiguity_cached_category_independent_and_policy_invalidates(monkeypatch, tmp_path):
@@ -411,7 +400,6 @@ def test_ambiguity_cached_category_independent_and_policy_invalidates(monkeypatc
     assert scenario.run().semantic_cache_hits == 1
     assert len(scenario.requests) == 1
     assert not scenario.rows(StoredArticle)
-    assert all(row.outcome == "success" for row in scenario.rows(WeeklyCoverageAttempt))
     scenario.settings.semantic_admission_prompt_version = "changed"
     scenario.answers[item.title]["admission"]["choice"] = "accepted_ai_editorial"
     assert scenario.run().new == 1
@@ -508,8 +496,6 @@ def test_confirmed_html_exclusion_settles_before_304(monkeypatch, tmp_path, batc
     first = scenario.run()
     assert first.new == 0 and first.screening_paused == 0
     assert not [r for r in scenario.rows(AdmissionDecision) if r.provider_status == "pending"]
-    attempt = scenario.rows(WeeklyCoverageAttempt)[0]
-    assert attempt.outcome == "empty" and attempt.complete
     scenario.not_modified = True
     second = scenario.run()
     assert second.not_modified_sources == 1
@@ -565,7 +551,6 @@ def test_redirect_identity_survives_pending_body_replay(monkeypatch, tmp_path):
     stored = scenario.rows(StoredArticle)[0]
     assert stored.url == str(redirected.url)
     assert stored.url_canonical == str(original.url)
-    assert len(scenario.rows(WeeklyInputObservation)) == 1
 
 
 def test_replay_and_fresh_fetch_share_source_savepoint(monkeypatch, tmp_path):
@@ -727,45 +712,6 @@ def test_settled_stale_pending_is_not_reopened_by_the_feed(monkeypatch, tmp_path
     assert not scenario.requests
     assert not _pending(scenario)
     assert [r.reason for r in scenario.rows(AdmissionDecision)].count("stale_pending") == 1
-
-
-def test_rss_records_known_items_as_weekly_observations(monkeypatch, tmp_path):
-    scenario = Scenario(tmp_path, monkeypatch, "rss", False)
-    known = scenario.items[0]
-    with scenario.sessions() as session:
-        session.add(StoredArticle(
-            title=known.title, url=str(known.url), url_canonical=str(known.url),
-            url_canonical_hash=canonical_url_hash(str(known.url)),
-            published_at=known.published_at, ai_relevance_score=0.9,
-            freshness_score=0.5, rank_score=0.7,
-        ))
-        session.commit()
-    result = scenario.run()
-    assert (result.new, result.duplicates) == (2, 1)
-    assert len(scenario.requests) == 2
-    observed = {row.canonical_hash for row in scenario.rows(WeeklyInputObservation)}
-    assert observed == {canonical_url_hash(str(item.url)) for item in scenario.items}
-
-
-@pytest.mark.parametrize("failure", ["fetch", "persist"])
-def test_admission_coverage_attempt_records_fetch_and_persist_failures(
-    monkeypatch, tmp_path, failure,
-):
-    scenario = Scenario(tmp_path, monkeypatch, "rss", False)
-    if failure == "fetch":
-        monkeypatch.setattr(
-            "app.core.ingestion.pipeline.cycle._collect_fetched_items", lambda **_kwargs: ({}, 1),
-        )
-    else:
-        with scenario.sessions() as session:
-            session.execute(text("CREATE TRIGGER fail_article BEFORE INSERT ON articles "
-                                 "BEGIN SELECT RAISE(ABORT, 'test rollback'); END"))
-            session.commit()
-    result = scenario.run()
-    assert result.errors == 1 and result.new == 0
-    attempts = scenario.rows(WeeklyCoverageAttempt)
-    assert [row.outcome for row in attempts] == [f"{failure}_failure"]
-    assert attempts[0].complete is (failure == "fetch")
 
 
 @pytest.mark.parametrize("daily", [False, True])

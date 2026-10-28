@@ -67,7 +67,7 @@ the Troubleshooting section of `README.md`.
       "date": "2026-10-18",
       "area": "tests (caplog)",
       "symptom": "Full suite: tests/unit/test_mcp_server.py and test_ingest_rss_additional.py fail with empty caplog.text, but pass when run alone.",
-      "cause": "A test that runs `alembic command.upgrade` executes src/app/storage/migrations/env.py, whose logging.config.fileConfig(alembic.ini) disables all existing loggers. Every test collected after it loses log capture. test_weekly_storage.py does the same but sorts after the affected files.",
+      "cause": "A test that runs `alembic command.upgrade` executes src/app/storage/migrations/env.py, whose logging.config.fileConfig(alembic.ini) disables all existing loggers. Every test collected after it loses log capture. Any other migration test does the same if it sorts before the affected files.",
       "fix": "In migration tests, monkeypatch logging.config.fileConfig to a no-op before calling alembic commands.",
       "verification": "Full ./venv1/bin/pytest passes with tests/unit/test_daily_signals_migration.py collected before test_mcp_server.py."
     },

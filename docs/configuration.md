@@ -128,8 +128,6 @@ AINEWS_PUBLISH_API_TOKEN=<openssl rand -hex 32>
 - `scripts/digest_generator.py` sends `Authorization: Bearer <token>` on every
   request to the app (its `/api/news/links` reads and its POSTs) when
   `AINEWS_PUBLISH_API_TOKEN` is set in its environment.
-  `scripts/run_weekly_analytics_job.sh` reads the token from the app container
-  when it is not exported.
 - With auth disabled (local dev), writes stay open and `include_content` works
   for everyone, as before.
 - In production the deploy workflows write the value from the repository secret

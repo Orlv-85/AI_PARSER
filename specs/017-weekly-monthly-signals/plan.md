@@ -358,3 +358,11 @@ Only product and money. Each is yes/no with a recommendation; everything else is
 4. **Q4 (product).** Is a month view worth building now (first usable month appears on 2026-12-01,
    with no comparison to October until January 2027)? Recommendation: **yes**, as the last release
    (R6), small because it reuses the same code.
+
+## Owner answers (2026-10-28)
+
+- Q1 yes: retire the legacy preview and pages (later releases), delete weekly v2.
+- Q2 yes, both briefs, built in one release; the weekly brief is turned on as soon as the page is
+  live (no week of waiting); the monthly brief runs from 2026-12-01.
+- Q3 yes: completed weeks and months only.
+- Q4 yes: month view as the last release.

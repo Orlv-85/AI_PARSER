@@ -39,7 +39,6 @@ def test_missing_provider_pauses_with_exact_notice(tmp_path, monkeypatch, jev_en
         semantic_admission_enabled=True,
         jev_enabled=jev_enabled,
         jev_api_key="",
-        weekly_v2_enabled=False,
         auth_enabled=False,
     )
     summary = run_fetch_cycle(settings=settings, logger=getLogger("notice-test"))
@@ -78,7 +77,6 @@ def sessions(tmp_path, monkeypatch):
             _env_file=None,
             semantic_admission_enabled=False,
             jev_enabled=False,
-            weekly_v2_enabled=False,
             auth_enabled=False,
         ),
     )
@@ -203,7 +201,7 @@ def test_status_is_public_when_admin_auth_enabled(sessions, monkeypatch) -> None
         _env_file=None, auth_enabled=True, auth_username="operator",
         auth_password_hash=hash_password("offline-test"),
         auth_secret="0123456789abcdef0123456789abcdef",
-        jev_enabled=False, weekly_v2_enabled=False,
+        jev_enabled=False,
     )
     monkeypatch.setattr(app_module, "get_settings", lambda: settings)
     with sessions() as session:
