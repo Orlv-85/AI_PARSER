@@ -314,7 +314,7 @@ function. Each rule lists the tests that check it.
 - The run writes no `weekly_*` row on any weekday: no legacy Monday report, no observation, no
   coverage attempt, no source version. Tests:
   `test_run_fetch_cycle_on_monday_creates_no_legacy_weekly_report`,
-  `test_fetch_cycle_writes_no_weekly_v2_rows`.
+  `test_fetch_cycle_creates_no_weekly_v2_tables`.
 
 **Counters**
 - `fetched` / `fetched_items` is what the source returned, not what was looked at: RSS the feed

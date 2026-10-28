@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import Settings
@@ -179,19 +179,14 @@ def _rss_entry(index: int, *, link: bool = True) -> str:
             "<pubDate>Sun, 04 Oct 2026 12:00:00 GMT</pubDate></item>")
 
 
-def _weekly_v2_row_count(sessions) -> int:
+def _weekly_v2_tables(sessions) -> set[str]:
     with sessions() as session:
-        return sum(
-            session.scalar(text(f"SELECT COUNT(*) FROM {table}")) or 0
-            for table in (
-                "weekly_source_versions", "weekly_coverage_attempts",
-                "weekly_input_observations", "weekly_decisions", "weekly_topic_versions",
-                "weekly_jobs", "weekly_snapshots", "weekly_publications",
-            )
-        )
+        names = set(inspect(session.get_bind()).get_table_names())
+    return {n for n in names if n.startswith("weekly_")} - {
+        "weekly_analytics_reports", "weekly_analytics_items"}
 
 
-def test_fetch_cycle_writes_no_weekly_v2_rows(monkeypatch, tmp_path):
+def test_fetch_cycle_creates_no_weekly_v2_tables(monkeypatch, tmp_path):
     configs = [
         SourceConfig(id="feed", name="feed", type="rss", url="https://example.com/feed.xml"),
         SourceConfig(id="gone", name="gone", type="rss", url="https://example.com/gone.xml"),
@@ -215,7 +210,7 @@ def test_fetch_cycle_writes_no_weekly_v2_rows(monkeypatch, tmp_path):
     summary = run_fetch_cycle(settings=_settings(), logger=getLogger("no-weekly"))
 
     assert summary.new == 2
-    assert _weekly_v2_row_count(sessions) == 0
+    assert _weekly_v2_tables(sessions) == set()
 
 
 def _html_configs(*keys: str) -> list[SourceConfig]:

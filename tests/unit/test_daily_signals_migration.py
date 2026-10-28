@@ -79,7 +79,7 @@ def test_upgrade_after_create_all_and_downgrade_keeps_existing_tables(tmp_path, 
     command.downgrade(config, "a42b750d0c44")
     tables = set(inspect(engine).get_table_names())
     assert not SIGNAL_TABLES & tables
-    assert {"articles", "sources", "weekly_snapshots"} <= tables
+    assert {"articles", "sources"} <= tables
     with engine.connect() as connection:
         assert connection.execute(text("SELECT COUNT(*) FROM articles")).scalar() == 1
     command.upgrade(config, "head")
