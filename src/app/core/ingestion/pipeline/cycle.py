@@ -7,8 +7,6 @@ from logging import Logger
 from threading import BoundedSemaphore
 from typing import Any, cast
 
-from sqlalchemy.orm import Session
-
 from app.config.settings import Settings
 from app.config.sources import load_sources
 from app.core.ingestion.pipeline.fetch import _collect_fetched_items
@@ -32,7 +30,6 @@ from app.storage.admission import (
 )
 from app.storage.article_repo import ArticleRepo
 from app.storage.source_repo import SourceRepo
-from app.storage.weekly import record_attempt, register_source
 
 
 # pylint: disable=too-many-branches,too-many-statements
@@ -62,7 +59,6 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
         article_repo = ArticleRepo(session)
         enabled_sources: list[EnabledSource] = []
         configured_source_keys: set[str] = set()
-        weekly_versions: dict[int, str] = {}
 
         for idx, config in enumerate(configs):
             configured_source_keys.add(config.id)
@@ -85,12 +81,6 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                 next_index, config, source_id, source_repo.get_fetch_state(source_id=source_id),
             ))
             next_index += 1
-
-        if isinstance(session, Session):
-            for _, config, source_id, _ in enabled_sources:
-                weekly_versions[source_id] = register_source(
-                    session, source_id, config, settings, datetime.now(UTC)
-                )
 
         if admission_state.enabled and relevance_scorer is None:
             set_collection_paused(session)
@@ -195,13 +185,6 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
                 else:
                     fetch_result = fetched_by_index.get(idx)
                     if fetch_result is None:
-                        if isinstance(session, Session):
-                            record_attempt(
-                                session, run_id=run_id, source_id=db_source_id,
-                                version_id=weekly_versions[db_source_id],
-                                interval=config.fetch_interval_minutes,
-                                outcome="fetch_failure", complete=True, now=datetime.now(UTC),
-                            )
                         source_metrics.errors = 1
                         _log_source_metrics(
                             logger=logger,
@@ -255,34 +238,6 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
             run_semantic_cache_hits += source_metrics.semantic_cache_hits
             fetched_count += source_metrics.fetched_items
             examined_count += source_metrics.examined_items
-            if isinstance(session, Session):
-                outcome = (
-                    "fetch_failure" if fetch_failed else "persist_failure"
-                    if source_metrics.errors
-                    else (
-                        "parser_failure"
-                        if not source_metrics.coverage_complete
-                        else (
-                            "not_modified"
-                            if source_metrics.not_modified
-                            else ("success" if source_metrics.fetched_items else "empty")
-                        )
-                    )
-                )
-                record_attempt(
-                    session,
-                    run_id=run_id,
-                    source_id=db_source_id,
-                    version_id=weekly_versions[db_source_id],
-                    interval=config.fetch_interval_minutes,
-                    outcome=outcome,
-                    complete=(
-                        source_metrics.coverage_complete
-                        and not source_metrics.acquisition_stopped
-                        and not (config.type == "html" and source_metrics.early_stop_hit)
-                    ),
-                    now=datetime.now(UTC),
-                )
             new_count += source_metrics.new_items
             duplicate_count += source_metrics.duplicate_items
             optimization_not_modified_sources += int(source_metrics.not_modified)
@@ -300,9 +255,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
 
         if not admission_state.paused and admission_state.fresh_success:
             clear_collection_paused(session)
-        _publish_weekly_analytics_if_due(
-            session=session, logger=logger, run_id=run_id, settings=settings
-        )
+        _publish_weekly_analytics_if_due(session=session, logger=logger, run_id=run_id)
         session.commit()
 
     logger.info(

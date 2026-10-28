@@ -140,7 +140,7 @@ header, not in CLI arguments.
   publication**. Each publication processes the previous completed UTC date.
   Both jobs share the collector lock; publication waits for an active fetch.
   UTC calendar timers handle host DST without changing the server timezone.
-  Installation removes the old managed daily cron blocks. Weekly stays off.
+  Installation removes the old managed daily cron blocks and a stale weekly analytics block.
   Timers do not catch up on installation (`Persistent=false`); use the dated
   wrapper for an explicit resume. Logs are `logs/daily-fetch.log` and
   `logs/daily-digest.log`; inspect `systemctl list-timers 'ai-news-daily-*'`.

@@ -6,6 +6,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
+from urllib.parse import urlsplit
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
@@ -50,9 +51,19 @@ from app.storage.models_sql import (
     NewsDigestReport,
     SignalMention,
 )
-from app.storage.weekly import publisher_group
 
 RECOMPUTE_DAYS = 400
+
+
+def publisher_group(url: str, overrides: Mapping[str, str]) -> str:
+    """Registrable domain of the URL host; an override maps a host or domain to a group."""
+    host = (urlsplit(url).hostname or "unknown").lower()
+    if host in overrides:
+        return overrides[host]
+    parts = host.split(".")
+    suffixes = {"co.uk", "org.uk", "com.au", "co.jp", "com.br", "co.nz", "co.in"}
+    domain = ".".join(parts[-3:] if ".".join(parts[-2:]) in suffixes else parts[-2:])
+    return overrides.get(domain, domain)
 
 
 class OverrideConflict(ValueError):

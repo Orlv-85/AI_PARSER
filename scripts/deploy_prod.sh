@@ -31,9 +31,6 @@ fi
 AINEWS_DIGEST_CRON_ENABLED="${AINEWS_DIGEST_CRON_ENABLED:-1}"
 AINEWS_DIGEST_CRON_SCHEDULE="${AINEWS_DIGEST_CRON_SCHEDULE:-0 2 * * *}"
 AINEWS_DIGEST_LOG_PATH="${AINEWS_DIGEST_LOG_PATH:-$ROOT_DIR/logs/daily-digest.log}"
-AINEWS_WEEKLY_CRON_ENABLED="${AINEWS_WEEKLY_CRON_ENABLED:-0}"
-AINEWS_WEEKLY_CRON_SCHEDULE="${AINEWS_WEEKLY_CRON_SCHEDULE:-15 2 * * 1}"
-AINEWS_WEEKLY_LOG_PATH="${AINEWS_WEEKLY_LOG_PATH:-$ROOT_DIR/logs/weekly-analytics.log}"
 
 if [ -n "$DEPLOY_TAG" ]; then
   echo "Checking out tag: $DEPLOY_TAG"
@@ -175,9 +172,9 @@ install_daily_digest_cron() {
   cleanup_cron_tmp
 }
 
-install_weekly_analytics_cron() {
+remove_weekly_analytics_cron() {
+  # The weekly analytics cron is retired; drop a stale managed block left by an older deploy.
   if ! command -v crontab >/dev/null 2>&1; then
-    echo "crontab command not found; skipping weekly analytics cron installation" >&2
     return 0
   fi
 
@@ -194,21 +191,10 @@ install_weekly_analytics_cron() {
   crontab -l >"$tmp_existing" 2>/dev/null || true
   sed "/^${begin_marker}\$/,/^${end_marker}\$/d" "$tmp_existing" >"$tmp_new"
 
-  if is_enabled "$AINEWS_WEEKLY_CRON_ENABLED"; then
-    {
-      printf '\n%s\n' "$begin_marker"
-      printf '# Managed by scripts/deploy_prod.sh\n'
-      printf 'CRON_TZ=UTC\n'
-      printf '%s cd %s && ./scripts/run_weekly_analytics_job.sh >> %s 2>&1\n' \
-        "$AINEWS_WEEKLY_CRON_SCHEDULE" "$ROOT_DIR" "$AINEWS_WEEKLY_LOG_PATH"
-      printf '%s\n' "$end_marker"
-    } >>"$tmp_new"
-    echo "Installed/updated weekly analytics cron (${AINEWS_WEEKLY_CRON_SCHEDULE} UTC)"
-  else
-    echo "AINEWS_WEEKLY_CRON_ENABLED=0; removed managed weekly analytics cron block (if present)"
+  if ! cmp -s "$tmp_existing" "$tmp_new"; then
+    crontab "$tmp_new"
+    echo "Removed stale weekly analytics cron block"
   fi
-
-  crontab "$tmp_new"
   trap - EXIT INT TERM
   cleanup_cron_tmp
 }
@@ -270,7 +256,7 @@ fi
 printf '%s\n' "$APP_IMAGE" > "$LAST_DEPLOY_IMAGE_FILE"
 install_auto_update_cron
 install_daily_digest_cron
-install_weekly_analytics_cron
+remove_weekly_analytics_cron
 if [ "$AINEWS_DAILY_SCHEDULER" = systemd ]; then
   # The deploy user is not root; the sudoers file allows exactly these systemctl calls.
   SUDO=""

@@ -17,7 +17,7 @@ from app.ingest.html import HtmlListPageResult
 from app.ingest.rss import RssFetchResult, RssItemList, _with_rss_metadata
 from app.storage.article_repo import ArticleRepo
 from app.storage.models_sql import Article as StoredArticle
-from app.storage.models_sql import Base, Source, WeeklyCoverageAttempt
+from app.storage.models_sql import Base, Source
 
 
 def _rss_items(
@@ -167,20 +167,10 @@ def _sqlite_run(monkeypatch, tmp_path, configs, *, collect=None, fetch_article=N
 def _settings(**overrides) -> Settings:
     values = {
         "_env_file": None, "respect_robots_txt": False, "rss_known_streak_stop": 0,
-        "rss_extract_full_text": False, "weekly_v2_enabled": False,
-        "article_batch_upsert_enabled": False,
+        "rss_extract_full_text": False, "article_batch_upsert_enabled": False,
     }
     values.update(overrides)
     return Settings(**values)
-
-
-def _attempts(sessions) -> dict[str, tuple[str, bool]]:
-    with sessions() as session:
-        keys = {source.id: source.source_key for source in session.scalars(select(Source))}
-        return {
-            keys[attempt.source_id]: (attempt.outcome, attempt.complete)
-            for attempt in session.scalars(select(WeeklyCoverageAttempt))
-        }
 
 
 def _rss_entry(index: int, *, link: bool = True) -> str:
@@ -189,36 +179,43 @@ def _rss_entry(index: int, *, link: bool = True) -> str:
             "<pubDate>Sun, 04 Oct 2026 12:00:00 GMT</pubDate></item>")
 
 
-def test_rss_skipped_entry_or_malformed_feed_marks_coverage_incomplete(monkeypatch, tmp_path):
-    feeds = {
-        "complete": f"<rss version=\"2.0\"><channel><title>AI</title>{_rss_entry(1)}"
-                    "</channel></rss>",
-        "skipped": f"<rss version=\"2.0\"><channel><title>AI</title>{_rss_entry(2)}"
-                   f"{_rss_entry(3, link=False)}</channel></rss>",
-        "malformed": f"<rss version=\"2.0\"><channel><title>AI</title>{_rss_entry(4)}"
-                     "</channel>",
-    }
+def _weekly_v2_row_count(sessions) -> int:
+    with sessions() as session:
+        return sum(
+            session.scalar(text(f"SELECT COUNT(*) FROM {table}")) or 0
+            for table in (
+                "weekly_source_versions", "weekly_coverage_attempts",
+                "weekly_input_observations", "weekly_decisions", "weekly_topic_versions",
+                "weekly_jobs", "weekly_snapshots", "weekly_publications",
+            )
+        )
+
+
+def test_fetch_cycle_writes_no_weekly_v2_rows(monkeypatch, tmp_path):
     configs = [
-        SourceConfig(id=key, name=key, type="rss", url=f"https://example.com/{key}.xml")
-        for key in feeds
-    ]
+        SourceConfig(id="feed", name="feed", type="rss", url="https://example.com/feed.xml"),
+        SourceConfig(id="gone", name="gone", type="rss", url="https://example.com/gone.xml"),
+    ] + _html_configs("site")
+    rss = [Article(source_key="feed", title="AI update", url="https://example.com/feed/1",
+                   published_at=NOW)]
 
-    def request(_self, *, source_id, url, **_kwargs):
-        return httpx.Response(200, content=feeds[source_id].encode(),
-                              request=httpx.Request("GET", url))
+    def collect(*, enabled_sources, **_kwargs):
+        results = {}
+        for index, config, *_ in enabled_sources:
+            if config.id == "feed":
+                results[index] = _rss_items(rss)
+            elif config.id == "site":
+                results[index] = HtmlListPageResult(links=["https://example.com/site/story-1"])
+        return results, 1
 
-    monkeypatch.setattr("app.ingest.fetcher.Fetcher.request", request)
-    sessions = _sqlite_run(monkeypatch, tmp_path, configs)
+    sessions = _sqlite_run(
+        monkeypatch, tmp_path, configs, collect=collect, fetch_article=_dated_article,
+    )
 
-    summary = run_fetch_cycle(settings=_settings(), logger=getLogger("coverage"))
+    summary = run_fetch_cycle(settings=_settings(), logger=getLogger("no-weekly"))
 
-    assert summary.errors == 0
-    assert summary.new == 3
-    assert _attempts(sessions) == {
-        "complete": ("success", True),
-        "skipped": ("parser_failure", False),
-        "malformed": ("parser_failure", False),
-    }
+    assert summary.new == 2
+    assert _weekly_v2_row_count(sessions) == 0
 
 
 def _html_configs(*keys: str) -> list[SourceConfig]:
@@ -240,143 +237,6 @@ def _html_links(links_by_source: dict[str, list[str]]):
 def _dated_article(*, source, url, **_kwargs):
     return Article(source_key=source.id, title="AI update", url=url, published_at=NOW,
                    content="AI is central.")
-
-
-def test_html_link_cap_marks_coverage_incomplete(monkeypatch, tmp_path):
-    links = {
-        "capped": [f"https://example.com/capped/story-{i}" for i in range(3)],
-        "within": [f"https://example.com/within/story-{i}" for i in range(2)],
-    }
-    sessions = _sqlite_run(
-        monkeypatch, tmp_path, _html_configs("capped", "within"),
-        collect=_html_links(links), fetch_article=_dated_article,
-    )
-
-    summary = run_fetch_cycle(
-        settings=_settings(html_max_links_per_source=2), logger=getLogger("coverage"),
-    )
-
-    assert summary.new == 4
-    assert _attempts(sessions) == {
-        "capped": ("parser_failure", False),
-        "within": ("success", True),
-    }
-
-
-def test_failed_or_unparsable_html_article_marks_coverage_incomplete(monkeypatch, tmp_path):
-    links = {
-        key: [f"https://example.com/{key}/story-1", f"https://example.com/{key}/story-2"]
-        for key in ("ok", "raises", "unparsable")
-    }
-
-    def fetch_article(*, source, url, **kwargs):
-        if url.endswith("story-1") and source.id == "raises":
-            raise httpx.ReadTimeout("offline")
-        if url.endswith("story-1") and source.id == "unparsable":
-            return None
-        return _dated_article(source=source, url=url, **kwargs)
-
-    sessions = _sqlite_run(
-        monkeypatch, tmp_path, _html_configs(*links),
-        collect=_html_links(links), fetch_article=fetch_article,
-    )
-
-    summary = run_fetch_cycle(settings=_settings(), logger=getLogger("coverage"))
-
-    assert summary.errors == 0
-    assert summary.new == 4
-    assert _attempts(sessions) == {
-        "ok": ("success", True),
-        "raises": ("parser_failure", False),
-        "unparsable": ("parser_failure", False),
-    }
-
-
-def test_coverage_attempt_records_fetch_persist_and_parser_failures(monkeypatch, tmp_path):
-    configs = [
-        SourceConfig(id=key, name=key, type="rss", url=f"https://example.com/{key}.xml")
-        for key in ("ok", "fetch", "persist", "parser")
-    ]
-    items = {
-        key: [Article(source_key=key, title="AI update" if key != "persist" else "Invalid",
-                      url=f"https://example.com/{key}/1", published_at=NOW)]
-        for key in ("ok", "persist", "parser")
-    }
-
-    def collect(*, enabled_sources, **_kwargs):
-        results = {}
-        for index, config, *_ in enabled_sources:
-            if config.id in items:
-                results[index] = _rss_items(
-                    items[config.id], coverage_complete=config.id != "parser",
-                )
-        return results, 1
-
-    sessions = _sqlite_run(monkeypatch, tmp_path, configs, collect=collect)
-    with sessions() as session:
-        session.execute(text(
-            "CREATE TRIGGER reject_article BEFORE INSERT ON articles "
-            "WHEN NEW.title = 'Invalid' BEGIN SELECT RAISE(ABORT, 'invalid article'); END"
-        ))
-        session.commit()
-
-    summary = run_fetch_cycle(settings=_settings(), logger=getLogger("coverage"))
-
-    assert summary.errors == 2
-    attempts = _attempts(sessions)
-    assert {key: outcome for key, (outcome, _) in attempts.items()} == {
-        "ok": "success", "fetch": "fetch_failure",
-        "persist": "persist_failure", "parser": "parser_failure",
-    }
-    assert attempts["ok"][1] is True
-    assert attempts["fetch"][1] is True
-    assert attempts["persist"][1] is False
-    assert attempts["parser"][1] is False
-
-
-def test_undated_item_marks_coverage_incomplete(monkeypatch, tmp_path):
-    configs = [
-        SourceConfig(id=key, name=key, type="rss", url=f"https://example.com/{key}.xml")
-        for key in ("rss_dated", "rss_undated", "rss_updated_only")
-    ] + _html_configs("html_dated", "html_undated")
-    rss_items = {
-        "rss_dated": Article(source_key="rss_dated", title="AI update",
-                             url="https://example.com/rss_dated/1", published_at=NOW),
-        "rss_undated": Article(source_key="rss_undated", title="AI update",
-                               url="https://example.com/rss_undated/1", published_at=None),
-        "rss_updated_only": Article(
-            source_key="rss_updated_only", title="AI update",
-            url="https://example.com/rss_updated_only/1", published_at=None,
-            publication_evidence_at=NOW, publication_date_kind="updated",
-        ),
-    }
-
-    def collect(*, enabled_sources, **_kwargs):
-        return {
-            index: _rss_items([rss_items[config.id]]) if config.type == "rss"
-            else HtmlListPageResult(links=[f"https://example.com/{config.id}/story-1"])
-            for index, config, *_ in enabled_sources
-        }, 0
-
-    def fetch_article(*, source, url, **kwargs):
-        if source.id == "html_undated":
-            return Article(source_key=source.id, title="AI update", url=url, published_at=None,
-                           content="AI is central.")
-        return _dated_article(source=source, url=url, **kwargs)
-
-    sessions = _sqlite_run(monkeypatch, tmp_path, configs, collect=collect,
-                           fetch_article=fetch_article)
-
-    summary = run_fetch_cycle(settings=_settings(), logger=getLogger("coverage"))
-
-    assert (summary.errors, summary.new) == (0, 5)
-    assert _attempts(sessions) == {
-        "rss_dated": ("success", True),
-        "rss_undated": ("parser_failure", False),
-        "rss_updated_only": ("parser_failure", False),
-        "html_dated": ("success", True),
-        "html_undated": ("parser_failure", False),
-    }
 
 
 def test_two_urls_of_one_story_become_two_articles(monkeypatch, tmp_path):
@@ -450,7 +310,7 @@ def test_per_row_duplicate_updates_scores_and_category_only(monkeypatch, tmp_pat
         assert stored.published_at.replace(tzinfo=UTC) == NOW
 
 
-@pytest.mark.parametrize("stage", ["load_sources", "create_all", "register_source"])
+@pytest.mark.parametrize("stage", ["load_sources", "create_all"])
 def test_error_outside_source_loop_aborts_without_commit(monkeypatch, tmp_path, stage):
     configs = [SourceConfig(id="feed", name="feed", type="rss", url="https://example.com/feed")]
     sessions = _sqlite_run(
@@ -468,7 +328,6 @@ def test_error_outside_source_loop_aborts_without_commit(monkeypatch, tmp_path, 
 
     with sessions() as session:
         assert not list(session.scalars(select(Source)))
-        assert not list(session.scalars(select(WeeklyCoverageAttempt)))
 
 
 def test_html_fetch_cycle_skips_failed_article_only(monkeypatch, tmp_path):
@@ -497,4 +356,3 @@ def test_html_fetch_cycle_skips_failed_article_only(monkeypatch, tmp_path):
         assert sorted(session.scalars(select(StoredArticle.title))) == [
             "Headline", f"{base}/news-3",
         ]
-    assert _attempts(sessions) == {"site": ("parser_failure", False)}

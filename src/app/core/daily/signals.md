@@ -126,6 +126,7 @@ that check it.
 | Evidence survives retention and cleanup | "first seen" must not move forward when old articles are pruned |
 | New = first seen in our corpus and presented as new by the article (model judgment, with quote) | New means newly announced, not merely new to our corpus (OD1) |
 | Lexical safety nets after the model (name shape, earlier digest text, not-yet-released words) | prompt revisions stopped at `daily-signals-extract-5`; remaining errors are fixed in code at $0 |
+| Publisher = registrable domain of the article host (`publisher_group`), with `weekly_publisher_overrides` | the count of publishers must not count subdomains twice; the function moved here from the deleted weekly v2 store (017 R1), the setting kept its old name for compatibility. Tests: `test_publisher_group_uses_registrable_domain_and_overrides` |
 | Thresholds are code constants recorded in every snapshot, no runtime override | a snapshot is reproducible; a change is a release with a `METHODOLOGY_VERSION` bump |
 | Rising waits for two usable 7-day windows; spikes until then | a comparison needs enough complete days on both sides (OD3) |
 | Brief in its own table keyed by input hash, not in the snapshot | snapshot hash stays pure; a recompute never drops a paid brief; same input never paid twice |
@@ -185,7 +186,7 @@ GET /?date=D                                     web/signals_view.py: render_sig
 | `core/daily/signals_naming.py` | `specific_variant`, `same_vendor`, `unit_key`, `proper_name`, `FAMILY_STOPWORDS` | yes |
 | `core/daily/signals_history.py` | `LexicalHistory`: earliest lexical mention before D | yes |
 | `core/daily/signals_brief.py` | Brief packet, prompt, request body, validation rules 1-9, O1 review marker | yes |
-| `storage/daily_signals.py` | `DailySignalRepo`: membership, extractions, evidence, entities, overrides, snapshots, briefs | no |
+| `storage/daily_signals.py` | `publisher_group`, `DailySignalRepo`: membership, extractions, evidence, entities, overrides, snapshots, briefs | no |
 | `storage/daily_signals_ledger.py` | `SignalsLedger`: private SQLite of physical POSTs, replay, per-run caps, per-model prices | no |
 | `web/signals_view.py` | Server HTML of the block; `quiet_line`, chips, D3 New list | yes |
 | `web/models.py` | `DailySignalsResponse` and nested API models (only optional fields added after 006) | - |

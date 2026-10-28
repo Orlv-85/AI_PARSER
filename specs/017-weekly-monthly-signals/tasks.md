@@ -18,28 +18,28 @@ rules, names, tests and `covers` globs it ships.
 
 ## Phase 1: Cleanup stage 1, weekly v2 code (US3, G5) - one PR (release R1)
 
-- [ ] T001 [US3] Re-read prod facts read-only (rows and size of `weekly_*`, crontab has no weekly
+- [x] T001 [US3] Re-read prod facts read-only (rows and size of `weekly_*`, crontab has no weekly
   line, `weekly_input_observations` growth) and put them in the PR body.
-- [ ] T002 [US3] Remove collection hooks: `_record_weekly_observation` calls in
+- [x] T002 [US3] Remove collection hooks: `_record_weekly_observation` calls in
   `core/ingestion/pipeline/rss.py` and `html_links.py`; `record_attempt` and source-version
   registration in `cycle.py`; v2 branch in `weekly_hooks.py` (legacy Monday publish stays). Edit
   `core/ingestion/pipeline.md` first ("Weekly hooks", the F1 decision line, test names).
-- [ ] T003 [US3] Delete `src/app/core/weekly/`, `src/app/storage/weekly.py`; drop the
+- [x] T003 [US3] Delete `src/app/core/weekly/`, `src/app/storage/weekly.py`; drop the
   `WeeklyStore` calls in `WeeklyAnalyticsRepo.save_weekly_report` (`storage/repos.py`); remove the
   `weekly-analytics` and `weekly-analytics-audit` commands and v2 imports from `cli/main.py`.
-- [ ] T004 [US3] Remove the 17 v2 fields from `config/settings.py` (check `weekly_publisher_overrides`
+- [x] T004 [US3] Remove the 17 v2 fields from `config/settings.py` (check `weekly_publisher_overrides`
   has no other user); delete `scripts/run_weekly_analytics_job.sh`, `scripts/weekly_frozen_report.py`;
   `scripts/deploy_prod.sh`: drop the cron install, keep removal of a stale managed block.
-- [ ] T005 [US3] Remove `AINEWS_WEEKLY_V2_ENABLED` from both deploy workflows (keep it in the `.env`
+- [x] T005 [US3] Remove `AINEWS_WEEKLY_V2_ENABLED` from both deploy workflows (keep it in the `.env`
   strip patterns), `docker-compose.prod.yml`, `deploy/.env.prod.example`, `docs/deploy.md`,
   `docs/configuration.md`; delete `docs/weekly-analytics.md`; fix `docs/README.md`, `README.md`,
   `src/app/README.md`, `docs/troubleshooting.md`, `web/pages.md`.
-- [ ] T006 [US3] Tests: delete the 6 `tests/unit/test_weekly_*.py` and
+- [x] T006 [US3] Tests: delete the 6 `tests/unit/test_weekly_*.py` and
   `tests/integration/test_weekly_postgres.py`; edit v2 assertions in `test_pipeline_runtime.py`,
   `test_deploy_cron_image.py`, `test_deepseek_deploy_workflows.py`, `test_web_weekly_analytics.py`.
   Leave model classes and tables. Add a test that a fetch cycle writes no `weekly_*` row.
   `bash -n scripts/*.sh`.
-- [ ] T-F1 [US3] Only if Q1 is no (v2 kept): `cycle.py` `fetch_failure` -> `complete=False`, test
+- [x] T-F1 [US3] Not needed (Q1 answered yes, 2026-10-28). Only if Q1 were no (v2 kept): `cycle.py` `fetch_failure` -> `complete=False`, test
   expects it; skip T002-T006 deletions.
 
 **Checkpoint**: legacy Monday report and `/` preview unchanged; no `weekly_*` writes.

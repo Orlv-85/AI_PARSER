@@ -852,7 +852,6 @@ def test_publish_paths_post_through_authenticated_helper(monkeypatch, tmp_path) 
     monkeypatch.setattr(bridge, "read_json_response", fake_read_json_response)
     monkeypatch.setattr(bridge, "_fetch_news_links_range", lambda **_kwargs: [])
     monkeypatch.setattr(bridge, "validate_digest", lambda **_kwargs: {"groups": []})
-    monkeypatch.delenv("AINEWS_WEEKLY_V2_ENABLED", raising=False)
 
     bridge.publish_digest(
         base_url="http://app.test", report_date="2026-10-17", input_path=tmp_path / "d.json"

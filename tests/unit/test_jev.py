@@ -20,9 +20,9 @@ from app.core.jev import JevAssessment, JevRelevanceScorer, jev_relevance_scorer
 from app.core.models import Article
 from app.ingest.html import HtmlListPageResult
 from app.ingest.rss import RssFetchResult, _with_rss_metadata
+from app.storage.journal_files import fingerprint
 from app.storage.models_sql import Article as StoredArticle
 from app.storage.models_sql import Base
-from app.storage.weekly import fingerprint
 
 
 def _article(index: int = 1) -> Article:
