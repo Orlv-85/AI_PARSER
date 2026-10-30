@@ -143,6 +143,7 @@ that check it.
 | Rising waits for two usable 7-day windows; spikes until then | a comparison needs enough complete days on both sides (OD3) |
 | Brief in its own table keyed by input hash, not in the snapshot | snapshot hash stays pure; a recompute never drops a paid brief; same input never paid twice |
 | Brief validated mechanically, meaning not checked | catches invented names, numbers and quotes without a second model call |
+| A name in the brief is checked as a substring, not a whole word | decided 2026-10-30 (agent): a whole-word check of the 18 stored briefs found no invented name and rejected 2 correct "The Verge" attributions (`specs/007-daily-signals-brief/records/report-brief-name-check-2026-10-30.md`) |
 | Quiet-day opening line is a template, not model output | counts are our facts |
 | Chips are display only | filtering the digest was deferred (OD4) |
 | Signals run only after a successful publication; failure never changes the job result | the digest job must not depend on the signals block |
