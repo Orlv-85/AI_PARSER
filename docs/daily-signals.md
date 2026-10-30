@@ -87,8 +87,13 @@ articles were pruned or deleted after their snapshot.
   | `deepseek-flash` | 0.30 | 1.20 | about $0.0012 (dry-run) |
 
   A model without a price entry is never called (`skipped:brief_model_unpriced`). Reservation per
-  attempt is at most about $0.023 at the 12,000-byte input cap, so a day with one recovery stays under
-  $0.05; about $0.15-0.20 a month with the default model.
+  attempt is at most about $0.025 at the 12,000-byte input cap and 1,200 output tokens, so a day with
+  one recovery stays under $0.05; about $0.15-0.20 a month with the default model.
+- **Dropped sentences (brief-4).** A brief sentence that fails a check is dropped, and only the first 5
+  (2 on a quiet day) are kept; the brief row's `reason` lists them for an `ok` brief, for example
+  `dropped:quote_not_found (sentence 3),over_limit:3`. Rows of `daily-signals-brief-3` stay as they
+  are; the nightly run regenerates only the previous day when it has no `ok` brief of the current
+  version.
 
 ## Fixing entities
 
