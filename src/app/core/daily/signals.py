@@ -227,13 +227,15 @@ def _brief_day(session: Session, repo: DailySignalRepo, run: _BriefRun, day: dat
                                      version=BRIEF_VERSION, scope_day=day.isoformat())
         if result.state != "response":
             return f"skipped:attempt_{result.state}"
+        dropped: list[str] = []
         try:
-            sentences = parse_brief(result.data, packet, run.model)
+            sentences = parse_brief(result.data, packet, run.model, dropped=dropped)
         except BriefInvalid as error:
             reasons.append(str(error))
             continue
         repo.save_brief(day, brief_version=BRIEF_VERSION, model=run.model, input_hash=digest,
-                        status="ok", payload=brief_payload(sentences, id_map))
+                        status="ok", payload=brief_payload(sentences, id_map),
+                        reason=("dropped:" + ",".join(dropped))[:1000] if dropped else None)
         session.commit()
         return "ok"
     repo.save_brief(day, brief_version=BRIEF_VERSION, model=run.model, input_hash=digest,

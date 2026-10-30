@@ -368,10 +368,10 @@ def test_one_day_brief_then_cached_then_regenerated(session, tmp_path):
     assert first["brief"]["run"] == {"calls": 1, "usd": pytest.approx((800 * 1.32 + 100 * 3.96)
                                                                      / 1e6)}
     row = brief_row(session)
-    assert (row.status, row.model, row.brief_version) == ("ok", PRO, "daily-signals-brief-3")
+    assert (row.status, row.model, row.brief_version) == ("ok", PRO, "daily-signals-brief-4")
     stored = json.loads(row.payload)["sentences"][0]
     assert stored["text"] == "Today Acme launched Atlas 0." and stored["links"][0]["url"]
-    assert fake.briefs[0]["model"] == PRO and fake.briefs[0]["max_tokens"] == 900
+    assert fake.briefs[0]["model"] == PRO and fake.briefs[0]["max_tokens"] == 1200
     again = paid(session, tmp_path, fake)
     assert again["brief"]["days"] == {D.isoformat(): "cached"} and len(fake.briefs) == 1
     item = session.scalar(select(NewsDigestItem).order_by(NewsDigestItem.id))
@@ -412,6 +412,25 @@ def test_invalid_answer_recovers_or_is_stored_invalid(session, tmp_path):
         ("invalid", "unsupported_number (sentence 1),unsupported_number (sentence 1)")
     assert paid(session, tmp_path, worse)["brief"]["days"][D.isoformat()] == "cached"
     assert len(worse.briefs) == 2
+
+
+def test_brief_keeps_valid_sentences_and_records_the_dropped(session, tmp_path):
+    def bad_then_good(request):
+        bad = json.loads(json.loads(brief_answer(request, valid=False).content)["choices"][0]
+                         ["message"]["content"])["sentences"]
+        good = json.loads(json.loads(brief_answer(request).content)["choices"][0]
+                          ["message"]["content"])["sentences"]
+        body = json.loads(brief_answer(request).content)
+        body["choices"][0]["message"]["content"] = json.dumps({"sentences": bad + good + good})
+        return httpx.Response(200, json=body)
+
+    seed(session)
+    fake = Both(brief=bad_then_good)
+    report = paid(session, tmp_path, fake)
+    row = brief_row(session)
+    assert report["brief"]["days"] == {D.isoformat(): "ok"} and len(fake.briefs) == 1
+    assert row.status == "ok" and len(json.loads(row.payload)["sentences"]) == 1
+    assert row.reason == "dropped:unsupported_number (sentence 1),duplicate_sentence (sentence 3)"
 
 
 def test_ledger_stop_skips_briefs_and_keeps_extraction(session, tmp_path):

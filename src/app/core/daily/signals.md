@@ -117,6 +117,12 @@ that check it.
   names present in the cited text, one sentence per story, 3-5 sentences (1-2 on a quiet day).
   Shown with numbered source links and an AI note. Tests: `test_sentence_codes`,
   `test_answer_level_codes`, `test_grounding_allowances`, `test_brief_rendered_escaped_with_http_links_and_ai_note`.
+- Sentences are checked in answer order: a sentence that fails is dropped, and the first 5 that pass
+  (2 on a quiet day) are kept, the rest unread. The answer is invalid only when fewer than 3 pass
+  (1 on a quiet day); the error is then the first dropped sentence's. Dropped and unread sentences
+  are recorded in the brief row's `reason`. The period brief keeps the strict rule (`keep_valid`).
+  Tests: `test_failed_or_extra_sentences_are_dropped`, `test_too_few_valid_sentences_fail_with_the_first_error`,
+  `test_brief_keeps_valid_sentences_and_records_the_dropped`.
 - An invalid answer gets one recovery attempt, then the day is stored `invalid` and shows no brief.
   Tests: `test_invalid_answer_recovers_or_is_stored_invalid`, `test_invalid_or_unreadable_brief_is_null`.
 - A brief is keyed by `input_hash`: the same input is never paid twice, a changed snapshot is
@@ -143,6 +149,7 @@ that check it.
 | Rising waits for two usable 7-day windows; spikes until then | a comparison needs enough complete days on both sides (OD3) |
 | Brief in its own table keyed by input hash, not in the snapshot | snapshot hash stays pure; a recompute never drops a paid brief; same input never paid twice |
 | Brief validated mechanically, meaning not checked | catches invented names, numbers and quotes without a second model call |
+| A failed or extra brief sentence is dropped, not the whole answer (owner, 2026-10-30) | the model often writes one sentence per item (8 on 2026-10-29) or misquotes one word; the other sentences passed every check, yet the day showed no brief |
 | A name in the brief is checked as a substring, not a whole word | decided 2026-10-30 (agent): a whole-word check of the 18 stored briefs found no invented name and rejected 2 correct "The Verge" attributions (`specs/007-daily-signals-brief/records/report-brief-name-check-2026-10-30.md`) |
 | Quiet-day opening line is a template, not model output | counts are our facts |
 | Chips are display only | filtering the digest was deferred (OD4) |

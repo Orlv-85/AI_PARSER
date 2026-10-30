@@ -63,9 +63,10 @@ def response_with(content_test):
 
 
 def brief2_body(packet, model=PRO):
-    body = request_body(packet, model)
+    # The dry-run request: brief-2 prompt text and its 900-token output bound.
+    body = request_body(packet, model, max_output=900)
     body["messages"][0]["content"] = BRIEF_PROMPT.replace(
-        "daily-signals-brief-3", "daily-signals-brief-2").replace(REVIEW_SENTENCE, "")
+        BRIEF_VERSION, "daily-signals-brief-2").replace(REVIEW_SENTENCE, "")
     return body
 
 
@@ -147,7 +148,7 @@ def test_input_hash_changes_with_packet_version_and_model(monkeypatch):
     changed = copy.deepcopy(packet)
     changed["digest_items"] += 1
     assert input_hash(changed, PRO) != base
-    monkeypatch.setattr(brief, "BRIEF_VERSION", "daily-signals-brief-4")
+    monkeypatch.setattr(brief, "BRIEF_VERSION", "daily-signals-brief-5")
     assert input_hash(packet, PRO) != base
 
 
@@ -156,11 +157,11 @@ def test_body_and_prompt_pinned():
     packet = REV2["2026-10-16"]["data"]
     body = request_body(packet, PRO)
     assert body == {"model": PRO, "temperature": 0, "thinking": {"type": "disabled"},
-                    "max_tokens": 900, "response_format": {"type": "json_object"},
+                    "max_tokens": 1200, "response_format": {"type": "json_object"},
                     "messages": [{"role": "system", "content": BRIEF_PROMPT},
                                  {"role": "user", "content": encoded(packet)}]}
-    assert BRIEF_VERSION == "daily-signals-brief-3"
-    assert BRIEF_PROMPT.startswith("Task: daily-signals-brief-3. ")
+    assert BRIEF_VERSION == "daily-signals-brief-4"
+    assert BRIEF_PROMPT.startswith("Task: daily-signals-brief-4. ")
     assert "only when nothing else is left. Stories with kind 'review' count as reviews. At " \
         "most one sentence per story or item." in BRIEF_PROMPT
     assert BRIEF_PROMPT.isascii()
@@ -174,7 +175,7 @@ def test_brief_2_answers_pass():
     for day, run in REV2.items():
         packet = run["data"]
         data = RESPONSES[fingerprint(brief2_body(packet))]["data"]
-        sentences = parse_brief(data, packet, PRO)
+        sentences = parse_brief(data, packet, PRO, keep_valid=False)
         assert [s.text for s in sentences] == [s["text"] for s in run["brief"]["sentences"]], day
 
 
@@ -184,16 +185,22 @@ def _accepted(key):
 
 
 def test_revision_1_answers_ten_pass_four_fail_same_story():
-    outcomes = {}
+    # Strict rule of the dry run; with the brief-4 rule the same_story sentence is dropped.
+    outcomes, kept = {}, {}
     for key, run in ANSWERS.items():
         model = key.split("/")[1]
         try:
-            parse_brief(_accepted(key), run["packet"], model)
+            parse_brief(_accepted(key), run["packet"], model, keep_valid=False)
             outcomes[key] = "ok"
         except BriefInvalid as error:
             outcomes[key] = error.code
+        dropped = []
+        parse_brief(_accepted(key), run["packet"], model, dropped=dropped)
+        kept[key] = [d.split(" ")[0] for d in dropped]
     assert len(outcomes) == 14
     assert sorted(outcomes.values()) == ["ok"] * 10 + ["same_story"] * 4
+    assert {k: v for k, v in kept.items() if v} == {
+        k: ["same_story"] for k, code in outcomes.items() if code == "same_story"}
 
 
 def test_rejected_first_attempts_fail_with_their_codes():
@@ -205,7 +212,7 @@ def test_rejected_first_attempts_fail_with_their_codes():
     for key, attempt in rejected.items():
         data = response_with(lambda c, raw=attempt["raw"]: c == raw)
         with pytest.raises(BriefInvalid) as error:
-            parse_brief(data, ANSWERS[key]["packet"], key.split("/")[1])
+            parse_brief(data, ANSWERS[key]["packet"], key.split("/")[1], keep_valid=False)
         assert str(error.value) == attempt["result"]
 
 
@@ -262,12 +269,33 @@ def test_minimal_valid_answer_and_stored_payload():
     (answer({"sentences": "x"}), "schema"),
     ({"model": PRO, "choices": []}, "schema"),
     (answer({"sentences": [S1, S2]}), "sentence_count"),
-    (answer({"sentences": [S1, S2, S3, S3, S3, S3]}), "sentence_count"),
 ])
 def test_answer_level_codes(data, code):
     with pytest.raises(BriefInvalid) as error:
         parse_brief(data, PACKET, PRO)
     assert error.value.code == code and error.value.sentence is None
+
+
+def test_failed_or_extra_sentences_are_dropped():
+    dropped = []
+    bad = with_(S2, quote={"id": "a3", "span": "Liquid AI says d1-ultra beats everyone"})
+    sentences = parse_brief(answer({"sentences": [S1, bad, S2, S3]}), PACKET, PRO, dropped=dropped)
+    assert [s.ids for s in sentences] == [("a1", "a2"), ("a3",), ("a4",)]
+    assert dropped == ["quote_not_found (sentence 2)"]
+    quiet, dropped = {**PACKET, "quiet": True}, []
+    sentences = parse_brief(answer({"sentences": [S1, S2, S3]}), quiet, PRO, dropped=dropped)
+    assert [s.ids for s in sentences] == [("a1", "a2"), ("a3",)] and dropped == ["over_limit:1"]
+    with pytest.raises(BriefInvalid, match="^sentence_count$"):
+        parse_brief(answer({"sentences": [S1, S2, S3, S3, S3, S3]}), PACKET, PRO,
+                    keep_valid=False)
+
+
+def test_too_few_valid_sentences_fail_with_the_first_error():
+    short = with_(S2, text="Too short.")
+    lost = with_(S3, quote={"id": "a4", "span": "Acme Robotics raised a huge round"})
+    with pytest.raises(BriefInvalid) as error:
+        check([S1, short, lost, S2])
+    assert str(error.value) == "text_length (sentence 2)"
 
 
 @pytest.mark.parametrize(("bad", "code"), [

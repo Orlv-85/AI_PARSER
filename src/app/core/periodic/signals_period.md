@@ -382,7 +382,7 @@ flowchart LR
 | `period_brief.py` | `PERIOD_BRIEF_VERSION`, values by kind, `period_packet`, `period_body`, `period_input_hash`, `parse_period_brief` | yes |
 | `period_brief_run.py` | `run_briefs`: targets, cache by hash, ledger per brief, attempts, store | no |
 | `storage/period_signals.py` | `PeriodSignalRepo`: `context`, `load_input`, `previous`, `save_report`, `get_report`, `latest`, `index`, `digest_items`, `get_brief`, `save_brief` | no |
-| `core/daily/signals_brief.py` | Shared brief code: `ArticleRefs`, `fit_packet`, `parse_brief(counts=)`, `request_body(prompt=, max_output=)`, `input_hash(version)`; daily behavior unchanged | yes |
+| `core/daily/signals_brief.py` | Shared brief code: `ArticleRefs`, `fit_packet`, `parse_brief(counts=, keep_valid=False)` (the period keeps the strict rule: any failing sentence fails the answer), `request_body(prompt=, max_output=)`, `input_hash(version)`; daily behavior unchanged | yes |
 | `storage/migrations/versions/f4a9c1d27b83_add_period_signals.py` | the two tables, skip-if-exists, `down_revision` `e7b4c2a9d150` | no |
 | `storage/migrations/versions/a7d3e5b18c94_drop_weekly_v2_tables.py` | drops the 8 weekly v2 tables; tests `tests/unit/test_drop_weekly_v2_migration.py` | no |
 | `web/period_view.py`, `web/period.html`, `web/static/css/period.css` | the `/weekly` HTML, template and styles; `latest_week` and `has_month` (in the route file) feed the nav links and the line on `/`; one template serves `/weekly` and `/monthly` | no |
