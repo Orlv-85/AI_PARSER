@@ -76,6 +76,50 @@
       "id": "B9",
       "title": "Outputs: AI video show",
       "status": "idea"
+    },
+    {
+      "id": "B10",
+      "title": "Alert when a paid cap stops work",
+      "why": "Owner 2026-10-30: wants to know when something was not processed because a limit ran out.",
+      "notes": [
+        "Today the signal is passive: daily signals stop with report state `cap_reached` and list `incomplete_days` in the job log (`AINEWS_DAILY_SIGNALS_MAX_USD`); the day shows as `partial`; the digest (`CAPS` in core/daily/enrichment.py) keeps the previous digest and records the reason. Nobody is notified.",
+        "Unprocessed articles of day D are not retried by later runs (`backfill_days` = 1), only by a manual backfill.",
+        "Options: a line on the admin page with the last run state per job; a push via the Telegram channel (B5) or e-mail. The channel is a product question for the owner."
+      ],
+      "priority": 5,
+      "status": "todo"
+    },
+    {
+      "id": "B11",
+      "title": "Sources: Bluesky profiles",
+      "why": "Many AI researchers and labs post on Bluesky; the profile RSS (bsky.app/profile/<handle>/rss) is free.",
+      "notes": [
+        "Bluesky RSS items have no <title>; `parse_rss` skips entries without a title, so the feed yields 0 articles (probe 2026-10-30).",
+        "Change: a title derived from the post text (first sentence, capped) for title-less feed items, with a test; then choose handles (labs, researchers) and add them to sources.yaml with a low weight.",
+        "Posts are short and link to the post, not to an article: check that relevance scoring and the digest handle them before enabling many."
+      ],
+      "status": "todo"
+    },
+    {
+      "id": "B12",
+      "title": "Sources: arXiv with a filter",
+      "why": "Research papers are missing; raw arXiv RSS is too large (cs.CL alone ~280 items on 2026-10-30).",
+      "notes": [
+        "Filter to design together with the owner. Candidates: Hugging Face daily papers (curated, upvotes); papers that reach Hacker News or the news corpus; affiliation or author lists of major labs; a keyword query via the arXiv API.",
+        "Keep paid calls in mind: every admitted item can reach DeepSeek in the digest and daily signals."
+      ],
+      "status": "todo"
+    },
+    {
+      "id": "B13",
+      "title": "Sources: Reddit",
+      "why": "r/LocalLLaMA and r/MachineLearning carry early open-model news.",
+      "notes": [
+        "2026-10-30: r/LocalLLaMA RSS returns 429 even from a home IP; old.reddit and openrss.org mirrors return 0 items; r/MachineLearning RSS works from a home IP (not checked from the server).",
+        "Already covered indirectly: Latent Space daily [AINews] issues (source `latent_space`, added in PR #143) include Reddit and X recaps.",
+        "Next step if more is needed: try r/MachineLearning from the server IP; no paid Reddit API (owner: no paid social APIs)."
+      ],
+      "status": "todo"
     }
   ],
   "small_followups": [
