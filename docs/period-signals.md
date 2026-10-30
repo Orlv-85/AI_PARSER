@@ -20,6 +20,8 @@ After the deploy (the migration runs with `alembic upgrade head` in the deploy s
 empty tables):
 
 ```bash
+cd /opt/ai-news
+export APP_IMAGE="$(cat .last_deploy_image)"  # the released image; without it compose runs a stale :latest
 L="flock -w 7200 /tmp/ai-news-auto-update.lock"
 C="docker compose -f docker-compose.prod.yml run --rm"
 
@@ -81,6 +83,8 @@ Dry run on one stored week, before enabling (cost-capped; the flag must be on fo
 for the command only):
 
 ```bash
+cd /opt/ai-news
+export APP_IMAGE="$(cat .last_deploy_image)"  # the released image; without it compose runs a stale :latest
 L="flock -w 7200 /tmp/ai-news-auto-update.lock"
 C="docker compose -f docker-compose.prod.yml run --rm"
 $L $C -e AINEWS_PERIOD_SIGNALS_BRIEF_ENABLED=true app \
