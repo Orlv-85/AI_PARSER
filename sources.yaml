@@ -55,6 +55,31 @@ sources:
       article_mode: readability
       respect_robots: true
 
+  - id: google_ai_blog
+    name: Google Blog - AI
+    type: rss
+    url: https://blog.google/technology/ai/rss/
+    fetch_interval_minutes: 60
+    source_weight: 1.3
+
+  - id: mistral_news
+    name: Mistral AI News (RSS)
+    type: rss
+    url: https://mistral.ai/news/rss
+    fetch_interval_minutes: 60
+    source_weight: 1.3
+
+  # Meta AI blog has no RSS; the selector keeps only post links, not site navigation
+  - id: meta_ai_blog
+    name: Meta AI Blog
+    type: html
+    url: https://ai.meta.com/blog/
+    fetch_interval_minutes: 60
+    source_weight: 1.3
+    html:
+      link_selector: a[href*="ai.meta.com/blog/"]:not([href$="/blog/"]), a[href^="/blog/"]:not([href="/blog/"])
+      extraction_strategy: readability
+
   # --- Hardware / infra with strong AI coverage ---
   - id: nvidia_press_room_rss
     name: NVIDIA Press Room (RSS)
@@ -855,3 +880,40 @@ sources:
     html:
       link_selector: a[href^="/blog/"]
       extraction_strategy: readability
+
+  # --- AI news outlets, newsletters and discussion (added 2026-10-30) ---
+  - id: marktechpost
+    name: MarkTechPost
+    type: rss
+    url: https://www.marktechpost.com/feed/
+    fetch_interval_minutes: 60
+    source_weight: 0.9
+
+  - id: the_register_ai
+    name: The Register - AI/ML
+    type: rss
+    url: https://www.theregister.com/software/ai_ml/headlines.atom
+    fetch_interval_minutes: 120
+    source_weight: 0.9
+
+  - id: latent_space
+    name: Latent Space
+    type: rss
+    url: https://www.latent.space/feed
+    fetch_interval_minutes: 120
+    source_weight: 1.0
+
+  - id: ahead_of_ai
+    name: Ahead of AI (Sebastian Raschka)
+    type: rss
+    url: https://magazine.sebastianraschka.com/feed
+    fetch_interval_minutes: 240
+    source_weight: 1.0
+
+  # Hacker News stories with AI keywords and at least 100 points (hnrss.org, free, links to the original article)
+  - id: hn_ai_top
+    name: Hacker News - AI stories (100+ points)
+    type: rss
+    url: https://hnrss.org/newest?points=100&q=AI%20OR%20LLM%20OR%20GPT%20OR%20OpenAI%20OR%20Anthropic%20OR%20Claude%20OR%20Gemini
+    fetch_interval_minutes: 60
+    source_weight: 0.9
