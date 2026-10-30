@@ -26,8 +26,9 @@ if ! command -v timeout >/dev/null 2>&1; then
 fi
 # A container left by a killed run would make --name fail.
 timeout -k 10 60 docker rm -f "$NAME" >/dev/null 2>&1 || true
+# The summary is already logged on stderr; drop the CLI's stdout copy so the log has it once.
 timeout -k 30 1680 docker compose -f "$COMPOSE_FILE" run --rm --name "$NAME" app \
-  ai-news archive capture --max-seconds 1500 \
+  ai-news archive capture --max-seconds 1500 >/dev/null \
   || {
     status=$?
     echo "archive capture failed or timed out (exit ${status}); other jobs are unaffected" >&2

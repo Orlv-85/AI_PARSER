@@ -107,7 +107,8 @@ flowchart LR
   1800 s for the shared host lock, runs `archive capture --max-seconds 1500` in the named container
   `ai-news-archive` under `timeout -k 30 1680`, removes that container after a failure or timeout,
   and always exits 0 with one stderr line on a lock timeout, failure or timeout, so it never changes
-  the fetch or digest jobs. Tests: `test_archive_job_script_is_isolated`,
+  the fetch or digest jobs. It sends the CLI's stdout to /dev/null, so `logs/daily-archive.log`
+  holds the summary once (the log line on stderr). Tests: `test_archive_job_script_is_isolated`,
   `test_install_timers_includes_archive`.
 - `ai-news archive status` is read-only and prints counts by state, versions, size, coverage per
   first-seen day of the last `ARCHIVE_LOOKBACK_DAYS` and the top hosts without text. Tests:
@@ -133,6 +134,8 @@ flowchart LR
 
 ## Decisions
 
+- The nightly job, not the CLI, drops the stdout summary: operators running `archive capture` by
+  hand still see it.
 - decided by the owner 2026-10-28: one declared bot user agent (`DEFAULT_USER_AGENT`, product token
   `BOT_TOKEN`) instead of a browser string, for fetch, archive, evidence, robots.txt and the source
   probe. Measured: no blocked host got worse; www.intel.com answered 403 to the Chrome string and

@@ -1,7 +1,7 @@
 {
   "title": "Coordinator todo: checks, fixes and open decisions",
   "created": "2026-10-27",
-  "updated": "2026-10-28",
+  "updated": "2026-10-30",
   "status": "active",
   "how_to_use": "The coordinator keeps this list current (docs PR). Product ideas live in backlog-todo.json, agent tooling in tooling-todo.json; items here may point to them. Statuses: todo, in_progress, waiting_owner, backlog, deferred, done. Done items stay one week, then are removed.",
   "items": [
@@ -151,16 +151,19 @@
       "id": "ARCHIVE-LOG-DUP",
       "title": "daily-archive.log writes each nightly summary line twice",
       "priority": "P3",
-      "status": "todo",
-      "source": "coordinator, night of 2026-10-28"
+      "status": "in_progress",
+      "source": "coordinator, night of 2026-10-28",
+      "note": "Fix in PR #140; check the log after the next deploy."
     },
     {
       "id": "PERIOD-1029",
       "title": "Night of 2026-10-29 on v0.1.139: daily digest job green including the period-signals step (log: week 2026-10-19 unchanged, brief cached, month skipped); fetch writes no weekly_* rows (v2 tables are gone)",
       "due": "2026-10-29",
       "priority": "P1",
-      "status": "todo",
-      "source": "specs/017-weekly-monthly-signals"
+      "status": "done",
+      "source": "specs/017-weekly-monthly-signals",
+      "done": "2026-10-29",
+      "result": "Night of 2026-10-29 on v0.1.139: fetch (152 sources, 178 new, 7 errors), digest for 2026-10-28 (84 in scope, 75 published), archive (coverage 97.1%, gave_up 1) green; period-signals step: week 2026-10-19 unchanged, brief cached, month skipped, $0."
     },
     {
       "id": "PERIOD-WEEK-1026",

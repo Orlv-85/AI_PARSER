@@ -556,7 +556,8 @@ def _archive_job(tmp_path, *, lock_exit=0, capture_exit=0):
                   '[ "$LOCK_EXIT" -eq 0 ] || exit "$LOCK_EXIT"\nshift 3\nexec "$@"\n'),
         "timeout": 'printf "timeout %s\\n" "$*" >> "$TEST_LOG"\nshift 3\nexec "$@"\n',
         "docker": ('printf "docker %s|image=%s\\n" "$*" "$APP_IMAGE" >> "$TEST_LOG"\n'
-                   'case "$*" in *"archive capture"*) exit "$CAPTURE_EXIT";; esac\nexit 0\n'),
+                   'case "$*" in *"archive capture"*)'
+                   ' echo summary-stdout; exit "$CAPTURE_EXIT";; esac\nexit 0\n'),
     }
     for name, body in fakes.items():
         (bin_dir / name).write_text("#!/bin/sh\n" + body, encoding="utf-8")
@@ -572,6 +573,7 @@ def _archive_job(tmp_path, *, lock_exit=0, capture_exit=0):
 def test_archive_job_script_is_isolated(tmp_path):
     result, calls = _archive_job(tmp_path / "ok")
     assert (result.returncode, result.stderr) == (0, "")
+    assert result.stdout == ""
     assert calls[0].startswith("flock -w 1800 /tmp/ai-news-auto-update.lock sh ")
     assert calls[0].endswith("/scripts/run_daily_archive_job.sh --locked")
     capture = ("docker compose -f docker-compose.prod.yml run --rm --name ai-news-archive app "
@@ -582,6 +584,7 @@ def test_archive_job_script_is_isolated(tmp_path):
 
     result, calls = _archive_job(tmp_path / "timeout", capture_exit=124)
     assert result.returncode == 0
+    assert result.stdout == ""
     assert result.stderr.splitlines() == [
         "archive capture failed or timed out (exit 124); other jobs are unaffected"]
     assert calls[-2:] == ["timeout -k 10 60 docker rm -f ai-news-archive",
