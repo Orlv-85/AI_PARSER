@@ -336,10 +336,13 @@ def run_signals(session: Session, settings: Any, options: RunOptions, *,
                                          counts=counts)
     # Through the latest completed day, so a backfill never leaves later reports stale (F1).
     until = max(options.report_date, now().date() - timedelta(days=1))
-    result = repo.recompute_reports(until, all_days=options.recompute_all, now=now())
+    result = repo.recompute_reports(until, all_days=options.recompute_all, since=days[0],
+                                    now=now())
     session.commit()
     report.update(reports_written=[d.isoformat() for d in result.written],
-                  reports_unchanged=result.unchanged, entities=result.entities,
+                  reports_unchanged=result.unchanged, reports_kept=result.kept,
+                  reports_lost_articles=[d.isoformat() for d in result.lost_articles],
+                  entities=result.entities,
                   articles=dict(sorted(counts.items())),
                   incomplete_days=_incomplete_days(repo, days, report["terminal_reason"]))
     if not options.recompute_only:

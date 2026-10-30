@@ -415,6 +415,59 @@ def test_recompute_bound_and_all_days(session, repo):
     assert repo.recompute_reports(days[1], now=NOW, all_days=True).written == [days[0]]
 
 
+def _settled_day_with_new_item(session, repo):
+    """Day D with New "Atlas", a later day L that makes D settled, then earlier evidence of
+    "Atlas" (D-3) that would remove it from D's New on a recompute."""
+    later = D + timedelta(days=module.SETTLED_DAYS + 6)
+    for day, name in ((D, "Atlas"), (later, "Bravo")):
+        article = add_article(session, f"https://p.com/{day}")
+        digest(session, day, article.url)
+        repo.replace_membership(day)
+        repo.save_extraction(article, extraction(model(name, new=True)), content_hash="h")
+    repo.recompute_reports(later, now=NOW)
+    assert [i["name"] for i in json.loads(repo.get_report(D).payload)["new"]] == ["Atlas"]
+    early = D - timedelta(days=3)
+    old = add_article(session, "https://p.com/early")
+    digest(session, early, old.url)
+    repo.replace_membership(early)
+    repo.save_extraction(old, extraction(model("Atlas")), content_hash="h")
+    return later
+
+
+def test_settled_day_keeps_its_snapshot(session, repo):
+    later = _settled_day_with_new_item(session, repo)
+    result = repo.recompute_reports(later, now=NOW)
+    assert D not in result.written and result.kept >= 1 and result.lost_articles == ()
+    assert [i["name"] for i in json.loads(repo.get_report(D).payload)["new"]] == ["Atlas"]
+
+
+@pytest.mark.parametrize("call", [{"since": D}, {"all_days": True}])
+def test_run_days_and_recompute_all_rewrite_settled_days(session, repo, call):
+    later = _settled_day_with_new_item(session, repo)
+    assert D in repo.recompute_reports(later, now=NOW, **call).written
+    assert json.loads(repo.get_report(D).payload)["new"] == []
+
+
+@pytest.mark.parametrize("all_days", [False, True])
+def test_day_that_lost_articles_keeps_its_snapshot(session, repo, all_days):
+    old = add_article(session, "https://a.com/old", published=datetime(2020, 1, 1, tzinfo=UTC))
+    new = add_article(session, "https://b.com/new")
+    digest(session, D, old.url, new.url)
+    repo.replace_membership(D)
+    for article in (old, new):
+        repo.save_extraction(article, extraction(model("Atlas")), content_hash="h")
+    repo.recompute_reports(D, now=NOW)
+    before = repo.get_report(D).payload_hash
+    ArticleRepo(session).prune_older_than(older_than_days=365)
+    session.flush()
+    session.expire_all()
+    result = repo.recompute_reports(D, now=NOW, all_days=all_days)
+    assert result.written == [] and result.lost_articles == (D,)
+    stored = repo.get_report(D)
+    assert stored.payload_hash == before
+    assert json.loads(stored.payload)["coverage"]["extracted"] == 2
+
+
 def test_save_report_integrity_error_path(session, repo, monkeypatch):
     payload = {"methodology_version": "m", "extraction_version": "e", "status": "ready",
                "thresholds": {}, "coverage": {}}
