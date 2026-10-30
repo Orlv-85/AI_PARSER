@@ -43,7 +43,7 @@ def _r(value: float) -> float:
     return round(value, 3)
 
 
-class _Snapshot:
+class _Snapshot:  # pylint: disable=too-many-instance-attributes
     def __init__(self, data: SnapshotInput):
         self.data = data
         self.t = data.thresholds
@@ -91,6 +91,20 @@ class _Snapshot:
             eligible.append(key)
         candidates = [self._new_item(key, by_entity[key], quotes[key]) for key in eligible]
         candidates.sort(key=self._new_order)
+        shown, members = self._group_variants(candidates)
+        keys: set[str] = set()
+        for index, item in enumerate(shown):
+            key = item.pop("_key")
+            item.pop("_type_rank")
+            if index < self.t.new_max:
+                keys |= members[key]
+            else:
+                self.hidden.append({"name": item["name"], "entity_id": item["entity_id"]})
+        return shown[:self.t.new_max], keys
+
+    def _group_variants(self, candidates: list[dict[str, Any]]
+                        ) -> tuple[list[dict[str, Any]], dict[str, set[str]]]:
+        """(items in order with same-family candidates as `variants`, item key -> its keys)."""
         shown: list[dict[str, Any]] = []
         grouped: set[str] = set()
         members: dict[str, set[str]] = {}
@@ -104,15 +118,7 @@ class _Snapshot:
             grouped.update(o["_key"] for o in family)
             members[key] = {key} | {o["_key"] for o in family}
             shown.append(item)
-        keys: set[str] = set()
-        for index, item in enumerate(shown):
-            key = item.pop("_key")
-            item.pop("_type_rank")
-            if index < self.t.new_max:
-                keys |= members[key]
-            else:
-                self.hidden.append({"name": item["name"], "entity_id": item["entity_id"]})
-        return shown[:self.t.new_max], keys
+        return shown, members
 
     def _new_name_ok(self, key: str, e: Entity) -> bool:
         """F22 name shape and F19 lexical history; refusals are kept in the payload."""

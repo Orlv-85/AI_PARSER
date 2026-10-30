@@ -429,7 +429,7 @@ def test_new_past_the_limit_is_hidden_and_may_rise():
     assert [i["name"] for i in snapshot["new_hidden"]] == ["Fresh"]
     rising = {i["name"]: i for i in snapshot["rising"]}
     assert "Alpha" not in rising and rising["Fresh"]["spike"] is True
-    assert w.snapshot()["new_hidden"] == []
+    assert not w.snapshot()["new_hidden"]
 
 
 def window_world(day=date(2026, 10, 24), per_day=10, skip=(), incomplete=(), empty=()):
