@@ -151,8 +151,10 @@ header, not in CLI arguments.
 ### Nightly health check
 
 The read-only `.github/workflows/nightly-health.yml` workflow runs at 03:00 UTC and checks that
-collection is not paused, today's fetch log contains `fetch_run_finished`, and yesterday's digest
-is published with scope at least `MIN_DIGEST_SCOPE` (5). Run it by hand with
+collection is not paused, today's fetch log contains `fetch_run_finished`, yesterday's digest
+is published with scope at least `MIN_DIGEST_SCOPE` (5), and yesterday's daily-signals run in
+`logs/daily-digest.log` ended with state `ok` and no skipped brief (a stop on
+`AINEWS_DAILY_SIGNALS_MAX_USD`, the call cap or the deadline fails the check). Run it by hand with
 `gh workflow run nightly-health.yml`. GitHub emails scheduled workflow failures to the user who
 last changed its cron line.
 

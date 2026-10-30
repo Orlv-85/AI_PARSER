@@ -613,5 +613,28 @@ def test_nightly_health_workflow_is_read_only():
     assert "read_collection_status" in commands
     assert "fetch_run_finished" in commands
     assert "MIN_DIGEST_SCOPE=5" in commands and "scope_count" in commands
+    assert "yesterday_signals_within_limits" in commands
     assert re.search(r"\bsystemctl\b|\bdocker\s+compose\s+run\b|\brm\b|\brestart\b",
                      commands, flags=re.IGNORECASE) is None
+
+
+@pytest.mark.parametrize(("report", "expected"), [
+    ({"state": "ok", "brief": {"days": {"2026-10-29": "ok"}}}, "ok"),
+    ({"state": "ok", "brief": None}, "ok"),
+    ({"state": "cap_reached", "brief": None}, "failed"),
+    ({"state": "deadline_reached", "brief": {"days": {}}}, "failed"),
+    ({"state": "ok", "brief": {"days": {"2026-10-29": "skipped:brief_budget_exhausted"}}},
+     "failed"),
+    (None, "failed"),
+])
+def test_nightly_health_flags_signals_stopped_by_a_limit(report, expected):
+    workflow = yaml.safe_load(
+        Path(".github/workflows/nightly-health.yml").read_text(encoding="utf-8"))
+    job = next(iter(workflow["jobs"].values()))
+    commands = "\n".join(step.get("run", "") for step in job.get("steps", []))
+    check = commands.split("signals_status=", 1)[1]
+    code = check.split("python3 -c '", 1)[1].split("\n'", 1)[0]
+    line = "" if report is None else json.dumps(report, sort_keys=True)
+    result = subprocess.run(["python3", "-c", code], input=line, capture_output=True, text=True,
+                            env={"REPORT_DATE": "2026-10-29"}, check=True)
+    assert result.stdout.strip() == expected

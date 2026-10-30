@@ -87,7 +87,8 @@
         "Options: a line on the admin page with the last run state per job; a push via the Telegram channel (B5) or e-mail. The channel is a product question for the owner."
       ],
       "priority": 5,
-      "status": "todo"
+      "status": "done",
+      "done": "2026-10-30: nightly-health fails (GitHub e-mails the failure) when yesterday's daily-signals run stopped on a cap, deadline or provider error or skipped the brief; the digest was already checked."
     },
     {
       "id": "B11",

@@ -85,5 +85,29 @@ jobs:
             failed=1
           fi
 
+          # The digest job logs one JSON report per daily-signals run; a stop on a paid cap,
+          # deadline or provider error, or a skipped brief, means work of that day was not done.
+          signals_line="$(grep -F "\"report_date\": \"$yesterday\"" logs/daily-digest.log 2>/dev/null | \
+            grep -F '"extraction_version"' | tail -n 1)"
+          signals_status="$(printf '%s' "$signals_line" | REPORT_DATE="$yesterday" python3 -c '
+          import json
+          import os
+          import sys
+          try:
+              report = json.loads(sys.stdin.read())
+              brief = report.get("brief") or {}
+              day = str((brief.get("days") or {}).get(os.environ["REPORT_DATE"], ""))
+              ok = report.get("state") == "ok" and not day.startswith("skipped:")
+          except (ValueError, TypeError, AttributeError):
+              ok = False
+          print("ok" if ok else "failed")
+          ' 2>/dev/null)"
+          if [ "$?" -eq 0 ] && [ "$signals_status" = "ok" ]; then
+            echo "yesterday_signals_within_limits: ok"
+          else
+            echo "yesterday_signals_within_limits: failed"
+            failed=1
+          fi
+
           exit "$failed"
           REMOTE
