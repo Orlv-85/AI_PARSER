@@ -32,7 +32,7 @@ __all__ = [
     "SnapshotInput", "Thresholds", "compute_snapshot", "payload_hash",
 ]
 
-METHODOLOGY_VERSION = "daily-signals-3"
+METHODOLOGY_VERSION = "daily-signals-4"
 
 
 def payload_hash(payload: Mapping[str, Any]) -> str:
@@ -52,6 +52,7 @@ class _Snapshot:
         self.notes: list[str] = []
         self.sections: dict[str, dict[str, Any]] = {}
         self.suppressed: list[dict[str, Any]] = []
+        self.hidden: list[dict[str, Any]] = []
 
     def complete(self, day: date) -> bool:
         cov = self.data.coverage.get(day)
@@ -66,6 +67,8 @@ class _Snapshot:
 
     # New ------------------------------------------------------------------------------------
     def new_items(self) -> tuple[list[dict[str, Any]], set[str]]:
+        """(shown items, entity keys of the shown items and their grouped variants); items past
+        `new_max` go to `self.hidden`."""
         by_entity: dict[str, list[ArticleObs]] = defaultdict(list)
         quotes: dict[str, str] = {}
         for a in self.articles:
@@ -90,6 +93,7 @@ class _Snapshot:
         candidates.sort(key=self._new_order)
         shown: list[dict[str, Any]] = []
         grouped: set[str] = set()
+        members: dict[str, set[str]] = {}
         for item in candidates:
             key = item["_key"]
             if key in grouped:
@@ -98,11 +102,17 @@ class _Snapshot:
                       and same_family(self.entity(key), self.entity(o["_key"]))]
             item["variants"] = sorted(o["name"] for o in family)
             grouped.update(o["_key"] for o in family)
+            members[key] = {key} | {o["_key"] for o in family}
             shown.append(item)
-        for item in shown:
-            item.pop("_key")
+        keys: set[str] = set()
+        for index, item in enumerate(shown):
+            key = item.pop("_key")
             item.pop("_type_rank")
-        return shown[:self.t.new_max], set(eligible)
+            if index < self.t.new_max:
+                keys |= members[key]
+            else:
+                self.hidden.append({"name": item["name"], "entity_id": item["entity_id"]})
+        return shown[:self.t.new_max], keys
 
     def _new_name_ok(self, key: str, e: Entity) -> bool:
         """F22 name shape and F19 lexical history; refusals are kept in the payload."""
@@ -310,7 +320,7 @@ class _Snapshot:
     # Payload --------------------------------------------------------------------------------
     def build(self) -> dict[str, Any]:
         cov = self.data.coverage.get(self.day) or DayCoverage(self.day, "signals", False)
-        new, eligible = self.new_items()
+        new, new_keys = self.new_items()
         history_days = sum(1 for d, c in self.data.coverage.items()
                            if d < self.day and c.complete(self.t.complete_ratio))
         self.sections["new"] = {"state": "ready", "note": None}
@@ -322,7 +332,7 @@ class _Snapshot:
         top.sort(key=lambda s: (-s.publishers, -len(s.members), s.earliest, s.label))
         self.sections["top_stories"] = {"state": "ready", "note": None} if top else {
             "state": "empty", "note": "No story was covered by more than one publisher."}
-        excluded = {unit_key(k) for k in eligible}
+        excluded = {unit_key(k) for k in new_keys}
         spikes = self.spikes(excluded)
         shown = [(s, self._story(s)) for s in top[:self.t.top_max]]
         kept, folded = self.fold_spikes(spikes or [], stories, shown, new)
@@ -362,6 +372,7 @@ class _Snapshot:
             "quiet": cov.items < self.t.quiet_items or not top,
             "new": new,
             "new_suppressed": sorted(self.suppressed, key=lambda i: (i["name"], i["entity_id"])),
+            "new_hidden": self.hidden,
             "top_stories": [out for _, out in shown],
             "rising": rising,
             "spikes_folded": folded,

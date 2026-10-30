@@ -74,6 +74,9 @@ that check it.
 - Confirmed items (`confirmed_publishers`) first, then single-source ones in `EARLY_TYPE_ORDER`; at
   most `new_max`; a history note while fewer than `history_note_days` complete days precede D.
   Tests: `test_us1_confirmed_early_alias_and_history_note`, `test_cp1_new_ordering_early_models_before_products`.
+- Only the shown New items (with their grouped variants) are kept out of Spikes and Rising; New items
+  past `new_max` may appear there and are listed in the snapshot as `new_hidden`.
+  Tests: `test_new_past_the_limit_is_hidden_and_may_rise`.
 - Not New: people and "other"; packaging variants of a known model (`PACKAGING`); names that do not
   look like names (`proper_name`); names already in an earlier published digest item
   (`LexicalHistory`). An earlier text that frames the name as not yet released (`NOT_RELEASED`)
@@ -86,8 +89,9 @@ that check it.
 - Each item has one line without a provider call (`one_liner`): a digest-summary sentence that names
   it with a launch or "is a" verb, else the novelty quote; at most `one_liner_max` characters.
   Tests: `test_one_liner_rules`, `test_one_liners_of_the_40_dry_run_items`.
-- `variant of X` only for a specific earlier entity (`specific_variant`), never a family word
-  (`FAMILY_STOPWORDS`). Tests: `test_variant_of_only_for_a_specific_earlier_entity`.
+- `variant of X` only for a specific earlier entity (`specific_variant`): its name without the vendor
+  has two words or a digit, so a bare family word ("Gemini") never qualifies.
+  Tests: `test_variant_of_only_for_a_specific_earlier_entity`.
 
 **Other sections**
 - Top stories: clusters of one event with at least `top_min_publishers`, at most `top_max`.
@@ -144,6 +148,9 @@ that check it.
 | A day that lost matched articles keeps its snapshot, even under `--recompute-all` | decided 2026-10-30 (agent): coverage and observations need the article rows, so a recompute after pruning would store `unavailable` over a good day |
 | New = first seen in our corpus and presented as new by the article (model judgment, with quote) | New means newly announced, not merely new to our corpus (OD1) |
 | Lexical safety nets after the model (name shape, earlier digest text, not-yet-released words) | prompt revisions stopped at `daily-signals-extract-5`; remaining errors are fixed in code at $0 |
+| Units of New items cut by `new_max` are not excluded from Spikes and Rising | decided 2026-10-30 (agent): they used to be excluded while not shown, so on a big day an item vanished from every section |
+| Word lists (`NOT_RELEASED`, `STARTERS`, `REVIEW_TITLE`) stay hand-kept | decided 2026-10-30 (agent): they are English phrasing, not corpus data; each change comes with a test. The family-word list of `specific_variant` was removed: its two-words-or-digit rule already refused every word in it |
+| A recompute reloads and reconciles all evidence every run; no incremental path | decided 2026-10-30 (agent): measured on a synthetic database of production size (240 days, 25 items a day, 6,000 names) the nightly recompute takes 1.2 s and 2.6 s at three times that history (full recompute 4.5 s); growth is linear and settled days are not computed |
 | Publisher = registrable domain of the article host (`publisher_group`), with `weekly_publisher_overrides` | the count of publishers must not count subdomains twice; the function moved here from the deleted weekly v2 store (017 R1), the setting kept its old name for compatibility. Tests: `test_publisher_group_uses_registrable_domain_and_overrides` |
 | Thresholds are code constants recorded in every snapshot, no runtime override | a snapshot is reproducible; a change is a release with a `METHODOLOGY_VERSION` bump |
 | Rising waits for two usable 7-day windows; spikes until then | a comparison needs enough complete days on both sides (OD3) |
@@ -205,7 +212,7 @@ GET /?date=D                                     web/signals_view.py: render_sig
 | `core/daily/signals_model.py` | `Thresholds`, `ArticleObs`, `EntityMention`, `DayCoverage`, `SnapshotInput`, event labels and display orders | yes |
 | `core/daily/signals_stories.py` | Story clustering (`cluster`, `Story`), `links`, `linked_articles` | yes |
 | `core/daily/signals_lines.py` | `one_liner` of a New item, sentence split | yes |
-| `core/daily/signals_naming.py` | `specific_variant`, `same_vendor`, `unit_key`, `proper_name`, `FAMILY_STOPWORDS` | yes |
+| `core/daily/signals_naming.py` | `specific_variant`, `same_vendor`, `unit_key`, `proper_name` | yes |
 | `core/daily/signals_history.py` | `LexicalHistory`: earliest lexical mention before D | yes |
 | `core/daily/signals_brief.py` | Brief packet, prompt, request body, validation rules 1-9, O1 review marker; `ArticleRefs`, `fit_packet`, and the optional `counts`, `prompt`, `max_output` and `version` arguments are shared with the period brief (`core/periodic/signals_period.md`) and default to the daily values | yes |
 | `storage/daily_signals.py` | `publisher_group`, `DailySignalRepo`: membership, extractions, evidence, entities, overrides, snapshots, briefs | no |
@@ -234,7 +241,7 @@ Ledger and run reports live in `data/daily-signals/` (not in the database).
 | Constant | File | Bump when | After deploy |
 | --- | --- | --- | --- |
 | `EXTRACTION_VERSION` | `signals_extract.py` | prompt or validation of extraction changes | paid re-extraction (backfill) |
-| `METHODOLOGY_VERSION` | `signals_compute.py` | thresholds or snapshot rules change | `--recompute-only --recompute-all` ($0) |
+| `METHODOLOGY_VERSION` | `signals_compute.py` | thresholds or snapshot rules change | nothing: unsettled and new days get it on the next run; settled days keep their version unless `--recompute-only --recompute-all` ($0) rewrites them |
 | `BRIEF_VERSION` | `signals_brief.py` | brief prompt, packet or validation changes | brief backfill (paid) |
 
 The brief `input_hash` covers packet, `BRIEF_VERSION` and model: an unchanged input is never paid
@@ -246,7 +253,7 @@ twice; a row with the same hash is reused even when `invalid`.
 | --- | --- | --- |
 | New/Top/Spike/Rising thresholds | `Thresholds` in `signals_model.py` | bump `METHODOLOGY_VERSION` |
 | Days a recompute rewrites | `SETTLED_DAYS`, `RECOMPUTE_DAYS` in `storage/daily_signals.py` | - |
-| Family words for `variant of` | `FAMILY_STOPWORDS` in `signals_naming.py` | methodology bump |
+| What counts as a specific `variant of` target | `specific_variant` in `signals_naming.py` | methodology bump |
 | Hard event types (chips, brief order) | `HARD_EVENTS` in `signals_brief.py` | view uses the same tuple |
 | Review marker (O1) | `REVIEW_TITLE`, `REVIEW_SHARE` in `signals_brief.py` | `BRIEF_VERSION` bump |
 | Brief prompt / rules | `BRIEF_PROMPT`, `parse_brief` in `signals_brief.py` | `BRIEF_VERSION` bump, fixtures |

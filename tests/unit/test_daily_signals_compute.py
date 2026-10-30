@@ -414,6 +414,24 @@ def test_new_entities_excluded_from_spikes():
     assert "Fresh" not in names(snapshot["rising"])
 
 
+def test_new_past_the_limit_is_hidden_and_may_rise():
+    # Every article has its own event and title, so no top story absorbs the spikes.
+    w = spike_world()
+    events = ("funding", "legal", "research", "partnership")
+    words = ("harbor lamp", "violet ridge", "copper field", "quiet engine", "maple orbit",
+             "silver canyon", "amber relay")
+    for i in range(4):
+        w.article(D, f"q{i}.com", e("Alpha", new=True), event=events[i], title=words[i])
+    for i in range(3):
+        w.article(D, f"r{i}.com", e("Fresh", new=True), event=events[i], title=words[4 + i])
+    snapshot = w.snapshot(thresholds=Thresholds(new_max=1))
+    assert names(snapshot["new"]) == ["Alpha"]
+    assert [i["name"] for i in snapshot["new_hidden"]] == ["Fresh"]
+    rising = {i["name"]: i for i in snapshot["rising"]}
+    assert "Alpha" not in rising and rising["Fresh"]["spike"] is True
+    assert w.snapshot()["new_hidden"] == []
+
+
 def window_world(day=date(2026, 10, 24), per_day=10, skip=(), incomplete=(), empty=()):
     w = World()
     for i in range(14):
@@ -767,7 +785,7 @@ def test_quiet_flag_thresholds_and_methodology():
     w.article(D, "b.com", e("Atlas"), title="Atlas robot model from Acme")
     snapshot = w.snapshot()
     assert snapshot["quiet"] is False
-    assert snapshot["methodology_version"] == METHODOLOGY_VERSION == "daily-signals-3"
+    assert snapshot["methodology_version"] == METHODOLOGY_VERSION == "daily-signals-4"
     assert {k: snapshot["thresholds"][k] for k in ("quiet_items", "one_liner_max", "fold_share",
                                                     "diffuse_story_min")} == \
         {"quiet_items": 20, "one_liner_max": 140, "fold_share": 0.5, "diffuse_story_min": 2}

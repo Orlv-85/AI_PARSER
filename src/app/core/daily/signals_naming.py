@@ -1,18 +1,15 @@
 """Daily AI Signals: naming helpers for variants, vendors and counting units (see signals.md)."""
 from app.core.daily.signals_entities import Entity, tokens, vendor_tokens
 
-# `variant of X` only for a specific earlier entity, never a bare family word (007 noise rule 2).
-FAMILY_STOPWORDS = frozenset({"gpt", "claude", "gemini", "llama", "muse", "grok", "qwen", "clef",
-                              "nemotron"})
-
 
 def specific_variant(older: Entity, newer: Entity) -> bool:
-    """`variant of` names a specific earlier entity of the same type (007 noise rule 2)."""
+    """`variant of` names a specific earlier entity of the same type (007 noise rule 2): two words
+    or a digit besides the vendor, so a bare family word ("Gemini") never qualifies."""
     if older.entity_type != newer.entity_type:
         return False
     vendor = set(vendor_tokens(newer.vendor)) | set(tokens(newer.vendor or ""))
     rest = [t for t in tokens(older.display_name) if t not in vendor]
-    if not rest or " ".join(rest) in FAMILY_STOPWORDS:
+    if not rest:
         return False
     return len(rest) > 1 or any(ch.isdigit() for ch in "".join(rest))
 

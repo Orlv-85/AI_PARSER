@@ -186,9 +186,10 @@ def test_a_week_payload_does_not_change_with_the_month_thresholds():
     week = compute_period(fixture_period_input())
     assert not [k for k in week["thresholds"] if k.startswith("month_")]
     assert len(week["thresholds"]) == 11
-    # Pinned on origin/master before R6: the week fixture hash must not move.
+    # Pinned on origin/master before R6: the week fixture hash must not move. Re-pinned for the
+    # daily-signals-4 methodology only (with daily-signals-3 the hash is still 84b0c0aa...).
     assert payload_hash(week) == (
-        "84b0c0aae69e2e7695e4e48b7ec340311d1b0d10e2eb7e5cda4494bb5d8106b1")
+        "961ed01f2aa2a11e3e885725411411d8e2ca3aeb6498a69065740beccb3d1e7f")
     month = PeriodThresholds.for_kind(MONTH)
     assert month.month_rising_min_current == 12 and month.month_cooling_min_previous == 15
     assert PeriodThresholds.for_kind(WEEK).month_rising_max is None
