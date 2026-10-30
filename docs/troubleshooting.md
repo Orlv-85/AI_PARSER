@@ -30,10 +30,10 @@ the Troubleshooting section of `README.md`.
       "id": "local-e2e-auth-settings-validation",
       "date": "2026-10-17",
       "area": "local test runs",
-      "symptom": "Tests that build the app fail locally with pydantic ValidationError: 'Authentication is enabled, missing required auth settings: AINEWS_AUTH_USERNAME, AINEWS_AUTH_PASSWORD_HASH'. CI does not fail.",
-      "cause": "The local .env enables auth or sets auth values, and Settings validation requires the full auth set. Exporting AINEWS_AUTH_ENABLED=false is not enough because other auth values are still read.",
-      "fix": "Run the suite in a clean copy without .env (rsync the repo excluding .env, venv1 and .git, then run with PYTHONPATH=src), as CI does.",
-      "verification": "tests/e2e/test_api_e2e.py passes in such a copy."
+      "symptom": "Tests that build the app fail locally with pydantic ValidationError: 'Authentication is enabled, missing required auth settings: AINEWS_AUTH_USERNAME, AINEWS_AUTH_PASSWORD_HASH' or 'AINEWS_AUTH_SECRET must be at least 32 characters long', some already at collection. CI does not fail.",
+      "cause": "Settings read .env from the working directory, and the local .env sets auth values that fail validation. app.storage.db calls get_settings() at import, so the error hits every test module that imports app.storage. Exporting AINEWS_AUTH_ENABLED=false is not enough because other auth values are still read.",
+      "fix": "2026-10-30: tests/conftest.py sets Settings.model_config['env_file'] = None at import, so tests never read .env (a test that needs one passes _env_file=). Subprocess tests run from a tmp dir without .env (tests/unit/test_source_registry_repair_script.py). The earlier workaround, a clean copy without .env, is no longer needed.",
+      "verification": "2026-10-30: ./venv1/bin/pytest with the local .env in place: 1395 passed, 1 skipped; before the fix about 40 daily/period signal tests failed or errored."
     },
     {
       "id": "public-api-post-auth-bypass",

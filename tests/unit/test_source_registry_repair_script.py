@@ -37,10 +37,12 @@ def registry_fixture(tmp_path: Path):
 
 def _run(url: str, *arguments: str):
     root = Path(__file__).resolve().parents[2]
+    # Run in the test's tmp dir: the script's Settings read .env from the working directory.
     return subprocess.run(
         [sys.executable, str(root / "scripts/repair_source_registry.py"), *arguments],
-        cwd=root, env={**os.environ, "AINEWS_DATABASE_URL": url,
-                       "AINEWS_SOURCES_PATH": str(root / "sources.yaml")},
+        cwd=Path(url.removeprefix("sqlite:///")).parent,
+        env={**os.environ, "AINEWS_DATABASE_URL": url,
+             "AINEWS_SOURCES_PATH": str(root / "sources.yaml")},
         capture_output=True, text=True, check=False,
     )
 
