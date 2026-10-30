@@ -153,7 +153,7 @@
       "priority": "P3",
       "status": "in_progress",
       "source": "coordinator, night of 2026-10-28",
-      "note": "Fix in PR <this PR>; check the log after the next deploy."
+      "note": "Fix in PR #140; check the log after the next deploy."
     },
     {
       "id": "PERIOD-1029",
