@@ -51,6 +51,12 @@ flowchart LR
   `test_fetch_job_runs_catch_up_only_after_success_with_recent_hold`,
   `test_fetch_job_preserves_success_status_when_catch_up_fails`,
   `test_nightly_health_workflow_is_read_only`.
+- Nightly health (`.github/workflows/nightly-health.yml`, 03:00 UTC, read-only) fails, and GitHub
+  e-mails the failure, when collection is paused, today's fetch did not finish, yesterday's digest
+  is not published with a scope of at least 5, or yesterday's daily-signals report in
+  `logs/daily-digest.log` is missing, has a state other than `ok` (`cap_reached`,
+  `deadline_reached`, ...) or a skipped brief. Tests: `test_nightly_health_workflow_is_read_only`,
+  `test_nightly_health_flags_signals_stopped_by_a_limit`.
 - The first summary request (`grounded_summary`, attempt 0) carries the rule tagged
   `SUMMARY_PROMPT_VERSION`: every name, number, role, product and attribution in a sentence appears
   in its own quote, and a claim is attributed only to a speaker its quote names. The repair requests
@@ -64,6 +70,8 @@ flowchart LR
   on time with an incomplete one.
 - 2026-10-22 (agent): nightly health requires a digest scope of at least 5,
   based on the observed scope of 11-100 on 2026-10-10..20 and 1 on the broken night.
+- 2026-10-30 (owner): a paid cap or deadline that leaves a day unprocessed is reported by the
+  nightly health failure e-mail from GitHub, not by a separate alert channel.
 - 2026-10-24 (owner): the first summary request keeps every detail inside its quote (pilots 1-3,
   `docs/archive/2026-10/report-summary-grounding-pilot-2026-10-24.md`); a stricter review gate was rejected because
   it held ~20% of the digest.
@@ -82,7 +90,7 @@ flowchart LR
 - `cli/main.py`: `daily-publish` options and exit codes.
 - `run_daily_fetch_job.sh`: fetch lock and post-fetch catch-up dispatch.
 - `run_daily_digest_job.sh`: publication, held result handling, signals and shared budget.
-- `.github/workflows/nightly-health.yml`: read-only checks for collection, fetch and digest health.
+- `.github/workflows/nightly-health.yml`: read-only checks for collection, fetch, digest and signals health.
 
 ## Tests
 
