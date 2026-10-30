@@ -43,6 +43,15 @@ that check it.
 - Days before `AINEWS_DAILY_SIGNALS_COMPARABLE_FROM` are history only: they feed "first seen", get
   no snapshot. Tests: `test_kind_by_comparable_from`.
 - Day status: `unavailable`, `partial`, `building_history`, `ready`. Tests: `test_status_precedence`.
+- A stored day settles: a day before the run's first day, more than `SETTLED_DAYS` before the
+  latest completed day, with status `ready` or `building_history`, keeps its snapshot. Later
+  evidence, entity changes and overrides reach it only through `--recompute-all`; a `partial` or
+  `unavailable` day is recomputed until it settles. Tests: `test_settled_day_keeps_its_snapshot`,
+  `test_run_days_and_recompute_all_rewrite_settled_days`,
+  `test_settled_day_is_kept_unless_it_is_a_run_day`.
+- A stored day whose digest kept its item count but lost matched articles (retention, deletion)
+  keeps its snapshot in every mode, `--recompute-all` included. Tests:
+  `test_day_that_lost_articles_keeps_its_snapshot`.
 
 **Extraction and entities**
 - One provider call per in-scope article, cached by content hash and `EXTRACTION_VERSION`.
@@ -124,6 +133,9 @@ that check it.
 | One extraction call per article, separate from the digest summary call | digest prompts and replays stay pinned; one bad answer loses one article, not a batch |
 | Entities derived from stored evidence by a pure function + overrides | same evidence gives same entities in any arrival or backfill order; fixes are replayable |
 | Evidence survives retention and cleanup | "first seen" must not move forward when old articles are pruned |
+| A settled day keeps its snapshot; only `--recompute-all` rewrites it (owner, 2026-10-30) | entities are rebuilt from all evidence, so later days used to change names and drop items of days readers already saw, and their briefs were not regenerated |
+| `SETTLED_DAYS` = two trend windows; the run's own days always recompute | decided 2026-10-30 (agent): a late fix in a recent day still reaches every snapshot whose windows include it, and a backfill still refreshes the days after it (F1) |
+| A day that lost matched articles keeps its snapshot, even under `--recompute-all` | decided 2026-10-30 (agent): coverage and observations need the article rows, so a recompute after pruning would store `unavailable` over a good day |
 | New = first seen in our corpus and presented as new by the article (model judgment, with quote) | New means newly announced, not merely new to our corpus (OD1) |
 | Lexical safety nets after the model (name shape, earlier digest text, not-yet-released words) | prompt revisions stopped at `daily-signals-extract-5`; remaining errors are fixed in code at $0 |
 | Publisher = registrable domain of the article host (`publisher_group`), with `weekly_publisher_overrides` | the count of publishers must not count subdomains twice; the function moved here from the deleted weekly v2 store (017 R1), the setting kept its old name for compatibility. Tests: `test_publisher_group_uses_registrable_domain_and_overrides` |
@@ -163,7 +175,8 @@ scripts/run_daily_digest_job.sh (02:00 UTC, after the digest)
        _gate                    flag AINEWS_DAILY_SIGNALS_ENABLED + DS key; else state disabled/missing_provider_key
        repo.replace_membership  digest items of D -> articles (exact URL, then canonical hash)
        _extract_days            one DeepSeek call per in-scope article, via SignalsLedger
-       repo.recompute_reports   reconcile entities, compute_snapshot per day, store if payload changed
+       repo.recompute_reports   reconcile entities, compute_snapshot per day, store if payload changed;
+                                settled days and days that lost articles keep their snapshot
        _briefs                  one brief call per target day (paid runs only), via a second ledger run
   -> JSON run report (stdout + data/daily-signals/runs/<run_id>.json)
 
@@ -224,6 +237,7 @@ twice; a row with the same hash is reused even when `invalid`.
 | Change | Place | Also |
 | --- | --- | --- |
 | New/Top/Spike/Rising thresholds | `Thresholds` in `signals_model.py` | bump `METHODOLOGY_VERSION` |
+| Days a recompute rewrites | `SETTLED_DAYS`, `RECOMPUTE_DAYS` in `storage/daily_signals.py` | - |
 | Family words for `variant of` | `FAMILY_STOPWORDS` in `signals_naming.py` | methodology bump |
 | Hard event types (chips, brief order) | `HARD_EVENTS` in `signals_brief.py` | view uses the same tuple |
 | Review marker (O1) | `REVIEW_TITLE`, `REVIEW_SHARE` in `signals_brief.py` | `BRIEF_VERSION` bump |

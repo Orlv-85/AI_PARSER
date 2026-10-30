@@ -53,6 +53,9 @@ from app.storage.models_sql import (
 )
 
 RECOMPUTE_DAYS = 400
+# A stored day this far before the latest day is settled (signals.md, "Scope and days").
+SETTLED_DAYS = 14
+SETTLED_STATUSES = frozenset({"ready", "building_history"})
 
 
 def publisher_group(url: str, overrides: Mapping[str, str]) -> str:
@@ -90,6 +93,8 @@ class RecomputeResult:
     unchanged: int
     entities: int
     reconciliation: Reconciliation
+    kept: int = 0  # settled days and days that lost articles, left as stored
+    lost_articles: tuple[date, ...] = ()
 
 
 class DailySignalRepo:  # pylint: disable=too-many-public-methods
@@ -574,11 +579,37 @@ class DailySignalRepo:  # pylint: disable=too-many-public-methods
         self.session.flush()
         return row
 
+    def _keep(self, days: list[date], coverage: Mapping[date, DayCoverage], *, all_days: bool,
+              settled_before: date) -> tuple[set[date], set[date]]:
+        """(days to leave as stored, those of them that lost matched articles)."""
+        keep: set[date] = set()
+        lost: set[date] = set()
+        if not days:
+            return keep, lost
+        for day, status, stored in self.session.execute(
+                select(DailySignalReport.report_date, DailySignalReport.status,
+                       DailySignalReport.coverage)
+                .where(DailySignalReport.report_date.between(days[0], days[-1]))):
+            cov = coverage.get(day)
+            if cov is None:
+                continue
+            before = json.loads(stored or "{}")
+            if before.get("items") == cov.items and cov.matched < before.get("matched", 0):
+                keep.add(day)
+                lost.add(day)
+            elif not all_days and day < settled_before and status in SETTLED_STATUSES:
+                keep.add(day)
+        return keep, lost
+
     def recompute_reports(self, until: date, *, all_days: bool = False,
-                          now: datetime | None = None,
+                          since: date | None = None, now: datetime | None = None,
                           thresholds: Thresholds | None = None) -> RecomputeResult:
         """Reconcile entities and recompute every comparable published day up to `until`;
-        write only reports that are missing or whose payload hash changed."""
+        write only reports that are missing or whose payload hash changed.
+
+        A stored day before `since` (the run's first day; default `until`) and more than
+        SETTLED_DAYS before `until` with a settled status is left as stored unless `all_days`.
+        A day that lost matched articles since its snapshot is left as stored in every mode."""
         evidence, rows = self.load_evidence()
         result = reconcile(evidence, self.overrides())
         ids = self.apply_reconciliation(result, rows)
@@ -587,6 +618,9 @@ class DailySignalRepo:  # pylint: disable=too-many-public-methods
             max(self.comparable_from, until - timedelta(days=RECOMPUTE_DAYS))
         targets = sorted(d for d, c in coverage.items()
                          if start <= d <= until and c.kind == "signals")
+        keep, lost = self._keep(targets, coverage, all_days=all_days, settled_before=min(
+            since or until, until - timedelta(days=SETTLED_DAYS)))
+        targets = [d for d in targets if d not in keep]
         t = thresholds or Thresholds()
         span = 2 * t.window_days
         needed = {d - timedelta(days=i) for d in targets for i in range(span)}
@@ -607,7 +641,8 @@ class DailySignalRepo:  # pylint: disable=too-many-public-methods
             self.save_report(day, payload, digest)
             written.append(day)
         return RecomputeResult(written=written, unchanged=unchanged,
-                               entities=len(result.entities), reconciliation=result)
+                               entities=len(result.entities), reconciliation=result,
+                               kept=len(keep), lost_articles=tuple(sorted(lost)))
 
 
 __all__ = ["METHODOLOGY_VERSION", "DailySignalRepo", "OverrideConflict", "RecomputeResult"]

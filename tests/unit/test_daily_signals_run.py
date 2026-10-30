@@ -208,6 +208,20 @@ def test_backfill_recomputes_through_latest_completed_day(session, tmp_path):
     only = run(session, tmp_path, report_date=date(2026, 10, 14), recompute_only=True,
                recompute_all=True)
     assert only["reports_unchanged"] == 2
+    assert (only["reports_kept"], only["reports_lost_articles"]) == (0, [])
+
+
+def test_settled_day_is_kept_unless_it_is_a_run_day(session, tmp_path):
+    early, late = date(2026, 10, 10), date(2026, 10, 30)
+    seed(session, early, n=1)
+    seed(session, late, n=1)
+    first = run(session, tmp_path, report_date=late, backfill_days=21)
+    assert first["reports_written"] == [early.isoformat(), late.isoformat()]
+    nightly = run(session, tmp_path, report_date=late, recompute_only=True)
+    assert (nightly["reports_kept"], nightly["reports_unchanged"]) == (1, 1)
+    backfill = run(session, tmp_path, report_date=early, recompute_only=True)
+    # Recomputed through the latest completed day before NOW, so `late` is out of range here.
+    assert (backfill["reports_kept"], backfill["reports_unchanged"]) == (0, 1)
 
 
 def _skipped_article(session, tmp_path):

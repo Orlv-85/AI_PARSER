@@ -57,7 +57,9 @@ documented state (`ok`, `disabled`, `missing_provider_key`, `recompute_only`, `c
 The line has a `brief` block (`null` without a paid run): `model`, `days` (per day `ok`, `invalid`,
 `cached` or `skipped:<reason>`, e.g. `brief_budget_exhausted`, `brief_model_unpriced`, `cap_reached`,
 `deadline_reached`, `packet_too_large`), `run` (`calls`, `usd`) and `terminal_reason`. A brief failure
-never changes `state`, the extraction results or the snapshots.
+never changes `state`, the extraction results or the snapshots. `reports_kept` counts stored days
+left as they were (settled, or lost articles); `reports_lost_articles` lists the days whose
+articles were pruned or deleted after their snapshot.
 
 ## Cost and limits
 
@@ -91,6 +93,8 @@ never changes `state`, the extraction results or the snapshots.
 ## Fixing entities
 
 All commands store an override, re-run reconciliation and recompute snapshots; no provider calls.
+Settled days (older than two weeks) keep their snapshot; to apply an override to them, run
+`daily-signals --recompute-only --recompute-all` afterwards.
 
 ```bash
 # entities needing a decision (conflicting vendors)
