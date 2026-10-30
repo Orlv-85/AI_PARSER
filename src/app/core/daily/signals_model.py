@@ -103,7 +103,7 @@ class DayCoverage:  # pylint: disable=too-many-instance-attributes
     def pending(self) -> int:
         return max(0, self.matched - self.extracted - self.failed - self.skipped)
 
-    def complete(self, ratio: float = 0.9) -> bool:
+    def complete(self, ratio: float = Thresholds.complete_ratio) -> bool:
         return self.published and (self.items == 0 or self.extracted >= ratio * self.items)
 
 
