@@ -183,6 +183,16 @@ the Troubleshooting section of `README.md`.
       "fix": "/etc/fail2ban/jail.d/ai-news-sshd.local: [sshd] backend = auto, logpath = /var/log/auth.log; then fail2ban-client -t and systemctl restart fail2ban.",
       "verification": "fail2ban-client status sshd shows File list: /var/log/auth.log. Bans not yet observed at the time of writing (the jail reads only new lines).",
       "if_it_recurs": "Check `fail2ban-client status sshd` (File list vs Journal matches) and where sshd writes: `grep -c 'Invalid user' /var/log/auth.log` vs `journalctl -g 'Invalid user'`."
+    },
+    {
+      "id": "prod-compose-run-stale-latest-image",
+      "date": "2026-10-30",
+      "area": "prod operator commands (docker compose run)",
+      "symptom": "On the prod server `docker compose -f docker-compose.prod.yml run --rm app ai-news daily-signals ...` fails with `No such command 'daily-signals'` (or runs old code) right after a successful deploy.",
+      "evidence": ["2026-10-30: the running ai-news-app used ghcr.io/orlv-85/ai-parser:v0.1.146; the one-off run without APP_IMAGE used the local :latest"],
+      "cause": "docker-compose.prod.yml uses ${APP_IMAGE:-ghcr.io/orlv-85/ai-parser:latest} and the server .env has no APP_IMAGE; deploys record the released image in .last_deploy_image. The scheduled scripts export it, the operator examples in docs/daily-signals.md and docs/period-signals.md did not.",
+      "fix": "Run `export APP_IMAGE=\"$(cat .last_deploy_image)\"` in /opt/ai-news before any `docker compose ... run` (added to both docs' command blocks; docs/deploy.md already had it).",
+      "verification": "The same command with APP_IMAGE exported ran on v0.1.146 and stored the 2026-10-13 and 2026-10-14 briefs."
     }
   ]
 }

@@ -25,6 +25,8 @@ server `.env` have no effect there. Set caps per run with `--max-calls`, `--max-
 Every writer must hold the host lock:
 
 ```bash
+cd /opt/ai-news
+export APP_IMAGE="$(cat .last_deploy_image)"  # the released image; without it compose runs a stale :latest
 L="flock -w 7200 /tmp/ai-news-auto-update.lock"
 C="docker compose -f docker-compose.prod.yml run --rm"
 
