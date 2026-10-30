@@ -1,0 +1,134 @@
+{
+  "title": "Project review 2026-10-31: findings for other sessions to assess",
+  "created": "2026-10-31",
+  "status": "backlog",
+  "origin": "A whole-project review in a coordinator session (2026-10-31). Each item is one finding of that review, written so that a fresh session can check whether it is real, decide whether it is worth fixing, and propose a fix. The review was quick; treat every claim below as a hypothesis with evidence, not as a verdict.",
+  "how_to_use": [
+    "One session takes one item. Start from the item's 'prompt'.",
+    "Follow AGENTS.md: read the feature code doc before any behavior change; a behavior change edits the doc first; prompts and reports are files (docs/work/ while open, docs/archive/<YYYY-MM>/ when done).",
+    "Write the result as docs/work/report-<item-id>-<YYYY-MM-DD>.md: verdict (real / partly real / not real), evidence with file:line, options with cost, recommendation.",
+    "Owner rule (AGENTS.md 'Owner And Questions'): only product questions (what readers see) and money questions go to the owner, as one-line yes/no with a recommendation; everything else the session decides and reports.",
+    "Update this item's status and add a 'result' line pointing to the report."
+  ],
+  "items": [
+    {
+      "id": "R1",
+      "title": "Source config promises robots.txt and fetch intervals that the fetch pipeline does not honor",
+      "status": "todo",
+      "kind": "correctness, ethics/legal risk, dead config",
+      "problem": [
+        "sources.yaml sets 'respect_robots: true' in defaults and per source (parser_options too); config/sources.py parses it; Settings has respect_robots_txt=True. The fetch pipeline (src/app/ingest/*, src/app/core/ingestion/pipeline/*) never reads robots.txt: grep for 'robots' finds it only in the archive capture (src/app/core/archive/capture.py) and the article evidence cache (src/app/storage/article_evidence_cache.py, _robots_allowed, urllib.robotparser, cached per origin, crawl-delay).",
+        "So the bot, which declares itself as DEFAULT_USER_AGENT with BOT_TOKEN 'ai-news-collector', fetches RSS feeds, HTML list pages and HTML article pages that robots.txt forbids for it, while the archive of the same articles refuses them. A reader of the config believes the opposite.",
+        "fetch_interval_minutes is set per source in sources.yaml and validated in config/sources.py, but pipeline.md says 'Every enabled source is fetched on every run; fetch_interval_minutes does not skip a source' (test_run_fetch_cycle_fetches_every_enabled_source_regardless_of_interval). The field is dead config that looks live."
+      ],
+      "evidence_measured": {
+        "when": "2026-10-31, from a laptop, robots.txt of each enabled source origin in sources.yaml (96 enabled), urllib.robotparser.can_fetch('ai-news-collector', source url)",
+        "allowed": 88,
+        "disallowed_by_robots": [
+          "the_register_ai (https://www.theregister.com/software/ai_ml/headlines.atom): 'User-agent: * / Disallow: /' with only ads.txt allowed",
+          "odintext (http://odintext.com/blog/feed): 'User-agent: * / Disallow: /'",
+          "paulhcleverley (https://paulhcleverley.com/feed): 'User-agent: * / Disallow: /'"
+        ],
+        "robots_unavailable": [
+          "marek_rosa (502), tabnine_blog (502), replit_blog (525), datascience_fair_ml (403), clarifai_blog (connect timeout)"
+        ],
+        "not_measured": "DB-managed sources (added through onboarding, only in the production DB) and article-level URLs of HTML sources (only list URLs were checked). Re-measure on production before deciding."
+      },
+      "questions_to_answer": [
+        "Is the finding real? Confirm that no fetch code path checks robots.txt (RSS, HTML list, HTML article stage, source onboarding checks in core/sources/validation.py).",
+        "Which status codes mean what: RFC 9309 says 4xx = no restrictions, 5xx/unreachable = assume full disallow (temporary). The evidence cache treats every non-200/404/410 as disallow-all; is that the rule we want for the fetch too?",
+        "Cost of honoring robots in the fetch: reuse of the evidence cache's parser/cache vs a small shared helper for the sync httpx Fetcher; per-origin cache lifetime; crawl-delay vs per_source_min_interval_seconds; what a blocked source looks like in FetchSummary, logs and the admin sources page.",
+        "Cheaper alternative: disable the three disallowing sources in sources.yaml and add a source-onboarding check that refuses a candidate whose robots.txt forbids the bot. Compare with full enforcement.",
+        "fetch_interval_minutes: remove from the schema (backward compatibility of sources.yaml: the loader must still accept the key), mark it explicitly as 'ignored', or implement it? Decide and report the reason.",
+        "respect_robots per source: keep as an override (what does false mean, who may set it) or remove?"
+      ],
+      "owner_question_expected": "Product: honoring robots.txt drops The Register AI and two small blogs (and sources whose robots.txt is down at fetch time). Ask the owner as one yes/no line with a recommendation; the coordinator recommends yes (the bot is publicly identified and the archive already honors robots).",
+      "constraints": [
+        "Behavior change of ingestion: pipeline.md changes first, then code and tests (AGENTS.md 'Feature Docs Next To Code', 'When changing parsing or ingestion behavior').",
+        "Do not remove sources without the owner's yes.",
+        "Code-behavior PRs need the owner's go before merge; tags only on the owner's request."
+      ],
+      "prompt": "Read docs/backlog/project-review-todo.json item R1, AGENTS.md and src/app/core/ingestion/pipeline.md. Verify the finding in the code, re-measure robots.txt for all enabled sources (sources.yaml and, read-only, the production DB sources; see the prod access memory), and write docs/work/report-R1-<date>.md with: verdict, options (full enforcement / disable sources + onboarding check / other) with cost and blast radius, the decision on fetch_interval_minutes and respect_robots, and one yes/no owner question with a recommendation. Do not change code before the owner's answer."
+    },
+    {
+      "id": "R2",
+      "title": "Keyword relevance scoring looks naive next to the Signals heuristics",
+      "status": "todo",
+      "kind": "design check, probably low value",
+      "problem": [
+        "src/app/core/ingestion/scoring.py ai_relevance_score is 13 weighted keywords (AI_KEYWORDS) with whole-word matching, while the Signals layer downstream has many fine rules (PACKAGING, LexicalHistory, NOT_RELEASED, specific_variant). The review called this an asymmetry: a weak filter at the entrance, a precise one at the exit."
+      ],
+      "already_known_against_the_finding": [
+        "Production runs with AINEWS_JEV_ENABLED=true, AINEWS_SEMANTIC_ADMISSION_ENABLED=true and AINEWS_DAILY_ENRICHMENT_ENABLED=true (docker-compose.prod.yml, deploy/.env.prod.example). The Settings defaults are false, which is what the review saw.",
+        "src/app/core/ingestion/pipeline/rows.py:110 uses the Jev assessment relevance and falls back to ai_relevance_score only when there is no assessment; core/daily/enrichment.py:352 overwrites it with the Jev score. So in production the keyword score is a fallback, not the filter."
+      ],
+      "questions_to_answer": [
+        "Where does the keyword score still decide something in production: articles without a Jev assessment (Jev outage, input too large, pending), the 'top' CLI, sorting, digest selection, the web news list? Count such articles in the production DB for the last 30 days (read-only).",
+        "If it matters: is a cheap improvement worth it (e.g. a few missing keywords, or using the source's category) or should the fallback stay crude because Jev covers it?",
+        "If it does not matter: say so, and propose only a doc line in pipeline.md that the keyword score is the fallback when Jev gives no assessment (check whether the doc already says it, pipeline.md around the 'heuristic (ai_relevance_score' rule)."
+      ],
+      "constraints": [
+        "Jev and DeepSeek calls are paid; do not run paid calls for this check.",
+        "No ingestion behavior change without editing pipeline.md first."
+      ],
+      "prompt": "Read docs/backlog/project-review-todo.json item R2 and src/app/core/ingestion/pipeline.md. Check where ai_relevance_score still affects stored or shown data in production (code paths plus read-only counts on the production DB), and write docs/work/report-R2-<date>.md: verdict, numbers, and either 'close: no action' or a small proposal with cost. Expect the likely answer to be 'close'; do not invent work."
+    },
+    {
+      "id": "R3",
+      "title": "Daily Signals heuristics may be fitted to observed examples",
+      "status": "todo",
+      "kind": "quality method, maintenance cost",
+      "problem": [
+        "The rules for New, variants, spikes and one-liners (src/app/core/daily/signals_*.py, rules in signals.md) were added one by one after concrete bad items in dry runs and gates (code comments cite F7, F8, F18, CP1, 'gate finding 3'). Each new edge case adds a rule; nothing measures quality on days the rules were not tuned on, so we do not know whether a new rule helps in general or only fixes the example that triggered it.",
+        "Example cited by the review: tests/unit/test_daily_signals_compute.py test_one_liners_of_the_40_dry_run_items freezes the one-liners of 40 New items from 2026-10-12..18 (fixtures under tests/fixtures/daily_signals/brief/)."
+      ],
+      "already_known_against_the_finding": [
+        "That test is a golden regression lock on a real week, not proof of overfitting by itself; golden tests are reasonable.",
+        "The heuristic modules are small (signals_naming 33, signals_lines 66, signals_history 99 lines; signals_entities 496). Runtime cost is zero: no paid calls on page loads, snapshots are computed from stored data.",
+        "Development is done by agents, so writing a rule is cheap. The remaining cost is interaction between rules, regression risk and review time.",
+        "Owner decision 2026-10-27 (backlog B4): keep New as it is, recall over precision."
+      ],
+      "questions_to_answer": [
+        "Is there a measurable problem? Take production snapshots of days after the last rule change (held-out days), label New / Spikes / one-liners by hand (or by a second model, cheap, within a stated budget) as correct / wrong / borderline, and report precision per section and which rule caused each wrong or missed item.",
+        "Would a small labeled evaluation set (e.g. 2-4 weeks of real days, JSON fixtures, a test that reports precision and fails only below a floor) be a better guard than one golden test per fixed example? What would it cost to build and keep?",
+        "Are there rules that never fire on real data (dead rules) or that conflict? Count rule hits over production snapshots (new_suppressed, spikes_folded, rejects in extraction rows).",
+        "Recommend one of: leave as is; freeze rule growth and add the evaluation set first; remove dead rules."
+      ],
+      "constraints": [
+        "Any paid labeling needs a budget stated in the report before spending (money question for the owner if above a few dollars).",
+        "signals.md is the current behavior; a rule removal edits it first."
+      ],
+      "prompt": "Read docs/backlog/project-review-todo.json item R3 and src/app/core/daily/signals.md. Without paid calls first: count rule hits and suppressions over production snapshots (read-only), pick held-out days after the last rule change, and estimate precision of New and Spikes by reading the items. Write docs/work/report-R3-<date>.md: verdict, numbers, dead or conflicting rules, and a recommendation (leave / evaluation set / remove rules) with cost. Ask the owner only if paid labeling above a few dollars is proposed."
+    },
+    {
+      "id": "R4",
+      "title": "Who is the reader and why would they come: research before more features",
+      "status": "todo",
+      "kind": "product research",
+      "problem": [
+        "The project has a working collector, daily digest, Daily/Weekly/Monthly AI Signals with grounded briefs, an archive and an MCP endpoint, but no written answer to: who reads it, what job it does for them, why they would pick it over existing AI news products, and how we know it works. README describes the system, not the reader. Backlog B5-B13 (Telegram, watchlist, entity pages, RAG chat, video, new sources) are ideas without a chosen reader to rank them.",
+        "Without a reader, quality questions cannot be settled either: e.g. whether the precision of New (GA vs preview, packaging variants) matters depends on who reads New and what a wrong item costs them."
+      ],
+      "known_inputs": [
+        "Strongest differentiator found in the review: every brief sentence is mechanically checked against cited article text (exact quote, known ids, numbers and capitalized names present in the cited text; src/app/core/daily/signals_brief.py parse_brief, _sentence), and extraction keeps only names and novelty quotes that occur in the article (src/app/core/daily/signals_extract.py _entity, parse_extraction). Competing newsletters are written by people or LLMs without such checks.",
+        "Coverage: ~96 enabled English sources in sources.yaml (labs, big tech, media, research blogs) plus DB-managed sources; daily digest, signals, weekly/monthly periods; costs are capped per day (provider_costs.py, BRIEF_MAX_USD_PER_DAY).",
+        "Known competitors to compare (check the current state, the list is from memory): Techmeme, TLDR AI, The Rundown AI, Ben's Bites, Import AI, smol.ai AINews, The Batch, Feedly AI feeds, Perplexity/ChatGPT news answers.",
+        "Unknown: actual traffic and usage. Check what the production web logs or DB can tell (page views per route, returning visitors, MCP calls) read-only, and whether any analytics exist at all."
+      ],
+      "questions_to_answer": [
+        "Candidate readers (at least 3), e.g.: the owner as a personal radar; AI engineers who need 'what shipped today' with sources; analysts/managers who need weekly/monthly trends; agents that consume the corpus through MCP. For each: the job, what they use today, what this project does better or worse, what it would take.",
+        "Which of the existing outputs serve which reader; what is unused.",
+        "What to measure to know it works (minimal, privacy-respecting): e.g. visits per page, returning readers, clicks to sources, MCP queries. What exists now and the cheapest way to add the rest.",
+        "Recommendation: one primary reader, the 2-3 next things for that reader, the backlog items (B5-B13) to drop or defer, and what not to build.",
+        "Positioning in one paragraph the owner can accept or reject."
+      ],
+      "owner_question_expected": "Product: which primary reader to choose. Present as one yes/no on the recommended reader (with the runner-up named), not as an open survey.",
+      "constraints": [
+        "Research only; no code changes in this item.",
+        "Web research is fine; do not contact people or post anywhere.",
+        "Read-only access to production; no new paid provider calls."
+      ],
+      "prompt": "Read docs/backlog/project-review-todo.json item R4, README.md, src/app/README.md, docs/backlog/backlog-todo.json and the code docs of daily and period signals. Research the readers and competitors listed there (web), check what usage data production has (read-only), and write docs/work/report-R4-<date>.md with candidate readers, comparison, measurement plan and one recommended primary reader with next steps. End with one yes/no question to the owner."
+    }
+  ]
+}
