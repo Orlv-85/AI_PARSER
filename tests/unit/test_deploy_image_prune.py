@@ -16,7 +16,9 @@ exit 0
 """
 
 
-def _run_deploy(tmp_path, *, images, in_use, previous, fail_rmi="none", fail_prune="", extra_env=None):
+def _run_deploy(
+    tmp_path, *, images, in_use, previous, fail_rmi="none", fail_prune="", extra_env=None
+):
     scripts = tmp_path / "scripts"
     scripts.mkdir()
     script = scripts / "deploy_prod.sh"
@@ -64,7 +66,10 @@ def _removed(calls):
 def test_deploy_prunes_old_release_images_but_keeps_current_previous_and_in_use(tmp_path) -> None:
     result, calls = _run_deploy(
         tmp_path,
-        images=[f"{REPO}:v3", f"{REPO}:v2", f"{REPO}:v1", f"{REPO}:v0", f"{REPO}:latest", f"{REPO}:<none>"],
+        images=[
+            f"{REPO}:v3", f"{REPO}:v2", f"{REPO}:v1", f"{REPO}:v0", f"{REPO}:latest",
+            f"{REPO}:<none>",
+        ],
         in_use=[f"{REPO}:v1", "postgres:18-alpine"],
         previous=f"{REPO}:v2",
     )
