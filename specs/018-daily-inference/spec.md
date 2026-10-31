@@ -2,7 +2,7 @@
 
 **Feature Branch**: `018-daily-inference`
 **Created**: 2026-10-31
-**Status**: Draft (brief; the voice in `voice.md` waits for the owner's look; Q3 open)
+**Status**: Draft (brief; the voice in `voice.md` waits for the owner's look; channels later)
 **Input**: Owner decisions of 2026-10-31, R4 report `docs/work/report-R4-2026-10-31.md`, sections
 "Owner decisions" parts 1-3, and the owner's answers recorded below.
 
@@ -92,12 +92,15 @@ report".
 4. **Given** a day without a bulletin, **Then** the page says so and links to `/daily` of that day.
 5. **Given** publishing is switched off (FR-019), **Then** `/` shows the digest as today.
 
-### User Story 3 - Telegram channel (Priority: P3)
+### User Story 3 - Channels, Telegram first (Priority: P3, after the site is checked)
 
-Each new bulletin is posted once to a Telegram channel: the short version, outlet names linked to
-sources, "Full report" linked to the site.
+Each new bulletin is posted once to a channel: the short version, outlet names linked to sources,
+"Full report" linked to the site. Telegram is the first channel; others (Instagram, X, ...) follow
+the same poster interface after their own owner decision.
 
-**Why this priority**: the first place where people meet the outlet; free and automatic.
+**Why this priority**: where people meet the outlet; it starts only after the bulletin has run on the
+site and passed the review (owner 2026-10-31: "first set up and check everything on the site, then
+the channels").
 
 **Independent Test**: post a stored bulletin to a private test channel.
 
@@ -168,8 +171,11 @@ about the project (ER-10). Shape decided after P1-P3 run for two weeks.
   unchanged.
 
 **Schedule and switches**
-- **FR-019** Two settings, both off by default: publishing on the site and posting to Telegram. Off
-  means the bulletin is still built and stored but not shown or posted (the kill switch).
+- **FR-019** Two settings, both off by default: the bulletin as the home page, and posting to
+  channels. Off means the bulletin is still built and stored, and visible at its own preview page
+  `/bulletin?date=` (not linked from the site), while `/` stays the digest and nothing is posted
+  (the kill switch). The site is checked on the preview page first (decided 2026-10-31 (agent):
+  the debugging happens on real days without changing what visitors of `/` see).
 - **FR-020** The bulletin runs as its own daily job at 04:00 UTC: after the digest and signals
   (02:00) and the archive capture (03:00); host lock and isolation as the archive job; a failure
   never changes other jobs. Telegram posting follows in the same job.
@@ -223,7 +229,8 @@ about the project (ER-10). Shape decided after P1-P3 run for two weeks.
 
 ## Success Criteria
 
-- **SC-001** On days with ready signals, the bulletin is on the site and in Telegram by 06:00 UTC.
+- **SC-001** On days with ready signals, the bulletin is on the site by 06:00 UTC (and in the
+  channels, once they are on).
 - **SC-002** 100% of published stories link to a source of that day; 0 sentences with a failed
   grounding check are published; the review of FR-022 finds no story with distorted meaning in the
   last 7 of the 14 days.
@@ -235,18 +242,23 @@ about the project (ER-10). Shape decided after P1-P3 run for two weeks.
 
 ## Implementation order (one item = one PR)
 
-1. Jev questions, storage, offline check on stored days (FR-001, FR-002).
-2. Bulletin builder with the phrase library and title-only stories, CLI dry run (FR-003, FR-004,
-   FR-006).
-3. Model writer with grounding (FR-005).
-4. Bulletin storage, daily job, switches, API (FR-007, FR-008, FR-019, FR-020).
-5. Home page as the newspaper, digest to `/daily`, page counter (FR-009, FR-010, FR-023); the
-   design from a separate design session (Q1).
-6. Telegram poster and subscriber count (FR-011, FR-021, FR-023); needs Q3.
-7. Weekly bulletin; then the monthly chronicle (User Story 4).
-8. World stream (FR-014..FR-018). Can start in parallel with item 2 once item 1 is done.
+Phase A, the site (no channels):
 
-The review of FR-022 runs from the first published day. Each item: feature doc next to the main
+1. Jev questions, storage, offline check on stored days (FR-001, FR-002).
+2. Bulletin builder with the phrase library (JSON, from `voice.md`) and title-only stories, CLI dry
+   run (FR-003, FR-004, FR-006).
+3. Model writer with grounding (FR-005).
+4. Bulletin storage, daily job, switches, API, preview page (FR-007, FR-008, FR-019, FR-020).
+5. World stream (FR-014..FR-018). Can start in parallel with item 2 once item 1 is done.
+6. Home page as the newspaper, digest to `/daily`, page counter (FR-009, FR-010, FR-023); the
+   design from a separate design session (Q1).
+7. Review of 14 days on the preview page (FR-022); then the owner switches `/` to the bulletin.
+
+Phase B, channels (after phase A):
+
+8. Telegram poster and subscriber count (FR-011, FR-021, FR-023); needs Q3. Other channels after
+   their own owner decision (FR-013).
+9. Weekly bulletin; then the monthly chronicle (User Story 4). Each item: feature doc next to the main
 module first (AGENTS.md "Feature Docs Next To Code"), then code and tests; reviewed by a different
 session.
 
@@ -265,7 +277,7 @@ session.
 
 ## Open questions for the owner
 
-- **Q3** Telegram: the owner creates the channel and the bot once (about 10 minutes) and puts the
-  token into prod `.env`. Recommendation: yes, before item 6.
+- **Q3** (deferred by the owner 2026-10-31 to phase B) Telegram: the owner creates the channel and
+  the bot once (about 10 minutes) and puts the token into prod `.env`.
 - **Q4** The voice in `voice.md` (phrases and samples). Recommendation: accept as the starting
   library; it is tuned after the first two weeks.

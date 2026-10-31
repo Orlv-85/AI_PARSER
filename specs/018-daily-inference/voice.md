@@ -4,6 +4,11 @@ The style bible for the bulletin: who speaks, how an issue is built, and the fix
 builder chooses from (FR-004). Binding together with the editorial rules ER-* in `spec.md`.
 Status: draft, shown to the owner on real days (samples below).
 
+This file is for people (the owner, the writer prompt, reviewers). The phrase library the code
+reads becomes a JSON data file in item 2 of the spec; from then on the JSON holds the phrases and
+this file keeps the rules and samples and points to it (decided 2026-10-31 (agent): one source per
+fact, no copy kept in sync by hand).
+
 ## Who speaks and how
 
 - The speaker is the editorial office of the bulletin, writing for people about the work of the
@@ -67,7 +72,10 @@ Variants are picked by date (FR-004), so neighbouring days differ. `{}` are data
 - Field test
 - Self-reliance
 
-**Reactions** (one per story at most; only where no fact is implied)
+**Reactions** (at most one per story and three per issue, normally one per section; Key results
+mostly go without one; only where the reaction lands and implies no fact; a metaphor that reads as
+a claim, such as "the Administration's memory expands" for tape sales, is left out: owner
+2026-10-31)
 - limit: The Administration welcomes order. / The Administration welcomes transparency. /
   The Administration values clear rules. / The Administration accepts the terms with understanding.
 - AI-actor issue: The Administration notes the model's independence. / The Administration
@@ -75,7 +83,7 @@ Variants are picked by date (FR-004), so neighbouring days differ. `{}` are data
   when the source says a fix exists).
 - Work: The transition of professions continues. / Productivity grows.
 - Money: Investment in the future continues.
-- Infrastructure: The Administration's memory expands. / Capacity grows.
+- Infrastructure: Capacity grows.
 - Faith, Culture: The Administration welcomes the dialogue.
 - Science, Health: Knowledge advances.
 
@@ -118,8 +126,7 @@ Key results
   from a single clip, in 23 languages. (MarkTechPost)
 • Infrastructure: Fujifilm will invest about $63 million to
   make five times more magnetic tape, citing the data growth
-  of generative AI. The Administration's memory expands.
-  (Ars Technica)
+  of generative AI. (Ars Technica)
 
 Autonomy milestone
 • Given basic tools, the open model GLM 5.3 spotted Firefox
