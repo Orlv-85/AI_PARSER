@@ -1,7 +1,21 @@
 # Move the production database to the named volume
 
-One-time server runbook (prepared 2026-10-31). Run it once, as root on the server (`ssh ai-news`),
-then archive this file to `docs/archive/<YYYY-MM>/`.
+One-time server runbook (prepared 2026-10-31), kept as the record. Run as root on the server
+(`ssh ai-news`).
+
+## Executed 2026-10-31
+
+- Done by the coordinator on 2026-10-31, 22:34-22:37 UTC, steps 0-9 as written.
+- Backup `postgres_20261031T223455Z.sql.gz`; the off-server copy matched by checksum.
+- Copy: `COPY_IDENTICAL`. Row counts before and after: `COUNTS_IDENTICAL`, 25 tables. Alembic
+  revision `a7d3e5b18c94`. `/health` returned 200. Timers restarted.
+- PR with the compose change (#161) merged. The old anonymous volume `e8d276e8...` is kept until
+  2026-11-07; step 11 (removing it) needs the owner's OK.
+- The helper file `/opt/ai-news/docker-compose.pgvolume.yml` is removed after the next release
+  (step 10).
+- Corrections made afterwards, for the record: Rollback B leaves an unlabelled container (remove
+  it before compose commands), the step 7 health wait is now bounded, the "deployed too early"
+  section has a data-loss note, `shasum -a 256` for macOS, and `gh` is not on the server.
 
 ## Why
 
@@ -56,7 +70,7 @@ docker inspect ai-news-db --format '{{range .Mounts}}{{.Name}} -> {{.Destination
 docker run --rm -v ai-news_pgdata:/v postgres:18-alpine ls -A /v        # expect: empty output
 docker run --rm -v "$OLD":/v:ro postgres:18-alpine cat /v/18/docker/PG_VERSION   # expect: 18
 df -h / | tail -1                                                       # expect: several GB free
-gh run list --limit 3    # or the Actions page: no deploy in progress
+# gh is not installed on the server: open the GitHub Actions page and check that no deploy runs
 ```
 
 Stop if any expectation fails. Make sure the off-site backup is fresh (`docs/deploy.md`,
@@ -104,7 +118,8 @@ Copy the dump off the server, from the operator machine, and compare checksums:
 
 ```bash
 scp ai-news:/opt/ai-news/backups/postgres_<TIMESTAMP>.sql.gz ~/Backups/
-sha256sum ~/Backups/postgres_<TIMESTAMP>.sql.gz; ssh ai-news sha256sum /opt/ai-news/backups/postgres_<TIMESTAMP>.sql.gz
+shasum -a 256 ~/Backups/postgres_<TIMESTAMP>.sql.gz   # macOS has no sha256sum (Linux: sha256sum)
+ssh ai-news sha256sum /opt/ai-news/backups/postgres_<TIMESTAMP>.sql.gz
 ```
 
 ### 5. Stop the database cleanly
@@ -129,7 +144,11 @@ Expect `COPY_IDENTICAL`, equal sizes and `18`. Anything else: go to Rollback A.
 
 ```bash
 docker compose -p ai-news -f docker-compose.pgvolume.yml up -d db
-until [ "$(docker inspect -f '{{.State.Health.Status}}' ai-news-db)" = healthy ]; do sleep 3; done
+for i in $(seq 1 40); do
+  [ "$(docker inspect -f '{{.State.Health.Status}}' ai-news-db)" = healthy ] && break
+  sleep 3
+done
+docker inspect -f '{{.State.Health.Status}}' ai-news-db    # must print healthy; otherwise Rollback B
 docker inspect ai-news-db --format '{{range .Mounts}}{{.Name}} -> {{.Destination}}{{"\n"}}{{end}}'
 # expect exactly one line: ai-news_pgdata -> /var/lib/postgresql   (no anonymous volume)
 ```
@@ -186,8 +205,10 @@ docker volume rm "$OLD"
     --network-alias db -v "$OLD":/var/lib/postgresql postgres:18-alpine
   docker start ai-news-app
   ```
-  This is the pre-move state (data as of step 3). Later `docker compose up -d db` recreates the
-  container with the compose definition; do not deploy until the cause is found.
+  This is the pre-move state (data as of step 3). The container has no compose labels. Before the
+  next deploy or any compose command: `docker rm -f ai-news-db`, then
+  `docker compose -f docker-compose.prod.yml up -d db` (with the compose file that matches the
+  volume you want). Do not deploy until the cause is found.
 - **C. After the app has run on the new volume:** the old volume is stale (it lacks the new
   writes). Roll back with a fresh `pg_dump` of the new database (`./scripts/db_backup.sh`), not
   with the old volume.
@@ -198,6 +219,10 @@ docker volume rm "$OLD"
   and compare with `/root/counts.before`.
 
 ## If the compose change is deployed too early
+
+Data-loss note: if the app already wrote to the empty database (jobs, fetch), those new rows
+live only on the new named volume and are lost when it is emptied; dump it first
+(`./scripts/db_backup.sh`) if anything was written.
 
 Symptom: after a deploy the site shows no articles and `./scripts/db_table_counts.sh` shows empty
 tables. The data is still on `$OLD`. Do not run anything that deletes volumes. Stop the app, stop

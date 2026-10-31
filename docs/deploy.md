@@ -112,7 +112,7 @@ Set `CADDY_SITE_ADDRESS` to your public domain/host (for example `5kzt.l.time4vp
 
 The compose file mounts the named volume `pgdata` at `/var/lib/postgresql` (PostgreSQL 18 layout).
 Servers set up before that change keep the database on an anonymous volume until the one-time
-move in [db-volume-move.md](db-volume-move.md) is done. Do not release the compose change to a
+move in [db-volume-move.md](archive/2026-10/db-volume-move.md) is done. Do not release the compose change to a
 server before that move.
 
 ### Daily digest generation (DeepSeek)
