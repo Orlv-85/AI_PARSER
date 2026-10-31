@@ -108,6 +108,38 @@ Set `CADDY_SITE_ADDRESS` to your public domain/host (for example `5kzt.l.time4vp
 - fail2ban (sshd jail) bans repeated failed logins.
 - Setup, verification and rollback steps: `docs/work/plan-ssh-deploy-user-2026-10-24.md`.
 
+### Cap the systemd journal (one-time server setup)
+
+By default the journal may grow to 10% of the disk (it reached 2.2 GB on the 25 GB server). Cap it
+with a drop-in. This is a server change, done once, as root (the `deploy` user has no sudo for it;
+use the root login or the provider console):
+
+```bash
+install -d /etc/systemd/journald.conf.d
+printf '[Journal]\nSystemMaxUse=300M\n' > /etc/systemd/journald.conf.d/size.conf
+systemctl restart systemd-journald
+journalctl --vacuum-size=300M     # shrink what is already stored (no-op if already below)
+```
+
+Restarting `systemd-journald` does not touch the app, the database or the timers.
+
+Verify:
+
+```bash
+systemd-analyze cat-config systemd/journald.conf | grep SystemMaxUse   # shows SystemMaxUse=300M
+journalctl --disk-usage                                                      # at most about 300M
+```
+
+Undo (back to the distribution default):
+
+```bash
+rm /etc/systemd/journald.conf.d/size.conf
+systemctl restart systemd-journald
+```
+
+Rotated entries older than the cap are dropped oldest first; nothing in this project reads the
+journal for state (job logs are in `logs/`). The deploy never changes this file.
+
 ### Database volume
 
 The compose file mounts the named volume `pgdata` at `/var/lib/postgresql` (PostgreSQL 18 layout).
