@@ -15,6 +15,7 @@ Specs in `specs/` are the history of how a feature got there.
 | Period AI Signals (017) | [src/app/core/periodic/signals_period.md](../src/app/core/periodic/signals_period.md) | `src/app/core/periodic/signals_period.py` |
 | Fetch pipeline (001, 002, admission) | [src/app/core/ingestion/pipeline.md](../src/app/core/ingestion/pipeline.md) | `src/app/core/ingestion/pipeline.py` |
 | Source onboarding (003, 011) | [src/app/core/sources/onboarding.md](../src/app/core/sources/onboarding.md) | `src/app/core/sources/onboarding.py` |
+| World news stream (018 item 5) | [src/app/core/world/world.md](../src/app/core/world/world.md) | `src/app/core/world/__init__.py` |
 | Article archive (016) | [src/app/core/archive/capture.md](../src/app/core/archive/capture.md) | `src/app/core/archive/capture.py` |
 | Web pages and static assets | [src/app/web/pages.md](../src/app/web/pages.md) | `src/app/web/routes/pages.py` |
 
@@ -25,6 +26,7 @@ Specs in `specs/` are the history of how a feature got there.
 | [deploy.md](deploy.md) | Docker, CI/CD, server setup, daily jobs, maintenance, systemd |
 | [configuration.md](configuration.md) | Environment variables, Jev admission, `sources.yaml` |
 | [cli.md](cli.md) | CLI commands, fetch/cron, search, prune |
+| [db-volume-move.md](archive/2026-10/db-volume-move.md) | Executed 2026-10-31, archived runbook: move the production database from the anonymous to the named volume |
 | [troubleshooting.md](troubleshooting.md) | Known failures with cause and fix (JSON cases) |
 | [daily-signals.md](daily-signals.md) | Daily AI Signals operator guide: commands, cost, deploy note, rollback |
 | [period-signals.md](period-signals.md) | Period (weekly and monthly) AI Signals operator guide: enable, backfill, recompute, rollback |

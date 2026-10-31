@@ -140,6 +140,13 @@ systemctl restart systemd-journald
 Rotated entries older than the cap are dropped oldest first; nothing in this project reads the
 journal for state (job logs are in `logs/`). The deploy never changes this file.
 
+### Database volume
+
+The compose file mounts the named volume `pgdata` at `/var/lib/postgresql` (PostgreSQL 18 layout).
+Servers set up before that change keep the database on an anonymous volume until the one-time
+move in [db-volume-move.md](archive/2026-10/db-volume-move.md) is done. Do not release the compose change to a
+server before that move.
+
 ### Daily digest generation (DeepSeek)
 
 Set `DS_API_KEY` in the server's `.env` or in the job environment. Do not commit
@@ -261,6 +268,16 @@ Rollback / manual deploy by tag:
 - Provide `deploy_tag` input (for example `v0.1.0` or `v0.2.3-rollback`).
 - Workflow deploys exactly that tag to server.
 
+Image pruning (end of every successful `scripts/deploy_prod.sh`):
+- Removes `ghcr.io/orlv-85/ai-parser:v*` images except the one just deployed, the one from the
+  previous deploy (read from `.last_deploy_image` before it is overwritten; the rollback target)
+  and any image a container uses. Then `docker image prune -f` (dangling images only).
+- Other images (`postgres`, `caddy`, VPN `amnezia*`, `:latest`) and volumes are never touched.
+- A failed prune prints a warning and does not fail the deploy. Opt out with `IMAGE_PRUNE_ENABLED=0`.
+- Redeploying the same tag as the last deploy skips the prune (the real rollback image is unknown).
+- Rolling back further than one release pulls the older tag from GHCR again (`deploy-by-tag`).
+- Tests: `tests/unit/test_deploy_image_prune.py`.
+
 ### 4) Maintenance and backups
 
 Retention + VACUUM:
@@ -334,6 +351,17 @@ Remove a URL, source or host on request (dry run first, then `--apply`):
 docker compose -f docker-compose.prod.yml run --rm app ai-news archive purge --host example.com
 docker compose -f docker-compose.prod.yml run --rm app ai-news archive purge --host example.com --apply
 ```
+
+Old source-page cache directories hold a duplicate `page.html` next to `body.bin` (new ones do not).
+The files belong to root (the container user), so run the command in the container; dry run first:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm app ai-news archive dedupe-cache
+docker compose -f docker-compose.prod.yml run --rm app ai-news archive dedupe-cache --apply
+```
+
+It prints `{"state", "dirs", "files", "bytes"}` and removes only `page.html` where `body.bin` and
+`response.json` exist. `df -h /` before and after shows the freed space (about half of the cache).
 
 Archive articles that exist only in a backup (for example rows pruned before the archive existed).
 The dump is a plain `pg_dump` of one database (no `CREATE DATABASE`), so it loads into a scratch

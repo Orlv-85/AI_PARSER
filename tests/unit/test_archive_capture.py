@@ -14,6 +14,7 @@ from app.core.archive.capture import (
     ARCHIVE_RAW_KEEP_DAYS,
     ARCHIVE_RETRY_DELAYS,
     capture,
+    dedupe_page_cache,
 )
 from app.storage.article_evidence_cache import EXTRACTION_VERSION, PageCache, url_key
 from app.storage.models_sql import ArchiveDocument, ArchiveText, Article, Base
@@ -301,3 +302,27 @@ def test_capture_deletes_old_raw_pages(tmp_path) -> None:
     assert not old_dir.exists()
     assert (pages / url_key(new_url)).is_dir()
     assert _document(session, old_url).state == "archived"
+
+
+def test_dedupe_page_cache_dry_run_then_apply(tmp_path) -> None:
+    archive, daily = tmp_path / "archive", tmp_path / "daily"
+    rebuildable = archive / "pages" / "a"
+    no_response = daily / "pages" / "b"
+    clean = daily / "pages" / "c"
+    for directory in (rebuildable, no_response, clean):
+        directory.mkdir(parents=True)
+        (directory / "body.bin").write_bytes(b"x" * 10)
+    (rebuildable / "response.json").write_text("{}")
+    (rebuildable / "page.html").write_bytes(b"x" * 10)
+    (no_response / "page.html").write_bytes(b"x" * 10)
+
+    dry = dedupe_page_cache([archive, daily, tmp_path / "missing"])
+    assert dry == {"dirs": 1, "files": 1, "bytes": 10}
+    assert (rebuildable / "page.html").exists()
+
+    applied = dedupe_page_cache([archive, daily], apply=True)
+    assert applied == dry
+    assert not (rebuildable / "page.html").exists()
+    assert (rebuildable / "body.bin").exists()
+    assert (no_response / "page.html").exists()
+    assert dedupe_page_cache([archive, daily], apply=True)["files"] == 0
