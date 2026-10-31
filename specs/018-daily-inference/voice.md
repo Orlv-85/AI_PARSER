@@ -2,9 +2,10 @@
 
 The style bible for the bulletin: who speaks, how an issue is built, and the fixed phrases the
 builder chooses from (FR-004). Binding together with the editorial rules ER-* in `spec.md`.
-Status: draft, shown to the owner on real days (samples below).
+Status: draft; samples on real days below.
 
-This file is for people (the owner, the writer prompt, reviewers). The phrase library the code
+This file is for agents: the session that builds the bulletin, the writer model's prompt and the
+reviewing session. The phrase library the code
 reads becomes a JSON data file in item 2 of the spec; from then on the JSON holds the phrases and
 this file keeps the rules and samples and points to it (decided 2026-10-31 (agent): one source per
 fact, no copy kept in sync by hand).
