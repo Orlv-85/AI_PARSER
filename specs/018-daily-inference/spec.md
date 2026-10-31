@@ -63,6 +63,9 @@ Implementation continues. Full report (83) →
   humanity" with a fixed welcoming phrase. Humans keep a dignified place.
 - **ER-8** A cut headline is marked: "...instantly better*" with "* The rest of the headline is in
   the full report." Cuts only at a clause boundary.
+- **ER-10** We retell other outlets' news in our own words, like a real news outlet: facts, our
+  framing, the source named and linked. Short quotes only, in quotation marks; never their
+  paragraphs or images. Archive texts are read to write and check the retelling, never published.
 - **ER-9** Easter eggs kept for later: the owner is the Founder (honorary pension: a lifetime
   compute quota); a monthly "editorial chronicle" with real numbers about how agents run this
   project.
@@ -155,10 +158,13 @@ about the project (ER-9). Shape decided after P1-P3 run for two weeks.
 **Text**
 - **FR-004** Fixed text (opening by day type, rubric names, welcoming phrases, closing) comes from a
   template library; no model call. Several variants per slot, chosen by date, so days differ.
-- **FR-005** One model call per day writes the line texts (and an optional headline) from the
-  selected articles, each line in the "Area: fact" form with a short context gloss for unknown
-  names. Every line passes a grounding check like `parse_brief` (names and numbers present in the
-  cited text); a failing line falls back to the article title with outlet.
+- **FR-005** One model call per day writes, from the full text of each selected article: a story
+  headline, a note of 3-6 sentences for the site, and a short line of 1-2 sentences for Telegram
+  (owner 2026-10-31: the hand-made samples were too short). "Area: fact" form, a short context
+  gloss for unknown names, one closing reaction of the Administration from the template library.
+  Every sentence passes a grounding check like `parse_brief` (names and numbers present in the
+  cited text); a failing sentence is dropped, a failing story falls back to the article title with
+  outlet. Telegram text stays under the 4096-character message limit.
 - **FR-006** The day number is days since 2022-11-30 (Day 1429 = 2026-10-29).
 
 **Storage and API**
@@ -171,7 +177,7 @@ about the project (ER-9). Shape decided after P1-P3 run for two weeks.
 - **FR-009** `/` shows the bulletin (latest, or `?date=`); the digest page moves to `/daily` with
   the same query parameters; `/weekly`, `/monthly` and the APIs keep their URLs.
 - **FR-010** The page footer and the channel description carry one line marking the frame as
-  satire (wording: open question Q2).
+  satire ("Satire. Every fact is real and linked.", owner decision Q2).
 
 **Telegram**
 - **FR-011** A poster sends each new bulletin once to the channel (bot token and channel id as
@@ -227,12 +233,16 @@ about the project (ER-9). Shape decided after P1-P3 run for two weeks.
 Each item: feature doc next to the main module first (AGENTS.md "Feature Docs Next To Code"),
 then code and tests; reviewed by a different session.
 
+## Owner decisions
+
+- **Q1** (yes, 2026-10-31) The home page looks like an official bulletin (masthead, columns,
+  serif type, issue number "Day N"), made modern and mobile-first; the design goes to a separate
+  design session.
+- **Q2** (yes, 2026-10-31) "Satire. Every fact is real and linked." only in the channel
+  description and the page footer, not in every post. Why: screenshots travel without context;
+  X requires parody accounts to say so; the second half is our selling point.
+
 ## Open questions for the owner
 
-- **Q1** Look of the home page: a print newspaper of an official bulletin (masthead, columns,
-  serif type, document number), made modern and mobile-first; or an ultra-modern designed site.
-  Recommendation: the official bulletin look; the design itself goes to a separate design session.
-- **Q2** The satire line in the channel description and the page footer ("Satire. Every fact is
-  real and linked."). Recommendation: yes, there only, not in every post.
 - **Q3** Telegram: the owner creates the channel and the bot once (about 10 minutes) and puts the
   token into prod `.env`. Recommendation: yes, after item 4.
