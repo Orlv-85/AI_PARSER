@@ -276,6 +276,10 @@ session.
   14-day review (item 7).
 - World news about AI in human life, without a separate trial: "take it and build it", up to
   $3/month (2026-10-31).
+- (yes, 2026-10-31) Footer credit "News discovery: GDELT Project" with a link (GDELT terms require
+  citation).
+- (yes, 2026-10-31) The digest Jev cap of FR-012 stays $0.05 per day; the world stream has its own
+  Jev cap of $0.10 per day, inside the approved $3 per month.
 
 ## Open questions for the owner
 
