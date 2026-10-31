@@ -121,6 +121,17 @@
         "Next step if more is needed: try r/MachineLearning from the server IP; no paid Reddit API (owner: no paid social APIs)."
       ],
       "status": "todo"
+    },
+    {
+      "id": "B14",
+      "title": "Sources: per-source visible publication date (Meta AI blog)",
+      "why": "ai.meta.com/blog posts show the date only as text next to the h1 (no JSON-LD, meta or time tag); all 10 articles collected on 2026-10-31 are publication_status unknown and never reach a digest.",
+      "notes": [
+        "The pipeline takes dates only from page metadata and never parses visible labels (pipeline.md, 'Publication date only from evidence'), so this needs a design change: an opt-in per-source date selector in `HtmlOptions` whose text is parsed, recorded as its own evidence kind in date_provenance.",
+        "Source `meta_ai_blog` is disabled in sources.yaml until then; Meta launches still arrive through news outlets.",
+        "Already stored Meta rows stay undated (known canonical hash is skipped); re-dating them is part of the change or skipped."
+      ],
+      "status": "todo"
     }
   ],
   "small_followups": [

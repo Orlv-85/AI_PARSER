@@ -69,11 +69,14 @@ sources:
     fetch_interval_minutes: 60
     source_weight: 1.3
 
-  # Meta AI blog has no RSS; the selector keeps only post links, not site navigation
+  # Meta AI blog has no RSS; the selector keeps only post links, not site navigation.
+  # Disabled: posts carry only a visible date (no metadata), so every article is undated and never
+  # reaches a digest; see backlog B14.
   - id: meta_ai_blog
     name: Meta AI Blog
     type: html
     url: https://ai.meta.com/blog/
+    enabled: false
     fetch_interval_minutes: 60
     source_weight: 1.3
     html:
