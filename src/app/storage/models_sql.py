@@ -547,5 +547,27 @@ class ArchiveText(Base):  # pylint: disable=too-many-instance-attributes
     captured_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
 
 
+class WorldChangeAssessment(Base):  # pylint: disable=too-many-instance-attributes
+    """Jev world_change answers per article and question version (spec 018); no FK so it outlives
+    pruned articles."""
+    __tablename__ = "world_change_assessments"
+    __table_args__ = (UniqueConstraint("url_canonical_hash", "question_version",
+                                       name="uq_world_change_hash_version"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    url_canonical_hash: Mapped[str] = mapped_column(String(64), index=True)
+    article_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    world_change: Mapped[str] = mapped_column(String(16))
+    world_change_confidence: Mapped[float] = mapped_column(Float)
+    area: Mapped[str] = mapped_column(String(16))
+    area_confidence: Mapped[float] = mapped_column(Float)
+    actor: Mapped[str] = mapped_column(String(16))
+    actor_confidence: Mapped[float] = mapped_column(Float)
+    harm_to_people: Mapped[float] = mapped_column(Float)  # probability of harm
+    question_version: Mapped[str] = mapped_column(String(64))
+    model: Mapped[str] = mapped_column(String(64))
+    assessed_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+
+
 Index("ix_articles_published_at_desc", Article.published_at.desc())
 Index("ix_articles_rank_score_desc", Article.rank_score.desc())
