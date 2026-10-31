@@ -28,5 +28,6 @@ Feature docs live next to their main module and are checked by `scripts/check_co
 | Period AI Signals (017) | `core/periodic/signals_period.md` |
 | Fetch pipeline (001, 002, admission) | `core/ingestion/pipeline.md` |
 | Source onboarding (003, 011) | `core/sources/onboarding.md` |
+| World news stream (018 item 5) | `core/world/world.md` |
 | Article archive (016) | `core/archive/capture.md` |
 | Web pages and static assets | `web/pages.md` |

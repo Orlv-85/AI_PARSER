@@ -47,6 +47,7 @@ Index of all docs: [docs/README.md](docs/README.md). Code docs live next to the 
 - [Period AI Signals](src/app/core/periodic/signals_period.md) - weekly and monthly sums and comparisons: periods, status, coverage, decisions.
 - [Fetch pipeline](src/app/core/ingestion/pipeline.md) - ingestion: sources, page filter, admission, scoring.
 - [Source onboarding](src/app/core/sources/onboarding.md) - candidate import, check, review, approval into collection.
+- [World news stream](src/app/core/world/world.md) - keyword filter and reader for world news candidates (018 item 5).
 - [Article archive](src/app/core/archive/capture.md) - private archive of article text; prune archives before delete.
 - [Web pages](src/app/web/pages.md) - pages, access, placeholders, static CSS/JS assets.
 
