@@ -32,6 +32,8 @@ from app.core.periodic.period_run import PeriodRunError, PeriodRunOptions, run_p
 from app.core.provider_costs import microdollars
 from app.core.sources.onboarding import import_source_candidates
 from app.core.sources.validation import run_source_validation_batch
+from app.core.world.filter import load_own_domains
+from app.core.world.gdelt import DayStats, make_client, scan_day
 from app.observability import setup_json_logging
 from app.storage import SessionLocal, create_all
 from app.storage.archive import ArchiveRepo
@@ -462,6 +464,30 @@ def bulletin_assess(
         typer.echo(f"bulletin assess: no digest for {target}", err=True)
         raise typer.Exit(2)
     typer.echo(json.dumps(summary, sort_keys=True))
+
+
+world_app = typer.Typer(help="World news stream (spec 018, item 5).")
+app.add_typer(world_app, name="world")
+
+
+@world_app.command("scan")
+def world_scan(
+    report_date: str = typer.Option(..., "--date", help="UTC day, YYYY-MM-DD."),
+    max_files: int | None = typer.Option(None, "--max-files", min=1, help="Read only N files."),
+) -> None:
+    """Download the GDELT files of a day, filter titles, print counts. Writes nothing."""
+    try:
+        target = date.fromisoformat(report_date)
+    except ValueError as exc:
+        raise typer.BadParameter("--date must be YYYY-MM-DD") from exc
+    own = load_own_domains(get_settings().sources_path)
+    stats = DayStats()
+    with make_client() as client:
+        for _candidate in scan_day(
+            target, client=client, stats=stats, own_domains=own, max_files=max_files
+        ):
+            pass
+    typer.echo(json.dumps(stats.as_dict(), sort_keys=True))
 
 
 @app.command("import-candidates")
