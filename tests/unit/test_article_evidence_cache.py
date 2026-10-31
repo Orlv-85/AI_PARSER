@@ -182,6 +182,29 @@ def test_extract_saved_response_after_crash_without_network(tmp_path):
     assert (directory / "text.txt").exists()
 
 
+def test_page_dir_keeps_one_copy_of_the_page(tmp_path):
+    cache = PageCache(tmp_path / "run")
+    url = "https://example.com/article"
+    _fetch(cache, lambda _: httpx.Response(200, text=_html(),
+                                         headers={"Content-Type": "text/html"}), [url])
+    files = {path.name for path in cache.page_dir(url).iterdir()}
+    assert "body.bin" in files
+    assert "page.html" not in files
+    assert cache.attempt(url)["state"] == "completed"
+
+
+def test_extract_saved_reads_old_dir_that_still_has_page_html(tmp_path):
+    cache = PageCache(tmp_path / "run")
+    url = "https://example.com/article"
+    _fetch(cache, lambda _: httpx.Response(200, text=_html(),
+                                         headers={"Content-Type": "text/html"}), [url])
+    directory = cache.page_dir(url)
+    (directory / "page.html").write_bytes((directory / "body.bin").read_bytes())
+    before = json.loads((directory / "evidence.json").read_text())
+    cache.extract_saved(url)
+    assert json.loads((directory / "evidence.json").read_text()) == before
+
+
 def test_size_limit_preserves_partial_body_but_disallows_evidence(tmp_path):
     cache = PageCache(tmp_path / "run")
     url = "https://example.com/article"

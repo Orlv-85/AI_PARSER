@@ -289,6 +289,28 @@ def _download_step(session: Session, *, since: datetime | None, now: datetime,  
     return result
 
 
+def dedupe_page_cache(roots: Iterable[Path], *, apply: bool = False) -> dict[str, int]:
+    """Remove the duplicate page.html that older cache dirs hold next to body.bin.
+
+    A dir qualifies only when body.bin and response.json exist, so the page can be rebuilt.
+    Dry run unless apply is set.
+    """
+    result = {"dirs": 0, "files": 0, "bytes": 0}
+    for root in roots:
+        pages = root / "pages"
+        for directory in pages.iterdir() if pages.is_dir() else ():
+            duplicate = directory / "page.html"
+            if not (duplicate.is_file() and (directory / "body.bin").is_file()
+                    and (directory / "response.json").is_file()):
+                continue
+            result["dirs"] += 1
+            result["files"] += 1
+            result["bytes"] += duplicate.stat().st_size
+            if apply:
+                duplicate.unlink()
+    return result
+
+
 def _clean_cache(cache_root: Path) -> int:
     """Delete page dirs older than ARCHIVE_RAW_KEEP_DAYS and stale robots files."""
     now = time.time()

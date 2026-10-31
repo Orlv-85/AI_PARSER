@@ -9,6 +9,11 @@ from sqlalchemy import select
 
 from app.config.settings import get_settings
 from app.config.sources import load_sources
+from app.core.archive.capture import (
+    ARCHIVE_CACHE_ROOT,
+    DAILY_CACHE_ROOT,
+    dedupe_page_cache,
+)
 from app.core.archive.capture import capture as archive_capture
 from app.core.archive.capture import import_db as archive_import_db
 from app.core.archive.capture import status as archive_status
@@ -406,6 +411,15 @@ def archive_purge(
         session.commit()
     typer.echo(json.dumps({"state": "deleted" if apply else "dry_run", "documents": documents,
                            "versions": versions}, sort_keys=True))
+
+
+@archive_app.command("dedupe-cache")
+def archive_dedupe_cache(
+    apply: bool = typer.Option(False, "--apply", help="Delete; without it only counts."),
+) -> None:
+    """Remove duplicate page.html files from the source-page caches (dry run by default)."""
+    result = dedupe_page_cache([ARCHIVE_CACHE_ROOT, DAILY_CACHE_ROOT], apply=apply)
+    typer.echo(json.dumps({"state": "deleted" if apply else "dry_run", **result}, sort_keys=True))
 
 
 @archive_app.command("import-db")

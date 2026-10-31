@@ -2,6 +2,7 @@
 module: src/app/core/archive/capture.py
 covers:
   - src/app/core/archive/*.py
+  - src/app/storage/article_evidence_cache.py
   - src/app/storage/archive.py
   - src/app/storage/migrations/versions/*article_archive*.py
   - scripts/run_daily_archive_job.sh
@@ -95,6 +96,15 @@ flowchart LR
 - After the downloads the capture deletes page directories in `ARCHIVE_CACHE_ROOT` older than
   `ARCHIVE_RAW_KEEP_DAYS` and robots files older than `ARCHIVE_ROBOTS_KEEP_HOURS`. Tests:
   `test_capture_deletes_old_raw_pages`.
+- A page directory in the source-page caches holds one copy of the page, `body.bin`, next to
+  response.json, evidence.json, text.txt and attempt.json; extraction decodes `body.bin` and
+  writes no page.html. Directories written earlier may still hold a page.html; nothing reads it.
+  Tests: `test_page_dir_keeps_one_copy_of_the_page`,
+  `test_extract_saved_reads_old_dir_that_still_has_page_html`.
+- `ai-news archive dedupe-cache` counts, and with `--apply` deletes, the page.html of every
+  directory in `ARCHIVE_CACHE_ROOT` and `DAILY_CACHE_ROOT` that has `body.bin` and response.json
+  (`dedupe_page_cache`); other files and directories are untouched. Dry run by default. Tests:
+  `test_dedupe_page_cache_dry_run_then_apply`.
 - The capture ends with one `archive_capture_finished` JSON log line, which the CLI also prints:
   `window_days` (null with `--all`), `articles_synced`, `window_documents` and `window_archived`
   (documents first seen in the window), `coverage_pct`, `new_versions` by origin, `cache_reused`,
@@ -141,6 +151,9 @@ flowchart LR
   probe. Measured: no blocked host got worse; www.intel.com answered 403 to the Chrome string and
   200 to the bot. Tests: `test_every_client_sends_the_bot_user_agent`,
   `test_robots_matches_the_bot_token`.
+- decided 2026-10-31 (agent): drop page.html instead of `body.bin`: it was the decoded copy of
+  `body.bin` (identical for UTF-8 pages, measured on prod: ~1.9 GB of duplicates), only `body.bin`
+  is checked against `body_sha256`, and no code reads page.html.
 - Same database, two tables, no foreign key to `articles` or `sources`: backups already cover the
   database, and documents must outlive their articles (plan.md, "Where the archive lives").
 - Stored content is copied under `ARTICLE_CONTENT_VERSION`, because ingestion does not record which
@@ -183,14 +196,14 @@ flowchart LR
 ## Code map
 
 - `capture.py`: constants, `archive_articles` (sync of stored articles, no network), `capture`
-  (window, batches, due, reuse, downloads, record, clean, summary), `status` and `import_db`
-  (archive pruned rows from a dump).
+  (window, batches, due, reuse, downloads, record, clean, summary), `status`, `import_db`
+  (archive pruned rows from a dump) and `dedupe_page_cache` (one-off page.html cleanup).
 - `storage/article_evidence_cache.py`: shared `PageCache`, `SourcePageDownloader`,
-  `make_http_client` (not changed by the archive).
+  `make_http_client` (not changed by the archive; `extract_saved` writes no page.html).
 - `scripts/run_daily_archive_job.sh`: nightly job (image, lock, timeout, exit 0).
 - `scripts/install_daily_timers.sh`: installs the `ai-news-daily-archive` unit and timer next to
   fetch and digest (run by every deploy with the systemd scheduler).
-- `cli/main.py`: `archive` Typer group (`capture`, `status`, `purge`, `import-db`).
+- `cli/main.py`: `archive` Typer group (`capture`, `status`, `purge`, `import-db`, `dedupe-cache`).
 - `storage/archive.py`: `ArchiveRepo` (upsert document, add version by hash, purge selection,
   due selection, `record_attempt`, state counts, window coverage, hosts without text, size).
 - `storage/models_sql.py`: `ArchiveDocument`, `ArchiveText` (tables `archive_documents`,

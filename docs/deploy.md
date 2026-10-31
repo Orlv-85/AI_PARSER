@@ -303,6 +303,17 @@ docker compose -f docker-compose.prod.yml run --rm app ai-news archive purge --h
 docker compose -f docker-compose.prod.yml run --rm app ai-news archive purge --host example.com --apply
 ```
 
+Old source-page cache directories hold a duplicate `page.html` next to `body.bin` (new ones do not).
+The files belong to root (the container user), so run the command in the container; dry run first:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm app ai-news archive dedupe-cache
+docker compose -f docker-compose.prod.yml run --rm app ai-news archive dedupe-cache --apply
+```
+
+It prints `{"state", "dirs", "files", "bytes"}` and removes only `page.html` where `body.bin` and
+`response.json` exist. `df -h /` before and after shows the freed space (about half of the cache).
+
 Archive articles that exist only in a backup (for example rows pruned before the archive existed).
 The dump is a plain `pg_dump` of one database (no `CREATE DATABASE`), so it loads into a scratch
 database; `import-db` only reads it and writes nothing to `articles`:
