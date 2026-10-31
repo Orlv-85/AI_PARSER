@@ -13,6 +13,7 @@ PREVIOUS_HEAD = "e7b4c2a9d150"
 PERIOD_REVISION = "f4a9c1d27b83"
 DROP_REVISION = "a7d3e5b18c94"
 HEAD = "b8e2d4f61a07"
+LATEST_HEAD = "c9f3a7e15b28"
 
 
 def schema(url, table):
@@ -38,7 +39,7 @@ def upgrade(monkeypatch, path, revision="head"):
 
 def test_single_head_and_chain():
     script = ScriptDirectory.from_config(Config("alembic.ini"))
-    assert script.get_heads() == [HEAD]
+    assert script.get_heads() == [LATEST_HEAD]
     assert script.get_revision(PERIOD_REVISION).down_revision == PREVIOUS_HEAD
     assert script.get_revision(DROP_REVISION).down_revision == PERIOD_REVISION
     assert script.get_revision(HEAD).down_revision == DROP_REVISION

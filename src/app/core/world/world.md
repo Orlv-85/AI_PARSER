@@ -2,14 +2,15 @@
 module: src/app/core/world/__init__.py
 covers:
   - src/app/core/world/*.py
+  - src/app/storage/world.py
 -->
 # World news stream
 
 Candidate stories about AI in human life from outside our own sources, for the Daily Inference
 bulletin (spec `specs/018-daily-inference/spec.md`, FR-014..FR-018). Plan:
 `specs/018-daily-inference/records/plan-item5-world-sources-2026-10-31.md`. Shipped so far: the
-keyword filter (W1) and the GDELT reader (W2, no database). Storage, jobs and Jev steps (W3 and
-later) are not in the code yet.
+keyword filter (W1), the GDELT reader (W2, no database) and the storage tables (W3). The collect
+command, jobs and Jev steps (W4 and later) are not in the code yet.
 
 ## Behavior
 
@@ -119,6 +120,54 @@ flowchart LR
 - The command `ai-news world scan --date D [--max-files N]` prints the `DayStats` as one JSON
   line; it needs the network and writes nothing. Tests: `test_cli_world_scan_prints_counts`.
 
+### Storage
+
+```mermaid
+stateDiagram-v2
+  [*] --> new
+  new --> screened_out
+  new --> screened_in
+  new --> failed
+  screened_in --> text_ready
+  screened_in --> no_text
+  screened_in --> failed
+  text_ready --> assessed
+  text_ready --> failed
+  failed --> new
+  failed --> screened_in
+  failed --> text_ready
+```
+
+- Candidates live in `world_candidates`, files in `world_files`; both are separate from `articles`
+  and the digest tables, which the world storage never reads or writes (FR-016). Tests:
+  `test_world_tables_not_read_by_digest`, `test_world_storage_never_touches_articles`.
+- A candidate is identified by `url_canonical_hash`, made with `canonical_url_hash` (the same
+  canonicalization as `articles`). `upsert_candidates` inserts a new hash in state `new`. A repeat
+  of a known hash, also in the same batch, changes nothing: `first_seen_at` and the state stay.
+  Tests: `test_world_candidate_dedup_by_canonical_hash`,
+  `test_world_upsert_repeat_keeps_first_seen_and_state`.
+- `cluster_key` is the first `CLUSTER_KEY_CHARS` characters of the title, lower-cased with every
+  run of non-letters and non-digits made one space. Candidates of the same story in different
+  outlets share it; it is stored, nothing is merged in W3. Tests: `test_world_cluster_key_normalizes_title`.
+- `published_at` comes from the 14 digit GDELT record stamp and is null when it does not parse.
+  Long titles and URLs are cut to the column size. Tests: `test_world_candidate_fields_from_gdelt`.
+- `transition` moves a candidate along the arrows of the diagram only (`TRANSITIONS`); any other
+  move raises `InvalidTransition` and changes nothing. A move to `failed` adds one to `attempts`
+  and stores the error text; a move to another state clears the error. `screened_out`, `no_text`
+  and `assessed` are final. Tests: `test_world_transitions_follow_allowed_table`,
+  `test_world_failed_counts_attempts_and_retries`.
+- `candidates_in_state` lists candidates of a state, oldest first, for the next step to take.
+  Tests: `test_world_transitions_follow_allowed_table`.
+- `world_files` has one row per GDELT file stamp and kind (`gkg`, `translation`). `record_file`
+  stores state `done` or `missing`, rows, matched and the error, and replaces an earlier row of the
+  same file. `done_files` gives the `done` files of a UTC day so a rerun skips them; `missing`
+  files are tried again. Tests: `test_world_file_states_record_and_skip_done`.
+- `prune` deletes candidates whose `first_seen_at` is older than `WORLD_RETENTION_DAYS` and file
+  rows last updated before the same limit. Archive documents, archive texts, articles and world
+  change answers are not touched. Tests: `test_world_prune_keeps_archive`.
+- The migration adds both tables on SQLite and PostgreSQL, is safe after `create_all`, and its
+  schema equals the models. Tests: `test_world_migration_round_trip`.
+
 ## Decisions
 
 - Keyword filter on the title, not a GDELT theme filter: GDELT has no AI theme (measured on one
@@ -133,6 +182,14 @@ flowchart LR
 - Files come one at a time, a second apart, with a bot user agent: the production server has little
   disk and memory (see Invariants), and GDELT files are small enough that parallel download gains
   nothing in a nightly job (decided 2026-10-31 (agent)).
+- `world_change_assessments` keys stay as they are (hash and question version); W5 reads a
+  candidate's answers by its `url_canonical_hash`, no join column is added (decided 2026-11-01
+  (agent)).
+- File rows are pruned with the candidates: they are 192 rows a day, and a catch-up older than the
+  retention is not expected (decided 2026-11-01 (agent)).
+- A `failed` candidate returns to the step that failed (`new`, `screened_in` or `text_ready`), so
+  W5 and W6 need no separate retry state; the run decides how many attempts are enough (decided
+  2026-11-01 (agent)).
 - The scan has no `--dry-run`: in W2 nothing is written at all; the flag arrives with storage (W4).
 - A 404 is retried like any failure because the newest files appear on https with a delay.
 - Dedup (same canonical URL, same first 60 normalized title characters) is not part of the filter;
@@ -146,6 +203,8 @@ flowchart LR
 
 - The filter module imports no network, database or web code and never touches `articles`
   (FR-016). Tests: `test_filter_has_no_io_imports`.
+- `src/app/storage/world.py` is imported only by the world code and the world CLI, never by web,
+  digest, bulletin or daily code. Tests: `test_world_tables_not_read_by_digest`.
 - Production has 3.6 GB of free disk and 2 GB of RAM: the reader keeps no raw GDELT file and holds
   no whole-day list of raw rows; one file lives on disk at a time and is deleted. Binding for the
   later steps. Tests: `test_scan_leaves_no_file_on_disk`, `test_scan_memory_is_bounded`.
@@ -156,6 +215,11 @@ flowchart LR
   reason), `load_own_domains`, `own_domains_from_hosts`, `host_in_domains`.
 - `gdelt.py`: constants, `day_file_names`, `parse_gkg_line`, `GkgRow`, `Candidate`, `DayStats`,
   `GkgFile` (open file, lines, close), `fetch_file` (download, check, retries), `scan_day`.
+- `storage/world.py`: `WorldRepo` (`upsert_candidates`, `transition`, `candidates_in_state`,
+  `record_file`, `done_files`, `prune`), `cluster_key`, `TRANSITIONS`, `InvalidTransition`, state and
+  file constants, `WORLD_RETENTION_DAYS`, `CLUSTER_KEY_CHARS`.
+- `storage/models_sql.py`: `WorldCandidate` (`world_candidates`), `WorldFile` (`world_files`);
+  migration `c9f3a7e15b28_add_world_candidates_and_files.py`, after `b8e2d4f61a07`.
 - `cli/main.py`: `world` Typer group with `scan`.
 - Change a keyword or a drop rule in the constant named above and extend the fixture test.
 
@@ -164,5 +228,6 @@ flowchart LR
 - `tests/unit/test_world_filter.py`: all rules above.
 - `tests/unit/test_world_gdelt.py`: reader rules above, with `httpx.MockTransport` and small zip
   and plain fixtures built in the test.
+- `tests/unit/test_world_storage.py`: storage rules above, including the migration round trip.
 - `tests/fixtures/world/titles.jsonl`: 60 real titles from the measured day, each with the
   recorded decision.
