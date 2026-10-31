@@ -177,9 +177,24 @@ about the project (ER-9). Shape decided after P1-P3 run for two weeks.
 - **FR-011** A poster sends each new bulletin once to the channel (bot token and channel id as
   secrets in prod `.env`); the message id is stored; a failure never blocks the daily job.
 
+**World news about AI in human life** (owner yes 2026-10-31: "take it and build it", up to $3/month)
+- **FR-014** Our 152 sources are AI and tech outlets; they report launches, not AI in courts,
+  schools, churches, farms or city halls. A second stream reads general world news in any language
+  (GDELT, free; plus a few general feeds) for stories of AI in human life.
+- **FR-015** Free filters run first: the GDELT query itself (AI keywords and themes, last 24 h), then
+  a local keyword and dedup filter on title and summary (several languages; ambiguous "AI" matches
+  kept for Jev). Only the candidates go to Jev (`ai_relevant`, then `world_change`).
+- **FR-016** This stream feeds only the bulletin; the digest at `/daily` keeps its sources (decided
+  2026-10-31 (agent): an AI-made icon next to model releases would blur the digest).
+- **FR-017** Lines from non-English sources are translated by the line writer (FR-005); the
+  grounding check compares names and numbers with the original text.
+- **FR-018** The first days are checked before the stream enters the bulletin: candidates per day,
+  share accepted by Jev, cost per day, a sample of lines; numbers go into `records/`.
+
 **Cost and safety**
 - **FR-012** Paid calls of this feature are capped per day (Jev and the line writer) through the
-  existing provider journal; expected total below $1 per month.
+  existing provider journal; expected total below $1 per month for items 1-6 and up to $3 per
+  month with the world news stream (item 8).
 - **FR-013** Nothing is posted anywhere else (Instagram, X) without a new owner decision.
 
 ### Key Entities
@@ -193,7 +208,8 @@ about the project (ER-9). Shape decided after P1-P3 run for two weeks.
 - **SC-001** On days with ready signals, the bulletin is on the site and in Telegram by 06:00 UTC.
 - **SC-002** 100% of published lines link to a source of that day; 0 lines with a failed grounding
   check are published.
-- **SC-003** Paid cost of the feature stays below $1 per month (provider ledger).
+- **SC-003** Paid cost of the feature stays below $3 per month with the world news stream, below
+  $1 without it (provider ledger).
 - **SC-004** After the setup, the owner spends no time on daily posts.
 
 ## Implementation order (one item = one PR)
@@ -205,6 +221,8 @@ about the project (ER-9). Shape decided after P1-P3 run for two weeks.
 5. Home page as the newspaper, digest to `/daily` (FR-009, FR-010).
 6. Telegram poster (FR-011).
 7. Weekly bulletin; then the monthly chronicle (User Story 4).
+8. World news about AI in human life: GDELT stream, free filters, Jev, bulletin only
+   (FR-014..FR-018). Can start in parallel with item 2 once item 1 is done.
 
 Each item: feature doc next to the main module first (AGENTS.md "Feature Docs Next To Code"),
 then code and tests; reviewed by a different session.
