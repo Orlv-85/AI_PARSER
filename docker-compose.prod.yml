@@ -14,7 +14,10 @@ services:
       retries: 10
       start_period: 10s
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # PostgreSQL 18 keeps its data in /var/lib/postgresql/18/docker, and the image declares
+      # /var/lib/postgresql as its volume. Mount the named volume there, not at .../data
+      # (the pre-18 path), or the data lands in an anonymous volume. See docs/db-volume-move.md.
+      - pgdata:/var/lib/postgresql
 
   app:
     image: ${APP_IMAGE:-ghcr.io/orlv-85/ai-parser:latest}
