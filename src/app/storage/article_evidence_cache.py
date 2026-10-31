@@ -148,7 +148,6 @@ class PageCache:
         if _sha(body) != response["body_sha256"]:
             raise ValueError("Cached response hash mismatch")
         page_html = body.decode(response["encoding"] or "utf-8", errors="replace")
-        private_bytes(directory / "page.html", page_html.encode())
         try:
             evidence = inspect_page(page_html, url, response["final_url"])
         except (ValueError, TypeError, AttributeError, LxmlError):
