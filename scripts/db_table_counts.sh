@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # Prints "<table> <row count>" for every public table, sorted, from the running db container.
-# Read-only. Used to compare the database before and after moving it (docs/db-volume-move.md).
+# Read-only. Used to compare the database before and after moving it (docs/archive/2026-10/db-volume-move.md).
 set -eu
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"

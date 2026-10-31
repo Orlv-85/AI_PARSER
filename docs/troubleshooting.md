@@ -201,7 +201,7 @@ the Troubleshooting section of `README.md`.
       "symptom": "The named volume ai-news_pgdata is empty (4 KB) while the database is 174 MB; `docker volume ls` shows an extra volume with a random name.",
       "evidence": ["docker inspect ai-news-db: anonymous volume e8d276e8... at /var/lib/postgresql and ai-news_pgdata at /var/lib/postgresql/data", "SHOW data_directory = /var/lib/postgresql/18/docker"],
       "cause": "The compose file mounted pgdata at the PostgreSQL 17 data path; the postgres:18 image uses PGDATA=/var/lib/postgresql/18/docker and declares VOLUME /var/lib/postgresql, so Docker made an anonymous volume for the real data.",
-      "fix": "Mount pgdata at /var/lib/postgresql (docker-compose.prod.yml) and move the data once with docs/db-volume-move.md; do not deploy the compose change before the move.",
+      "fix": "Mount pgdata at /var/lib/postgresql (docker-compose.prod.yml) and move the data once with docs/archive/2026-10/db-volume-move.md; do not deploy the compose change before the move.",
       "verification": "docker inspect ai-news-db shows only ai-news_pgdata -> /var/lib/postgresql; scripts/db_table_counts.sh equals the counts taken before the move.",
       "if_it_recurs": "After a deploy shows an empty site, check the db mounts first; the data is still on the other volume, so do not prune volumes."
     }
