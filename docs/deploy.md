@@ -126,7 +126,7 @@ Restarting `systemd-journald` does not touch the app, the database or the timers
 Verify:
 
 ```bash
-systemd-analyze cat-config systemd/journald.conf | grep -A1 '^\[Journal\]'   # shows SystemMaxUse=300M
+systemd-analyze cat-config systemd/journald.conf | grep SystemMaxUse   # shows SystemMaxUse=300M
 journalctl --disk-usage                                                      # at most about 300M
 ```
 
