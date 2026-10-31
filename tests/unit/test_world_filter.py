@@ -119,16 +119,58 @@ def test_load_own_domains_cuts_feed_prefixes(tmp_path: Path) -> None:
         "  - id: a\n    url: https://feeds.arstechnica.com/arstechnica/index\n"
         "  - id: b\n    url: https://rss.example.org/feed\n"
         "  - id: c\n    url: https://microsoft.github.io/blog/feed.xml\n"
-        "  - id: d\n    url: ''\n",
+        "  - id: d\n    url: ''\n"
+        "  - id: e\n    url: https://medium.com/feed/x\n"
+        "  - id: f\n    url: https://feeds.feedburner.com/y\n"
+        "  - id: g\n    url: https://github.com/a/b/releases.atom\n"
+        "  - id: h\n    url: https://blogs.microsoft.com/ai/feed/\n",
         encoding="utf-8",
     )
-    assert load_own_domains(path) == {"arstechnica.com", "example.org", "microsoft.github.io"}
+    assert load_own_domains(path) == {"arstechnica.com", "example.org"}
 
 
 def test_load_own_domains_reads_repo_sources() -> None:
     own = load_own_domains(ROOT / "sources.yaml")
     assert len(own) > 50
     assert "arstechnica.com" in own
+
+
+def test_filter_own_domains_skip_shared_platforms() -> None:
+    own = own_domains_from_hosts(["medium.com", "github.com", "feeds.feedburner.com", "blogs.microsoft.com"])
+    assert own == frozenset()
+    assert filter_title(title="AI in class", url="https://medium.com/@a/b", own_domains=own).kept
+    assert filter_title(title="AI in class", url="https://news.microsoft.com/a", own_domains=own).kept
+
+
+def test_filter_ai_token_is_a_word() -> None:
+    for title in ("AIDS research gets funding", "AIIB approves a loan", "AIFF cup final", "AIRPORT delays", "AIADMK rally"):
+        assert classify_title(title) is None, title
+    for title in ("AI技术进入课堂", "AI-generated images flood feeds", "Kodiak AI trucks", "Teachers use AI.", "(AI) rules"):
+        assert classify_title(title) == "strong", title
+
+
+def test_filter_keeps_human_life_stories_with_money_words() -> None:
+    for title in (
+        "She shares how AI helped her son",
+        "Government actions on AI in schools",
+        "Реакция на ИИ в школах",
+        "Акция протеста против ИИ",
+        "AI stock photos flood newsrooms",
+        "Фонд поддержки и инвестиции в школы с ИИ",
+        "人工智能基金会成立",
+        "Acciones contra la inteligencia artificial en las escuelas",
+        "Azioni di protesta contro l'intelligenza artificiale",
+        "Borsa in pelle e intelligenza artificiale: nuovo design",
+    ):
+        assert _kept(title), title
+
+
+def test_filter_ia_ki_need_context() -> None:
+    for title in ("Des Moines, IA wins grant", "Mi KI es tu casa", "Tour of Cedar Rapids, IA", "Anthropic KI"):
+        assert not _kept(title), title
+    for title in ("KI hilft bei der Diagnose", "Googles KI-Suche", "Uso de la IA en clase", "Cina, film dall'IA",
+                  "Pour sauver l'IA européenne", "Eine neue KI generativ"):
+        assert _kept(title), title
 
 
 def test_filter_ignores_names_alexa_ai_and_automatically() -> None:
@@ -153,7 +195,7 @@ def test_filter_real_title_fixture() -> None:
     rows = _fixture_rows()
     assert len(rows) == 60
     assert sum(row["kept"] for row in rows) == 30
-    own = own_domains_from_hosts(["techcrunch.com", "theregister.com", "theverge.com", "github.com"])
+    own = own_domains_from_hosts(["techcrunch.com", "theregister.com", "theverge.com"])
     for row in rows:
         result = filter_title(title=row["title"], url=row["url"], own_domains=own)
         assert (result.kept, result.reason, result.match) == (row["kept"], row["reason"], row["match"]), row["title"]

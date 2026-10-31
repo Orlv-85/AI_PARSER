@@ -28,26 +28,35 @@ flowchart LR
   no database. Tests: `test_filter_has_no_io_imports`.
 - A title matches strongly on a phrase list in many languages (`STRONG_PHRASES`) or on the
   capitalised tokens `AI`, `ИИ`, `ШІ`, `GPT` (`STRONG_TOKENS`); phrases ignore case, tokens do not.
+  `AI` is a token when no letter or digit stands before it and no letter after it: "AI-generated"
+  and "AI技术" match; AIDS, AIIB, AIFF, AIRPORT do not. Tests: `test_filter_ai_token_is_a_word`.
   A headline written entirely in capitals (at least `ALL_CAPS_MIN_LETTERS` cased letters) does not
   match on `AI`; a CJK title with a Latin `AI` is not a capitals headline. Tests:
   `test_filter_strong_phrases_in_many_languages`, `test_filter_all_caps_title_is_not_strong`,
   `test_filter_cjk_title_with_ai_is_strong`.
-- A weak match (`WEAK_WORDS`, `WEAK_TOKENS`) is kept only when the title also has `IA`, `KI`
-  (capitals), "robot" or "algorithm" (`WEAK_KEEP_RE`); other weak matches are dropped. Tests:
-  `test_filter_weak_requires_ia_ki_or_robot`.
+- A weak match (`WEAK_WORDS`, `WEAK_TOKENS`) is kept only with "robot", "algorithm" or `IA` / `KI`
+  (capitals) in a context (`WEAK_KEEP_RE`): after an article or preposition ("la IA", "de KI"),
+  with a hyphen ("KI-Suche"), before "generativ...", or as the first word. "Des Moines, IA" and
+  "Mi KI es tu casa" are dropped. Other weak matches are dropped. Tests:
+  `test_filter_weak_requires_ia_ki_or_robot`, `test_filter_ia_ki_need_context`.
 - Names and stems that gave false hits do not match: Alexa, Siri, Gemini, Claude, "automat...",
   and "Ai" inside a name or a longer word. Tests: `test_filter_ignores_names_alexa_ai_and_automatically`.
 - A title is dropped when it has a finance word (`FINANCE_TITLE_RE`), when a GDELT theme is in
-  `FINANCE_THEMES`, or when the host is in `FINANCE_DOMAINS` or a subdomain of one. Tests:
-  `test_filter_drops_finance_titles_and_themes`, `test_filter_drops_finance_domains`,
-  `test_filter_keeps_slguardian_org`.
+  `FINANCE_THEMES`, or when the host is in `FINANCE_DOMAINS` or a subdomain of one. Words that
+  also mean something else (shares, stock photos, actions, акции, 基金, инвест) are not finance
+  words alone, so human-life stories stay. Tests: `test_filter_drops_finance_titles_and_themes`,
+  `test_filter_drops_finance_domains`, `test_filter_keeps_slguardian_org`,
+  `test_filter_keeps_human_life_stories_with_money_words`.
 - A title is dropped when the host is one of our own source domains or a subdomain of one:
   `feeds.arstechnica.com` as a source makes `arstechnica.com` and `www.arstechnica.com` own.
   `load_own_domains` reads the hosts of all sources in `sources.yaml` and cuts the prefixes in
-  `FEED_HOST_PREFIXES`. Tests: `test_filter_drops_own_registrable_domains`,
+  `FEED_HOST_PREFIXES`. Hosts on `SHARED_PLATFORM_DOMAINS` (medium.com, github.com,
+  microsoft.com, feedburner.com and similar) are not own: their stories are not ours. Tests:
+  `test_filter_own_domains_skip_shared_platforms`, `test_filter_drops_own_registrable_domains`,
   `test_load_own_domains_cuts_feed_prefixes`, `test_load_own_domains_reads_repo_sources`.
 - On 60 real titles of a measured day (30 kept, 30 dropped) the result equals the recorded one.
-  Tests: `test_filter_real_title_fixture`.
+  The expected values were recorded from this filter and read by hand; the fixture pins the
+  behavior and is not an independent judgement. Tests: `test_filter_real_title_fixture`.
 
 ## Decisions
 
@@ -57,13 +66,15 @@ flowchart LR
   and "automat..." were removed after false hits on a hand-checked sample.
 - Own-domain match is by suffix, not by exact host, so feed and `www` subdomains do not leak our
   own sources into the stream. Only the prefixes in `FEED_HOST_PREFIXES` are cut; a source on a
-  shared host (a project page on a hosting provider) makes only that host own, not the provider.
+  shared host (a project page on a hosting provider) is not own at all
+  (`SHARED_PLATFORM_DOMAINS`, decided 2026-10-31 by the coordinator).
 - `slguardian.org` is a general news site; it was listed as finance by mistake and is removed.
 - Dedup (same canonical URL, same first 60 normalized title characters) is not part of the filter;
   it belongs to storage (W3).
 - The footer credit "News discovery: GDELT Project" with a link is required by the GDELT terms
-  and approved by the owner (2026-10-31); the world stream has its own Jev budget of $0.10 per
-  day inside the approved $3 per month. Both are used by later steps; neither is in the code yet.
+  and approved by the owner (2026-10-31); the digest Jev cap of FR-012 stays $0.05 per day,
+  and the world stream has its own Jev cap of $0.10 per day (owner, 2026-10-31), inside the
+  approved $3 per month. Both are used by later steps; neither is in the code yet.
 
 ## Invariants
 

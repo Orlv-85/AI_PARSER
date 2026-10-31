@@ -33,10 +33,23 @@ STRONG_PHRASES = (
 # Gemini, Claude and the stem "automat" gave false hits and are not listed.
 WEAK_WORDS = (r"robot", r"algorithm", r"copilot", r"\bgrok\b", r"anthropic", r"chat bot")
 # Case-sensitive tokens: "AI" is a word only in capitals.
-STRONG_TOKENS = (r"\bAI\b", r"\bИИ\b", r"\bШІ\b", r"\bGPT\b", r"(?<![A-Za-z])AI(?=[-A-Z人])")
+STRONG_TOKENS = (r"(?<![A-Za-z0-9])AI(?![A-Za-z])", r"\bИИ\b", r"\bШІ\b", r"\bGPT\b")
 WEAK_TOKENS = (r"\bIA\b", r"\bKI\b", r"\bIAs\b", r"\bKI-", r"\bIA-")
-# A weak match is kept only with one of these (IA and KI are case-sensitive).
-WEAK_KEEP_RE = re.compile(r"\bIA\b|\bKI\b|(?i:robot|algorithm)")
+# A weak match is kept only with one of these. IA and KI are case-sensitive and count only in a
+# context: after an article or preposition ("la IA", "de KI"), with a hyphen ("KI-Suche"), before
+# "generativ...", or as the first word of the title; so "Des Moines, IA" does not count.
+_IA_PREFIXES = (
+    "la|el|las|los|le|les|l|d|de|del|des|dell|dall|con|por|para|sobre|contra|com|da|do|na|no|uma|"
+    "una|un|une|der|die|das|dem|den|mit|durch|von|zur|zum|im|per|su|sulla|nella|avec|pour|sans|"
+    "dans|sur|en|et|y|und|and|a|e"
+)
+WEAK_KEEP_RE = re.compile(
+    r"(?i:\b(?:" + _IA_PREFIXES + r")['’\s]+)(?-i:IA|KI)\b"
+    r"|(?-i:\b(?:IA|KI)-)"
+    r"|(?-i:\b(?:IA|KI)\s+)(?i:generativ|génératif|generat)"
+    r"|^(?:IA|KI)\b"
+    r"|(?i:robot|algorithm)"
+)
 
 ALL_CAPS_MIN_LETTERS = 8
 
@@ -44,10 +57,16 @@ FINANCE_THEMES = (
     "ECON_STOCKMARKET", "ECON_IPO", "ECON_EARNINGSREPORT", "ECON_WORLDCURRENCIES",
     "ECON_BITCOIN", "ECON_OILPRICE",
 )
+# Words that mean money only: "shares", "stock", "actions", "azioni", "акции", "基金" and
+# "инвест" also mean sharing, stock photos, actions, foundations or investment in AI projects, so
+# they are not listed alone.
 FINANCE_TITLE_RE = re.compile(
-    r"\b(stocks?|shares|nasdaq|nyse|s&p|dow jones|wall street|valuation|earnings|price target|"
-    r"etf|funding round|raises? \$|bitcoin|crypto|aktie|börse|boerse|bolsa|acciones|azioni|"
-    r"actions|akcj|hisse|borsa|cổ phiếu)\b|股|基金|净值|акци|биржа|котировк|рынок|инвест",
+    r"(?<![A-Za-z])(?:stocks|stock market|stock prices?|share prices?|nasdaq|nyse|s&p|dow jones|"
+    r"wall street|valuation|earnings|price target|etf|funding round|bitcoin|crypto|aktien?|"
+    r"b[öo]e?rse|bolsa de valores|cotizaci[óo]n|piazza affari|borsa di milano|borsa istanbul|"
+    r"giełd\w*|hisse|cổ phiếu|shares (?:fall|drop|rise|jump|slump|surge|tumble|plunge|slide|"
+    r"gain|sink|tank)|raises? \$)(?![A-Za-z])"
+    r"|股票|股价|股市|概念股|涨停|净值|котировк|биржев|фондов\w+ рын|рынок акций|курс акций",
     re.IGNORECASE,
 )
 # slguardian.org is a general news site and is not listed.
@@ -55,6 +74,12 @@ FINANCE_DOMAINS = (
     "econotimes.com", "boerse-express.com", "themarketsdaily.com", "247wallst.com", "fool.com",
     "marketbeat.com", "morningstar.com", "moneycontrol.com", "eastmoney.com", "investing.com",
     "seekingalpha.com", "benzinga.com", "zerohedge.com", "stocktwits.com", "tickerreport.com",
+)
+# Shared platforms host many authors; a source on them does not make the whole platform ours.
+SHARED_PLATFORM_DOMAINS = (
+    "medium.com", "github.com", "github.io", "microsoft.com", "feedburner.com", "substack.com",
+    "wordpress.com", "blogspot.com", "google.com", "youtube.com", "reddit.com", "x.com",
+    "twitter.com", "linkedin.com", "amazon.com", "hnrss.org", "ycombinator.com", "arxiv.org",
 )
 # Host prefixes cut when a source host becomes an own domain.
 FEED_HOST_PREFIXES = ("www.", "feeds.", "feed.", "rss.")
@@ -108,7 +133,10 @@ def host_in_domains(host: str, domains: frozenset[str] | tuple[str, ...]) -> boo
 
 
 def own_domains_from_hosts(hosts: list[str]) -> frozenset[str]:
-    """Own domains from source hosts: feed prefixes are cut, so subdomains match too."""
+    """Own domains from source hosts: feed prefixes are cut, so subdomains match too.
+
+    Hosts on `SHARED_PLATFORM_DOMAINS` are left out.
+    """
     result: set[str] = set()
     for raw in hosts:
         host = raw.lower().strip(".")
@@ -116,7 +144,7 @@ def own_domains_from_hosts(hosts: list[str]) -> frozenset[str]:
             if host.startswith(prefix) and host.count(".") >= 2:
                 host = host.removeprefix(prefix)
                 break
-        if host:
+        if host and not host_in_domains(host, SHARED_PLATFORM_DOMAINS):
             result.add(host)
     return frozenset(result)
 
@@ -132,7 +160,7 @@ def load_own_domains(path: Path) -> frozenset[str]:
     return own_domains_from_hosts([host for host in hosts if host])
 
 
-def filter_title(
+def filter_title(  # pylint: disable=too-many-return-statements
     *,
     title: str,
     url: str,
