@@ -24,6 +24,7 @@ from app.storage.models_sql import (
 from app.storage.world import (
     FILE_DONE,
     FILE_MISSING,
+    HASH_CHUNK,
     STATE_ASSESSED,
     STATE_FAILED,
     STATE_NEW,
@@ -188,6 +189,55 @@ def test_world_prune_keeps_archive(session):
     assert session.scalar(select(func.count()).select_from(WorldChangeAssessment)) == 1
 
 
+def test_world_candidate_cuts_long_url_title_and_error(session):
+    repo = WorldRepo(session)
+    long_url = "https://example.org/" + "a" * 3000
+    repo.upsert_candidates([candidate(url=long_url, title="t" * 700)], now=NOW)
+    row = session.scalars(select(WorldCandidate)).one()
+    assert len(row.url) == 2048
+    assert len(row.title) == 512
+    assert row.url_canonical_hash == canonical_url_hash(long_url)
+    repo.transition(row, STATE_FAILED, error="e" * 400)
+    assert len(row.last_error) == 255
+    repo.record_file("20261031000000", "gkg", FILE_MISSING, error="x" * 400)
+    assert len(session.get(WorldFile, ("20261031000000", "gkg")).error) == 255
+
+
+def test_world_upsert_batches_over_hash_chunk(session):
+    repo = WorldRepo(session)
+    total = HASH_CHUNK * 2 + 7
+    batch = [candidate(url=f"https://example.org/story-{i}") for i in range(total)]
+    assert repo.upsert_candidates(batch, now=NOW) == (total, 0)
+    assert repo.upsert_candidates(batch, now=NOW + timedelta(hours=1)) == (0, total)
+    assert session.scalar(select(func.count()).select_from(WorldCandidate)) == total
+
+
+def test_world_upsert_empty_batch(session):
+    assert WorldRepo(session).upsert_candidates([], now=NOW) == (0, 0)
+    assert session.scalar(select(func.count()).select_from(WorldCandidate)) == 0
+
+
+def test_world_prune_cutoff_boundary(session):
+    repo = WorldRepo(session)
+    edge = NOW - timedelta(days=WORLD_RETENTION_DAYS)
+    repo.upsert_candidates([candidate(url="https://example.org/edge")], now=edge)
+    repo.upsert_candidates([candidate(url="https://example.org/old")],
+                           now=edge - timedelta(seconds=1))
+    assert repo.prune(now=NOW) == (1, 0)
+    assert [row.url for row in session.scalars(select(WorldCandidate))] == [
+        "https://example.org/edge"]
+
+
+def test_world_transition_unknown_stored_state_is_invalid(session):
+    repo = WorldRepo(session)
+    repo.upsert_candidates([candidate()], now=NOW)
+    row = session.scalars(select(WorldCandidate)).one()
+    row.state = "corrupt"
+    with pytest.raises(InvalidTransition):
+        repo.transition(row, STATE_NEW)
+    assert row.state == "corrupt"
+
+
 def test_world_storage_never_touches_articles(session):
     repo = WorldRepo(session)
     repo.upsert_candidates([candidate()], now=NOW)
@@ -201,14 +251,20 @@ def test_world_storage_never_touches_articles(session):
     assert not names & {"Article", "NewsDigestReport", "NewsDigestItem", "NewsDigestGroup"}
 
 
-def _imports(path):
+def _imports(path, root=SRC.parent):
+    """Absolute names imported by a file; relative imports are resolved against `root`."""
+    parts = list(path.relative_to(root).with_suffix("").parts)
+    package = parts[:-1]
     tree = ast.parse(path.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             yield from (alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            yield node.module
-            yield from (f"{node.module}.{alias.name}" for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            base = package[:len(package) - node.level + 1] if node.level else []
+            module = ".".join([*base, *([node.module] if node.module else [])])
+            if module:
+                yield module
+                yield from (f"{module}.{alias.name}" for alias in node.names)
 
 
 def test_world_tables_not_read_by_digest():
@@ -227,6 +283,23 @@ def test_world_tables_not_read_by_digest():
     for path in (SRC / "web").rglob("*.py"):
         assert not any(name.startswith(("app.storage.world.", "app.core.world"))
                        for name in _imports(path)), path
+
+
+def test_import_scan_resolves_relative_imports(tmp_path):
+    module = tmp_path / "app" / "core" / "world" / "x.py"
+    module.parent.mkdir(parents=True)
+    module.write_text("from ...storage import world\nfrom . import gdelt\nimport os\n")
+    names = set(_imports(module, root=tmp_path))
+    assert "app.storage.world" in names
+    assert "app.core.world.gdelt" in names
+    assert "os" in names
+
+
+def test_world_core_never_imports_storage():
+    found = [path.name for path in (SRC / "core" / "world").glob("*.py")
+             if any(name == "app.storage" or name.startswith("app.storage.")
+                    for name in _imports(path))]
+    assert not found
 
 
 WORLD_TABLES = {"world_candidates", "world_files"}

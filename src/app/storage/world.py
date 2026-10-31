@@ -111,7 +111,7 @@ class WorldRepo:
                    screen_confidence: float | None = None,
                    priority: float | None = None) -> WorldCandidate:
         """Move a candidate to `state` if TRANSITIONS allows it; `failed` counts an attempt."""
-        if state not in TRANSITIONS[candidate.state]:
+        if state not in TRANSITIONS.get(candidate.state, frozenset()):
             raise InvalidTransition(f"{candidate.state} -> {state}")
         candidate.state = state
         if state == STATE_FAILED:

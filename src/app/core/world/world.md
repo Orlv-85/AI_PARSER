@@ -150,12 +150,18 @@ stateDiagram-v2
   run of non-letters and non-digits made one space. Candidates of the same story in different
   outlets share it; it is stored, nothing is merged in W3. Tests: `test_world_cluster_key_normalizes_title`.
 - `published_at` comes from the 14 digit GDELT record stamp and is null when it does not parse.
-  Long titles and URLs are cut to the column size. Tests: `test_world_candidate_fields_from_gdelt`.
+  Long titles and URLs (and error texts) are cut to the column size; the hash is made from the
+  full URL. An empty batch changes nothing, and a batch over `HASH_CHUNK` hashes is checked in
+  chunks. Tests: `test_world_candidate_fields_from_gdelt`,
+  `test_world_candidate_cuts_long_url_title_and_error`, `test_world_upsert_batches_over_hash_chunk`,
+  `test_world_upsert_empty_batch`.
 - `transition` moves a candidate along the arrows of the diagram only (`TRANSITIONS`); any other
   move raises `InvalidTransition` and changes nothing. A move to `failed` adds one to `attempts`
   and stores the error text; a move to another state clears the error. `screened_out`, `no_text`
-  and `assessed` are final. Tests: `test_world_transitions_follow_allowed_table`,
-  `test_world_failed_counts_attempts_and_retries`.
+  and `assessed` are final. A stored state that is not in the table also raises
+  `InvalidTransition`. Tests: `test_world_transitions_follow_allowed_table`,
+  `test_world_failed_counts_attempts_and_retries`,
+  `test_world_transition_unknown_stored_state_is_invalid`.
 - `candidates_in_state` lists candidates of a state, oldest first, for the next step to take.
   Tests: `test_world_transitions_follow_allowed_table`.
 - `world_files` has one row per GDELT file stamp and kind (`gkg`, `translation`). `record_file`
@@ -163,10 +169,14 @@ stateDiagram-v2
   same file. `done_files` gives the `done` files of a UTC day so a rerun skips them; `missing`
   files are tried again. Tests: `test_world_file_states_record_and_skip_done`.
 - `prune` deletes candidates whose `first_seen_at` is older than `WORLD_RETENTION_DAYS` and file
-  rows last updated before the same limit. Archive documents, archive texts, articles and world
-  change answers are not touched. Tests: `test_world_prune_keeps_archive`.
+  rows last updated before the same limit; a row exactly at the limit stays. Archive documents, archive texts, articles and world
+  change answers are not touched. Tests: `test_world_prune_keeps_archive`, `test_world_prune_cutoff_boundary`.
 - The migration adds both tables on SQLite and PostgreSQL, is safe after `create_all`, and its
-  schema equals the models. Tests: `test_world_migration_round_trip`.
+  schema equals the models. Tests: `test_world_migration_round_trip` (SQLite). CI has no
+  PostgreSQL test: on 2026-11-01 `upgrade head`, `downgrade -1`, `upgrade head` and a round of
+  upsert (1200 rows, 1200 repeats), `record_file`, `done_files`, `prune` and `transition` ran by
+  hand on a throwaway PostgreSQL database without errors. Repeat that check by hand when the
+  tables change.
 
 ## Decisions
 
@@ -187,6 +197,8 @@ stateDiagram-v2
   (agent)).
 - File rows are pruned with the candidates: they are 192 rows a day, and a catch-up older than the
   retention is not expected (decided 2026-11-01 (agent)).
+- Check-then-insert without `ON CONFLICT` in `upsert_candidates`: it relies on one writer (see
+  Invariants); decided 2026-11-01 by the coordinator.
 - A `failed` candidate returns to the step that failed (`new`, `screened_in` or `text_ready`), so
   W5 and W6 need no separate retry state; the run decides how many attempts are enough (decided
   2026-11-01 (agent)).
@@ -203,8 +215,14 @@ stateDiagram-v2
 
 - The filter module imports no network, database or web code and never touches `articles`
   (FR-016). Tests: `test_filter_has_no_io_imports`.
+- Code in `src/app/core/world/` never imports `app.storage`, because `storage/world.py` imports
+  `core/world/gdelt.py`; a relative import counts too. Tests: `test_world_core_never_imports_storage`,
+  `test_import_scan_resolves_relative_imports`.
 - `src/app/storage/world.py` is imported only by the world code and the world CLI, never by web,
   digest, bulletin or daily code. Tests: `test_world_tables_not_read_by_digest`.
+- One writer: only the collect job writes the world tables, and only under the host lock.
+  `upsert_candidates` is check-then-insert; a second concurrent writer could lose a batch to
+  `IntegrityError`, and would need `ON CONFLICT DO NOTHING`. Tests: none (a rule of use).
 - Production has 3.6 GB of free disk and 2 GB of RAM: the reader keeps no raw GDELT file and holds
   no whole-day list of raw rows; one file lives on disk at a time and is deleted. Binding for the
   later steps. Tests: `test_scan_leaves_no_file_on_disk`, `test_scan_memory_is_bounded`.
