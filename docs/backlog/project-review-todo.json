@@ -156,11 +156,11 @@
       ],
       "constraints": [
         "Docs-only change: no code; follow the docs PR rule (separate worktree, no full gate, say so in the PR).",
-        "Code docs are curated: rewording a code doc's Behavior/Decisions is reviewed by a different session; cutting dead tooling lines from AGENTS.md is fine within this task.",
+        "Code docs are curated (AGENTS.md): the R5 session may edit them, but the PR is reviewed by a different session before merge (the coordinator session or any other one the owner opens); no separate review task is needed.",
         "Do not delete history (specs/, docs/archive/); move or mark it instead.",
         "Memory files live outside the repo (~/.claude/projects/.../memory/); propose memory edits in the report, do not edit them from this task unless the session itself owns that memory."
       ],
-      "prompt": "Read docs/backlog/project-review-todo.json item R5 and AGENTS.md. Audit every file an agent loads by default or by a standing rule, verify each suspected item against the repo, and write docs/work/report-R5-<date>.md with line-by-line proposals (cut / move / mark superseded / merge duplicates) and the measured line counts before and after. Then apply the uncontroversial part (dead Codex tooling lines, superseded markers on dead specs, the AGENTS.md wording about shipped specs) in a docs PR from a separate worktree, and list the rest as proposals for review by another session."
+      "prompt": "Read docs/backlog/project-review-todo.json item R5 and AGENTS.md. Audit every file an agent loads by default or by a standing rule, verify each suspected item against the repo, and write docs/work/report-R5-<date>.md with the measured line counts before and after. Apply all verified cuts, moves, superseded markers and merges of duplicates in one docs PR from a separate worktree; list in the PR body each change to a code doc's Behavior or Decisions, so the reviewing session can check them. Proposals for memory files go into the report only."
     }
   ]
 }
