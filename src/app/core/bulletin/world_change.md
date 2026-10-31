@@ -45,9 +45,10 @@ flowchart LR
 - Probabilities are validated like `_probability`; an unknown choice, a missing answer or a bad
   probability makes the whole assessment invalid. Tests: `test_invalid_answers_return_none`.
 - A transport, HTTP or parse failure returns `None` and is logged; `assess` never raises into
-  callers. A journal stop (cap reached, unreviewed failed call) also returns `None` and sets
-  `stopped`, so a loop can end. Tests: `test_transport_failure_returns_none`,
-  `test_journal_stop_sets_stopped`.
+  callers. A journal stop (cap reached, unreviewed failed call), exhausted transport attempts
+  (an outage) or a `sqlite3.Error` of the journal also returns `None` and sets `stopped`, so a
+  loop can end. Tests: `test_transport_failure_returns_none`, `test_journal_stop_sets_stopped`,
+  `test_journal_errors_stop_without_raising`.
 
 **Storage**
 - One row per article hash and question version (`world_change_assessments`); a second save of the
@@ -59,13 +60,27 @@ flowchart LR
 **Command** `ai-news bulletin assess --date D [--max-usd X] [--dry-run]`
 - Scope: the articles of the published digest of D (the scope of daily signals). A day without a
   digest is an error (exit 2). Articles already answered for the current version are skipped.
-  Tests: `test_cli_assess_skips_answered_and_summarizes`, `test_cli_assess_needs_a_digest`.
+  Tests: `test_cli_assess_skips_answered_and_summarizes`, `test_cli_assess_needs_a_digest`,
+  `test_run_assessment_counts`.
+- A failed article counts in `failed` and stores nothing; after a stop the rest is
+  `not_attempted`. Tests: `test_run_assessment_failures_store_nothing`,
+  `test_run_assessment_stops_after_journal_stop`.
+- A real run needs `JEV_API_KEY`; without it the command exits 2. Tests: `test_cli_assess_needs_a_key`.
 - Prints one JSON summary: `assessed`, `skipped`, `failed`, `unmatched` (digest URLs without a
   stored article), `not_attempted` (after a journal stop), `by_choice`, `cost_usd`. Tests:
   `test_cli_assess_skips_answered_and_summarizes`.
-- `--dry-run` sends nothing, writes nothing, needs no key. Tests: `test_cli_dry_run_makes_no_request`.
+- `--dry-run` sends nothing, writes nothing (no table creation, no journal), needs no key. Tests:
+  `test_cli_dry_run_makes_no_request`, `test_cli_dry_run_does_not_create_tables`.
 - The cap `--max-usd` (default `ASSESS_DEFAULT_MAX_USD`) is a journal cap; the journal lives in
-  `data/bulletin/<D>/` per cap. Tests: `test_cli_assess_skips_answered_and_summarizes`.
+  `data/bulletin/<D>/` per cap. `--max-usd` above `WORLD_CHANGE_MAX_USD_PER_DAY` is rejected.
+  Known limit: another cap value opens another journal, so spend of one day can add up to a few
+  caps; the ceiling bounds each run, not the day. Tests: `test_cli_assess_skips_answered_and_summarizes`,
+  `test_cli_rejects_max_usd_above_ceiling`; the per-cap journal itself has no test.
+- When a rerun stops with `unknown_or_failed_previous_call_requires_review`, an earlier call of
+  that journal is unresolved (it may have been billed). The operator checks the log line
+  `bulletin_assess_usage` and the journal file `data/bulletin/<D>/journal-*.sqlite3`, then either
+  runs with a different `--max-usd` (new journal) or deletes that file after accepting the risk
+  of paying that call twice. No test.
 
 ## Decisions
 

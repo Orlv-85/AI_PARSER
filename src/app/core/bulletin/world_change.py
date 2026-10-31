@@ -3,6 +3,7 @@
 Behavior, decisions and tests: src/app/core/bulletin/world_change.md.
 """
 # ruff: noqa: E501
+import sqlite3
 from collections import Counter
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -19,6 +20,7 @@ from app.core.jev import _probability, jev_state
 
 WORLD_CHANGE_VERSION = "world-change-1"
 ASSESS_DEFAULT_MAX_USD = "0.05"
+WORLD_CHANGE_MAX_USD_PER_DAY = "0.20"  # hard ceiling for --max-usd
 ASSESS_TIMEOUT_SECONDS = 60.0
 TRANSPORT_REVIEW_REASON = "bulletin-assess: transport failure, conservative reservation kept"
 TRANSPORT_RETRY_DELAYS = (10,)
@@ -139,7 +141,9 @@ class WorldChangeAssessor:
                 "questions": WORLD_CHANGE_QUESTIONS}
 
     def assess(self, article: object) -> WorldChange | None:
-        pilot_stopped = import_module("app.storage.provider_journal").PilotStopped
+        journal_module = import_module("app.storage.provider_journal")
+        stop_errors = (journal_module.PilotStopped, journal_module.TransportAttemptsExhausted,
+                       sqlite3.Error)
         try:
             body = self.body(article)
             if self.payment_journal is not None:
@@ -152,8 +156,9 @@ class WorldChangeAssessor:
                 response.raise_for_status()
                 data = response.json()
             return parse_answers(data)
-        except pilot_stopped as exc:
-            self.stopped = str(exc)
+        except stop_errors as exc:
+            # A spent cap, an outage or a broken journal: the caller's loop must stop.
+            self.stopped = str(exc) or type(exc).__name__
             self.logger.error("world_change_stopped", {"reason": self.stopped})
         except (httpx.HTTPError, ValueError, KeyError, TypeError, RuntimeError) as exc:
             fields: dict[str, object] = {"error_type": type(exc).__name__}

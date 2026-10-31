@@ -14,6 +14,7 @@ from app.core.archive.capture import import_db as archive_import_db
 from app.core.archive.capture import status as archive_status
 from app.core.bulletin.world_change import (
     ASSESS_DEFAULT_MAX_USD,
+    WORLD_CHANGE_MAX_USD_PER_DAY,
     open_assessor,
     run_assessment,
 )
@@ -437,11 +438,14 @@ def bulletin_assess(
     """Ask Jev the world_change questions for the digest articles of a day."""
     try:
         target = date.fromisoformat(report_date)
-        microdollars(max_usd)
+        too_high = microdollars(max_usd) > microdollars(WORLD_CHANGE_MAX_USD_PER_DAY)
     except (ValueError, ArithmeticError) as exc:
         raise typer.BadParameter(
             "--date must be YYYY-MM-DD and --max-usd a positive amount") from exc
-    create_all()
+    if too_high:
+        raise typer.BadParameter(f"--max-usd is above the ceiling {WORLD_CHANGE_MAX_USD_PER_DAY}")
+    if not dry_run:
+        create_all()
     logger = setup_json_logging()
     with SessionLocal() as session:
         repo = WorldChangeRepo(session)

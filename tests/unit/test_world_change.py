@@ -1,5 +1,6 @@
 import json
 import logging.config
+import sqlite3
 from datetime import date
 from logging import getLogger
 
@@ -17,6 +18,7 @@ from app.config.settings import Settings
 from app.core.bulletin import world_change as wc
 from app.core.bulletin.world_change import (
     AREA_CRITERIA,
+    WORLD_CHANGE_MAX_USD_PER_DAY,
     WORLD_CHANGE_QUESTIONS,
     WORLD_CHANGE_VERSION,
     WorldChange,
@@ -31,7 +33,7 @@ from app.core.jev import JevRelevanceScorer
 from app.core.models import Article as CoreArticle
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import Article, Base, WorldChangeAssessment
-from app.storage.provider_journal import PilotJournal
+from app.storage.provider_journal import PilotJournal, TransportAttemptsExhausted
 from app.storage.world_change import WorldChangeRepo
 
 DAY = date(2026, 10, 30)
@@ -332,3 +334,65 @@ def test_migration_round_trip(tmp_path, monkeypatch):
     command.upgrade(config, "head")
     assert "world_change_assessments" in inspect(engine).get_table_names()
     engine.dispose()
+
+
+class RaisingJournal:
+    def __init__(self, error):
+        self.error = error
+
+    def call(self, *_args, **_kwargs):
+        raise self.error
+
+    def report(self):
+        return {"providers": {"jev": {"usage_priced_usd": 0.0}}}
+
+
+@pytest.mark.parametrize("error", [
+    sqlite3.OperationalError("database is locked"),
+    TransportAttemptsExhausted("down", dispatched=True),
+])
+def test_journal_errors_stop_without_raising(error):
+    with mock_client(ok) as client:
+        assessor = WorldChangeAssessor(client, "m", getLogger("t"),
+                                       payment_journal=RaisingJournal(error), secret="k")
+        assert assessor.assess(core_article()) is None
+    assert assessor.stopped
+
+
+def test_run_assessment_failures_store_nothing(maker):
+    seed_digest(maker, 3)
+    with maker() as session, mock_client(lambda _r: httpx.Response(500, json={})) as client:
+        summary = run_assessment(session, WorldChangeRepo(session),
+                                 WorldChangeAssessor(client, "m", getLogger("t")), DAY)
+        assert (summary["assessed"], summary["failed"], summary["not_attempted"]) == (0, 3, 0)
+        assert session.query(WorldChangeAssessment).count() == 0
+
+
+def test_run_assessment_stops_after_journal_stop(maker):
+    seed_digest(maker, 3)
+    with maker() as session, mock_client(ok) as client:
+        assessor = WorldChangeAssessor(
+            client, "m", getLogger("t"), secret="k",
+            payment_journal=RaisingJournal(sqlite3.OperationalError("locked")))
+        summary = run_assessment(session, WorldChangeRepo(session), assessor, DAY)
+        assert (summary["assessed"], summary["failed"], summary["not_attempted"]) == (0, 1, 2)
+        assert session.query(WorldChangeAssessment).count() == 0
+
+
+def test_cli_rejects_max_usd_above_ceiling(maker):
+    seed_digest(maker, 1)
+    result = CliRunner().invoke(cli_main.app, [
+        "bulletin", "assess", "--date", DAY.isoformat(), "--max-usd", "0.21"])
+    assert result.exit_code != 0
+    assert "ceiling" in result.output
+    assert WORLD_CHANGE_MAX_USD_PER_DAY == "0.20"
+
+
+def test_cli_dry_run_does_not_create_tables(maker, monkeypatch):
+    seed_digest(maker, 1)
+    calls = []
+    monkeypatch.setattr(cli_main, "create_all", lambda: calls.append(1))
+    result = CliRunner().invoke(
+        cli_main.app, ["bulletin", "assess", "--date", DAY.isoformat(), "--dry-run"])
+    assert result.exit_code == 0
+    assert not calls
