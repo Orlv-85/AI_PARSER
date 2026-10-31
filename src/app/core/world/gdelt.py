@@ -9,8 +9,9 @@ import re
 import tempfile
 import time
 import zipfile
+import zlib
 from collections import Counter
-from collections.abc import Callable, Generator, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -33,7 +34,8 @@ PAUSE_SECONDS = 1.0
 MAX_MISSING_FILES_OK = 8
 STATUS_OK = "ok"
 STATUS_PARTIAL = "partial"
-DEFAULT_LANGUAGE = "eng"
+LANGUAGE_UNKNOWN = "unknown"
+MAX_CONSECUTIVE_MISSING = 12
 # GKG 2.1 columns (0-based) used by the reader.
 COL_DATE = 1
 COL_DOMAIN = 3
@@ -83,6 +85,7 @@ class DayStats:  # pylint: disable=too-many-instance-attributes
     matched: int = 0
     kept: int = 0
     drops: Counter[str] = field(default_factory=Counter)
+    stopped_early: bool = False
 
     @property
     def status(self) -> str:
@@ -92,6 +95,7 @@ class DayStats:  # pylint: disable=too-many-instance-attributes
         return {
             "status": self.status,
             "files_expected": self.files_expected,
+            "stopped_early": self.stopped_early,
             "files_read": self.files_read,
             "files_missing": self.files_missing,
             "rows": self.rows,
@@ -129,7 +133,7 @@ def parse_gkg_line(line: str) -> GkgRow | None:
         url=url,
         title=title,
         source_domain=cols[COL_DOMAIN].strip().lower(),
-        language=lang.group(1) if lang else DEFAULT_LANGUAGE,
+        language=lang.group(1) if lang else LANGUAGE_UNKNOWN,
         themes=cols[COL_THEMES],
         date=cols[COL_DATE].strip(),
     )
@@ -164,6 +168,55 @@ def _download(client: httpx.Client, url: str, target: IO[bytes]) -> bool:
     return True
 
 
+class GkgFile:
+    """An open GKG file: iterate its lines, `close()` removes the temporary file.
+
+    `corrupt` is set when the zip stream breaks while it is read.
+    """
+
+    def __init__(self, target: IO[bytes]) -> None:
+        self.corrupt = False
+        self._target = target
+        self._archive: zipfile.ZipFile | None = None
+        self._text: io.TextIOWrapper | None = None
+        try:
+            self._open()
+        except BaseException:
+            self.close()
+            raise
+
+    def _open(self) -> None:
+        self._target.seek(0)
+        head = self._target.read(2048)
+        self._target.seek(0)
+        if head.startswith(_ZIP_MAGIC):
+            self._archive = zipfile.ZipFile(self._target)  # pylint: disable=consider-using-with
+            members = self._archive.namelist()
+            if not members:
+                raise zipfile.BadZipFile("empty archive")
+            raw = self._archive.open(members[0])  # pylint: disable=consider-using-with
+            self._text = io.TextIOWrapper(raw, encoding="utf-8", errors="replace")
+        elif b"\t" in head and not head.lstrip().startswith(b"<"):
+            self._text = io.TextIOWrapper(
+                self._target, encoding="utf-8", errors="replace", newline="\n"
+            )
+        else:
+            raise zipfile.BadZipFile("not a GKG file")
+
+    def __iter__(self) -> Iterator[str]:
+        if self._text is None:
+            return
+        try:
+            yield from self._text
+        except (zipfile.BadZipFile, zlib.error, EOFError, OSError):
+            self.corrupt = True
+
+    def close(self) -> None:
+        for resource in (self._text, self._archive, self._target):
+            if resource is not None:
+                resource.close()
+
+
 def fetch_file(
     client: httpx.Client,
     name: str,
@@ -172,10 +225,11 @@ def fetch_file(
     retry_delay: float = RETRY_DELAY_SECONDS,
     sleep: Callable[[float], None] = time.sleep,
     base_url: str = GDELT_BASE_URL,
-) -> Generator[str] | None:
-    """Download a GKG file (zip or plain) and return its lines, or None when it is missing.
+) -> GkgFile | None:
+    """Download a GKG file (zip or plain), check it and return it open, or None when missing.
 
-    The temporary file is removed when the returned iterator is exhausted or closed.
+    A truncated or broken zip, an HTML body or a failed download is a failed attempt. The caller
+    closes the result; the temporary file is removed then.
     """
     for attempt in range(DOWNLOAD_TRIES):
         if attempt:
@@ -183,32 +237,14 @@ def fetch_file(
         target = tempfile.TemporaryFile(dir=tmp_dir)  # pylint: disable=consider-using-with
         try:
             if _download(client, base_url + name, target):
-                return _lines(target)
+                return GkgFile(target)
+        except (zipfile.BadZipFile, zlib.error, EOFError):
+            pass
         except BaseException:
             target.close()
             raise
         target.close()
     return None
-
-
-def _lines(target: IO[bytes]) -> Generator[str]:
-    try:
-        target.seek(0)
-        if target.read(4) == _ZIP_MAGIC:
-            target.seek(0)
-            with zipfile.ZipFile(target) as archive:
-                members = archive.namelist()
-                if not members:
-                    return
-                with archive.open(members[0]) as raw:
-                    yield from io.TextIOWrapper(raw, encoding="utf-8", errors="replace")
-        else:
-            target.seek(0)
-            yield from io.TextIOWrapper(target, encoding="utf-8", errors="replace", newline="\n")
-    except zipfile.BadZipFile:
-        return
-    finally:
-        target.close()
 
 
 def scan_day(  # pylint: disable=too-many-arguments,too-many-locals
@@ -233,24 +269,37 @@ def scan_day(  # pylint: disable=too-many-arguments,too-many-locals
     if max_files is not None:
         names = names[:max_files]
     stats.files_expected = len(names)
+    consecutive_missing = 0
     for index, (kind, name) in enumerate(names):
+        if consecutive_missing >= MAX_CONSECUTIVE_MISSING:
+            stats.stopped_early = True
+            stats.files_missing += len(names) - index
+            return
         if index:
             sleep(pause)
-        lines = fetch_file(
+        gfile = fetch_file(
             client, name, tmp_dir=tmp_dir, retry_delay=retry_delay, sleep=sleep, base_url=base_url
         )
-        if lines is None:
+        if gfile is None:
             stats.files_missing += 1
+            consecutive_missing += 1
             continue
-        stats.files_read += 1
+        rows_before, bad_before = stats.rows, stats.bad_rows
         try:
-            yield from _scan_lines(lines, name, kind == KIND_TRANSLATION, stats, own_domains)
+            yield from _scan_lines(gfile, name, kind == KIND_TRANSLATION, stats, own_domains)
         finally:
-            lines.close()
+            gfile.close()
+        all_bad = stats.rows == rows_before and stats.bad_rows > bad_before
+        if gfile.corrupt or all_bad:
+            stats.files_missing += 1
+            consecutive_missing += 1
+        else:
+            stats.files_read += 1
+            consecutive_missing = 0
 
 
 def _scan_lines(
-    lines: Iterator[str],
+    lines: Iterable[str],
     name: str,
     translation: bool,
     stats: DayStats,

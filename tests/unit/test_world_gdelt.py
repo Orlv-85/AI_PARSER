@@ -2,6 +2,7 @@
 # ruff: noqa: E501
 import io
 import json
+import tempfile
 import tracemalloc
 import zipfile
 from datetime import date
@@ -11,11 +12,13 @@ import httpx
 from typer.testing import CliRunner
 
 from app.cli import main as cli_main
+from app.core.world import gdelt as gdelt_module
 from app.core.world.gdelt import (
     DOWNLOAD_TRIES,
     FILES_PER_KIND,
     KIND_GKG,
     KIND_TRANSLATION,
+    MAX_CONSECUTIVE_MISSING,
     MAX_MISSING_FILES_OK,
     STATUS_OK,
     STATUS_PARTIAL,
@@ -98,7 +101,7 @@ def test_gkg_row_parse_title_and_lang() -> None:
     assert row.themes == "EDUCATION"
     assert row.date == "20261030000000"
     english = parse_gkg_line(gkg_line("AI in class", "https://example.org/b"))
-    assert english is not None and english.language == "eng"
+    assert english is not None and english.language == "unknown"
 
 
 def test_gkg_malformed_row_is_counted_and_skipped(tmp_path: Path) -> None:
@@ -123,7 +126,11 @@ def test_scan_reads_zip_and_plain_files(tmp_path: Path) -> None:
         T_FIRST: zipped(gkg_line("Inteligencia artificial en la escuela", "https://escuela.es/t",
                                  lang="spa")),
     }
-    found, stats = run_scan(files, tmp_path, max_files=FILES_PER_KIND + 1)
+    found, stats = run_scan(files, tmp_path, kinds=(KIND_GKG,), max_files=2)
+    found_t, stats_t = run_scan(files, tmp_path, kinds=(KIND_TRANSLATION,), max_files=1)
+    found += found_t
+    stats.files_read += stats_t.files_read
+    stats.kept += stats_t.kept
     by_url = {c.url: c for c in found}
     assert set(by_url) == {"https://example.org/zip", "https://example.org/plain", "https://escuela.es/t"}
     assert by_url["https://escuela.es/t"].translation
@@ -195,19 +202,104 @@ def test_scan_counts_rows_and_drop_reasons(tmp_path: Path) -> None:
     }
 
 
-def test_scan_leaves_no_file_on_disk(tmp_path: Path) -> None:
-    files = {FIRST: zipped(gkg_line("AI in class", "https://example.org/a") * 3)}
+def record_tempfiles(monkeypatch) -> list:
+    handles: list = []
+    real = tempfile.TemporaryFile
+
+    def recording(*args, **kwargs):
+        handle = real(*args, **kwargs)
+        handles.append(handle)
+        return handle
+
+    monkeypatch.setattr(gdelt_module.tempfile, "TemporaryFile", recording)
+    return handles
+
+
+def test_scan_leaves_no_file_on_disk(tmp_path: Path, monkeypatch) -> None:
+    handles = record_tempfiles(monkeypatch)
+    good = zipped(gkg_line("AI in class", "https://example.org/a") * 3)
+    files = {FIRST: good, SECOND: good[: len(good) // 2]}  # second is truncated
+    found, _stats = run_scan(files, tmp_path, kinds=(KIND_GKG,), max_files=3)
+    assert len(found) == 3
+    assert len(handles) >= 5 and all(handle.closed for handle in handles)
+
+    handles.clear()
     stats = DayStats()
     with client_for(files) as client:
         iterator = scan_day(DAY, client=client, stats=stats, kinds=(KIND_GKG,), max_files=1,
                             tmp_dir=tmp_path, pause=0)
-        first = next(iterator)
-        assert first.url == "https://example.org/a"
+        assert next(iterator).url == "https://example.org/a"
+        assert not all(handle.closed for handle in handles)  # the file is open while read
         iterator.close()  # early stop
+    assert handles and all(handle.closed for handle in handles)
+
+    handles.clear()
+
+    def consumer_fails() -> None:
+        with client_for(files) as client:
+            for _candidate in scan_day(DAY, client=client, stats=DayStats(), kinds=(KIND_GKG,),
+                                       max_files=1, tmp_dir=tmp_path, pause=0):
+                raise RuntimeError("consumer failed")
+
+    try:
+        consumer_fails()
+    except RuntimeError:
+        pass
+    assert handles and all(handle.closed for handle in handles)
     assert not list(tmp_path.rglob("*"))
-    found, _stats = run_scan(files, tmp_path, kinds=(KIND_GKG,), max_files=2)
-    assert len(found) == 3
+
+
+def test_truncated_zip_is_retried_then_missing(tmp_path: Path) -> None:
+    good = zipped(gkg_line("AI in class", "https://example.org/a") * 50)
+    calls: list[str] = []
+    stats = DayStats()
+    with client_for({FIRST: good[: len(good) // 2]}, calls) as client:
+        found = list(scan_day(DAY, client=client, stats=stats, kinds=(KIND_GKG,), max_files=1,
+                              tmp_dir=tmp_path, pause=0, retry_delay=0, sleep=lambda _s: None))
+    assert not found
+    assert calls.count(FIRST) == DOWNLOAD_TRIES
+    assert stats.files_missing == 1 and stats.files_read == 0
+
+
+def test_html_body_is_missing(tmp_path: Path) -> None:
+    body = b"<html><body>Service unavailable\tsoon</body></html>"
+    found, stats = run_scan({FIRST: body}, tmp_path, kinds=(KIND_GKG,), max_files=1)
+    assert not found and stats.files_missing == 1 and stats.files_read == 0
+
+
+def test_corrupt_zip_mid_stream_counts_as_missing(tmp_path: Path) -> None:
+    text = "".join(gkg_line(f"AI in class number {i}", f"https://example.org/{i}") for i in range(2000))
+    # stored: a flipped byte is found by the CRC at the end; deflated: by zlib in the middle
+    for method in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", method) as archive:
+            archive.writestr("x.gkg.csv", text.encode("utf-8"))
+        data = bytearray(buffer.getvalue())
+        middle = len(data) // 2
+        data[middle : middle + 40] = b"\xff" * 40
+        found, stats = run_scan({FIRST: bytes(data)}, tmp_path, kinds=(KIND_GKG,), max_files=1)
+        assert stats.files_missing == 1 and stats.files_read == 0, method
+        assert len(found) < 2000
     assert not list(tmp_path.rglob("*"))
+
+
+def test_all_bad_rows_file_is_missing(tmp_path: Path) -> None:
+    body = b"a\tb\tc\nd\te\tf\n"
+    found, stats = run_scan({FIRST: body}, tmp_path, kinds=(KIND_GKG,), max_files=1)
+    assert not found
+    assert stats.bad_rows == 2 and stats.files_missing == 1 and stats.files_read == 0
+
+
+def test_scan_stops_after_consecutive_missing(tmp_path: Path) -> None:
+    calls: list[str] = []
+    stats = DayStats()
+    with client_for({}, calls) as client:
+        found = list(scan_day(DAY, client=client, stats=stats, kinds=(KIND_GKG,), max_files=30,
+                              tmp_dir=tmp_path, pause=0, retry_delay=0, sleep=lambda _s: None))
+    assert not found
+    assert stats.stopped_early and stats.files_missing == 30
+    assert stats.status == STATUS_PARTIAL
+    assert len(calls) == MAX_CONSECUTIVE_MISSING * DOWNLOAD_TRIES
 
 
 def test_scan_memory_is_bounded(tmp_path: Path) -> None:

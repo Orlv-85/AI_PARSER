@@ -68,7 +68,9 @@ flowchart LR
   one --> dl["Stream download into an anonymous temp file"]
   dl --> ok{"Downloaded?"}
   ok -- "no after DOWNLOAD_TRIES" --> miss["File counts as missing"]
-  ok -- yes --> rows["Unzip stream, one line at a time"]
+  ok -- yes --> chk{"Valid zip or tab text?"}
+  chk -- "no: retry" --> ok
+  chk -- yes --> rows["Unzip stream, one line at a time"]
   rows --> parse{"Valid row with url and title?"}
   parse -- no --> bad["Counted as bad row"]
   parse -- yes --> flt["filter_title"]
@@ -83,17 +85,30 @@ flowchart LR
   stamps every 15 minutes (`STAMP_MINUTES`), at `GDELT_BASE_URL` over https. Tests:
   `test_day_file_names_cover_96_stamps`.
 - `parse_gkg_line` reads one tab separated GKG 2.1 line: url, source domain, file time, themes,
-  language from `srclc:<iso3>` in the translation field (English when absent), and the title from
+  language from `srclc:<iso3>` in the translation field (`LANGUAGE_UNKNOWN` when absent, also in
+  the primary set: a primary file is not all English), and the title from
   `<PAGE_TITLE>` in the extras with HTML entities decoded. A line without a url or a title, or
   with too few columns, is a bad row: it is counted and skipped, never raised. Tests:
   `test_gkg_row_parse_title_and_lang`, `test_gkg_malformed_row_is_counted_and_skipped`.
+  `published_stamp` of a candidate is the GKG record date (the 15 minute file time), not the
+  article time; the article time would be `<PAGE_PRECISEPUBTIMESTAMP>` in the extras, which the
+  reader does not read yet.
 - A file is downloaded as a stream into an anonymous temporary file (zip or plain text, detected
-  by the zip signature), read line by line and closed; the file is gone on success, on failure and
-  on an early stop. Tests: `test_scan_reads_zip_and_plain_files`,
-  `test_scan_leaves_no_file_on_disk`.
+  by the zip signature), read line by line and closed; the file is gone on success, on failure,
+  after an error in the consumer and on an early stop; every temporary file handle is closed
+  (`GkgFile.close`). Tests: `test_scan_reads_zip_and_plain_files`, `test_scan_leaves_no_file_on_disk`.
 - A failed download (HTTP error, 404, transport error) is tried `DOWNLOAD_TRIES` times,
-  `RETRY_DELAY_SECONDS` apart; after that the file counts as missing and the scan goes on. Tests:
-  `test_missing_file_counts_as_missing`, `test_download_retries_then_succeeds`.
+  `RETRY_DELAY_SECONDS` apart; after that the file counts as missing and the scan goes on. A
+  download that is not a readable zip (truncated, no central directory) or not tab text (an HTML
+  body with status 200) is a failed attempt too. Tests: `test_missing_file_counts_as_missing`,
+  `test_download_retries_then_succeeds`, `test_truncated_zip_is_retried_then_missing`,
+  `test_html_body_is_missing`.
+- A zip that breaks while it is read (CRC, deflate or end of data) counts the file as missing, the
+  rows read before the break stay, and the scan goes on. A file whose every row is bad counts as
+  missing. Tests: `test_corrupt_zip_mid_stream_counts_as_missing`, `test_all_bad_rows_file_is_missing`.
+- After `MAX_CONSECUTIVE_MISSING` missing files in a row the scan stops (`stopped_early`), counts
+  the rest as missing and the day is `partial`: a day not yet published would otherwise cost
+  3 tries x `RETRY_DELAY_SECONDS` for each of 192 files. Tests: `test_scan_stops_after_consecutive_missing`.
 - A day is `ok` with at most `MAX_MISSING_FILES_OK` missing files of its 192, otherwise `partial`.
   Tests: `test_day_status_partial_above_missing_limit`.
 - The scan yields candidates (rows kept by the filter) as it reads and fills a `DayStats` with
@@ -140,7 +155,7 @@ flowchart LR
 - `filter.py`: keyword lists, `classify_title`, `filter_title` (result `FilterResult` with a
   reason), `load_own_domains`, `own_domains_from_hosts`, `host_in_domains`.
 - `gdelt.py`: constants, `day_file_names`, `parse_gkg_line`, `GkgRow`, `Candidate`, `DayStats`,
-  `fetch_file` (download with retries, yields lines), `scan_day`.
+  `GkgFile` (open file, lines, close), `fetch_file` (download, check, retries), `scan_day`.
 - `cli/main.py`: `world` Typer group with `scan`.
 - Change a keyword or a drop rule in the constant named above and extend the fixture test.
 
