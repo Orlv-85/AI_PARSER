@@ -215,6 +215,11 @@ prune_old_app_images() {
     echo "IMAGE_PRUNE_ENABLED=0; skipping image prune"
     return 0
   fi
+  if [ "$PREVIOUS_IMAGE" = "$APP_IMAGE" ]; then
+    # Same tag redeployed: the real rollback image is unknown, so keep every image.
+    echo "Redeploy of the same image; skipping image prune"
+    return 0
+  fi
   in_use="$(docker ps -a --format '{{.Image}}' 2>/dev/null || true)"
   candidates="$(docker images --format '{{.Repository}}:{{.Tag}}' "$APP_IMAGE_REPO" 2>/dev/null || true)"
   removed=0

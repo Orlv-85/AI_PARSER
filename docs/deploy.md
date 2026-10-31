@@ -235,6 +235,7 @@ Image pruning (end of every successful `scripts/deploy_prod.sh`):
   and any image a container uses. Then `docker image prune -f` (dangling images only).
 - Other images (`postgres`, `caddy`, VPN `amnezia*`, `:latest`) and volumes are never touched.
 - A failed prune prints a warning and does not fail the deploy. Opt out with `IMAGE_PRUNE_ENABLED=0`.
+- Redeploying the same tag as the last deploy skips the prune (the real rollback image is unknown).
 - Rolling back further than one release pulls the older tag from GHCR again (`deploy-by-tag`).
 - Tests: `tests/unit/test_deploy_image_prune.py`.
 

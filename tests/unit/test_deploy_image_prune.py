@@ -116,3 +116,15 @@ def test_deploy_image_prune_can_be_disabled(tmp_path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
     assert _removed(calls) == []
     assert "image prune -f" not in calls
+
+
+def test_redeploy_of_the_same_image_skips_the_prune(tmp_path) -> None:
+    result, calls = _run_deploy(
+        tmp_path,
+        images=[f"{REPO}:v3", f"{REPO}:v2", f"{REPO}:v1"],
+        in_use=[],
+        previous=f"{REPO}:v3",
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _removed(calls) == []
+    assert "image prune -f" not in calls
