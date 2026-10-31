@@ -14,6 +14,7 @@ DEPLOY_TAG="${1:-}"
 LAST_DEPLOY_FILE="${LAST_DEPLOY_FILE:-.last_deploy_commit}"
 LAST_DEPLOY_IMAGE_FILE="${LAST_DEPLOY_IMAGE_FILE:-.last_deploy_image}"
 APP_IMAGE_REPO="${APP_IMAGE_REPO:-ghcr.io/orlv-85/ai-parser}"
+IMAGE_PRUNE_ENABLED="${IMAGE_PRUNE_ENABLED:-1}"
 APP_IMAGE="${APP_IMAGE:-}"
 AUTO_UPDATE_ENABLED="${AUTO_UPDATE_ENABLED:-1}"
 AUTO_UPDATE_CRON_SCHEDULE="${AUTO_UPDATE_CRON_SCHEDULE:-0 1 * * *}"
@@ -48,6 +49,12 @@ fi
 export APP_IMAGE
 
 CURRENT_COMMIT="$(git rev-parse --verify HEAD)"
+
+# The image of the previous successful deploy is the rollback target; read it before it is overwritten.
+PREVIOUS_IMAGE=""
+if [ -f "$LAST_DEPLOY_IMAGE_FILE" ]; then
+  PREVIOUS_IMAGE="$(head -n 1 "$LAST_DEPLOY_IMAGE_FILE" 2>/dev/null || true)"
+fi
 
 mkdir -p data backups logs
 
@@ -199,6 +206,44 @@ remove_weekly_analytics_cron() {
   cleanup_cron_tmp
 }
 
+prune_old_app_images() {
+  # Every release adds an image and nothing else removes it. Keep the current image, the previous
+  # one (rollback) and any image a container uses; remove other project release tags and dangling
+  # images. Only "$APP_IMAGE_REPO:v*" tags are candidates: postgres, caddy, VPN images are not.
+  # Never fails the deploy.
+  if ! is_enabled "$IMAGE_PRUNE_ENABLED"; then
+    echo "IMAGE_PRUNE_ENABLED=0; skipping image prune"
+    return 0
+  fi
+  if [ "$PREVIOUS_IMAGE" = "$APP_IMAGE" ]; then
+    # Same tag redeployed: the real rollback image is unknown, so keep every image.
+    echo "Redeploy of the same image; skipping image prune"
+    return 0
+  fi
+  in_use="$(docker ps -a --format '{{.Image}}' 2>/dev/null || true)"
+  candidates="$(docker images --format '{{.Repository}}:{{.Tag}}' "$APP_IMAGE_REPO" 2>/dev/null || true)"
+  removed=0
+  for image in $candidates; do
+    case "$image" in
+      "$APP_IMAGE_REPO":v*) ;;
+      *) continue ;;
+    esac
+    if [ "$image" = "$APP_IMAGE" ] || [ "$image" = "$PREVIOUS_IMAGE" ]; then
+      continue
+    fi
+    if printf '%s\n' "$in_use" | grep -Fxq -- "$image"; then
+      continue
+    fi
+    if docker rmi "$image" >/dev/null 2>&1; then
+      removed=$((removed + 1))
+    else
+      echo "Could not remove image $image; leaving it" >&2
+    fi
+  done
+  docker image prune -f >/dev/null 2>&1 || echo "Dangling image prune failed; ignoring" >&2
+  echo "Image prune: removed ${removed} old release image(s); kept ${APP_IMAGE} and ${PREVIOUS_IMAGE:-none}"
+}
+
 echo "Starting PostgreSQL..."
 docker compose -f "$COMPOSE_FILE" up -d db
 
@@ -274,5 +319,7 @@ fi
 
 printf '%s\n' "$CURRENT_COMMIT" > "$LAST_DEPLOY_FILE"
 printf '%s\n' "$APP_IMAGE" > "$LAST_DEPLOY_IMAGE_FILE"
+
+prune_old_app_images || echo "Image prune failed; deploy is not affected" >&2
 
 echo "Deployment completed successfully."
