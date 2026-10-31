@@ -2,7 +2,7 @@
 
 **Feature Branch**: `018-daily-inference`
 **Created**: 2026-10-31
-**Status**: Draft (brief; the voice in `voice.md` waits for the owner's look; channels later)
+**Status**: Ready for phase A (owner decisions Q1, Q2, Q4 recorded; Q3 deferred to phase B)
 **Input**: Owner decisions of 2026-10-31, R4 report `docs/work/report-R4-2026-10-31.md`, sections
 "Owner decisions" parts 1-3, and the owner's answers recorded below.
 
@@ -272,6 +272,8 @@ session.
   X requires parody accounts to say so; the second half is our selling point.
 - Retelling with sources like a real outlet, our own framing; longer notes than the first samples
   (2026-10-31).
+- **Q4** (yes, 2026-10-31) The voice in `voice.md` is the starting library; it is tuned after the
+  14-day review (item 7).
 - World news about AI in human life, without a separate trial: "take it and build it", up to
   $3/month (2026-10-31).
 
@@ -279,5 +281,3 @@ session.
 
 - **Q3** (deferred by the owner 2026-10-31 to phase B) Telegram: the owner creates the channel and
   the bot once (about 10 minutes) and puts the token into prod `.env`.
-- **Q4** The voice in `voice.md` (phrases and samples). Recommendation: accept as the starting
-  library; it is tuned after the first two weeks.
