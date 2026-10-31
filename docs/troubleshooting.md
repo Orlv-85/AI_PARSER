@@ -193,6 +193,17 @@ the Troubleshooting section of `README.md`.
       "cause": "docker-compose.prod.yml uses ${APP_IMAGE:-ghcr.io/orlv-85/ai-parser:latest} and the server .env has no APP_IMAGE; deploys record the released image in .last_deploy_image. The scheduled scripts export it, the operator examples in docs/daily-signals.md and docs/period-signals.md did not.",
       "fix": "Run `export APP_IMAGE=\"$(cat .last_deploy_image)\"` in /opt/ai-news before any `docker compose ... run` (added to both docs' command blocks; docs/deploy.md already had it).",
       "verification": "The same command with APP_IMAGE exported ran on v0.1.146 and stored the 2026-10-13 and 2026-10-14 briefs."
+    },
+    {
+      "id": "prod-postgres18-anonymous-volume",
+      "date": "2026-10-31",
+      "area": "prod database volume (docker-compose.prod.yml)",
+      "symptom": "The named volume ai-news_pgdata is empty (4 KB) while the database is 174 MB; `docker volume ls` shows an extra volume with a random name.",
+      "evidence": ["docker inspect ai-news-db: anonymous volume e8d276e8... at /var/lib/postgresql and ai-news_pgdata at /var/lib/postgresql/data", "SHOW data_directory = /var/lib/postgresql/18/docker"],
+      "cause": "The compose file mounted pgdata at the PostgreSQL 17 data path; the postgres:18 image uses PGDATA=/var/lib/postgresql/18/docker and declares VOLUME /var/lib/postgresql, so Docker made an anonymous volume for the real data.",
+      "fix": "Mount pgdata at /var/lib/postgresql (docker-compose.prod.yml) and move the data once with docs/db-volume-move.md; do not deploy the compose change before the move.",
+      "verification": "docker inspect ai-news-db shows only ai-news_pgdata -> /var/lib/postgresql; scripts/db_table_counts.sh equals the counts taken before the move.",
+      "if_it_recurs": "After a deploy shows an empty site, check the db mounts first; the data is still on the other volume, so do not prune volumes."
     }
   ]
 }
