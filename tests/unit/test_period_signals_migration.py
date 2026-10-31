@@ -11,7 +11,8 @@ from app.storage.models_sql import Article, Base
 PERIOD_TABLES = {"period_signal_reports", "period_signal_briefs"}
 PREVIOUS_HEAD = "e7b4c2a9d150"
 PERIOD_REVISION = "f4a9c1d27b83"
-HEAD = "a7d3e5b18c94"
+DROP_REVISION = "a7d3e5b18c94"
+HEAD = "b8e2d4f61a07"
 
 
 def schema(url, table):
@@ -39,7 +40,8 @@ def test_single_head_and_chain():
     script = ScriptDirectory.from_config(Config("alembic.ini"))
     assert script.get_heads() == [HEAD]
     assert script.get_revision(PERIOD_REVISION).down_revision == PREVIOUS_HEAD
-    assert script.get_revision(HEAD).down_revision == PERIOD_REVISION
+    assert script.get_revision(DROP_REVISION).down_revision == PERIOD_REVISION
+    assert script.get_revision(HEAD).down_revision == DROP_REVISION
 
 
 def test_upgrade_matches_models_and_downgrade_drops_only_period_tables(tmp_path, monkeypatch):

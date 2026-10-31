@@ -12,6 +12,12 @@ from app.config.sources import load_sources
 from app.core.archive.capture import capture as archive_capture
 from app.core.archive.capture import import_db as archive_import_db
 from app.core.archive.capture import status as archive_status
+from app.core.bulletin.world_change import (
+    ASSESS_DEFAULT_MAX_USD,
+    WORLD_CHANGE_MAX_USD_PER_DAY,
+    open_assessor,
+    run_assessment,
+)
 from app.core.daily.enrichment import publish_catch_up, publish_day
 from app.core.daily.signals import (
     EntityCommandError,
@@ -33,6 +39,7 @@ from app.storage.article_repo import ArticleRepo
 from app.storage.daily_signals import DailySignalRepo, OverrideConflict
 from app.storage.models_sql import AIEntityOverride
 from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
+from app.storage.world_change import WorldChangeRepo
 
 app = typer.Typer(help="AI News Collector CLI")
 _WEEKLY_DATE_OPTION = typer.Option(None, "--report-date")
@@ -416,6 +423,45 @@ def archive_import_db_command(
             typer.echo(f"archive import-db: {exc}", err=True)
             raise typer.Exit(2) from exc
     typer.echo(json.dumps(result, sort_keys=True))
+
+
+bulletin_app = typer.Typer(help="Daily bulletin tools (spec 018).")
+app.add_typer(bulletin_app, name="bulletin")
+
+
+@bulletin_app.command("assess")
+def bulletin_assess(
+    report_date: str = typer.Option(..., "--date", help="Digest day, YYYY-MM-DD."),
+    max_usd: str = typer.Option(ASSESS_DEFAULT_MAX_USD, "--max-usd", help="Jev cap in USD."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="No request, nothing written."),
+) -> None:
+    """Ask Jev the world_change questions for the digest articles of a day."""
+    try:
+        target = date.fromisoformat(report_date)
+        too_high = microdollars(max_usd) > microdollars(WORLD_CHANGE_MAX_USD_PER_DAY)
+    except (ValueError, ArithmeticError) as exc:
+        raise typer.BadParameter(
+            "--date must be YYYY-MM-DD and --max-usd a positive amount") from exc
+    if too_high:
+        raise typer.BadParameter(f"--max-usd is above the ceiling {WORLD_CHANGE_MAX_USD_PER_DAY}")
+    if not dry_run:
+        create_all()
+    logger = setup_json_logging()
+    with SessionLocal() as session:
+        repo = WorldChangeRepo(session)
+        try:
+            if dry_run:
+                summary = run_assessment(session, repo, None, target, dry_run=True)
+            else:
+                with open_assessor(get_settings(), logger, target, max_usd) as assessor:
+                    summary = run_assessment(session, repo, assessor, target)
+        except ValueError as exc:
+            typer.echo(f"bulletin assess: {exc}", err=True)
+            raise typer.Exit(2) from exc
+    if summary is None:
+        typer.echo(f"bulletin assess: no digest for {target}", err=True)
+        raise typer.Exit(2)
+    typer.echo(json.dumps(summary, sort_keys=True))
 
 
 @app.command("import-candidates")
