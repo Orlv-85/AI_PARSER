@@ -105,7 +105,7 @@
       "id": "R4",
       "title": "Who is the reader and why would they come: research before more features",
       "status": "done",
-      "decided": "Owner 2026-10-31: no reader media; primary consumer is AI agents and pipelines; niche: AI release radar (first announced, each fact with a source quote); no direct monetization (return = skill and portfolio); attention order: agent-driven development with measured owner minutes/cost/defects, then R3 quality, then the radar (after R1 and R3). Details: report section 'Owner decisions'.",
+      "decided": "Owner 2026-10-31: no reader media; primary consumer is AI agents and pipelines; niche: AI release radar (first announced, each fact with a source quote); no direct monetization (return = skill and portfolio); attention order: agent-driven development with measured owner minutes/cost/defects, then R3 quality, then the radar (after R1 and R3). Later the same day: a public outlet, The Daily Inference, the bulletin of the 'AI World Administration' on real daily signals (facts real and linked, loyal framing only); spec 018. Details: report sections 'Owner decisions' (parts 1-3).",
       "result": "docs/work/report-R4-2026-10-31.md: no usage data on production; recommended primary reader: the owner as a personal AI radar (runner-up: analysts on weekly/monthly); next: B5 private Telegram channel, a page-view counter, B6 watchlist.",
       "kind": "product research",
       "problem": [
