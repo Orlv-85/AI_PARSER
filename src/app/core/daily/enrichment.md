@@ -103,4 +103,7 @@ flowchart LR
 - `tests/unit/test_daily_enrichment.py`: publication, reuse, holds and catch-up selection;
   `test_source_row_*` pin source selection (admitted stored content, extracted page, date checks,
   stored fallback).
+- `tests/unit/test_daily_publish_day.py` (fixtures in `tests/unit/daily_fixtures.py`):
+  `test_publish_day_*` pin the key guards, the progress file (not written for reused articles), the
+  digest backup file content and the per-article commit.
 - `tests/unit/test_deepseek_digest.py`: digest/fetch job shells and nightly workflow safety checks.
