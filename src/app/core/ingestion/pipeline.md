@@ -430,7 +430,7 @@ web update (thread or process)               web/service.py: UpdateRunService
 | `core/ingestion/pipeline/fetch.py` | Network fetch of enabled sources: validators, execution groups, thread pool | no |
 | `core/ingestion/pipeline/source_result.py` | `_process_source_result` (HTML or items path), `_log_source_metrics` | no |
 | `core/ingestion/pipeline/html_links.py` | `_process_html_links_two_stage`: list page links to stored articles | no |
-| `core/ingestion/pipeline/rss.py` | `_process_fetched_source_items`: feed items to stored articles | no |
+| `core/ingestion/pipeline/rss.py` | `_process_fetched_source_items`: feed items to stored articles (helpers `_accepted_items`, `_queue_pending_candidates`, `_merge_queued_row`) | no |
 | `core/ingestion/pipeline/screening.py` | `_screen_candidate` (cache lookup `_resolve_cached`, then `_score_and_record`, `_pause`), cached-assessment checks (`_assessment_from_cached`, `_cached_score`, `_cached_category`), admission counters snapshot and restore | no |
 | `core/ingestion/pipeline/replay.py` | Pending admission candidates replayed before a source's fresh fetch | no |
 | `core/ingestion/pipeline/rows.py` | Candidate payloads, `_build_article_row`, exclusion reason, batch upsert | no |

@@ -219,3 +219,22 @@ def test_rss_linked_landing_is_removed_before_text_extraction(monkeypatch) -> No
                               "<h1>Platform</h1><p>Features</p><a>Request a demo</a>")
     assert not fetch_rss("example", "https://example.com/feed", fetcher=fetcher,
                          extract_full_text=True)
+
+
+def test_rss_item_without_row_is_skipped_without_counting(monkeypatch) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    monkeypatch.setattr("app.core.ingestion.pipeline.rss._build_article_row",
+                        lambda **_kwargs: None)
+    with Session(engine) as session:
+        source = _source("rss")
+        db_source = SourceRepo(session).upsert_source(source)
+        item = Article(source_key="example", title="AI release",
+                       url="https://example.com/news/ai")
+        for batch in (False, True):
+            result = _process_fetched_source_items(
+                items=[item], config=source, db_source_id=db_source.id,
+                article_repo=ArticleRepo(session),
+                settings=Settings(article_batch_upsert_enabled=batch, rss_known_streak_stop=0))
+            assert result == (0, 0, 0, False)
+        assert session.scalar(select(func.count()).select_from(StoredArticle)) == 0
