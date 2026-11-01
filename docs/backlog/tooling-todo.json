@@ -26,7 +26,7 @@
     {
       "id": "T2",
       "title": "Refactor complex, duplicated and dead code found by crapper, dryer and mutator",
-      "status": "backlog",
+      "status": "done",
       "decided": "Owner 2026-11-01: valid point, keep as a backlog task; new code is checked per PR (advisory), old code is cleaned here, not inside feature PRs.",
       "facts_2026_11_01": {
         "tools": "unclebob crapper, dryer, mutator installed manually in ~/tools/unclebob on the owner's Mac (not in CI); Python supported.",
@@ -41,7 +41,14 @@
         "Optionally run mutator on one critical module (e.g. src/app/core/world/filter.py) to judge test strength; full-project mutator runs take hours."
       ],
       "done_when": "No dryer pair >= 0.8 in src/ and no function with CRAP >= 30; remaining 10-30 cases listed with a reason; dead-code candidates either deleted or listed with the reason they stay.",
-      "open_questions": []
+      "open_questions": [],
+      "done": "2026-11-01: 15 plan rows plus 7b, 11a/11b as PRs #170-#186 (except #174, #185 docs), each reviewed by another agent with mutation checks, merged after green CI. Dead code removed; dryer groups A, C, D gone; complexity of the target functions cut (e.g. _screen_candidate 25->7, _process_html_links_two_stage 34->14, run_fetch_cycle 25->8, parse_summary 21->4); characterization tests added before every split. Plan, log and prompts: docs/archive/2026-11/plan-t2-refactor-2026-11-01.md, t2-log-2026-11-01.md.",
+      "left_out": [
+        "JavaScript in src/app/web/static (no JS test harness; separate task if wanted)",
+        "FastAPI route factories and 100%-covered rule code (high CC is structure, not risk)",
+        "Alembic migrations (applied history)",
+        "Spec 018 code in flux: core/world/*, storage/world.py, jev.py _probability duplicate (dedupe after 018)"
+      ]
     }
   ]
 }
