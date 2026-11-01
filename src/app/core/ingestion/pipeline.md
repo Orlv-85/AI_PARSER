@@ -436,7 +436,7 @@ web update (thread or process)               web/service.py: UpdateRunService
 | File | Role | Pure |
 | --- | --- | --- |
 | `core/ingestion/pipeline/__init__.py` | Re-exports `run_fetch_cycle` only; everything else is imported from its module | no |
-| `core/ingestion/pipeline/cycle.py` | `run_fetch_cycle`: run loop, savepoint per source, `FetchSummary` | no |
+| `core/ingestion/pipeline/cycle.py` | `run_fetch_cycle` (setup, pause check, summary) over `_run_sources` (per-source loop), `_process_source_with_admission`, `_process_prefetched_source`, `_record_persist_failure`, `_finish_source`; savepoint per source, `FetchSummary` | no |
 | `core/ingestion/pipeline/models.py` | `FetchSummary`, `SourceMetrics`, `AdmissionState`, `EnabledSource`, `FetchResult`, replay and comparison constants | yes |
 | `core/ingestion/pipeline/sources.py` | `_managed_source_to_config`, fetch-state persist and validator clear | no |
 | `core/ingestion/pipeline/fetch.py` | Network fetch of enabled sources: validators, execution groups, thread pool | no |
