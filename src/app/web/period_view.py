@@ -48,12 +48,7 @@ def partial(unit: str = "week") -> str:
     return f"Partial {unit}: some days or items are missing, so numbers may be incomplete."
 
 
-NOT_YET = not_yet()
 NOT_FOR_WEEK = not_for()
-UNREADABLE = unreadable()
-FIRST_WEEK = first_period()
-LOW_COVERAGE = low_coverage()
-PARTIAL = partial()
 
 
 def month_label(start: date) -> str:

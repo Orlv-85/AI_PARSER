@@ -29,7 +29,6 @@ from app.core.periodic.period_model import (
 from app.storage.period_signals import PeriodSignalRepo
 
 LOGGER = logging.getLogger(__name__)
-BACKFILL_MAX = 200
 BRIEF_MAX_SECONDS = 300
 
 

@@ -4,7 +4,7 @@ from math import isfinite
 from types import SimpleNamespace
 from typing import Any
 
-from app.core.ingestion.admission import bounded_evidence, decision_from_assessment, evidence_hash
+from app.core.ingestion.admission import bounded_evidence, decision_from_assessment
 from app.core.jev import JevAssessment
 from app.ingest.page_filter import text_exclusion_reason
 
@@ -15,10 +15,6 @@ MAX_NON_AI_RELEVANCE = 0.05
 
 def article_evidence(row: dict[str, Any]) -> str:
     return str(bounded_evidence(SimpleNamespace(**row)))
-
-
-def article_evidence_hash(row: dict[str, Any]) -> str:
-    return str(evidence_hash(article_evidence(row)))
 
 
 def cleanup_verdict(row: dict[str, Any], assessment: JevAssessment) -> dict[str, Any]:

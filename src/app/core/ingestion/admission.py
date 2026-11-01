@@ -10,7 +10,6 @@ ACCEPTED = "accepted_ai_editorial"
 NON_AI = "non_ai"
 NON_EDITORIAL = "non_editorial"
 INSUFFICIENT = "insufficient_evidence"
-ADMISSION_CHOICES = {ACCEPTED, NON_AI, NON_EDITORIAL, INSUFFICIENT}
 
 
 @dataclass(frozen=True)
