@@ -400,3 +400,151 @@ def test_persist_fetch_state_if_present_skips_results_without_metadata() -> None
         )
         is None
     )
+
+
+def _patch_html_stage(monkeypatch, fetch_html_article) -> None:
+    monkeypatch.setattr("app.core.ingestion.pipeline.html_links.Fetcher", _FakeFetcher)
+    monkeypatch.setattr(
+        "app.core.ingestion.pipeline.html_links.fetch_html_article", fetch_html_article,
+    )
+
+
+def _dated_article(url: str) -> Article:
+    return Article(
+        source_key="html_source",
+        title="Title",
+        url=url,
+        published_at=datetime(2026, 2, 28, tzinfo=UTC),
+    )
+
+
+@pytest.mark.parametrize("admission_enabled", [False, True])
+def test_process_html_links_two_stage_excluded_item_is_logged_and_not_stored(
+    monkeypatch, admission_enabled: bool,
+) -> None:
+    url = "https://example.com/news/excluded"
+    _patch_html_stage(monkeypatch, lambda *, url, **_kwargs: _dated_article(url))
+    monkeypatch.setattr(
+        "app.core.ingestion.pipeline.html_links._item_exclusion_reason", lambda _item: "non_news",
+    )
+    logged: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        "app.core.ingestion.pipeline.html_links.log_exclusion",
+        lambda item_url, reason: logged.append((item_url, reason)),
+    )
+    settled: list[str] = []
+    monkeypatch.setattr(
+        "app.core.ingestion.pipeline.html_links.settle_pending",
+        lambda _session, *, key: settled.append(key),
+    )
+    monkeypatch.setattr(
+        "app.core.ingestion.pipeline.html_links.upsert_pending", lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        "app.core.ingestion.pipeline.html_links._html_placeholder_key", lambda _s, h: f"ph:{h}",
+    )
+    monkeypatch.setattr(
+        "app.core.ingestion.pipeline.html_links._screen_candidate",
+        lambda **_kwargs: pytest.fail("an excluded item is not screened"),
+    )
+    repo = _Repo()
+    flags: list[str] = []
+
+    result = _process_html_links_two_stage(
+        links=[url],
+        config=_html_source(),
+        db_source_id=1,
+        article_repo=repo,  # type: ignore[arg-type]
+        settings=_settings(article_batch_upsert_enabled=False),
+        quality_flags=flags,
+        admission_state=AdmissionState(enabled=True) if admission_enabled else None,
+    )
+
+    assert result == (0, 0, 0, 0, False)
+    assert logged == [(url, "non_news")]
+    assert not flags
+    # Admission on: the placeholder is settled once (the exclusion branch, not the screening one).
+    assert len(settled) == (1 if admission_enabled else 0)
+
+
+def test_process_html_links_two_stage_skips_item_without_row(monkeypatch) -> None:
+    urls = ["https://example.com/news/a", "https://example.com/news/b"]
+    _patch_html_stage(monkeypatch, lambda *, url, **_kwargs: _dated_article(url))
+    monkeypatch.setattr(
+        "app.core.ingestion.pipeline.html_links._build_article_row", lambda **_kwargs: None,
+    )
+    inserted: list[object] = []
+    repo = _Repo()
+    repo.insert_article = lambda **row: inserted.append(row)  # type: ignore[method-assign]
+
+    for batch_mode in (False, True):
+        result = _process_html_links_two_stage(
+            links=urls,
+            config=_html_source(),
+            db_source_id=1,
+            article_repo=repo,  # type: ignore[arg-type]
+            settings=_settings(article_batch_upsert_enabled=batch_mode),
+        )
+        assert result == (2, 0, 0, 0, False)
+
+    assert not inserted
+    assert not repo.batches
+
+
+def _run_html_links(links: list[str], flags: list[str], **setting_overrides):
+    return _process_html_links_two_stage(
+        links=links,
+        config=_html_source(),
+        db_source_id=1,
+        article_repo=_Repo(known={"known1", "known2"}),  # type: ignore[arg-type]
+        settings=_settings(article_batch_upsert_enabled=False, **setting_overrides),
+        quality_flags=flags,
+    )
+
+
+def _patch_scores(monkeypatch) -> None:
+    monkeypatch.setattr("app.core.ingestion.pipeline.rows.ai_relevance_score", lambda _i: 0.5)
+    monkeypatch.setattr("app.core.ingestion.pipeline.rows.freshness_score", lambda _p: 0.5)
+    monkeypatch.setattr("app.core.ingestion.pipeline.rows.rank_score", lambda **_k: 1.0)
+
+
+def test_process_html_links_two_stage_new_link_resets_known_streak(monkeypatch) -> None:
+    _patch_html_stage(monkeypatch, lambda *, url, **_kwargs: _dated_article(url))
+    monkeypatch.setattr(
+        "app.core.ingestion.pipeline.html_links.canonical_url_hash",
+        lambda url: url.rsplit("/", maxsplit=1)[-1],
+    )
+    _patch_scores(monkeypatch)
+
+    result = _run_html_links(
+        ["https://example.com/known1", "https://example.com/new", "https://example.com/known2"],
+        [],
+        html_known_streak_stop=2,
+    )
+
+    # known, new, known: the new link resets the streak, so there is no early stop.
+    assert result == (1, 1, 2, 2, False)
+
+
+def test_process_html_links_two_stage_flags_truncated_links(monkeypatch) -> None:
+    _patch_html_stage(monkeypatch, lambda *, url, **_kwargs: _dated_article(url))
+    _patch_scores(monkeypatch)
+    urls = [f"https://example.com/news/{n}" for n in range(3)]
+
+    flags: list[str] = []
+    assert _run_html_links(urls, flags, html_max_links_per_source=2)[0] == 2
+    assert flags == ["truncated"]
+
+    flags = []
+    assert _run_html_links(urls, flags, html_max_links_per_source=3)[0] == 3
+    assert "truncated" not in flags
+
+
+def test_process_html_links_two_stage_flags_unknown_publication_date(monkeypatch) -> None:
+    undated = Article(source_key="html_source", title="T", url="https://example.com/news/u")
+    _patch_html_stage(monkeypatch, lambda **_kwargs: undated)
+    _patch_scores(monkeypatch)
+    flags: list[str] = []
+
+    assert _run_html_links(["https://example.com/news/u"], flags)[0] == 1
+    assert flags == ["unknown_publication_date"]

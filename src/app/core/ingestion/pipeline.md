@@ -187,6 +187,13 @@ function. Each rule lists the tests that check it.
 - On the row (`_build_article_row`): unknown or conflicting evidence stores `published_at` empty,
   `publication_status` `unknown` / `conflict` and a zero freshness; the evidence goes to
   `date_provenance`. Tests: `test_unknown_or_conflicting_publication_has_zero_freshness`.
+- With admission on, an item without an assessment gets no row; a publication kind other than
+  `published` takes the evidence time; the Jev category, `Comparison` material type (confidence at
+  least `COMPARISON_MIN_CONFIDENCE`) and `enrichment_provenance` go on the row only from an
+  assessment. Tests: `test_admission_without_assessment_builds_no_row`,
+  `test_non_published_kind_uses_evidence_time_not_published_at`,
+  `test_row_fields_and_assessment_extras_are_pinned`,
+  `test_low_confidence_comparison_has_no_material_type_and_no_category`.
 - A publication time more than `FUTURE_DATE_TOLERANCE` ahead of the collection time is replaced by
   the collection time (`_clamp_future` in `_candidate_payload` for admission and the pending ledger,
   and in `_build_article_row` for the stored row), for RSS and HTML alike. The kind and status stay
@@ -301,7 +308,11 @@ function. Each rule lists the tests that check it.
   `test_settled_stale_pending_is_not_reopened_by_the_feed`.
 - HTML: each unknown link gets a pending placeholder before download; an exclusion, a decision or a
   known hash settles it; a temporary download or parse failure keeps it pending. Tests:
-  `test_html_article_failure_retains_retry_and_continues`, `test_confirmed_html_exclusion_settles_before_304`.
+  `test_html_article_failure_retains_retry_and_continues`, `test_confirmed_html_exclusion_settles_before_304`,
+  `test_process_html_links_two_stage_excluded_item_is_logged_and_not_stored` (a downloaded page the
+  pipeline filter excludes is logged, settled, not stored).
+- HTML: a candidate for which no row is built is skipped and not queued. Tests:
+  `test_process_html_links_two_stage_skips_item_without_row`.
 - The notice (`collection_status`, `PAUSED_MESSAGE`) is durable. It is cleared only by a run that
   ends unpaused after at least one fresh (not cached) successful assessment; empty, 304, cache-only
   and rolled-back runs keep it. An answer reused from the in-cycle cache of `JevRelevanceScorer` is
@@ -414,6 +425,7 @@ web update (thread or process)               web/service.py: UpdateRunService
            items      -> _process_fetched_source_items   rss.py (filter, known/streak check)
              _screen_candidate (admission)   screening.py: cache key, pending row, Jev, record_decision
              _build_article_row              rows.py: dates, relevance, freshness, rank, provenance
+                                             (steps: _row_relevance, _publication_time, _assessment_fields)
              insert_article / upsert_articles_batch
        clear_collection_paused if a fresh success; commit
   -> FetchSummary; logs source_fetch_finished, fetch_run_finished
@@ -430,7 +442,7 @@ web update (thread or process)               web/service.py: UpdateRunService
 | `core/ingestion/pipeline/fetch.py` | Network fetch of enabled sources: validators, execution groups, thread pool | no |
 | `core/ingestion/pipeline/source_result.py` | `_process_source_result` (HTML or items path), `_log_source_metrics` | no |
 | `core/ingestion/pipeline/html_links.py` | `_process_html_links_two_stage`: list page links to stored articles | no |
-| `core/ingestion/pipeline/rss.py` | `_process_fetched_source_items`: feed items to stored articles (helpers `_accepted_items`, `_queue_pending_candidates`, `_merge_queued_row`) | no |
+| `core/ingestion/pipeline/rss.py` | `_process_fetched_source_items`: feed items to stored articles | no |
 | `core/ingestion/pipeline/screening.py` | `_screen_candidate` (cache lookup `_resolve_cached`, then `_score_and_record`, `_pause`), cached-assessment checks (`_assessment_from_cached`, `_cached_score`, `_cached_category`), admission counters snapshot and restore | no |
 | `core/ingestion/pipeline/replay.py` | Pending admission candidates replayed before a source's fresh fetch | no |
 | `core/ingestion/pipeline/rows.py` | Candidate payloads, `_build_article_row`, exclusion reason, batch upsert | no |

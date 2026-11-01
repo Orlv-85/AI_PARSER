@@ -97,18 +97,14 @@ def _assessment_payload(assessment: JevAssessment) -> dict[str, object]:
     }
 
 
-def _build_article_row(
-    *, item: object, config: SourceConfig, db_source_id: int, canonical: str,
-    canonical_hash: str, assessment: JevAssessment | None, admission_enabled: bool,
-) -> dict[str, object] | None:
-    if admission_enabled:
-        if assessment is None:
-            return None
-        relevance = assessment.relevance_score
-    else:
-        relevance = (
-            assessment.relevance_score if assessment is not None else ai_relevance_score(item)
-        )
+def _row_relevance(item: object, assessment: JevAssessment | None) -> float:
+    if assessment is not None:
+        return cast(float, assessment.relevance_score)
+    return cast(float, ai_relevance_score(item))
+
+
+def _publication_time(item: object) -> tuple[datetime | None, dict[str, Any] | None]:
+    """Stored `published_at` and date provenance, before the evidence status is applied."""
     published = getattr(item, "published_at", None)
     if getattr(item, "publication_date_kind", "published") != "published":
         published = None
@@ -118,6 +114,39 @@ def _build_article_row(
     provenance = getattr(item, "date_evidence", None)
     if published is not original and original is not None:
         provenance = {**(provenance or {}), "future_date_replaced": original.isoformat()}
+    return published, provenance
+
+
+def _assessment_fields(item: object, assessment: JevAssessment | None) -> dict[str, object]:
+    """Row columns that come from the Jev assessment; empty without one."""
+    fields: dict[str, object] = {}
+    if assessment is None:
+        return fields
+    if assessment.category is not None:
+        fields["category"] = assessment.category
+        fields["category_confidence"] = assessment.category_confidence
+    if assessment.comparison_choice == "Comparison":
+        if (assessment.comparison_confidence or 0) >= COMPARISON_MIN_CONFIDENCE:
+            fields["material_type"] = "Comparison"
+    if assessment.comparison_choice is not None:
+        # Same text the daily rubric sent; daily enrichment re-checks it before reuse.
+        state = jev_state(item, with_summary=False)
+        source_hash = sha256(json.dumps(state, ensure_ascii=True).encode()).hexdigest()
+        fields["enrichment_provenance"] = json.dumps({
+            "rubric": RUBRIC_VERSION, "admission_source_hash": source_hash,
+            "admission_assessment": _assessment_payload(assessment),
+        })
+    return fields
+
+
+def _build_article_row(
+    *, item: object, config: SourceConfig, db_source_id: int, canonical: str,
+    canonical_hash: str, assessment: JevAssessment | None, admission_enabled: bool,
+) -> dict[str, object] | None:
+    if admission_enabled and assessment is None:
+        return None
+    relevance = _row_relevance(item, assessment)
+    published, provenance = _publication_time(item)
     dates = getattr(item, "date_evidence", None) or {}
     resolution = dates.get("published", {})
     if resolution.get("status") in {"unknown", "conflict"}:
@@ -151,20 +180,7 @@ def _build_article_row(
         "freshness_score": freshness,
         "rank_score": rank,
     }
-    if assessment is not None and assessment.category is not None:
-        row["category"] = assessment.category
-        row["category_confidence"] = assessment.category_confidence
-    if assessment is not None and assessment.comparison_choice == "Comparison":
-        if (assessment.comparison_confidence or 0) >= COMPARISON_MIN_CONFIDENCE:
-            row["material_type"] = "Comparison"
-    if assessment is not None and assessment.comparison_choice is not None:
-        # Same text the daily rubric sent; daily enrichment re-checks it before reuse.
-        state = jev_state(item, with_summary=False)
-        source_hash = sha256(json.dumps(state, ensure_ascii=True).encode()).hexdigest()
-        row["enrichment_provenance"] = json.dumps({
-            "rubric": RUBRIC_VERSION, "admission_source_hash": source_hash,
-            "admission_assessment": _assessment_payload(assessment),
-        })
+    row.update(_assessment_fields(item, assessment))
     return row
 
 
