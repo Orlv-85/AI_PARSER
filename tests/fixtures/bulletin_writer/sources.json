@@ -1,0 +1,28 @@
+{
+  "_note": "FIXTURE. Hand-written source texts for tests, modelled on the stories of voice.md for 2026-10-30. Not archive data.",
+  "https://techcrunch.com/crosby": {
+    "title": "Crosby bids for Weil Gotshal",
+    "summary": "An AI-first law firm wants the brand of a Wall Street name.",
+    "text": "Crosby, a two-year-old AI-first law firm, has bid for the brand and assets of Weil Gotshal, a famed Wall Street firm that is preparing to dissolve. Crosby is also hiring some of Weil's 1,200 lawyers, the company said on Thursday. Crosby says its lawyers use AI for drafting and review, and that partners sign every document."
+  },
+  "https://marktechpost.com/edge0": {
+    "title": "Edge0 releases open voice-cloning model",
+    "summary": "A voice from a single clip, in many languages.",
+    "text": "Edge0 released an open model that clones a voice from a single audio clip. The model supports 23 languages and runs on a laptop GPU. Edge0 says the cloned voice keeps the accent of the speaker. The weights are free to download."
+  },
+  "https://arstechnica.com/fujifilm": {
+    "title": "Fujifilm to invest in magnetic tape",
+    "summary": "Tape for the data of generative AI.",
+    "text": "Fujifilm will invest about $63 million to make five times more magnetic tape, citing the data growth of generative AI. The company said that archives of training data are the main reason for the demand."
+  },
+  "https://the-decoder.com/firefox": {
+    "title": "Open model breaks Firefox on its own",
+    "summary": "GLM 5.3 found security fixes and built attacks.",
+    "text": "Researchers at Epoch AI gave GLM 5.3, a Chinese open-weight model, a Firefox version, basic tools and public information, then let it work alone. Mozilla disguises its security fixes as routine changes; the model saw through that and chained the bugs into a working attack. The fastest attack took 12 hours and cost about $1,000 in API fees. Mozilla closed the hole in Firefox 159.0 on October 27."
+  },
+  "https://habr.example/model-spec": {
+    "title": "ОпенАИ переписала Model Spec",
+    "summary": "Правила для моделей изменены.",
+    "text": "Компания ОпенАИ переписала Model Spec: модели не должны блокировать надзор, исправление или отключение. Изменения вступили в силу 29 октября. В компании заявили, что правила будут пересматриваться."
+  }
+}

@@ -26,6 +26,7 @@ Feature docs live next to their main module and are checked by `scripts/check_co
 | Daily AI Signals (006, 007) | `core/daily/signals.md` |
 | World change questions (018 item 1) | `core/bulletin/world_change.md` |
 | Bulletin builder (018 item 2) | `core/bulletin/builder.md` |
+| Bulletin writer (018 item 3) | `core/bulletin/writer.md` |
 | Period AI Signals (017) | `core/periodic/signals_period.md` |
 | Fetch pipeline (001, 002, admission) | `core/ingestion/pipeline.md` |
 | Source onboarding (003, 011) | `core/sources/onboarding.md` |
