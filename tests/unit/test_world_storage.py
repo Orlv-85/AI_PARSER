@@ -272,6 +272,7 @@ def test_world_tables_not_read_by_digest():
     allowed |= set((SRC / "core" / "world").glob("*.py"))
     allowed.add(SRC / "cli" / "main.py")
     allowed.add(SRC / "core" / "world_collect.py")
+    allowed.add(SRC / "core" / "world_screen.py")
     found = []
     for path in SRC.rglob("*.py"):
         if path in allowed:

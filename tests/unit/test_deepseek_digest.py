@@ -662,6 +662,7 @@ def test_world_job_script_is_isolated(tmp_path):
     text = Path("scripts/run_daily_world_job.sh").read_text(encoding="utf-8")
     for other in ("fetch", "digest", "archive"):
         assert f"run_daily_{other}_job" not in text
+    assert "world screen" not in text
 
 
 @pytest.mark.parametrize("enabled,env_file", [

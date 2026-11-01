@@ -39,7 +39,9 @@ from app.core.sources.onboarding import import_source_candidates
 from app.core.sources.validation import run_source_validation_batch
 from app.core.world.filter import load_own_domains
 from app.core.world.gdelt import DayStats, make_client, scan_day
+from app.core.world.screen import WORLD_JEV_MAX_USD_PER_DAY
 from app.core.world_collect import collect_day, yesterday_utc
+from app.core.world_screen import open_world_assessor, run_screen, utc_today
 from app.observability import setup_json_logging
 from app.storage import SessionLocal, create_all
 from app.storage.archive import ArchiveRepo
@@ -528,6 +530,38 @@ def world_collect(
                 session, day, client=client, own_domains=own, max_files=max_files, logger=logger
             )
             typer.echo(json.dumps(summary.as_dict(), sort_keys=True))
+
+
+@world_app.command("screen")
+def world_screen(
+    report_date: str = typer.Option(..., "--date", help="GDELT day, YYYY-MM-DD."),
+    max_usd: str = typer.Option(
+        WORLD_JEV_MAX_USD_PER_DAY, "--max-usd", help="Jev cap in USD, at most the daily cap."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="No request, nothing written."),
+) -> None:
+    """Jev title screen of stored world candidates, then FR-001 for the top ones with text."""
+    try:
+        target = date.fromisoformat(report_date)
+        too_high = microdollars(max_usd) > microdollars(WORLD_JEV_MAX_USD_PER_DAY)
+    except (ValueError, ArithmeticError) as exc:
+        raise typer.BadParameter(
+            "--date must be YYYY-MM-DD and --max-usd a positive amount") from exc
+    if too_high:
+        raise typer.BadParameter(f"--max-usd is above the cap {WORLD_JEV_MAX_USD_PER_DAY}")
+    if not dry_run:
+        create_all()
+    logger = setup_json_logging()
+    with SessionLocal() as session:
+        try:
+            if dry_run:
+                summary = run_screen(session, None, target, dry_run=True)
+            else:
+                with open_world_assessor(get_settings(), logger, utc_today()) as assessor:
+                    summary = run_screen(session, assessor, target, limit_usd=float(max_usd))
+        except ValueError as exc:
+            typer.echo(f"world screen: {exc}", err=True)
+            raise typer.Exit(2) from exc
+    typer.echo(json.dumps(summary, sort_keys=True))
 
 
 @app.command("import-candidates")

@@ -281,6 +281,10 @@ function. Each rule lists the tests that check it.
   (`PilotJournal.review_failed_transports`, so it cannot block other candidates) and retried the
   same way. Tests:
   `test_failed_admission_row_from_older_version_is_retried`.
+- `PilotJournal.committed_usd()` is the sum of `committed` over all calls of the journal: a
+  reservation of a call without an answer or without usage counts in full, a priced answer counts
+  its actual cost. Callers use it to stop before a request at their own limit (the world stream's
+  `--max-usd`). Tests: `test_journal_committed_usd_counts_reservations_and_unknown_calls`.
 - Screening unavailable (provider error: HTTP error answer such as 5xx after the journal's overload
   retries, auth error; invalid admission answer; or `ADMISSION_CONSECUTIVE_TRANSPORT_LIMIT`
   transport failures in a row): no more Jev calls, the run pauses. Accepted articles of the current source are kept, the rest of its candidates
