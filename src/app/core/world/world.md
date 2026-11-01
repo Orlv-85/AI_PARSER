@@ -282,7 +282,8 @@ flowchart LR
   candidate whose cluster already has a screened member in the window (from an earlier run) also
   follows that member without a request: `screened_out` if it is out, else `screened_in`. The
   oldest screened member of the cluster is the reference. Tests:
-  `test_screen_cluster_follows_representative`, `test_late_outlet_follows_screened_cluster`.
+  `test_screen_cluster_follows_representative`, `test_late_outlet_follows_screened_cluster`,
+  `test_late_outlet_follows_oldest_screened_member`.
 - The probability is stored in `screen_confidence`. At or above `SCREEN_THRESHOLD` the state is
   `screened_in`, below it `screened_out` (final). An answer that is not a probability in [0, 1] is
   a failure. Tests: `test_screen_threshold_splits_in_and_out`, `test_screen_bad_answer_is_a_failure`.
@@ -324,7 +325,9 @@ flowchart LR
 - `--max-usd` is a run-local lower limit and never opens another journal: before each request the
   run stops when the journal's committed spend of the day has reached it; above
   `WORLD_JEV_MAX_USD_PER_DAY` it is rejected and nothing is opened. Tests:
-  `test_world_run_limit_stops_before_request`, `test_cli_world_screen_rejects_max_usd_above_cap`.
+  `test_world_run_limit_stops_before_request`, `test_world_run_limit_equal_to_spend_stops` (spend equal
+  to the limit stops), `test_world_run_limit_also_stops_step_b`,
+  `test_cli_world_screen_rejects_max_usd_above_cap`.
 - At the cap (or any journal stop or outage) the run stops, logs a stop line with the reason (event
   prefix `world_screen` for step A, `world_change` for step B, suffix `_stopped`), and also
   `world_cost_cap` when the reason is the day cap or the run limit; every unprocessed candidate
@@ -341,12 +344,14 @@ flowchart LR
 - A call that failed in transit may have been billed, so the journal refuses every further request
   (`unknown_or_failed_previous_call_requires_review`), also in later runs of the same real day.
   Operator step: read the `world_screen_usage` log line and the journal file of that day, decide
-  whether the call was billed, then either wait for the next UTC day (a new budget; the old file
-  stays), or, accepting the risk of paying that call twice, delete that day's journal file and
-  run again with `--max-usd` set to $0.10 minus the `cost_usd` already spent that day. Never work
-  around the stop by only changing `--max-usd`: it does not open another journal (unlike
-  `bulletin assess`), and deleting the file without lowering `--max-usd` would open a second
-  $0.10 for the same day. Tests: `test_world_wedged_journal_marks_nothing_failed` (the stop
+  whether the call was billed. The simple way is to wait for the next UTC day (a new budget; the
+  old file stays). To go on the same day, accepting the risk of paying that call twice, do not
+  delete the file: rename it to `journal-world-stream-1.sqlite3.reviewed-<UTC time>` and run again
+  with `--max-usd` set to $0.10 minus `total_committed_usd` from the `world_screen_usage` line
+  (`cost_usd` of the summary understates it, because unknown calls count 0 there); use that lowered
+  value for every further run of that UTC day. Never work around the stop by only changing
+  `--max-usd`: it does not open another journal (unlike `bulletin assess`), and a fresh file
+  without the lowered limit would open a second $0.10 for the same day. Tests: `test_world_wedged_journal_marks_nothing_failed` (the stop
   itself); the operator steps have no test.
 - At the start of a real run, `failed` candidates of the window with fewer than `MAX_ATTEMPTS`
   attempts return to the step named in `last_error`: `screen` to `new`, `assess` to `text_ready`.

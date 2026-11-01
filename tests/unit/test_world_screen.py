@@ -418,14 +418,14 @@ def test_world_journal_is_separate_from_digest_cap(tmp_path, monkeypatch):
             pass
 
 
-def usage_handler(requests=None):
-    """Every screen answer reports the largest billable usage: 2688 microdollars a request."""
+def usage_handler(requests=None, tokens=64000):
+    """Screen answers report `tokens`; the default is the largest billable usage (2688 micro)."""
     def handler(request):
         body = json.loads(request.content)
         if requests is not None:
             requests.append(body)
         return httpx.Response(200, json={"answers": {"ai_relevant": {"noul": 0.9}},
-                                         "usage": {"input_tokens": 64000}})
+                                         "usage": {"input_tokens": tokens}})
     return handler
 
 
@@ -491,6 +491,80 @@ def test_world_run_limit_stops_before_request(session, tmp_path, caplog):
     assert len(requests) == 1  # 2688 microdollars committed after the first answer
     assert (summary["screened"], summary["not_attempted"]) == (1, 4)
     assert any(r.getMessage() == "world_cost_cap" for r in caplog.records)
+
+
+def test_journal_committed_usd_counts_reservations_and_unknown_calls(tmp_path):
+    body = {"model": "m", "state": "x", "questions": {}}
+    journal = journal_for(tmp_path, 100000)
+    try:
+        assert journal.committed_usd() == 0
+        journal.reserve("sent-answer-unknown", "jev", 2688)  # no answer yet: counted in full
+        assert journal.committed_usd() == pytest.approx(0.002688)
+    finally:
+        journal.close()
+    no_usage = PilotJournal(tmp_path / "b.sqlite3", {"v": 2}, {
+        "total": "0.1", "jev": "0.099", "deepseek": "0.001"})
+    priced = PilotJournal(tmp_path / "c.sqlite3", {"v": 3}, {
+        "total": "0.1", "jev": "0.099", "deepseek": "0.001"})
+    try:
+        with make_assessor(lambda _r: httpx.Response(200, json={"answers": {}}),
+                           no_usage).client as client:
+            with pytest.raises(Exception, match="missing_usage"):
+                no_usage.call("jev", body, client, "k")
+        assert no_usage.committed_usd() == pytest.approx(0.002688)  # unknown usage: reservation
+        with make_assessor(usage_handler(tokens=1000), priced).client as client:
+            priced.call("jev", body, client, "k")
+        assert priced.committed_usd() == pytest.approx(0.000042)  # priced usage replaces it
+    finally:
+        no_usage.close()
+        priced.close()
+
+
+def test_world_run_limit_equal_to_spend_stops(session, tmp_path):
+    seed(session, *(cand(n, title=f"Boundary story {n}") for n in range(1, 4)))
+    journal = journal_for(tmp_path, 100000)
+    requests = []
+    assessor = make_assessor(usage_handler(requests, tokens=1000), journal)
+    try:
+        summary = run_screen(session, assessor, DAY, limit_usd=42 / 1e6)  # one request costs 42
+    finally:
+        journal.close()
+        assessor.client.close()
+    assert len(requests) == 1
+    assert (summary["screened"], summary["not_attempted"]) == (1, 2)
+
+
+def test_world_run_limit_also_stops_step_b(session, tmp_path):
+    seed(session, cand(1, title="Screen me first"), cand(2, title="Ready for questions"))
+    force(session, "Ready for questions", STATE_TEXT_READY, 0.9)
+    journal = journal_for(tmp_path, 100000)
+    requests = []
+    assessor = make_assessor(usage_handler(requests, tokens=1000), journal)
+    try:
+        summary = run_screen(session, assessor, DAY, limit_usd=42 / 1e6,
+                             texts=lambda c: "some text")
+    finally:
+        journal.close()
+        assessor.client.close()
+    assert len(requests) == 1  # the screen only
+    assert row(session, "Ready for questions").state == STATE_TEXT_READY
+    assert (summary["assessed"], summary["not_attempted"]) == (0, 1)
+
+
+def test_late_outlet_follows_oldest_screened_member(session):
+    story = "Courts rule on AI evidence"
+    seed(session, cand(1, title=story, domain="a.org"), cand(2, title=story, domain="b.org"),
+         cand(3, title=story, domain="c.org"))
+    members = {c.source_domain: c for c in session.scalars(select(WorldCandidate))}
+    members["a.org"].state, members["a.org"].screen_confidence = STATE_SCREENED_OUT, 0.2
+    members["b.org"].state, members["b.org"].screen_confidence = STATE_SCREENED_IN, 0.9
+    session.commit()
+    requests = []
+    screen(session, jev_handler(requests=requests))
+    assert not requests
+    late = session.scalars(select(WorldCandidate).where(
+        WorldCandidate.source_domain == "c.org")).one()
+    assert (late.state, late.screen_confidence) == (STATE_SCREENED_OUT, 0.2)
 
 
 def test_world_wedged_journal_marks_nothing_failed(session, tmp_path):
