@@ -32,20 +32,20 @@ def read_collection_status(session: Session) -> tuple[bool, str | None]:
     return bool(row.paused), row.message if row.paused else None
 
 
-def set_collection_paused(session: Session) -> None:
+def _write_pause(session: Session, paused: bool, message: str | None) -> None:
     row = get_collection_status(session)
-    row.paused = True
-    row.message = PAUSED_MESSAGE
+    row.paused = paused
+    row.message = message
     row.updated_at = datetime.now(UTC)
     session.flush()
+
+
+def set_collection_paused(session: Session) -> None:
+    _write_pause(session, True, PAUSED_MESSAGE)
 
 
 def clear_collection_paused(session: Session) -> None:
-    row = get_collection_status(session)
-    row.paused = False
-    row.message = None
-    row.updated_at = datetime.now(UTC)
-    session.flush()
+    _write_pause(session, False, None)
 
 
 def get_cached_decision(session: Session, key: str) -> AdmissionDecisionRow | None:
