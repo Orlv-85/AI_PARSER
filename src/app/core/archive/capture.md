@@ -71,6 +71,16 @@ flowchart LR
   `ARCHIVE_DOWNLOAD_CONCURRENCY` workers. An extracted page of at least `ARCHIVE_MIN_TEXT_CHARS`
   becomes an `origin = source_page` version with `EXTRACTION_VERSION`, final URL and HTTP status;
   the document is `archived`. Tests: `test_capture_downloads_and_archives_page`.
+- `download_documents` runs the same reuse, download and record step for the given document ids
+  only (the world stream uses it for its top candidates, `core/world/world.md`); other due
+  documents are not touched, and every rule of this list applies to the chosen ones. Tests:
+  `test_download_documents_touches_only_given_ids`.
+- Documents the world stream creates carry `source_key = WORLD_SOURCE_KEY`. The nightly capture
+  leaves them out: coverage (`window_states`, so `coverage_pct` and the 90 target) and the due
+  list without ids (so its download caps and retry schedule). `archive_articles` of a real
+  article with the same hash replaces the marker with the real `source_key`; `archive_bytes` and
+  its warning still count their texts. Tests: `test_archive_coverage_skips_world_documents`,
+  `test_archive_due_skips_world_documents`, `test_real_article_takes_over_a_world_document`.
 - At most `ARCHIVE_MAX_DOWNLOADS` downloads per run and `ARCHIVE_MAX_PER_HOST` per host
   (`skipped_cap`); no download starts after `--max-seconds` (`skipped_time`). Skipped documents
   are unchanged. Tests: `test_capture_respects_caps_and_time`.
@@ -195,7 +205,7 @@ flowchart LR
 
 ## Code map
 
-- `capture.py`: constants, `archive_articles` (sync of stored articles, no network), `capture`
+- `capture.py`: `download_documents` (download step for given ids), constants, `archive_articles` (sync of stored articles, no network), `capture`
   (window, batches, due, reuse, downloads, record, clean, summary), `status`, `import_db`
   (archive pruned rows from a dump) and `dedupe_page_cache` (one-off page.html cleanup).
 - `storage/article_evidence_cache.py`: shared `PageCache`, `SourcePageDownloader`,

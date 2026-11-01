@@ -264,6 +264,17 @@ def test_failed_candidates_return_to_their_step(session):
     assert row(session, "Failed screen").attempts == 1
 
 
+def test_no_text_is_not_requeued_by_screen(session):
+    seed(session, cand(1, title="Paywalled"))
+    force(session, "Paywalled", STATE_SCREENED_IN, 0.9)
+    WorldRepo(session).transition(row(session, "Paywalled"), "no_text", error="text: paywall")
+    session.commit()
+    summary = screen(session, jev_handler())
+    item = row(session, "Paywalled")
+    assert (item.state, item.last_error) == ("no_text", "text: paywall")
+    assert (summary["screened"], summary["asked"], summary["failed"]) == (0, 0, 0)
+
+
 def test_failed_after_max_attempts_stay_failed(session):
     seed(session, cand(1, title="Hopeless"))
     repo = WorldRepo(session)

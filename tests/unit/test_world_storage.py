@@ -145,6 +145,15 @@ def test_world_failed_counts_attempts_and_retries(session):
     assert row.priority == 2.5
 
 
+def test_world_no_text_keeps_reason(session):
+    repo = WorldRepo(session)
+    repo.upsert_candidates([candidate()], now=NOW)
+    row = repo.candidates_in_state(STATE_NEW)[0]
+    repo.transition(row, STATE_SCREENED_IN, screen_confidence=0.9)
+    repo.transition(row, STATE_NO_TEXT, error="text: paywall")
+    assert (row.state, row.attempts, row.last_error) == (STATE_NO_TEXT, 0, "text: paywall")
+
+
 def test_world_file_states_record_and_skip_done(session):
     repo = WorldRepo(session)
     repo.record_file("20261031000000", "gkg", FILE_DONE, rows=10, matched=3)
@@ -273,6 +282,7 @@ def test_world_tables_not_read_by_digest():
     allowed.add(SRC / "cli" / "main.py")
     allowed.add(SRC / "core" / "world_collect.py")
     allowed.add(SRC / "core" / "world_screen.py")
+    allowed.add(SRC / "core" / "world_text.py")
     found = []
     for path in SRC.rglob("*.py"):
         if path in allowed:

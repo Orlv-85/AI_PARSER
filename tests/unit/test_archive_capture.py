@@ -16,6 +16,7 @@ from app.core.archive.capture import (
     capture,
     dedupe_page_cache,
 )
+from app.storage.archive import WORLD_SOURCE_KEY, ArchiveRepo
 from app.storage.article_evidence_cache import EXTRACTION_VERSION, PageCache, url_key
 from app.storage.models_sql import ArchiveDocument, ArchiveText, Article, Base
 
@@ -326,3 +327,67 @@ def test_dedupe_page_cache_dry_run_then_apply(tmp_path) -> None:
     assert (rebuildable / "body.bin").exists()
     assert (no_response / "page.html").exists()
     assert dedupe_page_cache([archive, daily], apply=True)["files"] == 0
+
+
+def test_download_documents_touches_only_given_ids(tmp_path) -> None:
+    session = _session()
+    chosen = _article(session, "chosen")
+    other = _article(session, "other")
+    calls: list[str] = []
+    transport = httpx.MockTransport(_transport({}, calls))
+    ids = [_document_after_sync(session, chosen)]
+
+    summary = capture_module.download_documents(
+        session, ids, cache_root=tmp_path / "archive", daily_cache_root=tmp_path / "daily",
+        client_factory=lambda: httpx.AsyncClient(transport=transport), host_interval=0)
+
+    assert _pages(calls) == [chosen]
+    assert summary["downloads"] == 1
+    assert _document(session, chosen).state == "archived"
+    assert _document(session, other).state == "pending"
+
+
+def _document_after_sync(session, url) -> int:
+    rows = session.scalars(select(Article)).all()
+    capture_module.archive_articles(session, rows)
+    session.commit()
+    return int(_document(session, url).id)
+
+
+def _world_document(session, key="w"):
+    url = f"https://world.example.org/{key}"
+    return ArchiveRepo(session).upsert_document(
+        url_canonical_hash=f"world/{key}", url=url, url_canonical=url,
+        source_key=WORLD_SOURCE_KEY, host="world.example.org", title="World", published_at=None,
+        publication_day=None, publication_status=None, article_id=None, first_seen_at=NOW)
+
+
+def test_archive_coverage_skips_world_documents() -> None:
+    session = _session()
+    _world_document(session)
+    _article(session, "real")
+    capture_module.archive_articles(session, session.scalars(select(Article)).all())
+    states = ArchiveRepo(session).window_states(None)
+    assert len(states) == 1
+
+
+def test_archive_due_skips_world_documents() -> None:
+    session = _session()
+    document = _world_document(session)
+    repo = ArchiveRepo(session)
+    assert not repo.due(None, NOW)
+    assert repo.due(None, NOW, ids=[document.id]) == [document]
+
+
+def test_real_article_takes_over_a_world_document() -> None:
+    session = _session()
+    _world_document(session)
+    url = "https://world.example.org/w"
+    real = Article(id=7, source_id=1, title="Real title", url=url, url_canonical=url,
+                   url_canonical_hash="world/w", content=None, discovered_at=NOW)
+    capture_module.archive_articles(session, [real], {1: "real-source"})
+    document = session.scalars(select(ArchiveDocument)).one()
+    assert (document.source_key, document.article_id, document.title) == (
+        "real-source", 7, "Real title")
+    assert ArchiveRepo(session).due(None, NOW) == [document]
+    assert len(ArchiveRepo(session).window_states(None)) == 1
