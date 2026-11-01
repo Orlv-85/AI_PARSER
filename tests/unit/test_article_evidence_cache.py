@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 
 import httpx
 import pytest
@@ -342,3 +343,258 @@ def test_robots_matches_the_bot_token(tmp_path, agent, blocked):
     cache = PageCache(tmp_path / "run")
     _fetch(cache, transport, ["https://example.com/a"], respect_robots=True)
     assert (cache.status(["https://example.com/a"])["states"] == {"blocked": 1}) is blocked
+
+
+def _no_sleep(monkeypatch):
+    async def instant(_seconds):
+        return None
+    monkeypatch.setattr("app.storage.article_evidence_cache.asyncio.sleep", instant)
+
+
+def test_redirect_chain_is_followed_and_recorded(tmp_path):
+    calls = []
+
+    def transport(request):
+        calls.append(request.url.path)
+        if request.url.path == "/post/a":
+            return httpx.Response(301, headers={"Location": "/post/b"})
+        if request.url.path == "/post/b":
+            return httpx.Response(302, headers={"Location": "https://example.com/post/c"})
+        return httpx.Response(200, text=_html(), headers={"Content-Type": "text/html"})
+
+    cache = PageCache(tmp_path / "run")
+    url = "https://example.com/post/a"
+    _fetch(cache, transport, [url])
+    assert calls == ["/post/a", "/post/b", "/post/c"]
+    response = json.loads((cache.page_dir(url) / "response.json").read_text())
+    assert response["final_url"] == "https://example.com/post/c"
+    assert [item["status_code"] for item in response["redirects"]] == [301, 302]
+    assert response["original_url"] == url
+    assert "redirect_issue" not in response
+    assert cache.attempt(url)["state"] == "completed"
+    assert cache.attempt(url)["quality"] == "extracted"
+
+
+def test_too_many_redirects_stop_after_six_requests_and_are_unresolved(tmp_path):
+    calls = []
+
+    def transport(request):
+        calls.append(request.url.path)
+        return httpx.Response(302, headers={"Location": f"/post/{len(calls)}"})
+
+    cache = PageCache(tmp_path / "run")
+    url = "https://example.com/post/0"
+    _fetch(cache, transport, [url])
+    assert len(calls) == 6
+    attempt = cache.attempt(url)
+    assert attempt["quality"] == "unresolved"
+    assert "too_many_redirects" in attempt["issues"]
+    evidence = json.loads((cache.page_dir(url) / "evidence.json").read_text())
+    assert evidence["issues"] == attempt["issues"]
+    assert attempt["evidence_sha256"]
+
+
+def test_redirect_without_location_is_saved_as_a_response(tmp_path):
+    cache = PageCache(tmp_path / "run")
+    url = "https://example.com/post/a"
+    _fetch(cache, lambda _: httpx.Response(302), [url])
+    attempt = cache.attempt(url)
+    assert attempt["state"] == "completed"
+    assert "http_302" in attempt["issues"]
+    assert "non_html_response" in attempt["issues"]
+
+
+def test_service_unavailable_blocks_host_on_third_failure(tmp_path, monkeypatch):
+    _no_sleep(monkeypatch)
+    cache = PageCache(tmp_path / "run")
+    urls = [f"https://www.example.com/post/{i}" for i in range(4)]
+    calls = []
+
+    def transport(request):
+        calls.append(request.url.path)
+        return httpx.Response(503, text=_html(), headers={"Content-Type": "text/html",
+                                                          "Retry-After": "120"})
+
+    downloader = _fetch(cache, transport, urls, concurrency=1)
+    assert len(calls) == 3
+    assert downloader.service_failures["example.com"] == 3
+    assert downloader.blocked_hosts == {"example.com"}
+    states = [cache.attempt(url)["state"] for url in urls]
+    assert states == ["completed", "completed", "completed", "blocked"]
+    assert cache.attempt(urls[0])["issues"].count("http_503") == 1
+    assert cache.attempt(urls[3])["issues"] == ["host_rate_limit_or_unavailable"]
+
+
+@pytest.mark.parametrize("header,expected", [("5", 60), ("999999", 3600), ("soon", 60)])
+def test_retry_after_is_clamped_between_one_minute_and_one_hour(tmp_path, header, expected):
+    cache = PageCache(tmp_path / "run")
+    downloader = _fetch(cache, lambda _: httpx.Response(429, headers={"Retry-After": header}),
+                        ["https://example.com/post"])
+    wait = downloader.next_allowed["example.com"] - time.monotonic()
+    assert expected - 5 < wait <= expected
+    assert downloader.blocked_hosts == {"example.com"}
+
+
+def test_runtime_error_after_begin_marks_download_outage(tmp_path, monkeypatch):
+    cache = PageCache(tmp_path / "run")
+    url = "https://example.com/post"
+
+    async def broken(self, _url, original):
+        self.cache.begin(original)
+        raise RuntimeError("Download outage")
+
+    monkeypatch.setattr(SourcePageDownloader, "_get", broken)
+    _fetch(cache, lambda _: httpx.Response(200), [url])
+    stored = cache.attempt(url)
+    assert stored["state"] == "failed"
+    assert stored["issues"] == ["download_outage"]
+
+
+def test_runtime_error_without_attempt_writes_nothing(tmp_path, monkeypatch):
+    cache = PageCache(tmp_path / "run")
+    url = "https://example.com/post"
+
+    async def broken(self, _url, _original):
+        raise RuntimeError("Download outage")
+
+    monkeypatch.setattr(SourcePageDownloader, "_get", broken)
+    _fetch(cache, lambda _: httpx.Response(200), [url])
+    assert cache.attempt(url) is None
+
+
+def test_other_read_errors_do_not_count_toward_outage(tmp_path):
+    def transport(request):
+        raise httpx.ReadError("broken", request=request)
+
+    cache = PageCache(tmp_path / "run")
+    url = "https://example.com/post"
+    downloader = _fetch(cache, transport, [url])
+    assert downloader.connection_failures == set()
+    assert cache.attempt(url)["issues"] == ["ReadError"]
+
+
+def test_invalid_url_is_recorded_by_exception_class(tmp_path):
+    cache = PageCache(tmp_path / "run")
+    url = "http://localhost/post"
+    _fetch(cache, lambda _: pytest.fail("never fetched"), [url])
+    assert cache.attempt(url)["issues"] == ["ValueError"]
+
+
+def test_success_clears_connection_failures(tmp_path):
+    def transport(request):
+        if request.url.host == "down.example.com":
+            raise httpx.ConnectError("DNS", request=request)
+        return httpx.Response(200, text=_html(), headers={"Content-Type": "text/html"})
+
+    cache = PageCache(tmp_path / "run")
+    urls = ["https://down.example.com/a", "https://up.example.com/a"]
+    downloader = _fetch(cache, transport, urls, concurrency=1)
+    assert downloader.connection_failures == set()
+
+
+def test_crawl_delay_from_robots_paces_the_host(tmp_path, monkeypatch):
+    sleeps = []
+
+    async def record(seconds):
+        sleeps.append(seconds)
+
+    monkeypatch.setattr("app.storage.article_evidence_cache.asyncio.sleep", record)
+    def transport(request):
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text="User-agent: *\nCrawl-delay: 30\n")
+        return httpx.Response(200, text=_html(), headers={"Content-Type": "text/html"})
+
+    cache = PageCache(tmp_path / "run")
+    url = "https://example.com/post"
+    _fetch(cache, transport, [url], respect_robots=True)
+    assert len(sleeps) == 1
+    assert 25 < sleeps[0] <= 30
+    assert cache.attempt(url)["state"] == "completed"
+
+
+def test_robots_server_error_blocks_the_page(tmp_path):
+    def transport(request):
+        assert request.url.path == "/robots.txt", "article must not be fetched"
+        return httpx.Response(500)
+
+    cache = PageCache(tmp_path / "run")
+    url = "https://example.com/post"
+    _fetch(cache, transport, [url], respect_robots=True)
+    assert cache.attempt(url)["issues"] == ["robots_disallowed_or_unavailable"]
+    assert cache.attempt(url)["state"] == "blocked"
+
+
+def test_connect_error_on_second_hop_counts_the_second_host(tmp_path):
+    def transport(request):
+        if request.url.host == "example.com":
+            return httpx.Response(302, headers={"Location": "https://other.example.org/post"})
+        raise httpx.ConnectError("DNS", request=request)
+
+    cache = PageCache(tmp_path / "run")
+    url = "https://example.com/post"
+    downloader = _fetch(cache, transport, [url])
+    assert downloader.connection_failures == {"other.example.org"}
+    assert cache.attempt(url)["state"] == "failed"
+    assert cache.attempt(url)["issues"] == ["ConnectError"]
+
+
+def test_outage_set_before_dispatch_returns_without_attempt(tmp_path):
+    cache = PageCache(tmp_path / "run")
+    url = "https://example.com/post"
+
+    async def operation():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(
+                lambda _: pytest.fail("no request"))) as client:
+            downloader = SourcePageDownloader(cache, client, host_interval=0,
+                                              respect_robots=False)
+            downloader.outage = True
+            await downloader.fetch_one(url)
+
+    asyncio.run(operation())
+    assert cache.attempt(url) is None
+
+
+def test_inspect_page_issue_signals():
+    url = "https://example.com/a"
+    blocked = inspect_page("<html><head><title>Access denied</title></head><body></body></html>",
+                           url, url)
+    assert blocked["title"] == "Access denied"
+    assert {"blocked_or_error_page", "article_identity_unverified",
+            "short_or_empty_extraction"} <= set(blocked["issues"])
+    moved = inspect_page(_html(), url, "https://example.com/")
+    assert "redirect_to_non_article" in moved["issues"]
+    same = inspect_page(_html(), url, url + "/")
+    assert "redirect_to_non_article" not in same["issues"]
+    paywalled = inspect_page(_html(body="Subscribe to continue reading. " * 30), url, url)
+    assert paywalled["issues"] == ["paywall"]
+    hinted = inspect_page(_html('<link rel="alternate canonical" href="https://example.com/c">'),
+                          url, url)
+    assert hinted["canonical_hint"] == "https://example.com/c"
+    assert hinted["quality"] == "extracted"
+    assert hinted["issues"] == []
+    assert hinted["version"] == "article-source-extraction-1"
+
+
+def test_inspect_page_title_falls_back_through_h1_meta_title():
+    url = "https://example.com/a"
+    meta = inspect_page("<html><head><meta property='og:title' content=' Meta  Title '>"
+                        "<title>T</title></head><body><h1> </h1><article>x</article></body></html>",
+                        url, url)
+    assert meta["title"] == "Meta Title"
+    title = inspect_page("<html><head><title>Only title</title></head><body></body></html>",
+                         url, url)
+    assert title["title"] == "Only title"
+    none = inspect_page("<html><body><p>x</p></body></html>", url, url)
+    assert none["title"] == ""
+    assert "article_identity_unverified" in none["issues"]
+
+
+def test_inspect_page_extraction_failure_is_an_issue(monkeypatch):
+    def broken(_html, _url):
+        raise ValueError("boom")
+
+    monkeypatch.setattr("app.storage.article_evidence_cache.extract_article_text", broken)
+    result = inspect_page(_html(), "https://example.com/a", "https://example.com/a")
+    assert result["text"] == ""
+    assert {"extraction_failed", "short_or_empty_extraction"} <= set(result["issues"])
+    assert result["quality"] == "unresolved"

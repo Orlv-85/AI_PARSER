@@ -35,6 +35,10 @@ class HostUnavailableError(RuntimeError):
     """A source requested pacing or repeatedly returned service unavailable."""
 
 
+class _RobotsDisallowedError(Exception):
+    """robots.txt forbids the page or could not be read; ends the attempt as blocked."""
+
+
 def url_key(url: str) -> str:
     return hashlib.sha256(url.split("#", 1)[0].encode()).hexdigest()
 
@@ -57,22 +61,19 @@ def _sha(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
-def inspect_page(page_html: str, original_url: str, final_url: str) -> dict[str, Any]:
-    """Extraction quality is not an admission verdict or deletion authorization."""
-    tree = lxml_html.fromstring(page_html)
-    dates = extract_date_evidence(page_html, final_url)
+def _page_title(tree: Any) -> str:
     title_nodes = tree.xpath('//h1 | //meta[@property="og:title"] | //title')
-    title = ""
     for tag in ("h1", "meta", "title"):
         matches = [node for node in title_nodes if node.tag == tag]
         if matches:
             title = " ".join((matches[0].get("content") or matches[0].text_content()).split())
             if title:
-                break
-    issues: list[str] = []
-    redirected = original_url.rstrip("/") != final_url.rstrip("/")
-    if redirected and url_exclusion_reason(final_url):
-        issues.append("redirect_to_non_article")
+                return title
+    return ""
+
+
+def _structure_issues(tree: Any, title: str, dates: dict[str, Any]) -> list[str]:
+    issues = []
     if _BLOCK_TITLE.search(title):
         issues.append("blocked_or_error_page")
     article_markers = tree.xpath('//article | //main | //meta[@property="og:type" '
@@ -83,6 +84,11 @@ def inspect_page(page_html: str, original_url: str, final_url: str) -> dict[str,
         # Access restrictions are retained as quality signals, even if an excerpt extracts.
         if re.search(r'"isAccessibleForFree"\s*:\s*(?:false|"false")', node.text or "", re.I):
             issues.append("paywall")
+    return issues
+
+
+def _content_issues(page_html: str, final_url: str) -> tuple[str, list[str]]:
+    issues = []
     try:
         content = extract_article_text(page_html, final_url) or ""
     except (ValueError, TypeError, AttributeError, LxmlError):
@@ -92,6 +98,21 @@ def inspect_page(page_html: str, original_url: str, final_url: str) -> dict[str,
         issues.append("short_or_empty_extraction")
     if _PAYWALL.search(content[:2000]):
         issues.append("paywall")
+    return content, issues
+
+
+def inspect_page(page_html: str, original_url: str, final_url: str) -> dict[str, Any]:
+    """Extraction quality is not an admission verdict or deletion authorization."""
+    tree = lxml_html.fromstring(page_html)
+    dates = extract_date_evidence(page_html, final_url)
+    title = _page_title(tree)
+    issues: list[str] = []
+    redirected = original_url.rstrip("/") != final_url.rstrip("/")
+    if redirected and url_exclusion_reason(final_url):
+        issues.append("redirect_to_non_article")
+    issues += _structure_issues(tree, title, dates)
+    content, content_issues = _content_issues(page_html, final_url)
+    issues += content_issues
     canonical = tree.xpath('//link[contains(concat(" ", @rel, " "), " canonical ")]/@href')
     return {"version": EXTRACTION_VERSION, "title": title, "text": content,
             "date_evidence": dates, "quality": "unresolved" if issues else "extracted",
@@ -287,7 +308,60 @@ class SourcePageDownloader:  # pylint: disable=too-many-instance-attributes
                                               time.monotonic() + float(delay))
             return parser.can_fetch(BOT_TOKEN, url)
 
-    async def fetch_one(self, url: str) -> None:  # pylint: disable=too-many-branches,too-many-statements
+    def _note_service_status(self, current: str, response: dict[str, Any]) -> None:
+        status = response["status_code"]
+        if status not in {429, 503}:
+            return
+        host = (urlsplit(current).hostname or "").removeprefix("www.")
+        retry = response.get("retry_after") or "60"
+        seconds = max(60.0, min(float(retry) if retry.isdigit() else 60.0, 3600.0))
+        self.next_allowed[host] = time.monotonic() + seconds
+        self.service_failures[host] += 1
+        if status == 429 or self.service_failures[host] >= 3:
+            self.blocked_hosts.add(host)
+
+    async def _download_chain(self, url: str, trail: list[str]) -> tuple[dict[str, Any], list]:
+        """Follow up to 6 hops manually; `trail` ends with the URL being handled on failure."""
+        history: list[dict[str, Any]] = []
+        current = url
+        for _ in range(6):
+            trail.append(current)
+            if not await self._robots_allowed(current):
+                raise _RobotsDisallowedError
+            response = await self._get(current, url)
+            self.connection_failures.clear()
+            self._note_service_status(current, response)
+            if (response["status_code"] not in {301, 302, 303, 307, 308}
+                    or not response["location"]):
+                break
+            destination = urljoin(current, response["location"])
+            history.append({k: v for k, v in response.items() if k != "body"})
+            if url_exclusion_reason(destination):
+                response["redirect_issue"] = "redirect_to_non_article"
+                break
+            current = destination
+        else:
+            response["redirect_issue"] = "too_many_redirects"
+        return response, history
+
+    async def _store_response(self, url: str, response: dict[str, Any], history: list) -> None:
+        directory = self.cache.page_dir(url)
+        body = response.pop("body")
+        private_bytes(directory / "body.bin", body)
+        response.update(body_sha256=_sha(body), redirects=history, original_url=url)
+        private_write(directory / "response.json", response)
+        result = await asyncio.to_thread(self.cache.extract_saved, url)
+        if response.get("redirect_issue"):
+            result["quality"] = "unresolved"
+            result["issues"].append(response["redirect_issue"])
+            evidence_path = directory / "evidence.json"
+            evidence = json.loads(evidence_path.read_text())
+            evidence.update(quality=result["quality"], issues=result["issues"])
+            private_write(evidence_path, evidence)
+            result["evidence_sha256"] = fingerprint(evidence)
+            self.cache.finish(url, result)
+
+    async def fetch_one(self, url: str) -> None:
         attempt = self.cache.attempt(url)
         if attempt:
             directory = self.cache.page_dir(url)
@@ -296,49 +370,13 @@ class SourcePageDownloader:  # pylint: disable=too-many-instance-attributes
             return
         if self.outage:
             return
-        current, history = url, []
+        trail: list[str] = [url]
         try:
-            for _ in range(6):
-                if not await self._robots_allowed(current):
-                    self.cache.finish(url, {"state": "blocked", "quality": "unresolved",
-                                            "issues": ["robots_disallowed_or_unavailable"]})
-                    return
-                response = await self._get(current, url)
-                self.connection_failures.clear()
-                status = response["status_code"]
-                if status in {429, 503}:
-                    host = (urlsplit(current).hostname or "").removeprefix("www.")
-                    retry = response.get("retry_after") or "60"
-                    seconds = max(60.0, min(float(retry) if retry.isdigit() else 60.0, 3600.0))
-                    self.next_allowed[host] = time.monotonic() + seconds
-                    self.service_failures[host] += 1
-                    if status == 429 or self.service_failures[host] >= 3:
-                        self.blocked_hosts.add(host)
-                if status not in {301, 302, 303, 307, 308} or not response["location"]:
-                    break
-                destination = urljoin(current, response["location"])
-                history.append({k: v for k, v in response.items() if k != "body"})
-                if url_exclusion_reason(destination):
-                    response["redirect_issue"] = "redirect_to_non_article"
-                    break
-                current = destination
-            else:
-                response["redirect_issue"] = "too_many_redirects"
-            directory = self.cache.page_dir(url)
-            body = response.pop("body")
-            private_bytes(directory / "body.bin", body)
-            response.update(body_sha256=_sha(body), redirects=history, original_url=url)
-            private_write(directory / "response.json", response)
-            result = await asyncio.to_thread(self.cache.extract_saved, url)
-            if response.get("redirect_issue"):
-                result["quality"] = "unresolved"
-                result["issues"].append(response["redirect_issue"])
-                evidence_path = directory / "evidence.json"
-                evidence = json.loads(evidence_path.read_text())
-                evidence.update(quality=result["quality"], issues=result["issues"])
-                private_write(evidence_path, evidence)
-                result["evidence_sha256"] = fingerprint(evidence)
-                self.cache.finish(url, result)
+            response, history = await self._download_chain(url, trail)
+            await self._store_response(url, response, history)
+        except _RobotsDisallowedError:
+            self.cache.finish(url, {"state": "blocked", "quality": "unresolved",
+                                    "issues": ["robots_disallowed_or_unavailable"]})
         except HostUnavailableError:
             self.cache.finish(url, {"state": "blocked", "quality": "unresolved",
                                     "issues": ["host_rate_limit_or_unavailable"]})
@@ -348,7 +386,7 @@ class SourcePageDownloader:  # pylint: disable=too-many-instance-attributes
                                         "issues": ["download_outage"]})
         except (httpx.HTTPError, ValueError, OSError, LookupError) as exc:
             if isinstance(exc, (httpx.ConnectError, httpx.TimeoutException)):
-                self.connection_failures.add(urlsplit(current).hostname or "")
+                self.connection_failures.add(urlsplit(trail[-1]).hostname or "")
                 if len(self.connection_failures) >= OUTAGE_HOSTS:
                     self.outage = True
             # Exception messages can contain URLs/content. Emit only the exception class.
