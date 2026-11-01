@@ -95,7 +95,7 @@ def _assess_item(
     canonical: str,
 ) -> tuple[str, JevAssessment | None]:
     if admission_state is not None and admission_state.enabled:
-        return _screen_candidate(
+        screened: tuple[str, JevAssessment | None] = _screen_candidate(
             item=item,
             config=config,
             db_source_id=db_source_id,
@@ -106,6 +106,7 @@ def _assess_item(
             canonical_hash=canonical_hash,
             canonical_url=canonical,
         )
+        return screened
     return "accept", relevance_scorer.classify(item) if relevance_scorer is not None else None
 
 
