@@ -773,3 +773,38 @@ def test_source_count_stays_enabled_count_and_sources_fetched_stops_at_pause(
     summary = scenario.run()
     assert scenario.fetches == ["s1"]
     assert (summary.screening_paused, summary.source_count, summary.sources_fetched) == (1, 2, 1)
+
+
+def test_replay_outage_pauses_before_fetching_the_source(monkeypatch, tmp_path):
+    scenario = Scenario(tmp_path, monkeypatch, "rss", False)
+    scenario.fail_at = 2
+    scenario.run()
+    assert scenario.fetches == ["s1"]
+    scenario.fail_at = 3
+    second = scenario.run()
+    assert scenario.fetches == ["s1"]
+    assert (second.screening_paused, second.new, second.errors, second.sources_fetched) == (
+        1, 0, 0, 1,
+    )
+    assert scenario.rows(CollectionStatus)[0].paused
+
+
+def test_failed_fetch_in_admission_mode_counts_one_error_and_continues(monkeypatch, tmp_path):
+    scenario = Scenario(tmp_path, monkeypatch, "rss", False)
+    scenario.configs.append(SourceConfig(
+        id="s2", name="s2", type="rss", url="https://other.example/feed",
+    ))
+    real_collect = scenario.collect
+
+    def collect(**kwargs):
+        if kwargs["enabled_sources"][0][1].id == "s1":
+            scenario.fetches.append("s1")
+            return {}, 1
+        return real_collect(**kwargs)
+
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle._collect_fetched_items", collect)
+    summary = scenario.run()
+    assert scenario.fetches == ["s1", "s2"]
+    assert (summary.errors, summary.new, summary.sources_fetched, summary.screening_paused) == (
+        1, 3, 2, 0,
+    )
