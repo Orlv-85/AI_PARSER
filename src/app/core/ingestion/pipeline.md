@@ -187,6 +187,13 @@ function. Each rule lists the tests that check it.
 - On the row (`_build_article_row`): unknown or conflicting evidence stores `published_at` empty,
   `publication_status` `unknown` / `conflict` and a zero freshness; the evidence goes to
   `date_provenance`. Tests: `test_unknown_or_conflicting_publication_has_zero_freshness`.
+- With admission on, an item without an assessment gets no row; a publication kind other than
+  `published` takes the evidence time; the Jev category, `Comparison` material type (confidence at
+  least `COMPARISON_MIN_CONFIDENCE`) and `enrichment_provenance` go on the row only from an
+  assessment. Tests: `test_admission_without_assessment_builds_no_row`,
+  `test_non_published_kind_uses_evidence_time_not_published_at`,
+  `test_row_fields_and_assessment_extras_are_pinned`,
+  `test_low_confidence_comparison_has_no_material_type_and_no_category`.
 - A publication time more than `FUTURE_DATE_TOLERANCE` ahead of the collection time is replaced by
   the collection time (`_clamp_future` in `_candidate_payload` for admission and the pending ledger,
   and in `_build_article_row` for the stored row), for RSS and HTML alike. The kind and status stay
@@ -414,6 +421,7 @@ web update (thread or process)               web/service.py: UpdateRunService
            items      -> _process_fetched_source_items   rss.py (filter, known/streak check)
              _screen_candidate (admission)   screening.py: cache key, pending row, Jev, record_decision
              _build_article_row              rows.py: dates, relevance, freshness, rank, provenance
+                                             (steps: _row_relevance, _publication_time, _assessment_fields)
              insert_article / upsert_articles_batch
        clear_collection_paused if a fresh success; commit
   -> FetchSummary; logs source_fetch_finished, fetch_run_finished
