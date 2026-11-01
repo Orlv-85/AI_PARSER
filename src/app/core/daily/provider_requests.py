@@ -182,10 +182,7 @@ def reservation(provider, body):
                 body["max_tokens"] * PRICES[provider]["output"])
 
 
-def parse_jev(row, data):
-    if data.get("model") != JEV_MODEL:
-        raise ValueError("Unexpected JEV model")
-    answers = data["answers"]
+def _check_jev_answers(row, answers):
     for name, question in jev_request(row)["questions"].items():
         answer = answers[name]
         if question["type"] == "choice":
@@ -194,6 +191,13 @@ def parse_jev(row, data):
             _probability(answer["confidence"])
         else:
             _probability(answer["noul"])
+
+
+def parse_jev(row, data):
+    if data.get("model") != JEV_MODEL:
+        raise ValueError("Unexpected JEV model")
+    answers = data["answers"]
+    _check_jev_answers(row, answers)
     category, comparison = answers["category"], answers["comparison"]
     admission = answers["admission"]
     topic = category["choice"] if (category["choice"] != "Other" and
@@ -227,6 +231,44 @@ def _source_quote(quote, state):
     return matched.group() if matched else None
 
 
+def _named_item(item, key):
+    return (isinstance(item, dict) and isinstance(item.get(key), str)
+            and bool(item[key].strip()))
+
+
+def _verified_facts(facts, row):
+    """Return (verified facts, source state); the count check runs before the row is read."""
+    if not isinstance(facts, list) or not 1 <= len(facts) <= 3:
+        raise ValueError("Missing summary facts")
+    state = source_state(row)
+    verified = []
+    for fact in facts:
+        if not _named_item(fact, "sentence"):
+            raise ValueError("Unsupported summary quote")
+        quote = _source_quote(fact.get("quote"), state)
+        if quote is None:
+            raise ValueError("Unsupported summary quote")
+        verified.append({**fact, "quote": quote, "provider_quote": fact["quote"]})
+    return verified, state
+
+
+def _verified_products(products, comparison, state):
+    """Return (verified products, count of products whose quote does not name them)."""
+    if not isinstance(products, list) or len(products) > 8 or (products and not comparison):
+        raise ValueError("Unexpected products")
+    verified = []
+    unresolved = 0
+    for product in products:
+        if not _named_item(product, "name"):
+            raise ValueError("Unsupported comparison product")
+        quote = _source_quote(product.get("quote"), state)
+        if quote is None or product["name"] not in quote:
+            unresolved += 1
+            continue
+        verified.append({**product, "quote": quote, "provider_quote": product["quote"]})
+    return verified, unresolved
+
+
 def parse_summary(row, data, comparison, *, prompt_version=SUMMARY_VERSION):
     # The provider currently returns the requested alias, or its documented version.
     if data.get("model") not in {DEEPSEEK_MODEL, "deepseek-v4.1-flash"}:
@@ -236,32 +278,9 @@ def parse_summary(row, data, comparison, *, prompt_version=SUMMARY_VERSION):
         raise ValueError("Incomplete summary")
     value = json.loads(choice["message"]["content"])
     facts, products = value["facts"], value["compared_products"]
-    if not isinstance(facts, list) or not 1 <= len(facts) <= 3:
-        raise ValueError("Missing summary facts")
-    state = source_state(row)
-    verified_facts = []
-    for fact in facts:
-        if (not isinstance(fact, dict) or not isinstance(fact.get("sentence"), str)
-                or not fact["sentence"].strip()):
-            raise ValueError("Unsupported summary quote")
-        quote = _source_quote(fact.get("quote"), state)
-        if quote is None:
-            raise ValueError("Unsupported summary quote")
-        verified_facts.append({**fact, "quote": quote, "provider_quote": fact["quote"]})
+    verified_facts, state = _verified_facts(facts, row)
     summary = " ".join(fact["sentence"].strip() for fact in verified_facts)
-    if not isinstance(products, list) or len(products) > 8 or (products and not comparison):
-        raise ValueError("Unexpected products")
-    verified_products = []
-    unresolved_products = 0
-    for product in products:
-        if (not isinstance(product, dict) or not isinstance(product.get("name"), str)
-                or not product["name"].strip()):
-            raise ValueError("Unsupported comparison product")
-        quote = _source_quote(product.get("quote"), state)
-        if quote is None or product["name"] not in quote:
-            unresolved_products += 1
-            continue
-        verified_products.append({**product, "quote": quote, "provider_quote": product["quote"]})
+    verified_products, unresolved_products = _verified_products(products, comparison, state)
     return {"generated_summary": summary, "support": verified_facts,
             "compared_products": verified_products,
             "unresolved_compared_products": unresolved_products,
