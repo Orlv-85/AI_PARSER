@@ -77,11 +77,11 @@ automatically reclassified and existing published digests are not rewritten.
 For an existing database, apply the additive migration before starting this code:
 
 ```bash
-./venv1/bin/alembic upgrade head
+./.venv/bin/alembic upgrade head
 ```
 
 To keep local tests independent of a configured live API, run them with
-`AINEWS_JEV_ENABLED=false ./venv1/bin/pytest`.
+`AINEWS_JEV_ENABLED=false ./.venv/bin/pytest`.
 
 Daily AI Signals (feature 006) extract entities and events per digest article with one
 DeepSeek call each, after `daily-publish`. Paid extraction is off by default in the

@@ -1,4 +1,4 @@
-PYTHON ?= ./venv1/bin/python
+PYTHON ?= ./.venv/bin/python
 PYLINT_JOBS ?= 1
 
 .PHONY: help lint lint-ruff lint-mypy lint-pylint

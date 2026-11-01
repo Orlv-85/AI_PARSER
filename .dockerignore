@@ -9,6 +9,8 @@ __pycache__
 .ruff_cache
 .mypy_cache
 .coverage
+.metrics
+target
 *.db
 data
 tmp

@@ -31,9 +31,9 @@ When working in this repo, optimize for small, testable changes that preserve ex
 
 ## Local Environment
 
-- Prefer `venv1` for local commands in this repo.
-- Default Python for lint/test commands: `./venv1/bin/python`
-- Default pytest invocation: `./venv1/bin/pytest`
+- Prefer `.venv` for local commands in this repo (`venv1` may exist as a symlink to it for older prompts).
+- Default Python for lint/test commands: `./.venv/bin/python`
+- Default pytest invocation: `./.venv/bin/pytest`
 - If a command depends on project imports, run it from the repo root.
 
 ## Working Rules
@@ -102,14 +102,23 @@ code and tests follow it.
 
 For scoped changes, run the smallest useful check first.
 
-- Scoped lint: `./venv1/bin/python -m ruff check src tests`
-- Scoped tests: `./venv1/bin/pytest <target>`
+- Scoped lint: `./.venv/bin/python -m ruff check src tests`
+- Scoped tests: `./.venv/bin/pytest <target>`
 - Shell syntax (for script changes): `bash -n scripts/*.sh .codex/skills/multi-agent-orchestration/scripts/*.sh`
 
 Before commit or push, run the final repo-wide quality gate:
 
-- `make lint PYTHON=./venv1/bin/python`
-- `./venv1/bin/pytest`
+- `make lint PYTHON=./.venv/bin/python`
+- `./.venv/bin/pytest`
+
+Quality tools of the `ub-mode` skill live outside the repo, one checkout each, with their own
+`.venv` made on first run: `~/tools/unclebob/crapper`, `~/tools/unclebob/dryer`,
+`~/tools/unclebob/mutator` (https://github.com/unclebob). Run them from the repo root on the files
+your change touches; results go to `.metrics/` and coverage to `target/` (both git-ignored).
+
+- CRAP per function (keep under 10): `~/tools/unclebob/crapper/crapper <files>`
+- Duplication (fix pairs at 0.8 and above): `~/tools/unclebob/dryer/dryer --threshold 0.8 <files>`
+- Mutation testing (start with one file): `~/tools/unclebob/mutator/mutator --test-command "./.venv/bin/pytest -q" <file>`
 
 If full validation is too expensive or blocked, state exactly what was not run and why.
 

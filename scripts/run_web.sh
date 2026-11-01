@@ -19,10 +19,10 @@ POSTGRES_PASSWORD_VALUE="${POSTGRES_PASSWORD:-change_me}"
 if [ -z "${PYTHON_BIN_VALUE}" ]; then
   if [ -n "${VIRTUAL_ENV:-}" ] && [ -x "${VIRTUAL_ENV}/bin/python" ]; then
     PYTHON_BIN_VALUE="${VIRTUAL_ENV}/bin/python"
-  elif [ -x "${ROOT_DIR}/venv1/bin/python" ]; then
-    PYTHON_BIN_VALUE="${ROOT_DIR}/venv1/bin/python"
   elif [ -x "${ROOT_DIR}/.venv/bin/python" ]; then
     PYTHON_BIN_VALUE="${ROOT_DIR}/.venv/bin/python"
+  elif [ -x "${ROOT_DIR}/venv1/bin/python" ]; then
+    PYTHON_BIN_VALUE="${ROOT_DIR}/venv1/bin/python"
   elif command -v python >/dev/null 2>&1; then
     PYTHON_BIN_VALUE="python"
   elif command -v python3 >/dev/null 2>&1; then

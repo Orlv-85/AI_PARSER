@@ -209,11 +209,11 @@ the Troubleshooting section of `README.md`.
       "id": "local-mypy-worktree-stale-editable-install",
       "date": "2026-11-01",
       "area": "lint (mypy), git worktrees",
-      "symptom": "In a git worktree, `make lint PYTHON=<main folder>/venv1/bin/python` reports `Returning Any from function declared to return \"str\" [no-any-return]` for a call into a module that exists only in the branch, or passes without type-checking such a module. CI lint passes.",
+      "symptom": "In a git worktree, `make lint PYTHON=<main folder>/.venv/bin/python` reports `Returning Any from function declared to return \"str\" [no-any-return]` for a call into a module that exists only in the branch, or passes without type-checking such a module. CI lint passes.",
       "evidence": [
         "T2 PR3 (#172): `reveal_type(read_str)` in src/app/storage/source_repo.py showed Any locally; with MYPYPATH=src it showed the real signature"
       ],
-      "cause": "venv1 has an editable install of ai-news-collector (`__editable__.ai_news_collector-0.1.0.pth`) pointing at the main folder, which is on an older master. mypy resolves `app.*` through it; a module missing there is silently Any because `ignore_missing_imports = true`.",
+      "cause": "The main folder venv (.venv, formerly venv1) has an editable install of ai-news-collector (`__editable__.ai_news_collector-0.1.0.pth`) pointing at the main folder, which is on an older master. mypy resolves `app.*` through it; a module missing there is silently Any because `ignore_missing_imports = true`.",
       "fix": "CI reports the same `no-any-return` (names imported from `app.*` are Any there too, see the case citing `src.app.core.ingestion.pipeline`): use that case's idiom, `cast(T, ...)` or a typed local, never `# type: ignore`. Locally, a branch-only module may also be Any through the stale editable install; CI decides. Corrected 2026-11-01 after T2 PRs #183 and #184 failed CI lint.",
       "verification": "Reproduced by the PR #172 reviewer locally; CI lint of #183 (rows.py:102) and #184 (rss.py:98) failed with the same error, so the typed local is required, not a workaround.",
       "if_it_recurs": "If CI itself reports Any for a new module, check pyproject mypy settings (files, explicit_package_bases, mypy_path) rather than the venv."

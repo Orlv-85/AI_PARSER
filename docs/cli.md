@@ -77,7 +77,7 @@ Example `crontab` entry (adjust paths/venv as needed):
 
 ```cron
 */30 * * * * cd /opt/ai-news && \
-  . /opt/ai-news/venv1/bin/activate && \
+  . /opt/ai-news/.venv/bin/activate && \
   AINEWS_CONCURRENCY_LIMIT=10 \
   AINEWS_RSS_FULL_TEXT_CONCURRENCY_LIMIT=4 \
   AINEWS_RSS_EXTRACT_FULL_TEXT=0 \
