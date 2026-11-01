@@ -1,7 +1,7 @@
 {
   "title": "Coordinator todo: checks, fixes and open decisions",
   "created": "2026-10-27",
-  "updated": "2026-10-30",
+  "updated": "2026-11-01",
   "status": "active",
   "how_to_use": "The coordinator keeps this list current (docs PR). Product ideas live in backlog-todo.json, agent tooling in tooling-todo.json; items here may point to them. Statuses: todo, in_progress, waiting_owner, backlog, deferred, done. Done items stay one week, then are removed.",
   "items": [
@@ -188,6 +188,15 @@
       "priority": "P2",
       "status": "todo",
       "source": "specs/017-weekly-monthly-signals"
+    },
+    {
+      "id": "AUTH-deps",
+      "title": "Password hashing deps: pyproject.toml requires argon2-cffi and bcrypt, build/requirements.txt does not pin them, the image installs with --no-deps",
+      "priority": "P3",
+      "status": "backlog",
+      "source": "coordinator 2026-11-01",
+      "facts": "Production container (read-only check 2026-11-01): argon2 and bcrypt not importable, so src/app/web/auth.py hashes with its scrypt fallback (n=2**14). CI and local .venv the same. Works; scrypt is sound.",
+      "options": "Either drop both from pyproject.toml (matches reality) or pin them in build/requirements.txt (new hashes become argon2; old scrypt hashes still verify). Auth change: needs the owner's yes."
     }
   ]
 }
