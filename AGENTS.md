@@ -62,6 +62,10 @@ When working in this repo, optimize for small, testable changes that preserve ex
 - Add comments only where logic is non-obvious.
 - Follow existing naming and module organization; avoid speculative refactors.
 - When changing parsing or ingestion behavior, check surrounding tests first and extend coverage for regressions.
+- Test first (TDD): after the feature doc states the rule, write the failing test, run it and see it
+  fail for the expected reason, then write the smallest code that makes it pass. For a bug, the
+  failing test reproduces it before the fix. If an honest test is impractical, say so instead of
+  writing a weak one.
 
 ## Feature Docs Next To Code
 
