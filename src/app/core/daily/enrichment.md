@@ -94,5 +94,7 @@ flowchart LR
 
 ## Tests
 
-- `tests/unit/test_daily_enrichment.py`: publication, reuse, holds and catch-up selection.
+- `tests/unit/test_daily_enrichment.py`: publication, reuse, holds and catch-up selection;
+  `test_source_row_*` pin source selection (admitted stored content, extracted page, date checks,
+  stored fallback).
 - `tests/unit/test_deepseek_digest.py`: digest/fetch job shells and nightly workflow safety checks.
