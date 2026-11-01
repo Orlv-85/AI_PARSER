@@ -890,3 +890,21 @@ def test_source_row_unusable_page_without_stored_fallback_is_none(pages):
     row = _row_article(content="short")
     _evidence(pages, row, quality="partial")
     assert daily.source_row(row, pages) is None
+
+
+@pytest.mark.parametrize("proof", [True, False])
+@pytest.mark.parametrize(("size", "usable"), [(299, False), (300, True)])
+def test_source_row_stored_content_threshold_is_300_characters(pages, proof, size, usable):
+    row = _row_article(content="x" * size, proof=proof)
+    result = daily.source_row(row, pages)
+    assert (result is not None) is usable
+    if usable:
+        assert result["origin"] == "stored_source_content"
+
+
+@pytest.mark.parametrize(("size", "usable"), [(299, False), (300, True)])
+def test_source_row_page_text_threshold_is_300_characters(pages, size, usable):
+    row = _row_article(content="stored", status="inferred")
+    _evidence(pages, row, text="x" * size)
+    result = daily.source_row(row, pages)
+    assert (result is not None) is usable
