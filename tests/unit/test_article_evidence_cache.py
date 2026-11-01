@@ -514,9 +514,8 @@ def test_crawl_delay_from_robots_paces_the_host(tmp_path, monkeypatch):
 
 def test_robots_server_error_blocks_the_page(tmp_path):
     def transport(request):
-        if request.url.path == "/robots.txt":
-            return httpx.Response(500)
-        pytest.fail("article must not be fetched")
+        assert request.url.path == "/robots.txt", "article must not be fetched"
+        return httpx.Response(500)
 
     cache = PageCache(tmp_path / "run")
     url = "https://example.com/post"
