@@ -1,4 +1,5 @@
 """Daily publication coverage, grounding, cache reuse and failure isolation."""
+import hashlib
 import json
 from datetime import UTC, date, datetime
 from types import SimpleNamespace
@@ -754,3 +755,156 @@ def test_transport_retries_exhausted_fails_day_without_more_dispatch(
     assert len(deepseek_calls) == 3
     resumed = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
     assert "attempts exhausted" in resumed["reason"] and len(deepseek_calls) == 3
+
+
+class _PageCache:
+    def __init__(self, root):
+        self.root = root
+
+    def page_dir(self, url):
+        path = self.root / "".join(c if c.isalnum() else "_" for c in url)
+        path.mkdir(exist_ok=True)
+        return path
+
+
+def _row_article(*, content=SOURCE, status="confirmed", published=True, proof=False):
+    row = SimpleNamespace(
+        url="https://example.org/row", title="Stored title", content=content,
+        publication_status=status, enrichment_provenance=None,
+        published_at=datetime(2026, 10, 10, 12, tzinfo=UTC) if published else None)
+    if proof:
+        stored = {"url": row.url, "title": row.title, "content": row.content or "",
+                  "origin": "stored_source_content"}
+        row.enrichment_provenance = encoded({
+            "rubric": daily.RUBRIC_VERSION,
+            "admission_source_hash": fingerprint(daily.source_state(stored)),
+            "admission_assessment": {
+                "relevance_score": 0.9, "admission_choice": "include",
+                "admission_confidence": 0.9, "category": "AI Applications",
+                "category_confidence": 0.9, "comparison_choice": "Unknown",
+                "comparison_confidence": 0.5}})
+    return row
+
+
+def _evidence(cache, row, *, text=SOURCE, quality="extracted", published=None,
+              title="Page title", text_sha=None, write_text=True):
+    directory = cache.page_dir(row.url)
+    if write_text:
+        (directory / "text.txt").write_text(text)
+    data = {"quality": quality,
+            "text_sha256": text_sha or hashlib.sha256(text.encode()).hexdigest(),
+            "date_evidence": {"published": published or {}}}
+    if title:
+        data["title"] = title
+    (directory / "evidence.json").write_text(json.dumps(data))
+
+
+@pytest.fixture(name="pages")
+def page_cache(tmp_path):
+    return _PageCache(tmp_path)
+
+
+def test_source_row_uses_admitted_stored_content_without_reading_the_page(pages):
+    row = _row_article(proof=True)
+    assert daily.source_row(row, pages) == {
+        "url": row.url, "title": row.title, "content": SOURCE, "origin": "stored_source_content"}
+    assert not list(pages.root.iterdir())
+
+
+def test_source_row_ignores_admission_proof_for_short_stored_content(pages):
+    row = _row_article(content="short " * 10, proof=True)
+    assert daily.source_row(row, pages) is None
+
+
+def test_source_row_returns_none_without_evidence_or_long_confirmed_content(pages):
+    assert daily.source_row(_row_article(content="short"), pages) is None
+    assert daily.source_row(_row_article(content=None), pages) is None
+    assert daily.source_row(_row_article(content=" " * 400), pages) is None
+
+
+def test_source_row_falls_back_to_confirmed_stored_content(pages):
+    row = _row_article()
+    assert daily.source_row(row, pages) == {
+        "url": row.url, "title": row.title, "content": SOURCE, "origin": "stored_source_content"}
+
+
+def test_source_row_does_not_use_unconfirmed_stored_content(pages):
+    assert daily.source_row(_row_article(status="inferred"), pages) is None
+
+
+def test_source_row_prefers_extracted_page_with_its_title(pages):
+    row = _row_article(content="stored")
+    page = "Page text about the AI system. " * 12
+    _evidence(pages, row, text=page)
+    assert daily.source_row(row, pages) == {
+        "url": row.url, "title": "Page title", "content": page, "origin": "source_page"}
+
+
+def test_source_row_page_without_title_keeps_article_title(pages):
+    row = _row_article(content="stored")
+    _evidence(pages, row, title=None)
+    assert daily.source_row(row, pages)["title"] == "Stored title"
+
+
+def test_source_row_conflicting_page_date_rejects_article(pages):
+    row = _row_article()
+    _evidence(pages, row, published={"status": "conflict"})
+    assert daily.source_row(row, pages) is None
+
+
+def test_source_row_page_date_on_another_day_rejects_article(pages):
+    row = _row_article()
+    _evidence(pages, row, published={"selected": {"utc": "2026-10-11T01:00:00+00:00"}})
+    assert daily.source_row(row, pages) is None
+
+
+def test_source_row_page_date_is_compared_in_utc_with_naive_stored_date(pages):
+    row = _row_article(content="stored")
+    row.published_at = datetime(2026, 10, 10, 23, 30)
+    _evidence(pages, row, published={"selected": {"utc": "2026-10-11T01:30:00+02:00"}})
+    assert daily.source_row(row, pages)["origin"] == "source_page"
+
+
+def test_source_row_skips_date_check_without_selected_date_or_stored_date(pages):
+    row = _row_article(content="stored")
+    _evidence(pages, row, published={"selected": {}})
+    assert daily.source_row(row, pages)["origin"] == "source_page"
+    row = _row_article(content="stored", published=False)
+    _evidence(pages, row, published={"selected": {"utc": "2030-01-01T00:00:00+00:00"}})
+    assert daily.source_row(row, pages)["origin"] == "source_page"
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"quality": "partial"},
+    {"text_sha": "0" * 64},
+    {"text": "short page text"},
+    {"write_text": False},
+])
+def test_source_row_unusable_page_falls_back_to_stored_content(pages, kwargs):
+    row = _row_article()
+    _evidence(pages, row, **kwargs)
+    assert daily.source_row(row, pages)["origin"] == "stored_source_content"
+
+
+def test_source_row_unusable_page_without_stored_fallback_is_none(pages):
+    row = _row_article(content="short")
+    _evidence(pages, row, quality="partial")
+    assert daily.source_row(row, pages) is None
+
+
+@pytest.mark.parametrize("proof", [True, False])
+@pytest.mark.parametrize(("size", "usable"), [(299, False), (300, True)])
+def test_source_row_stored_content_threshold_is_300_characters(pages, proof, size, usable):
+    row = _row_article(content="x" * size, proof=proof)
+    result = daily.source_row(row, pages)
+    assert (result is not None) is usable
+    if usable:
+        assert result["origin"] == "stored_source_content"
+
+
+@pytest.mark.parametrize(("size", "usable"), [(299, False), (300, True)])
+def test_source_row_page_text_threshold_is_300_characters(pages, size, usable):
+    row = _row_article(content="stored", status="inferred")
+    _evidence(pages, row, text="x" * size)
+    result = daily.source_row(row, pages)
+    assert (result is not None) is usable
