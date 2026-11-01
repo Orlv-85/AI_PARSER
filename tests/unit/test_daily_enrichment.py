@@ -6,104 +6,29 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
-from pydantic import SecretStr
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
+from daily_fixtures import (  # pylint: disable=import-error,unused-import
+    EXTRA,
+    REPAIRED,
+    SOURCE,
+    SUMMARY,
+    TARGET,
+    article,
+    daily_session,  # noqa: F401
+    mock_client,
+    provider_response,
+    settings,
+    write_report,
+)
 
 from app.config.sources import SourceConfig
 from app.core.daily import enrichment as daily
-from app.core.daily.rubric import QUESTIONS
 from app.core.ingestion.pipeline.rows import _build_article_row
 from app.core.jev import JevRelevanceScorer
 from app.core.models import Article as CoreArticle
 from app.storage.admission import set_collection_paused
 from app.storage.digest_repo import NewsDigestRepo
-from app.storage.journal_files import encoded, fingerprint, private_write
-from app.storage.models_sql import Article, Base
+from app.storage.journal_files import encoded, fingerprint
 from app.storage.provider_journal import PilotJournal
-
-TARGET = date(2026, 10, 10)
-SOURCE = "The company says its AI system handles document extraction for hospitals. " * 8
-SUMMARY = "The company says its AI system handles document extraction for hospitals."
-EXTRA = "The company also says a second unsupported detail."
-REPAIRED = "The company says its AI system extracts documents for hospitals."
-
-
-@pytest.fixture(name="session")
-def daily_session(tmp_path):
-    engine = create_engine("sqlite:///" + str(tmp_path / "daily.sqlite3"))
-    Base.metadata.create_all(engine)
-    with Session(engine) as value:
-        yield value
-    engine.dispose()
-
-
-def article(session, index=1, *, proof=False, target=TARGET):
-    row = Article(title="AI document extraction", url=f"https://example.org/{index}",
-                  url_canonical=f"https://example.org/{index}",
-                  url_canonical_hash=f"{index:064x}", content=SOURCE,
-                  published_at=datetime.combine(target, datetime.min.time(), tzinfo=UTC),
-                  publication_status="confirmed", ai_relevance_score=0.9,
-                  freshness_score=0.5, rank_score=0.7)
-    if proof:
-        row.summary = SUMMARY
-        row.category = "AI Applications"
-        row.enrichment_provenance = encoded({"rubric": daily.RUBRIC_VERSION,
-            "source_content_hash": fingerprint(SOURCE),
-            "summary": {"generated_summary": SUMMARY, "support": [
-                {"sentence": SUMMARY, "quote": SUMMARY}]}, "summary_review": {"supported": True}})
-    session.add(row)
-    session.commit()
-    return row
-
-
-def settings():
-    return SimpleNamespace(semantic_admission_enabled=True, jev_api_key=SecretStr("test-key"),
-                           ds_api_key=SecretStr("test-key"))
-
-
-def write_report(root, target, state):
-    path = root / target.isoformat() / "report.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    private_write(path, {"state": state})
-
-
-async def no_download(*_args):
-    pass
-
-
-def mock_client(monkeypatch, handler):
-    real_client = httpx.Client
-    monkeypatch.setattr(daily, "acquire", no_download)
-    monkeypatch.setattr(daily.httpx, "Client", lambda **_kwargs:
-                        real_client(transport=httpx.MockTransport(handler)))
-
-
-def provider_response(request, *, truncate=False, supported=True, topic="AI Applications",
-                      category=("AI Applications", 0.99), comparison=("NotComparison", 0.99),
-                      reason=None):
-    body = json.loads(request.content)
-    if "questions" in body:
-        assert body["questions"] == QUESTIONS
-        assert "Summary:" not in body["state"]
-        return httpx.Response(200, json={"model": "jev-1.13.0", "usage": {"input_tokens": 500},
-            "answers": {"ai_relevant": {"noul": 0.99},
-                "admission": {"choice": "accepted_ai_editorial", "confidence": 0.99},
-                "category": {"choice": category[0], "confidence": category[1]},
-                "comparison": {"choice": comparison[0], "confidence": comparison[1]}}})
-    system = body["messages"][0]["content"]
-    if daily.TOPIC_FALLBACK_VERSION in system:
-        value = {"topic": topic, "confidence": 0.8, "reason": "Hospital document extraction."}
-    elif "entailment" in system:
-        value = {"supported": supported, "english": True}
-        if reason:
-            value["reason"] = reason
-    else:
-        value = {"facts": [{"sentence": SUMMARY, "quote": SUMMARY}], "compared_products": []}
-    return httpx.Response(200, json={"model": "deepseek-flash",
-        "usage": {"prompt_tokens": 500, "completion_tokens": 90},
-        "choices": [{"finish_reason": "length" if truncate else "stop",
-                     "message": {"content": json.dumps(value)}}]})
 
 
 def test_complete_day_more_than_200_and_preserves_history(session, tmp_path, monkeypatch):
