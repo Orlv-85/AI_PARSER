@@ -3,7 +3,6 @@ import asyncio
 import hashlib
 import ipaddress
 import json
-import os
 import re
 import time
 from collections import Counter
@@ -21,7 +20,7 @@ from app.ingest.date_evidence import extract_date_evidence
 from app.ingest.fetcher import BOT_TOKEN, DEFAULT_USER_AGENT
 from app.ingest.html import extract_article_text
 from app.ingest.page_filter import url_exclusion_reason
-from app.storage.journal_files import fingerprint, private_write
+from app.storage.journal_files import fingerprint, private_bytes, private_write
 
 CACHE_VERSION = "article-source-cache-1"
 EXTRACTION_VERSION = "article-source-extraction-1"
@@ -52,17 +51,6 @@ def validate_source_url(url: str) -> None:
         return
     if not address.is_global:
         raise ValueError("Non-public source address")
-
-
-def private_bytes(path: Path, value: bytes) -> None:
-    staged = path.with_suffix(path.suffix + ".next")
-    fd = os.open(staged, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    os.fchmod(fd, 0o600)
-    with os.fdopen(fd, "wb") as stream:
-        stream.write(value)
-        stream.flush()
-        os.fsync(stream.fileno())
-    os.replace(staged, path)
 
 
 def _sha(value: bytes) -> str:
