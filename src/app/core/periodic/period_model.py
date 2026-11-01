@@ -12,8 +12,6 @@ WEEK = "week"
 MONTH = "month"
 KINDS = (WEEK, MONTH)
 
-# Order of the status check: the first rule that holds wins.
-
 
 @dataclass(frozen=True)
 class PeriodThresholds:  # pylint: disable=too-many-instance-attributes
