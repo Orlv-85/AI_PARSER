@@ -307,6 +307,11 @@ class PilotJournal:
             raise PilotStopped("usage_exceeded_conservative_bound")
         return data
 
+    def committed_usd(self):
+        """Dollars committed so far in this journal (reservations and priced usage)."""
+        return self.db.execute(
+            "SELECT COALESCE(SUM(committed),0) FROM calls").fetchone()[0] / 1e6
+
     def report(self):
         rows = self.db.execute(
             "SELECT provider,committed,actual,state,response FROM calls").fetchall()

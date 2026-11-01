@@ -42,6 +42,7 @@ from app.storage.world import (
 )
 
 DAY = date(2026, 10, 30)
+TODAY = date(2026, 11, 1)
 ANSWER = {"answers": {
     "world_change": {"choice": "changed", "confidence": 0.9},
     "area": {"choice": "Work", "confidence": 0.8},
@@ -404,17 +405,169 @@ def test_world_journal_is_separate_from_digest_cap(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     settings = Settings(_env_file=None, jev_api_key=SecretStr("k"))
     assert WORLD_JEV_MAX_USD_PER_DAY == "0.10"
-    with open_world_assessor(settings, getLogger("t"), DAY, WORLD_JEV_MAX_USD_PER_DAY) as world:
+    with open_world_assessor(settings, getLogger("t"), TODAY) as world:
         assert world.payment_journal.caps["jev"] == 100000
     with wc.open_assessor(settings, getLogger("t"), DAY, "0.05") as bulletin:
         assert bulletin.payment_journal.caps["jev"] == 50000
     files = sorted(str(p.relative_to(tmp_path)) for p in (tmp_path / "data").rglob("*.sqlite3"))
     assert files == [
         "data/bulletin/2026-10-30/journal-world-change-1-50000.sqlite3",
-        "data/world/2026-10-30/journal-world-stream-1-100000.sqlite3"]
+        "data/world/2026-11-01/journal-world-stream-1.sqlite3"]
     with pytest.raises(ValueError, match="missing_provider_key"):
-        with open_world_assessor(Settings(_env_file=None), getLogger("t"), DAY, "0.10"):
+        with open_world_assessor(Settings(_env_file=None), getLogger("t"), TODAY):
             pass
+
+
+def usage_handler(requests=None):
+    """Every screen answer reports the largest billable usage: 2688 microdollars a request."""
+    def handler(request):
+        body = json.loads(request.content)
+        if requests is not None:
+            requests.append(body)
+        return httpx.Response(200, json={"answers": {"ai_relevant": {"noul": 0.9}},
+                                         "usage": {"input_tokens": 64000}})
+    return handler
+
+
+def seed_many(session, count, day):
+    seed(session, *(cand(n + int(day[-2:]) * 1000, title=f"Day {day} story {n}", day=day)
+                    for n in range(count)))
+
+
+def run_with_world_journal(maker, today, target, limit):
+    settings = Settings(_env_file=None, jev_api_key=SecretStr("k"))
+    requests = []
+    client_factory = httpx.Client
+    wc.httpx.Client = lambda **kw: client_factory(
+        transport=httpx.MockTransport(usage_handler(requests)), **kw)
+    try:
+        with maker() as session, open_world_assessor(settings, getLogger("t"), today) as assessor:
+            summary = run_screen(session, assessor, target, limit_usd=limit)
+            return summary, len(requests), assessor.payment_journal.report()
+    finally:
+        wc.httpx.Client = client_factory
+
+
+def test_world_budget_is_per_real_day_across_dates_and_limits(maker, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    with maker() as session:
+        seed_many(session, 60, "20261030")
+        seed_many(session, 60, "20261031")
+    first, _n1, _ = run_with_world_journal(maker, TODAY, DAY, 0.05)
+    second, _n2, report = run_with_world_journal(maker, TODAY, date(2026, 10, 31), 0.10)
+    third, n3, _ = run_with_world_journal(maker, TODAY, date(2026, 10, 31), 0.10)
+    assert first["screened"] > 0 and second["screened"] > 0
+    assert report["total_committed_usd"] <= 0.10
+    assert report["total_committed_usd"] > 0.09  # the second run used the rest of the day
+    assert n3 == 0 and third["screened"] == 0  # the day is spent for every date and limit
+    assert [p.name for p in (tmp_path / "data" / "world").rglob("*.sqlite3")] == [
+        "journal-world-stream-1.sqlite3"]
+
+
+def test_world_next_real_day_gets_new_budget(maker, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    with maker() as session:
+        seed_many(session, 60, "20261030")
+    _s, first_requests, _ = run_with_world_journal(maker, TODAY, DAY, 0.10)
+    _s, same_day, _ = run_with_world_journal(maker, TODAY, DAY, 0.10)
+    _s, next_day, report = run_with_world_journal(maker, date(2026, 11, 2), DAY, 0.10)
+    assert first_requests > 0 and same_day == 0 and next_day > 0
+    assert report["total_committed_usd"] <= 0.10
+    assert sorted(p.parent.name for p in (tmp_path / "data" / "world").rglob("*.sqlite3")) == [
+        "2026-11-01", "2026-11-02"]
+
+
+def test_world_run_limit_stops_before_request(session, tmp_path, caplog):
+    seed(session, *(cand(n, title=f"Limited story {n}") for n in range(1, 6)))
+    journal = journal_for(tmp_path, 100000)
+    requests = []
+    assessor = make_assessor(usage_handler(requests), journal)
+    try:
+        with caplog.at_level(logging.ERROR):
+            summary = run_screen(session, assessor, DAY, limit_usd=0.0001)
+    finally:
+        journal.close()
+        assessor.client.close()
+    assert len(requests) == 1  # 2688 microdollars committed after the first answer
+    assert (summary["screened"], summary["not_attempted"]) == (1, 4)
+    assert any(r.getMessage() == "world_cost_cap" for r in caplog.records)
+
+
+def test_world_wedged_journal_marks_nothing_failed(session, tmp_path):
+    seed(session, cand(1, title="First wedge story"), cand(2, title="Second wedge story"))
+    journal = journal_for(tmp_path, 100000)
+    requests = []
+
+    def server_error(request):
+        requests.append(request)
+        return httpx.Response(500, json={"detail": "down"})
+
+    try:
+        for _ in range(2):
+            assessor = make_assessor(server_error, journal)
+            summary = run_screen(session, assessor, DAY)
+            assessor.client.close()
+            assert (summary["failed"], summary["not_attempted"]) == (0, 2)
+            assert assessor.stopped is not None
+        assert assessor.stopped == "unknown_or_failed_previous_call_requires_review"
+    finally:
+        journal.close()
+    assert len(requests) == 1  # the second run sends nothing
+    states = session.scalars(select(WorldCandidate)).all()
+    assert {(c.state, c.attempts, c.last_error) for c in states} == {(STATE_NEW, 0, None)}
+
+
+def test_late_outlet_follows_screened_cluster(session):
+    story = "Schools adopt AI tutors"
+    seed(session, cand(1, title=story, domain="a.org"),
+         cand(2, title="Other story", domain="c.org"))
+    screen(session, jev_handler({story: 0.2, "Other story": 0.9}))
+    seed(session, cand(3, title=story, domain="b.org"),
+         cand(4, title="Other story", domain="d.org"))
+    requests = []
+    summary = screen(session, jev_handler({story: 0.9}, requests))
+    assert not requests
+    states = {c.source_domain: (c.state, c.screen_confidence)
+              for c in session.scalars(select(WorldCandidate))}
+    assert states["b.org"] == (STATE_SCREENED_OUT, 0.2)
+    assert states["d.org"] == (STATE_SCREENED_IN, 0.9)
+    assert (summary["screened"], summary["in"], summary["out"], summary["requests"]) == (2, 1, 1, 0)
+
+
+def test_dry_run_respects_top_n(session):
+    seed(session, *(cand(n, title=f"Dry story {n}") for n in range(1, 5)))
+    for n in range(1, 5):
+        force(session, f"Dry story {n}", STATE_TEXT_READY, 0.5 + n / 10)
+    full = run_screen(session, None, DAY, dry_run=True)
+    cut = run_screen(session, None, DAY, dry_run=True, top_n=2)
+    assert (full["would_assess"], cut["would_assess"]) == (4, 2)
+    seed(session, cand(9, title="Waiting dry story"))
+    force(session, "Waiting dry story", STATE_SCREENED_IN, 0.99)
+    cut = run_screen(session, None, DAY, dry_run=True, top_n=2)
+    assert (cut["would_assess"], cut["awaiting_text"]) == (1, 1)
+
+
+def test_rank_representative_prefers_assessed_then_text_ready_then_oldest(session):
+    seed(session, cand(1, title="Mixed cluster", domain="a.org"),
+         cand(2, title="Mixed cluster", domain="b.org"),
+         cand(3, title="Mixed cluster", domain="c.org"),
+         cand(4, title="Plain cluster", domain="d.org"),
+         cand(5, title="Plain cluster", domain="e.org"))
+    for item in session.scalars(select(WorldCandidate)):
+        item.state, item.screen_confidence = STATE_SCREENED_IN, 0.8
+    by_domain = {c.source_domain: c for c in session.scalars(select(WorldCandidate))}
+    by_domain["b.org"].state = STATE_TEXT_READY
+    session.commit()
+    items = WorldRepo(session).candidates_in_window(
+        [STATE_SCREENED_IN, STATE_TEXT_READY, STATE_ASSESSED], DAY)
+    reps = {r.rep.title: r.rep.source_domain for r in rank_clusters(items)}
+    assert reps == {"Mixed cluster": "b.org", "Plain cluster": "d.org"}
+    by_domain["c.org"].state = STATE_ASSESSED
+    session.commit()
+    items = WorldRepo(session).candidates_in_window(
+        [STATE_SCREENED_IN, STATE_TEXT_READY, STATE_ASSESSED], DAY)
+    reps = {r.rep.title: r.rep.source_domain for r in rank_clusters(items)}
+    assert reps["Mixed cluster"] == "c.org"
 
 
 @pytest.fixture(name="maker")
@@ -445,6 +598,7 @@ def test_cli_world_screen_summary(maker, monkeypatch, tmp_path):
         force(session, "Story three", STATE_SCREENED_IN, 0.9)
     monkeypatch.setattr(cli_main, "get_settings", lambda: Settings(
         _env_file=None, jev_api_key=SecretStr("k")))
+    monkeypatch.setattr(cli_main, "utc_today", lambda: TODAY)
     requests = []
     patch_jev(monkeypatch, jev_handler(requests=requests))
     result = CliRunner().invoke(cli_main.app, ["world", "screen", "--date", DAY.isoformat()])
@@ -456,7 +610,7 @@ def test_cli_world_screen_summary(maker, monkeypatch, tmp_path):
     assert summary["tokens"]["screen"] == {"input_tokens": 600}
     assert summary["cost_usd"] == pytest.approx(0.000026)
     assert summary["dry_run"] is False
-    assert (tmp_path / "data/world/2026-10-30/journal-world-stream-1-100000.sqlite3").exists()
+    assert (tmp_path / "data/world/2026-11-01/journal-world-stream-1.sqlite3").exists()
     assert len(requests) == 2
 
 
@@ -500,11 +654,21 @@ def test_cli_world_screen_needs_a_key(maker, monkeypatch, tmp_path):
     assert result.exit_code == 2
 
 
-def test_cli_world_screen_rejects_max_usd_above_cap(maker):
+def test_cli_world_screen_rejects_max_usd_above_cap(maker, monkeypatch, tmp_path):
     assert maker is not None
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli_main, "get_settings", lambda: Settings(
+        _env_file=None, jev_api_key=SecretStr("k")))
+
+    def boom(*_args, **_kwargs):
+        raise AssertionError("nothing is opened above the cap")
+
+    monkeypatch.setattr(cli_main, "open_world_assessor", boom)
+    monkeypatch.setattr(httpx.Client, "send", boom)
     result = CliRunner().invoke(cli_main.app, [
         "world", "screen", "--date", DAY.isoformat(), "--max-usd", "0.11"])
-    assert result.exit_code != 0
+    assert result.exit_code == 2
     assert "cap" in result.output
+    assert not (tmp_path / "data").exists()
     bad = CliRunner().invoke(cli_main.app, ["world", "screen", "--date", "nonsense"])
     assert bad.exit_code != 0

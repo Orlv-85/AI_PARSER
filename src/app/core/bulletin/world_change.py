@@ -179,10 +179,10 @@ class WorldChangeAssessor:
 @contextmanager
 def open_assessor(settings, logger: Logger, target: date, max_usd: str, *,
                   root: Path | None = None, version: str = WORLD_CHANGE_VERSION,
-                  usage_event: str = "bulletin_assess_usage") -> Iterator[WorldChangeAssessor]:
+                  usage_event: str = "bulletin_assess_usage", file_name: str | None = None) -> Iterator[WorldChangeAssessor]:
     """Assessor with its own capped journal in data/bulletin/<day>/ (one file per cap).
 
-    The world stream passes its own `root`, journal `version` and `usage_event`.
+    The world stream passes its own `root`, journal `version`, `usage_event` and `file_name`.
     """
     api_key = getattr(settings, "jev_api_key", None)
     secret = api_key.get_secret_value().strip() if api_key is not None else ""
@@ -194,7 +194,7 @@ def open_assessor(settings, logger: Logger, target: date, max_usd: str, *,
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     # The journal needs three caps; DeepSeek is never called here, so it gets the smallest.
     caps = {"total": str((cap + 1) / 1e6), "jev": str(cap / 1e6), "deepseek": "0.000001"}
-    journal = journal_class(root / f"journal-{version}-{cap}.sqlite3",
+    journal = journal_class(root / (file_name or f"journal-{version}-{cap}.sqlite3"),
                             {"version": version, "day": target.isoformat()}, caps,
                             transport_review_reason=TRANSPORT_REVIEW_REASON,
                             transport_retry_delays=TRANSPORT_RETRY_DELAYS)

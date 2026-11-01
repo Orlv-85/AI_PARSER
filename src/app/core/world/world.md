@@ -278,9 +278,11 @@ flowchart LR
   pending on the next run, and after that it is left alone. Tests: `test_screen_window_is_two_days`.
 - Candidates with the same `cluster_key` are one story: the oldest (lowest `first_seen_at`, then
   id) is the representative and is the only one sent. Every other `new` candidate of the cluster in
-  the window gets the same state and the same `screen_confidence` without a request. A cluster
-  is formed among the pending candidates of one run; a late outlet of a cluster screened earlier is
-  screened again as its own cluster. Tests: `test_screen_cluster_follows_representative`.
+  the window gets the same state and the same `screen_confidence` without a request. A new
+  candidate whose cluster already has a screened member in the window (from an earlier run) also
+  follows that member without a request: `screened_out` if it is out, else `screened_in`. The
+  oldest screened member of the cluster is the reference. Tests:
+  `test_screen_cluster_follows_representative`, `test_late_outlet_follows_screened_cluster`.
 - The probability is stored in `screen_confidence`. At or above `SCREEN_THRESHOLD` the state is
   `screened_in`, below it `screened_out` (final). An answer that is not a probability in [0, 1] is
   a failure. Tests: `test_screen_threshold_splits_in_and_out`, `test_screen_bad_answer_is_a_failure`.
@@ -292,7 +294,8 @@ flowchart LR
   `WORLD_TOP_N` clusters are the top; already assessed clusters come first whatever their
   priority, so a window never asks more than `WORLD_TOP_N` stories in total over any number of
   runs. The representative of a
-  cluster is its assessed member, else a `text_ready` one, else the oldest. The priority is stored
+  cluster is its assessed member, else a `text_ready` one, else the oldest (lowest
+  `first_seen_at`, then id). Tests: `test_rank_representative_prefers_assessed_then_text_ready_then_oldest`. The priority is stored
   in `priority` of the representative. Tests: `test_rank_orders_by_confidence_times_outlets`,
   `test_rank_assessed_keep_their_place`.
 - Step B asks the four FR-001 questions of `world_change` (the same questions, validation and
@@ -309,20 +312,42 @@ flowchart LR
   (the bulletin reads a story through its representative). Tests: `test_stage_b_stores_answers_by_hash`.
 
 **Cost cap and failures**
-- All world requests of a day (A and B) go through one provider journal
-  `data/world/<D>/journal-<WORLD_JOURNAL_VERSION>-<cap>.sqlite3`, a file of its own: the digest's
-  Jev cap (`data/daily-admission/<today>/`, $0.05) and `bulletin assess` (`data/bulletin/<D>/`)
-  neither share nor spend it. The cap is `WORLD_JEV_MAX_USD_PER_DAY` ($0.10, owner 2026-10-31);
-  `--max-usd` can only lower it. Tests: `test_world_journal_is_separate_from_digest_cap`,
-  `test_cli_world_screen_rejects_max_usd_above_cap`.
+- The budget is per real UTC calendar day, not per `--date`. All world requests of a real day
+  (steps A and B, any `--date`, any number of runs) go through one provider journal
+  `data/world/<UTC today>/journal-<WORLD_JOURNAL_VERSION>.sqlite3` with the fixed cap
+  `WORLD_JEV_MAX_USD_PER_DAY` ($0.10, owner 2026-10-31), a file of its own: the digest's Jev cap
+  (`data/daily-admission/<today>/`, $0.05) and `bulletin assess` (`data/bulletin/<D>/`) neither
+  share nor spend it. The next UTC day opens a new journal and a new budget. Tests:
+  `test_world_journal_is_separate_from_digest_cap`,
+  `test_world_budget_is_per_real_day_across_dates_and_limits`,
+  `test_world_next_real_day_gets_new_budget`.
+- `--max-usd` is a run-local lower limit and never opens another journal: before each request the
+  run stops when the journal's committed spend of the day has reached it; above
+  `WORLD_JEV_MAX_USD_PER_DAY` it is rejected and nothing is opened. Tests:
+  `test_world_run_limit_stops_before_request`, `test_cli_world_screen_rejects_max_usd_above_cap`.
 - At the cap (or any journal stop or outage) the run stops, logs a stop line with the reason (event
   prefix `world_screen` for step A, `world_change` for step B, suffix `_stopped`), and also
-  `world_cost_cap` when the reason is the cap; every unprocessed candidate stays in its state and counts in `not_attempted`; the next run
-  for the same or the next day takes them. Tests: `test_world_cap_stops_requests`.
-- A Jev failure of a representative (HTTP, bad answer) moves only that representative to `failed`
-  with `attempts` plus one and `last_error` `screen: ...` (or `assess: ...` for step B); its
-  cluster stays `new`. There is no retry in the same run. Tests:
-  `test_world_jev_failure_leaves_candidates_pending`.
+  `world_cost_cap` when the reason is the day cap or the run limit; every unprocessed candidate
+  stays in its state and counts in `not_attempted`; the next run takes them. Tests:
+  `test_world_cap_stops_requests`, `test_world_run_limit_stops_before_request`.
+- A bad answer to a representative (a reply that is not a valid probability or not valid
+  FR-001 answers) moves only that representative to `failed` with `attempts` plus one and
+  `last_error` `screen: ...` (or `assess: ...` for step B); its cluster stays `new`. There is no
+  retry in the same run. With the journal, an HTTP error status, a transport error or an outage is
+  not a failure of the candidate but a journal stop: nothing is marked `failed`, `attempts` stays,
+  the run ends and the rest counts in `not_attempted`. Tests:
+  `test_world_jev_failure_leaves_candidates_pending`,
+  `test_world_wedged_journal_marks_nothing_failed`.
+- A call that failed in transit may have been billed, so the journal refuses every further request
+  (`unknown_or_failed_previous_call_requires_review`), also in later runs of the same real day.
+  Operator step: read the `world_screen_usage` log line and the journal file of that day, decide
+  whether the call was billed, then either wait for the next UTC day (a new budget; the old file
+  stays), or, accepting the risk of paying that call twice, delete that day's journal file and
+  run again with `--max-usd` set to $0.10 minus the `cost_usd` already spent that day. Never work
+  around the stop by only changing `--max-usd`: it does not open another journal (unlike
+  `bulletin assess`), and deleting the file without lowering `--max-usd` would open a second
+  $0.10 for the same day. Tests: `test_world_wedged_journal_marks_nothing_failed` (the stop
+  itself); the operator steps have no test.
 - At the start of a real run, `failed` candidates of the window with fewer than `MAX_ATTEMPTS`
   attempts return to the step named in `last_error`: `screen` to `new`, `assess` to `text_ready`.
   Other failures (W6) are not touched. Tests: `test_failed_candidates_return_to_their_step`,
@@ -339,8 +364,9 @@ flowchart LR
   `test_cli_world_screen_needs_a_key`.
 - `--dry-run` sends nothing and writes nothing (no table creation, no journal, no requeue), needs no
   key, and prints the counts it would work on: `would_screen` (clusters of `new` candidates),
-  `would_follow`, `would_assess` (`text_ready` in the top; the text seam is not called),
-  `awaiting_text` and `retryable_failed`. Tests: `test_cli_world_screen_dry_run_sends_nothing_writes_nothing`.
+  `would_follow` (cluster followers and late outlets), `would_assess` (`text_ready` in the top;
+  the text seam is not called; the top is cut to `WORLD_TOP_N`),
+  `awaiting_text` and `retryable_failed`. Tests: `test_cli_world_screen_dry_run_sends_nothing_writes_nothing`, `test_dry_run_respects_top_n`.
 - The command is not on a timer and not in the 04:00 job, which stays collect-only; wiring comes
   with W6 and W7. Tests: `test_world_job_script_is_isolated`.
 
@@ -398,9 +424,13 @@ flowchart LR
 - The failing step is written as a prefix of `last_error` (`screen:` or `assess:`) because the
   `failed` state does not say where it came from and W3 has no column for it; W6 uses its own
   prefix (decided 2026-11-01 (agent)).
-- Steps A and B share one journal per day so one $0.10 cap covers the stream; the file name holds
-  the cap, as in `bulletin assess`, so a different `--max-usd` opens another file (the known limit
-  of `world_change.md` applies; decided 2026-11-01 (agent)).
+- Steps A and B share one journal per real UTC day with a fixed cap, so one $0.10 covers the
+  stream whatever `--date` or `--max-usd` a run has (coordinator, 2026-11-01, after review: the
+  owner's rule is a hard stop per calendar day; `bulletin assess` keys its journal by cap and is
+  not a model for this).
+- Top N is per window (GDELT days D-1 and D), not exactly per real day across sliding windows; the
+  same story can be asked again in the next window. Known for W5, left as is (coordinator,
+  2026-11-01).
 - Orchestration is `core/world_screen.py` (it imports storage); the question, state and parser are
   pure and live in `core/world/screen.py` (decided 2026-11-01 (agent)).
 - Real token sizes of A and B are not measured yet: the plan assumed 300 tokens for A and

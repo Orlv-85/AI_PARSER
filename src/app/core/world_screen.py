@@ -7,7 +7,7 @@ Lives outside core/world/ because it imports storage.
 from collections.abc import Callable, Iterable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from logging import Logger
 from pathlib import Path
 from typing import Any
@@ -23,6 +23,7 @@ from app.core.world.screen import (
     MAX_ATTEMPTS,
     SCREEN_QUESTIONS,
     SCREEN_THRESHOLD,
+    WORLD_JEV_MAX_USD_PER_DAY,
     WORLD_JOURNAL_VERSION,
     WORLD_SCREEN_VERSION,
     WORLD_TOP_N,
@@ -45,6 +46,7 @@ from app.storage.world_change import WorldChangeRepo
 STEP_SCREEN = "screen"
 STEP_ASSESS = "assess"
 CAP_REASON = "cumulative_budget_limit"
+RUN_LIMIT_REASON = "run_limit"
 # Where a failed candidate goes back to, by the step named in `last_error`.
 RETURN_STATE = {STEP_SCREEN: STATE_NEW, STEP_ASSESS: STATE_TEXT_READY}
 _REP_ORDER = {STATE_ASSESSED: 0, STATE_TEXT_READY: 1, STATE_SCREENED_IN: 2}
@@ -74,19 +76,31 @@ class RankedCluster:
     outlets: int
 
 
-def open_world_assessor(settings: Any, logger: Logger, target: date,
-                        max_usd: str) -> AbstractContextManager[WorldChangeAssessor]:
-    """Assessor on the world's own capped journal, data/world/<D>/ (not the digest's)."""
+def utc_today() -> date:
+    return datetime.now(UTC).date()
+
+
+def open_world_assessor(settings: Any, logger: Logger,
+                        today: date) -> AbstractContextManager[WorldChangeAssessor]:
+    """Assessor on the world's journal of the real UTC day `today` with the fixed daily cap.
+
+    One file per real day, whatever `--date` or `--max-usd` a run has; not the digest's journal.
+    """
     manager: AbstractContextManager[WorldChangeAssessor] = open_assessor(
-        settings, logger, target, max_usd, root=Path("data/world") / target.isoformat(),
-        version=WORLD_JOURNAL_VERSION, usage_event="world_screen_usage")
+        settings, logger, today, WORLD_JEV_MAX_USD_PER_DAY,
+        root=Path("data/world") / today.isoformat(), version=WORLD_JOURNAL_VERSION,
+        usage_event="world_screen_usage", file_name=f"journal-{WORLD_JOURNAL_VERSION}.sqlite3")
     return manager
+
+
+def _key(item: WorldCandidate) -> str:
+    return item.cluster_key or f"hash:{item.url_canonical_hash}"
 
 
 def _group(candidates: Iterable[WorldCandidate]) -> list[list[WorldCandidate]]:
     groups: dict[str, list[WorldCandidate]] = {}
     for item in candidates:
-        groups.setdefault(item.cluster_key or f"hash:{item.url_canonical_hash}", []).append(item)
+        groups.setdefault(_key(item), []).append(item)
     return list(groups.values())
 
 
@@ -123,11 +137,49 @@ def _delta(after: dict[str, int], before: dict[str, int]) -> dict[str, int]:
     return {k: v - before.get(k, 0) for k, v in after.items() if v != before.get(k, 0)}
 
 
-def _screen(repo: WorldRepo, assessor: WorldChangeAssessor,
-            pending: list[WorldCandidate], threshold: float, summary: dict[str, Any]) -> None:
+def _halted(assessor: WorldChangeAssessor, limit_usd: float | None) -> bool:
+    """True when the run must send nothing more: a journal stop or the run limit is reached."""
+    journal = assessor.payment_journal
+    if (not assessor.stopped and limit_usd is not None and journal is not None
+            and journal.committed_usd() >= limit_usd):
+        assessor.stopped = RUN_LIMIT_REASON
+    return bool(assessor.stopped)
+
+
+def _known_clusters(repo: WorldRepo, target: date) -> dict[str, tuple[str, float]]:
+    """Cluster key to (state, confidence) of its oldest member that already has a screen answer."""
+    known: dict[str, tuple[str, float]] = {}
+    for item in repo.candidates_in_window(
+            [STATE_SCREENED_IN, STATE_SCREENED_OUT, STATE_TEXT_READY, STATE_ASSESSED],
+            target):
+        if item.screen_confidence is not None:
+            state = STATE_SCREENED_OUT if item.state == STATE_SCREENED_OUT else STATE_SCREENED_IN
+            known.setdefault(_key(item), (state, item.screen_confidence))
+    return known
+
+
+def _follow_known(repo: WorldRepo, pending: list[WorldCandidate],
+                  known: dict[str, tuple[str, float]],
+                  summary: dict[str, Any]) -> list[WorldCandidate]:
+    """Late outlets take the answer of their screened cluster; returns the candidates left."""
+    rest = []
+    for item in pending:
+        if _key(item) not in known:
+            rest.append(item)
+            continue
+        state, confidence = known[_key(item)]
+        repo.transition(item, state, screen_confidence=confidence)
+        summary["screened"] += 1
+        summary["in" if state == STATE_SCREENED_IN else "out"] += 1
+    repo.session.commit()
+    return rest
+
+
+def _screen(repo: WorldRepo, assessor: WorldChangeAssessor, pending: list[WorldCandidate],
+            threshold: float, summary: dict[str, Any], *, limit_usd: float | None) -> None:
     clusters = _group(pending)
     for index, members in enumerate(clusters):
-        if assessor.stopped:
+        if _halted(assessor, limit_usd):
             summary["not_attempted"] += sum(len(m) for m in clusters[index:])
             return
         rep = members[0]
@@ -151,8 +203,8 @@ def _screen(repo: WorldRepo, assessor: WorldChangeAssessor,
         repo.session.commit()
 
 
-def _assess(repo: WorldRepo, assessor: WorldChangeAssessor,
-            top: list[RankedCluster], texts: TextSource, summary: dict[str, Any]) -> None:
+def _assess(repo: WorldRepo, assessor: WorldChangeAssessor, top: list[RankedCluster],
+            texts: TextSource, summary: dict[str, Any], *, limit_usd: float | None) -> None:
     saver = WorldChangeRepo(repo.session)
     for item in top:
         rep = item.rep
@@ -161,7 +213,7 @@ def _assess(repo: WorldRepo, assessor: WorldChangeAssessor,
             summary["awaiting_text"] += 1
         elif rep.state != STATE_TEXT_READY:
             continue
-        elif assessor.stopped:
+        elif _halted(assessor, limit_usd):
             summary["not_attempted"] += 1
         elif not (text := texts(rep)):
             summary["skipped_no_text"] += 1
@@ -191,11 +243,14 @@ def _new_summary(target: date, dry_run: bool) -> dict[str, Any]:
 
 
 def _dry_run(repo: WorldRepo, target: date, top_n: int, summary: dict[str, Any]) -> dict[str, Any]:
-    clusters = _group(repo.candidates_in_window([STATE_NEW], target))
+    known = _known_clusters(repo, target)
+    new = repo.candidates_in_window([STATE_NEW], target)
+    late = [item for item in new if _key(item) in known]
+    clusters = _group([item for item in new if _key(item) not in known])
     top = rank_clusters(repo.candidates_in_window(
         [STATE_SCREENED_IN, STATE_TEXT_READY, STATE_ASSESSED], target))[:top_n]
     summary["would_screen"] = len(clusters)
-    summary["would_follow"] = sum(len(m) - 1 for m in clusters)
+    summary["would_follow"] = len(late) + sum(len(m) - 1 for m in clusters)
     summary["would_assess"] = sum(1 for r in top if r.rep.state == STATE_TEXT_READY)
     summary["awaiting_text"] = sum(1 for r in top if r.rep.state == STATE_SCREENED_IN)
     summary["retryable_failed"] = len(_retryable(repo, target))
@@ -205,7 +260,7 @@ def _dry_run(repo: WorldRepo, target: date, top_n: int, summary: dict[str, Any])
 def run_screen(  # pylint: disable=too-many-arguments
     session: Session, assessor: WorldChangeAssessor | None, target: date, *,
     texts: TextSource = no_text, top_n: int = WORLD_TOP_N,
-    threshold: float = SCREEN_THRESHOLD, dry_run: bool = False,
+    threshold: float = SCREEN_THRESHOLD, dry_run: bool = False, limit_usd: float | None = None,
 ) -> dict[str, Any]:
     """Step A for the pending candidates of the window, then step B for the top ranked ones."""
     repo = WorldRepo(session)
@@ -218,17 +273,18 @@ def run_screen(  # pylint: disable=too-many-arguments
         repo.transition(item, RETURN_STATE[_step_of(item)])
     session.commit()
     start = _jev_usage(assessor)
-    _screen(repo, assessor, repo.candidates_in_window([STATE_NEW], target),
-            threshold, summary)
+    pending = _follow_known(repo, repo.candidates_in_window([STATE_NEW], target),
+                            _known_clusters(repo, target), summary)
+    _screen(repo, assessor, pending, threshold, summary, limit_usd=limit_usd)
     middle = _jev_usage(assessor)
     top = rank_clusters(repo.candidates_in_window(
         [STATE_SCREENED_IN, STATE_TEXT_READY, STATE_ASSESSED], target))[:top_n]
-    _assess(repo, assessor, top, texts, summary)
+    _assess(repo, assessor, top, texts, summary, limit_usd=limit_usd)
     end = _jev_usage(assessor)
     summary["tokens"] = {"screen": _delta(middle[0], start[0]),
                          "assess": _delta(end[0], middle[0])}
     summary["cost_usd"] = end[1]
-    if assessor.stopped == CAP_REASON:
+    if assessor.stopped in (CAP_REASON, RUN_LIMIT_REASON):
         assessor.logger.error("world_cost_cap", {"cost_usd": end[1], "date": summary["date"]})
     if not summary["asked"] and not assessor.stopped:
         summary["note"] = "step B asked nothing: no text for any top candidate"
