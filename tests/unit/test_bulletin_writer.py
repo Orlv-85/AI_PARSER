@@ -293,6 +293,55 @@ def test_sentence_caps():
     assert len(second.site_note) == 6 and len(second.telegram_note) == 2
 
 
+def test_grounding_is_per_story():
+    sources_map = sources()
+    first = sources_map[URLS[0]]
+    sources_map[URLS[0]] = SourceText(first.url, first.title, first.summary,
+                                      first.text + " Nvidia sold 777 chips to Crosby.")
+
+    def mutate(c):
+        c["stories"][1]["site"][1] = "Edge0 says Nvidia sold 23 chips to its testers."
+        c["stories"][1]["site"][2] = "Edge0 says the model needs 777 hours of audio."
+        c["stories"][0]["site"][2] = "Crosby bought chips from Nvidia, 777 of them."
+    result, _ = run(mutate=mutate, source_map=sources_map)
+    assert result.summary["dropped"] == ["s2:site:2:unsupported_name",
+                                         "s2:site:3:unsupported_number"]
+
+
+def test_names_match_whole_words_and_dates_need_the_text():
+    sources_map = sources()
+    first = sources_map[URLS[0]]
+    sources_map[URLS[0]] = SourceText(first.url, first.title, first.summary,
+                                      first.text + " The metadata of the bid is public.")
+
+    def mutate(c):
+        c["stories"][0]["site"][1] = "Meta is not part of the bid for Weil Gotshal."
+        c["stories"][3]["site"][3] = "Mozilla fixed the hole on Monday, in Firefox 159.0."
+        c["stories"][3]["site"][1] = "Mozilla fixed the hole on October 27, in Firefox 159.0."
+    result, _ = run(mutate=mutate, source_map=sources_map)
+    assert result.summary["dropped"] == ["s1:site:2:unsupported_name",
+                                         "s4:site:4:unsupported_name"]
+    assert grounding_module.sentence_error(
+        "Edge0 has 3 parts and is cool.", "Edge0 has 3 parts") is None
+    assert grounding_module.sentence_error(
+        "The AI firm hires in Edge0 labs.", "The AI-first firm hires. Edge0 labs.") is None
+
+
+def test_headline_and_gloss_are_checked_for_copying():
+    copied = "Weil Gotshal a famed Wall Street firm that is preparing to dissolve"
+
+    def mutate(c):
+        c["stories"][0]["headline"] = copied
+        c["stories"][0]["gloss"] = copied
+    result, _ = run(mutate=mutate)
+    assert result.summary["dropped"] == ["s1:headline:too_close", "s1:gloss:too_close"]
+
+
+def test_story_text_limit_is_pinned():
+    assert writer_module.STORY_TEXT_MAX == 6000
+    assert writer_module.ARTICLES_PER_STORY == 2
+
+
 def test_unknown_and_missing_story_ids():
     def mutate(c):
         c["stories"][0]["id"] = "s9"
@@ -346,7 +395,9 @@ def test_no_stories_no_call():
 def test_prompt_pins_its_rules():
     assert WRITER_VERSION in WRITER_PROMPT
     for rule in ("untrusted", "no outside knowledge", "at most 8 words", "3 to 6 sentences",
-                 "1 to 2 sentences", "own words", "Short quotes", "double quotation marks",
+                 "1 to 2 sentences", "own words", "Never copy",
+                 "every name and number must stand in the supplied text", "Short quotes",
+                 "double quotation marks",
                  "Attribute", "Never write \"the Administration\"", "Never invent a quote",
                  "Never add a fact", "Never present harm", "government", "citizens", "translate",
                  "English", "No URLs"):

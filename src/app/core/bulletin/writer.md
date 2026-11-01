@@ -37,7 +37,7 @@ flowchart LR
   article with an archive text sends it, the rest of the story's budget `STORY_TEXT_MAX` shared
   between them (newest `source_page` text, else the newest text of any origin, cut at a word
   boundary); an article without text sends title and summary (`SUMMARY_MAX`). Tests:
-  `test_packet_sends_text_or_title_and_summary`, `test_loader_prefers_source_page_text`,
+  `test_packet_sends_text_or_title_and_summary`, `test_story_text_limit_is_pinned`, `test_loader_prefers_source_page_text`,
   `test_loader_falls_back_to_summary`.
 - One request per bulletin (FR-005): `WRITER_MODEL` (DeepSeek flash, prices of `BRIEF_PRICES`),
   temperature 0, JSON object, at most `WRITER_MAX_OUTPUT` tokens. A day with no stories makes no
@@ -49,9 +49,16 @@ flowchart LR
   day: one file `data/bulletin/writer/<UTC day>/journal-<WRITER_JOURNAL_VERSION>.sqlite3`, fixed cap
   `WRITER_MAX_USD_PER_DAY` (FR-012), whatever `--date` the run builds. A request with the same body
   on the same UTC day is replayed from the journal and costs nothing. `--max-usd` only lowers the
-  cap of a run (it is a run limit checked before sending; above the daily cap it is rejected).
+  limit: it caps the total writer spend of that UTC day (committed in the journal plus the
+  reservation of the new call), checked before sending; above the daily cap it is rejected. A failed
+  call (outage, HTTP error, unreadable usage) blocks further writer calls that UTC day with
+  `unknown_or_failed_previous_call_requires_review` until the operator checks the journal file
+  `data/bulletin/writer/<UTC day>/journal-<WRITER_JOURNAL_VERSION>.sqlite3` and the log line, then
+  deletes that file after accepting the risk of paying that call twice (the cap then starts over for
+  the day). An identical rerun after a good call is replayed free.
   Tests: `test_journal_is_one_file_per_utc_day_and_replays`, `test_run_limit_only_lowers`,
-  `test_cap_reached_falls_back`, `test_cli_rejects_max_usd_above_the_cap`.
+  `test_cap_reached_falls_back`, `test_cli_rejects_max_usd_above_the_cap`; the block after a failed call
+  has no test of its own (the journal's rule, `test_transport_outage_falls_back` shows the outage).
 
 **Failure** (the call never raises into callers)
 - No answer (cap reached, run limit, outage, HTTP error, an unreviewed earlier call), a wrong model,
@@ -74,20 +81,28 @@ headline of the day, in this order; the first failing check names the drop reaso
    translated quote, is dropped. Tests: `test_long_quote_is_dropped`,
    `test_quote_must_be_in_the_source`.
 4. Copying (ER-9): a run of `COPY_RUN_WORDS` words that also stands in the original is dropped
-   (sentences only). Tests: `test_copied_run_is_dropped`.
+   (sentences, story headlines and glosses; not the headline of the day). Tests: `test_copied_run_is_dropped`,
+   `test_headline_and_gloss_are_checked_for_copying`.
 5. Numbers and names, the check of `parse_brief` (`grounding_error` in `signals_brief.py`) against
    the texts of that story: every number and every capitalised word or word with a digit must stand
    in the texts of the story's sources (the headline of the day: of all stories). Sentence
-   starters are exempt (`WRITER_STARTERS`), months and weekdays are always allowed. Folding makes
+   starters are exempt (`WRITER_STARTERS`). A name must match a whole word of the texts ("Meta"
+   does not pass on "metadata"); months and weekdays are names too and must stand in the texts of
+   the story. Evidence is per story: a name or number found only in another story does not
+   ground a sentence. Folding makes
    the comparison tolerant: accents are removed, decimal commas and thousand separators are
    unified, Cyrillic is transliterated, so an English sentence about a Russian article can name
    "OpenAI" when the text has "ОпенАИ". Tests: `test_grounded_sentences_are_kept`,
-   `test_invented_number_is_dropped`, `test_invented_name_is_dropped`,
+   `test_invented_number_is_dropped`, `test_invented_name_is_dropped`, `test_grounding_is_per_story`,
+   `test_names_match_whole_words_and_dates_need_the_text`,
    `test_translation_case_grounds_names_by_transliteration`, `test_folding_unifies_accents_and_numbers`.
 
-What it cannot check: meaning (a true name and number in a false claim), attribution ("Block says"
-versus a bare claim), causes and effects, tone, and harm framing (ER-6, ER-11 stay with the prompt
-and the review of FR-022). Names in non-Latin scripts other than Cyrillic (Chinese, Japanese, Arabic
+What it cannot check: meaning (a true name and number in a false claim: "Mozilla said ..." passes if
+Mozilla and the numbers stand in the text), attribution ("Block says" versus a bare claim), causes
+and effects, tone, and harm framing (ER-6, ER-11 stay with the prompt and the human review of
+FR-022 on the first real days). Numbers spelled out in words ("twelve") are not checked. Quotes in
+straight single quotes are not checked (the prompt asks for double quotes). The never-list also
+drops true sentences ("third-party tools"). Names in non-Latin scripts other than Cyrillic (Chinese, Japanese, Arabic
 and so on) can be checked only when the text also spells them in Latin letters; otherwise the
 sentence is dropped. A Cyrillic transliteration that differs from the English spelling ("Yandeks")
 drops the sentence. A first word that is a name and also a starter is not checked. False drops are

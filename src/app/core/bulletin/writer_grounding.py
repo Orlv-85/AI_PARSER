@@ -13,6 +13,7 @@ from app.core.daily.signals_brief import (
     NON_ENGLISH,
     NUMBER,
     STARTERS,
+    WORD,
     grounding_error,
     norm,
 )
@@ -26,8 +27,6 @@ Those Their His Her He She They We What When Where Who How Why If So Then Now He
 Only Per Since Until While Within Without Between Among During Before Early Late Earlier Later
 Given Using Under Despite Although Because Instead Reportedly Officials Experts Users Companies
 People""".split())
-CALENDAR = ("january february march april may june july august september october november december "
-            "monday tuesday wednesday thursday friday saturday sunday")
 QUOTED = re.compile(r'"([^"]+)"')
 TOKEN = re.compile(r"\w+")
 THE_ADMINISTRATION = re.compile(r"\b[Tt]he Administration\b")
@@ -61,7 +60,7 @@ def canon_number(value: str) -> str:
 @dataclass(frozen=True)
 class _Evidence:
     numbers: frozenset[str]
-    names: str
+    words: frozenset[str]
     text: str
     grams: frozenset[tuple[str, ...]]
 
@@ -71,13 +70,21 @@ def _grams(words: list[str]) -> frozenset[tuple[str, ...]]:
                      for i in range(len(words) - COPY_RUN_WORDS + 1))
 
 
+def _words(text: str) -> frozenset[str]:
+    """Whole words of the evidence, and the parts of hyphenated or dotted ones."""
+    found = set(WORD.findall(text))
+    for word in list(found):
+        found.update(part for part in re.split(r"[-.+]", word) if part)
+    return frozenset(found)
+
+
 @lru_cache(maxsize=256)
 def _evidence(raw: str) -> _Evidence:
     folded = fold(raw)
     text = folded.casefold()
     return _Evidence(
         numbers=frozenset(canon_number(n) for n in NUMBER.findall(folded)),
-        names=text + " " + CALENDAR, text=text,
+        words=_words(text), text=text,
         grams=_grams(TOKEN.findall(text)))
 
 
@@ -114,5 +121,5 @@ def sentence_error(text: str, evidence: str, *, copy: bool = False,
     code = _quote_error(folded, proof)
     if code is None and copy and _copies(folded, proof):
         code = "too_close"
-    return code or grounding_error(folded, set(proof.numbers), proof.names,
-                                   starters=WRITER_STARTERS, canon=canon_number)
+    return code or grounding_error(folded, set(proof.numbers), "", starters=WRITER_STARTERS,
+                                   canon=canon_number, words=proof.words)

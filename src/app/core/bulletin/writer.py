@@ -15,7 +15,7 @@ from app.core.bulletin.writer_grounding import sentence_error
 from app.core.daily.provider_requests import DEEPSEEK_MODEL
 from app.core.daily.signals_brief import SUMMARY_MAX, cut, request_body
 
-WRITER_VERSION = "bulletin-writer-1"
+WRITER_VERSION = "bulletin-writer-2"
 WRITER_MODEL = DEEPSEEK_MODEL
 MODEL_NAMES = frozenset({DEEPSEEK_MODEL, "deepseek-v4.1-flash"})  # the answer may name the alias
 # 8 stories of 4 sentences, a Telegram note and a headline are about 2500 tokens.
@@ -45,7 +45,7 @@ WRITER_PROMPT = (
     "sentences. gloss: one short phrase explaining a name a general reader may not know, taken "
     "only from the supplied text of that story, or null. An article with no text has only a title "
     "and summary: write 1 to 2 sentences from them and nothing else. "
-    "Rules. Retell in your own words; never copy more than a few words in a row. Short quotes "
+    "Rules. Retell in your own words. Never copy more than a few words in a row. Short quotes "
     "only, at most 12 words, exact, copied from the source, in double quotation marks; never quote "
     "text you translated. Attribute a company's claims to the company (for example "
     "\"Block says\"); when the outlet itself claims something, name the outlet. Real companies "
@@ -207,11 +207,12 @@ def _sentences(raw: Any, evidence: str, where: str, limit: int, dropped: list[st
 def _story_text(entry: Mapping[str, Any], evidence: str, dropped: list[str]) -> _StoryText:
     sid = entry["id"]
     headline = _text(entry.get("headline"), evidence, f"{sid}:headline", dropped,
-                     low=STORY_HEADLINE_MIN_WORDS, high=STORY_HEADLINE_MAX_WORDS, min_chars=8)
+                     low=STORY_HEADLINE_MIN_WORDS, high=STORY_HEADLINE_MAX_WORDS, copy=True,
+                     min_chars=8)
     gloss = entry.get("gloss")
     if gloss is not None:
         gloss = _text(gloss, evidence, f"{sid}:gloss", dropped, low=2, high=GLOSS_MAX_WORDS,
-                      min_chars=8)
+                      copy=True, min_chars=8)
     return _StoryText(
         headline=headline, gloss=gloss,
         site=_sentences(entry.get("site"), evidence, f"{sid}:site", SITE_SENTENCES_MAX, dropped),
