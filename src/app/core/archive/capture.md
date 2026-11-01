@@ -199,7 +199,8 @@ flowchart LR
   (window, batches, due, reuse, downloads, record, clean, summary), `status`, `import_db`
   (archive pruned rows from a dump) and `dedupe_page_cache` (one-off page.html cleanup).
 - `storage/article_evidence_cache.py`: shared `PageCache`, `SourcePageDownloader`,
-  `make_http_client` (not changed by the archive; `extract_saved` writes no page.html).
+  `make_http_client` (not changed by the archive; `extract_saved` writes no page.html). Cache files
+  are written through `journal_files.private_bytes` (0o600, atomic replace).
 - `scripts/run_daily_archive_job.sh`: nightly job (image, lock, timeout, exit 0).
 - `scripts/install_daily_timers.sh`: installs the `ai-news-daily-archive` unit and timer next to
   fetch and digest (run by every deploy with the systemd scheduler).

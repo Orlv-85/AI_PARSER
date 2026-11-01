@@ -66,3 +66,14 @@ def test_private_bytes_replaces_existing_content(tmp_path):
     private_bytes(path, b"\x00new")
     assert path.read_bytes() == b"\x00new"
     assert path.stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.parametrize("write", [_write_text, _write_bytes])
+def test_private_writers_tighten_stale_staged_file_left_by_a_crash(tmp_path, write):
+    path = tmp_path / "f.bin"
+    stale = tmp_path / "f.bin.next"
+    stale.write_text("partial")
+    stale.chmod(0o644)
+    write(path, "x")
+    assert path.stat().st_mode & 0o777 == 0o600
+    assert not stale.exists()
