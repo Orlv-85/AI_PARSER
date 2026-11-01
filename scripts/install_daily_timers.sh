@@ -3,8 +3,8 @@ set -eu
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 UNIT_DIR="${AINEWS_SYSTEMD_UNIT_DIR:-/etc/systemd/system}"
 command -v systemctl >/dev/null || { echo 'systemd is required for UTC scheduling' >&2; exit 1; }
-# A non-root deploy user stages the units and installs them with sudo (see the sudoers file in
-# docs/deploy.md). An explicit AINEWS_SYSTEMD_UNIT_DIR always writes directly.
+# A non-root deploy user stages the units and installs them with sudo (see the sudoers sample
+# deploy/sudoers.d/ai-news-deploy). An explicit AINEWS_SYSTEMD_UNIT_DIR always writes directly.
 SUDO=""
 STAGE_DIR=""
 if [ "$(id -u)" -ne 0 ] && [ -z "${AINEWS_SYSTEMD_UNIT_DIR:-}" ]; then

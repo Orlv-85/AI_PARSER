@@ -238,6 +238,8 @@ flowchart LR
   `timeout`, one container name `ai-news-world`, always exit 0, a failure or timeout is one stderr
   line. The timer `ai-news-daily-world` runs it at 04:00 UTC. Tests: `test_world_job_script_is_isolated`,
   `test_install_timers_includes_world`, `test_sudoers_sample_matches_the_sudo_calls_of_the_scripts`.
+  `install_daily_timers.sh` has no `disable` path for the world timer; the switch is the way to turn
+  the job off (no test).
 
 ## Decisions
 
