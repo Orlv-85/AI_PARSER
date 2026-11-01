@@ -15,8 +15,8 @@ Use this skill when:
 Scoped checks are for iteration only.
 
 Before `git commit`/`git push`, run final repo-wide gates and report them explicitly:
-- `make lint PYTHON=./venv1/bin/python`
-- `./venv1/bin/pytest`
+- `make lint PYTHON=./.venv/bin/python`
+- `./.venv/bin/pytest`
 
 ## Mandatory workflow
 

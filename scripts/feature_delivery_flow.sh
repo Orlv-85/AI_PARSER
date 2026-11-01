@@ -34,7 +34,7 @@ run options:
   --coverage-cmd CMD          Optional coverage command for wrapper gate
   --coverage-fail-under N     Optional coverage threshold
   --final-gate                Run final repo-wide gate:
-                              make lint PYTHON=./venv1/bin/python && ./venv1/bin/pytest
+                              make lint PYTHON=./.venv/bin/python && ./.venv/bin/pytest
 
 Examples:
   ./scripts/feature_delivery_flow.sh bootstrap
@@ -46,7 +46,7 @@ Examples:
     --approved \
     --stream \
     --final-gate \
-    --coverage-cmd "./venv1/bin/pytest --cov=src/app/web --cov-report=term-missing" \
+    --coverage-cmd "./.venv/bin/pytest --cov=src/app/web --cov-report=term-missing" \
     --coverage-fail-under 100
 USAGE
 }
@@ -488,7 +488,7 @@ PY
       echo "[final-gate] running lint..."
       if [[ "$stream" -eq 1 ]]; then
         set +e
-        (cd "$repo" && make lint PYTHON=./venv1/bin/python) 2>&1 | tee "$lint_log"
+        (cd "$repo" && make lint PYTHON=./.venv/bin/python) 2>&1 | tee "$lint_log"
         local lint_rc=${PIPESTATUS[0]}
         set -e
         if [[ "$lint_rc" -ne 0 ]]; then
@@ -496,7 +496,7 @@ PY
           gate_rc=1
         fi
       else
-        if ! (cd "$repo" && make lint PYTHON=./venv1/bin/python) >"$lint_log" 2>&1; then
+        if ! (cd "$repo" && make lint PYTHON=./.venv/bin/python) >"$lint_log" 2>&1; then
           echo "[final-gate] FAILED: make lint (see $lint_log)" >&2
           gate_rc=1
         fi
@@ -506,7 +506,7 @@ PY
         echo "[final-gate] running full pytest..."
         if [[ "$stream" -eq 1 ]]; then
           set +e
-          (cd "$repo" && ./venv1/bin/pytest) 2>&1 | tee "$pytest_log"
+          (cd "$repo" && ./.venv/bin/pytest) 2>&1 | tee "$pytest_log"
           local pytest_rc=${PIPESTATUS[0]}
           set -e
           if [[ "$pytest_rc" -ne 0 ]]; then
@@ -514,7 +514,7 @@ PY
             gate_rc=1
           fi
         else
-          if ! (cd "$repo" && ./venv1/bin/pytest) >"$pytest_log" 2>&1; then
+          if ! (cd "$repo" && ./.venv/bin/pytest) >"$pytest_log" 2>&1; then
             echo "[final-gate] FAILED: pytest (see $pytest_log)" >&2
             gate_rc=1
           fi

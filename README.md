@@ -11,8 +11,8 @@ Spec-driven Python application for collecting fresh English-language AI news fro
 ## Installation
 
 ```bash
-python -m venv venv1
-source venv1/bin/activate
+python -m venv .venv
+source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
@@ -24,7 +24,7 @@ ai-news fetch --once       # fetch once
 ai-news top --hours 24 --limit 30
 ```
 
-For an existing database, run `./venv1/bin/alembic upgrade head` first.
+For an existing database, run `./.venv/bin/alembic upgrade head` first.
 
 ## What the MVP does
 
@@ -98,7 +98,7 @@ pytest
 
 See also [docs/troubleshooting.md](docs/troubleshooting.md) for known CI/test failures.
 
-- `ModuleNotFoundError`: activate `venv1` and reinstall with `pip install -e ".[dev]"`.
+- `ModuleNotFoundError`: activate `.venv` and reinstall with `pip install -e ".[dev]"`.
 - `sqlite3.OperationalError: unable to open database file`: create `data/` directory or fix `AINEWS_DATABASE_URL`.
 - Empty `top` results: run `ai-news fetch --once` first and verify enabled sources in `sources.yaml`.
 - Source fetch errors: check network access and source availability; fetch run logs include `source_id`, `stage`, `error_type`.
