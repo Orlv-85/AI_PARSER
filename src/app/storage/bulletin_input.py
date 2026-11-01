@@ -4,6 +4,7 @@ The edge of src/app/core/bulletin/builder.py; behavior in src/app/core/bulletin/
 Read-only: nothing is written.
 """
 import json
+import re
 from datetime import date, timedelta
 from statistics import median
 from typing import Any
@@ -29,6 +30,12 @@ from app.storage.models_sql import (
 )
 from app.storage.world import STATE_ASSESSED, WorldRepo, cluster_key
 from app.storage.world_change import WorldChangeRepo
+
+
+def outlet_name(name: str) -> str:
+    name = re.sub(r"\s*\([^()]*(?:feed|newsletter|rss)[^()]*\)$", "", name,
+                  flags=re.IGNORECASE)
+    return re.sub(r"^www\.", "", name, flags=re.IGNORECASE)
 
 
 def _event_counts(payload: dict[str, Any]) -> dict[str, int]:
@@ -73,7 +80,8 @@ def _digest_candidates(session: Session, articles: list[Article],
         answer = answers.get(article.url_canonical_hash)
         if answer is None:
             continue
-        outlet = names.get(article.source_id) or urlparse(article.url).hostname or "source"
+        outlet = outlet_name(names.get(article.source_id) or "")
+        outlet = outlet or outlet_name(urlparse(article.url).hostname or "") or "source"
         found.append(Candidate(
             url=article.url, title=article.title, outlet=outlet,
             world_change=answer.world_change, confidence=answer.world_change_confidence,
@@ -90,8 +98,10 @@ def _world_candidates(session: Session, day: date) -> list[Candidate]:
         answer = WorldChangeRepo(session).get(item.url_canonical_hash, WORLD_CHANGE_VERSION)
         if answer is None:
             continue
+        outlet = outlet_name(item.source_domain)
+        outlet = outlet or outlet_name(urlparse(item.url).hostname or "") or "source"
         found.append(Candidate(
-            url=item.url, title=item.title, outlet=item.source_domain,
+            url=item.url, title=item.title, outlet=outlet,
             world_change=answer.world_change, confidence=answer.world_change_confidence,
             area=answer.area, actor=answer.actor, harm=answer.harm_to_people,
             event_key=f"title:{cluster_key(item.title)}", origin="world"))
