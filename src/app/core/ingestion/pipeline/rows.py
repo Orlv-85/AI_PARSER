@@ -99,8 +99,8 @@ def _assessment_payload(assessment: JevAssessment) -> dict[str, object]:
 
 def _row_relevance(item: object, assessment: JevAssessment | None) -> float:
     if assessment is not None:
-        return assessment.relevance_score
-    return ai_relevance_score(item)
+        return cast(float, assessment.relevance_score)
+    return cast(float, ai_relevance_score(item))
 
 
 def _publication_time(item: object) -> tuple[datetime | None, dict[str, Any] | None]:
