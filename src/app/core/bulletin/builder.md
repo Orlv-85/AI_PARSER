@@ -44,6 +44,9 @@ flowchart LR
   `test_median_counts_only_ready_days_before_the_day`.
 
 **Stories**
+- The outlet shown is the source name without a trailing parenthesised label
+  ("TechCrunch (main feed)" -> "TechCrunch"); a world story shows its domain without a leading
+  `www.`. Tests: `test_outlet_name_drops_feed_label`.
 - Candidates are the day's digest articles with an answer for `WORLD_CHANGE_VERSION`, plus assessed
   world candidates only when the setting `world_stream_in_bulletin` is on (env `AINEWS_WORLD_STREAM_IN_BULLETIN`,
   default off; FR-016/FR-018). Tests: `test_world_candidates_only_with_the_switch`,

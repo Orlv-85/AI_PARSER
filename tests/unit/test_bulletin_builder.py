@@ -27,7 +27,7 @@ from app.core.bulletin.phrases import PhraseError, load_phrases, validate_phrase
 from app.core.bulletin.render import render_text
 from app.core.bulletin.world_change import WORLD_CHANGE_VERSION, WorldChange
 from app.core.canonicalize import canonical_url_hash
-from app.storage.bulletin_input import load_day_input
+from app.storage.bulletin_input import load_day_input, outlet_name
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import (
     Article,
@@ -406,6 +406,18 @@ def test_core_has_no_io_imports():
 
 
 # loader and switch
+
+def test_outlet_name_drops_feed_label():
+    for name, expected in (
+        ("TechCrunch (main feed)", "TechCrunch"),
+        ("Machine Learnings (newsletter/feed)", "Machine Learnings"),
+        ("Simon Willison's Weblog", "Simon Willison's Weblog"),
+        ("www.bbc.com", "bbc.com"),
+        ("bbc.com", "bbc.com"),
+        ("", ""),
+    ):
+        assert outlet_name(name) == expected
+
 
 @pytest.fixture
 def maker():
