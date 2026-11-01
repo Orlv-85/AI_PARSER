@@ -38,9 +38,10 @@ flowchart LR
   the pipeline, not a quiet day. Tests: `test_partial_and_unavailable_days_are_skipped`,
   `test_day_without_answers_is_skipped`, `test_cli_skipped_day_logs_reason`.
 - Day type: quiet (`quiet` of the signals), else busy (items at or above `BUSY_FACTOR` times the
-  median items of the previous `BUSY_WINDOW_DAYS` stored days; no busy day without `BUSY_MIN_DAYS`
-  stored days), else ordinary. Quiet leaves empty sections out like every day. Tests:
-  `test_day_type_openings`, `test_quiet_day_leaves_out_empty_sections`.
+  median items of the ready days (`ready` or `building_history`) among the previous
+  `BUSY_WINDOW_DAYS` days, the day itself excluded; no busy day without `BUSY_MIN_DAYS` such days), else ordinary. Quiet leaves empty sections out like every day. Tests:
+  `test_day_type_openings`, `test_quiet_day_leaves_out_empty_sections`,
+  `test_median_counts_only_ready_days_before_the_day`.
 
 **Stories**
 - Candidates are the day's digest articles with an answer for `WORLD_CHANGE_VERSION`, plus assessed
@@ -48,8 +49,10 @@ flowchart LR
   default off; FR-016/FR-018). Tests: `test_world_candidates_only_with_the_switch`,
   `test_world_stream_setting_defaults_off`.
 - One story per event: candidates with the same event key (a top story of the daily signals, else
-  the title key of `cluster_key`) make one story; the best-confidence member leads, all outlets are
-  linked. Tests: `test_one_story_per_event_with_all_outlets`.
+  the title key of `cluster_key`) make one story; the best-confidence member leads (members that answered `none` only when no member has another
+  answer), all outlets are linked. Digest articles are matched to a top story by URL, then by
+  canonical hash. Tests: `test_one_story_per_event_with_all_outlets`, `test_none_member_does_not_drop_the_event`,
+  `test_story_key_matches_by_canonical_hash`.
 - A story is shown only at `world_change` confidence of at least `MIN_CONFIDENCE`. Stories are
   ranked by confidence, then outlet count. Tests: `test_below_threshold_is_not_shown`,
   `test_ranking_by_confidence_then_outlets`.
@@ -58,27 +61,31 @@ flowchart LR
   (`RUBRIC_MAX`); `limit` to Cooperation (at most `COOPERATION_MAX`); other `issue` stories and every
   other `issue` beyond the rubric one only count in "Isolated incidents: N". The top counted issue
   caused by people or an organisation may get a plain line "Among them". Tests:
-  `test_caps_per_section`, `test_model_launches_are_capped`, `test_incidents_are_counted_with_a_plain_line`.
+  `test_caps_per_section`, `test_issue_is_never_a_key_result`, `test_model_launches_are_capped`,
+  `test_incidents_are_counted_with_a_plain_line`, `test_plain_line_is_never_an_ai_actor_issue`.
 - Harm (ER-11): a story whose `harm_to_people` is at least `HARM_MIN` (any member of the event) is
-  counted in incidents only: never headline, rubric, section story, plain line or reaction. Tests:
+  counted in incidents only (only events that could be shown: answer not `none`, confidence at least
+  `MIN_CONFIDENCE`; harm on any other story is not counted): never headline, rubric, section story, plain line or reaction. Tests:
   `test_harm_story_is_only_counted`.
 
 **Headline**
 - Of the shown stories, the highest confidence times outlet count (ties: section order, then rank)
   whose title can be made a headline: at most `HEADLINE_MAX_WORDS` words in capitals. A longer title
-  is cut at a clause boundary (after `:` `,` `;` or a dash, or before "but", "while", "because",
+  is cut at a clause boundary (after `:` or `;`, before a dash, or before "but", "while", "because",
   "although"), at least `HEADLINE_MIN_WORDS` words kept, and carries the cut marker; the footnote
   closes the bulletin (ER-8). A story with no such boundary is skipped; when none fits the bulletin
-  has no headline line. Tests: `test_headline_is_the_highest_scored_shown_story`,
+  has no headline line. The headline may therefore not be the top story, and item 3 (the writer)
+  writes the real headlines. Tests: `test_headline_is_the_highest_scored_shown_story`,
   `test_long_headline_is_cut_at_a_clause_boundary`, `test_headline_without_boundary_is_skipped`.
 
 **Fixed text** (no model call)
 - Opening by day type, numbers line, rubric name, reactions and closing come from
   `phrases.json`, picked by date (ordinal plus a slot offset) so neighbouring days differ. Tests:
   `test_variants_differ_on_neighbouring_days`.
-- Numbers line: the launch line when both model releases and product launches (stories of the
-  signals' event counts) are above zero, else the items line. Tests: `test_numbers_line`.
-- Reactions: at most one per story; the three slots below give at most three per issue. Order: the rubric story, the
+- Numbers line (two variants each, picked by date): the launch line when both model releases and product launches (stories of the
+  signals' event counts) are above zero, else the items line. Tests: `test_numbers_line`, `test_numbers_line_varies_by_date`.
+- Reactions imply no fact: the library has only the limit, AI-actor and Faith/Culture dialogue
+  reactions. At most one per story; the three slots below give at most three per issue. Order: the rubric story, the
   first Cooperation story, then (only when neither got one) the first Key results story whose area
   has a reaction. Tests: `test_reactions_follow_the_limits`.
 - Day number: days since 2022-11-30 (Day 1429 = 2026-10-29). Tests: `test_day_number`.
@@ -93,7 +100,7 @@ flowchart LR
   Tests: `test_render_text_matches_the_voice_layout`.
 - `ai-news bulletin build --date D --dry-run [--json]` prints the text, or with `--json` the object
   only. Without `--dry-run` it exits 2 (storage comes in item 4); a day without a digest exits 2; a
-  skipped day prints nothing on stdout, logs `bulletin_skipped` and exits 0. Tests:
+  skipped day prints nothing on stdout, logs `bulletin_skipped` and exits 0. With `--json` the output also has `assessed` and `digest_articles`. Tests:
   `test_cli_dry_run_prints_text`, `test_cli_json_prints_the_object`, `test_cli_needs_dry_run`,
   `test_cli_no_digest`, `test_cli_skipped_day_logs_reason`.
 
@@ -110,6 +117,20 @@ flowchart LR
   (decided 2026-11-01 (agent)).
 - A top-ranked non-AI incident supplies the "Among them" line when actor is `people` or
   `organisation` (decided 2026-11-01 (agent): the voice file says "caused by people").
+- Headline cut: never at a comma, because the part before a comma is often a verbless fragment
+  (decided 2026-11-01 (agent): the bulletin is on a preview page until the 14-day review; tuned
+  later).
+- Busy-day median over ready days only: partial and unavailable days have low item counts and made
+  ordinary days read as busy (decided 2026-11-01 (agent)).
+- Reactions that claim an outcome ("Productivity grows.", "Capacity grows.", "Investment in the
+  future continues.", "Knowledge advances.", "The transition of professions continues.") are removed:
+  a layoffs or outage story would get a false claim, and the voice file forbids reactions that imply
+  a fact (decided 2026-11-01 (agent)).
+- A story's representative is chosen among members that did not answer `none`, so one strong
+  `none` outlet does not drop the event (decided 2026-11-01 (agent)).
+- The assessed share of the day's digest articles is logged (`bulletin_assessed_share`) and printed
+  in `--json` (`assessed`, `digest_articles`); unassessed articles are not in the bulletin
+  (decided 2026-11-01 (agent)).
 - The story key from signals' top stories merges outlets that the title key would not.
 
 ## Invariants

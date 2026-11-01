@@ -52,13 +52,18 @@ JSON and the never-list below on every phrase. Rules the JSON cannot carry:
 
 - Variants are picked by date (FR-004), so neighbouring days differ. `{}` in a phrase is a data
   slot.
-- Busy day: items at or above the 30-day median plus a quarter. Quiet day: `quiet = true`.
+- Busy day: items at or above the median of the ready days of the last 30 (at least 7 of them)
+  plus a quarter. Quiet day: `quiet = true`.
 - Numbers line: the launch line when both counts are above zero, else the events line.
 - Reactions: at most one per story and three per issue, normally one per section; Key results
   mostly go without one; only where the reaction lands and implies no fact. A metaphor that reads
   as a claim, such as "the Administration's memory expands" for tape sales, is left out (owner
   2026-10-31). "Reminds humans to update their software" (`ai_issue_with_fix`) only when the
   source says a fix exists.
+  Area reactions that claim an outcome (Work, Money, Infrastructure, Science, Health: "Productivity
+  grows.", "Capacity grows.", "Knowledge advances.") are not in the library: a layoffs or outage
+  story would get a false claim (decided 2026-11-01 (agent)). Only the Faith and Culture dialogue
+  line stays.
 - Cut headline (ER-8): the cut text ends with the marker and the footnote closes the bulletin.
 
 ## Never

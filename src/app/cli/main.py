@@ -512,11 +512,15 @@ def bulletin_build(
         raise typer.Exit(2)
     library = load_phrases()
     result = build_bulletin(data, library)
+    assessed = sum(1 for c in data.candidates if c.origin == "digest")
+    logger.info("bulletin_assessed_share", extra={
+        "date": target.isoformat(), "assessed": assessed, "digest_articles": data.digest_articles})
     if result.bulletin is None:
         logger.info("bulletin_skipped", extra={"date": target.isoformat(), "reason": result.reason})
         typer.echo(f"bulletin build: skipped {target}: {result.reason}", err=True)
     elif as_json:
-        typer.echo(json.dumps(result.bulletin.as_dict(), indent=2, sort_keys=True))
+        counts = {"assessed": assessed, "digest_articles": data.digest_articles}
+        typer.echo(json.dumps({**result.bulletin.as_dict(), **counts}, indent=2, sort_keys=True))
     else:
         typer.echo(render_text(result.bulletin, library), nl=False)
 

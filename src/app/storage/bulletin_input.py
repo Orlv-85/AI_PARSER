@@ -15,10 +15,12 @@ from sqlalchemy.orm import Session
 from app.core.bulletin.builder import (
     BUSY_MIN_DAYS,
     BUSY_WINDOW_DAYS,
+    READY_STATUSES,
     Candidate,
     DayInput,
 )
 from app.core.bulletin.world_change import WORLD_CHANGE_VERSION
+from app.core.canonicalize import canonical_url_hash
 from app.storage.models_sql import (
     Article,
     DailySignalReport,
@@ -35,15 +37,19 @@ def _event_counts(payload: dict[str, Any]) -> dict[str, int]:
 
 
 def _story_keys(payload: dict[str, Any]) -> dict[str, str]:
+    """Top story key by URL and by canonical URL hash."""
     keys: dict[str, str] = {}
     for index, story in enumerate(payload.get("top_stories") or []):
         for link in story.get("links") or []:
-            keys.setdefault(str(link.get("url")), f"story:{index}")
+            url = str(link.get("url"))
+            keys.setdefault(url, f"story:{index}")
+            keys.setdefault(canonical_url_hash(url), f"story:{index}")
     return keys
 
 
 def _median_items(session: Session, day: date) -> float | None:
     rows = session.scalars(select(DailySignalReport.coverage).where(
+        DailySignalReport.status.in_(READY_STATUSES),
         DailySignalReport.report_date < day,
         DailySignalReport.report_date >= day - timedelta(days=BUSY_WINDOW_DAYS)))
     counts = [int(json.loads(text).get("items") or 0) for text in rows]
@@ -72,7 +78,8 @@ def _digest_candidates(session: Session, articles: list[Article],
             url=article.url, title=article.title, outlet=outlet,
             world_change=answer.world_change, confidence=answer.world_change_confidence,
             area=answer.area, actor=answer.actor, harm=answer.harm_to_people,
-            event_key=stories.get(article.url) or f"title:{cluster_key(article.title)}",
+            event_key=stories.get(article.url)
+            or stories.get(article.url_canonical_hash) or f"title:{cluster_key(article.title)}",
             event_type=str(types.get(article.url) or "")))
     return found
 
@@ -109,4 +116,5 @@ def load_day_input(session: Session, day: date, *, include_world: bool) -> DayIn
         items=int((payload.get("coverage") or {}).get("items") or len(articles)),
         model_releases=counts.get("model_release", 0),
         product_launches=counts.get("product_launch", 0),
-        median_items=_median_items(session, day), candidates=tuple(candidates))
+        median_items=_median_items(session, day), candidates=tuple(candidates),
+        digest_articles=len(articles))

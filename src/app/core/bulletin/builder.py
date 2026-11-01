@@ -51,6 +51,7 @@ class DayInput:  # pylint: disable=too-many-instance-attributes
     product_launches: int
     median_items: float | None
     candidates: tuple[Candidate, ...]
+    digest_articles: int = 0
 
 
 @dataclass
@@ -141,7 +142,7 @@ def make_headline(title: str) -> tuple[str, bool] | None:
     if len(words) <= HEADLINE_MAX_WORDS:
         return " ".join(words).rstrip(".").upper(), False
     for end in range(HEADLINE_MAX_WORDS, HEADLINE_MIN_WORDS - 1, -1):
-        if (words[end - 1][-1] in ":,;" or words[end] in DASHES
+        if (words[end - 1][-1] in ":;" or words[end] in DASHES
                 or words[end].lower() in CLAUSE_WORDS):
             return " ".join(words[:end]).rstrip(":,;.").upper(), True
     return None
@@ -158,7 +159,8 @@ def _events(candidates: tuple[Candidate, ...]) -> list[_Event]:
         groups.setdefault(item.event_key, []).append(item)
     events = []
     for members in groups.values():
-        rep = max(members, key=lambda m: m.confidence)
+        rep = max([m for m in members if m.world_change != "none"] or members,
+                  key=lambda m: m.confidence)
         if rep.world_change == "none" or rep.confidence < MIN_CONFIDENCE:
             continue
         events.append(_Event(rep, members, any(m.harm >= HARM_MIN for m in members)))

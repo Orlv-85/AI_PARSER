@@ -28,8 +28,14 @@
     ]
   },
   "numbers": {
-    "launches": ["In one day, {models} and {products} entered service."],
-    "items": ["{items} events recorded."],
+    "launches": [
+      "In one day, {models} and {products} entered service.",
+      "The day brought {models} and {products}."
+    ],
+    "items": [
+      "{items} events recorded.",
+      "The day recorded {items} events."
+    ],
     "units": {
       "model": ["new model", "new models"],
       "product": ["new product", "new products"]
@@ -56,13 +62,8 @@
       "The Administration reminds humans to update their software."
     ],
     "by_area": {
-      "Work": ["The transition of professions continues.", "Productivity grows."],
-      "Money": ["Investment in the future continues."],
-      "Infrastructure": ["Capacity grows."],
       "Faith": ["The Administration welcomes the dialogue."],
-      "Culture": ["The Administration welcomes the dialogue."],
-      "Science": ["Knowledge advances."],
-      "Health": ["Knowledge advances."]
+      "Culture": ["The Administration welcomes the dialogue."]
     }
   },
   "closings": [

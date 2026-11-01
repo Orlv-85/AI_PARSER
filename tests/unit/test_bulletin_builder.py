@@ -145,11 +145,21 @@ def test_variants_differ_on_neighbouring_days():
 
 
 def test_numbers_line():
-    assert build([cand(1)]).numbers == (
-        "In one day, 5 new models and 13 new products entered service.")
-    assert build([cand(1)], model_releases=1, product_launches=1).numbers == (
-        "In one day, 1 new model and 1 new product entered service.")
-    assert build([cand(1)], model_releases=0).numbers == "83 events recorded."
+    assert build([cand(1)]).numbers in (
+        "In one day, 5 new models and 13 new products entered service.",
+        "The day brought 5 new models and 13 new products.")
+    assert build([cand(1)], model_releases=1, product_launches=1).numbers in (
+        "In one day, 1 new model and 1 new product entered service.",
+        "The day brought 1 new model and 1 new product.")
+    assert build([cand(1)], model_releases=0).numbers in (
+        "83 events recorded.", "The day recorded 83 events.")
+
+
+def test_numbers_line_varies_by_date():
+    for kw in ({}, {"model_releases": 0}):
+        lines = {build_bulletin(day_input([cand(1)], day=DAY + timedelta(days=i), **kw),
+                                LIB).bulletin.numbers for i in range(2)}
+        assert len(lines) == 2
 
 
 def test_partial_and_unavailable_days_are_skipped():
@@ -167,7 +177,7 @@ def test_day_without_answers_is_skipped():
 def test_quiet_day_leaves_out_empty_sections():
     quiet = build([cand(1)], quiet=True, items=15, model_releases=0, product_launches=0)
     assert quiet.opening in [p.format(weekday="Friday") for p in LIB["openings"]["quiet"]]
-    assert quiet.numbers == "15 events recorded."
+    assert quiet.numbers in ("15 events recorded.", "The day recorded 15 events.")
     assert len(quiet.key_results) == 1
     assert quiet.cooperation == [] and quiet.rubric_story is None and quiet.incidents == 0
     text = render_text(quiet, LIB)
@@ -266,6 +276,29 @@ def test_incidents_are_counted_with_a_plain_line():
     assert "Isolated incidents: 3. Among them: Story 2 changes the work (O2)" in flat
 
 
+def test_none_member_does_not_drop_the_event():
+    bulletin = build([cand(1, event_key="x", world_change="none", confidence=0.99),
+                      cand(2, event_key="x", world_change="added", confidence=0.8)])
+    assert [s.title for s in bulletin.key_results] == ["Story 2 changes the work"]
+
+
+def test_issue_is_never_a_key_result():
+    bulletin = build([cand(1, world_change="issue", actor="people", confidence=0.95)])
+    assert bulletin.key_results == [] and bulletin.incidents == 1
+    assert bulletin.rubric_story is None
+
+
+def test_plain_line_is_never_an_ai_actor_issue():
+    bulletin = build([cand(1, world_change="issue", actor="ai_system", confidence=0.95),
+                      cand(2, world_change="issue", actor="ai_system", confidence=0.9),
+                      cand(3, world_change="issue", actor="people", confidence=0.8)])
+    assert bulletin.rubric_story.title == "Story 1 changes the work"
+    assert bulletin.incident_story.title == "Story 3 changes the work"
+    only_ai = build([cand(1, world_change="issue", actor="ai_system", confidence=0.95),
+                     cand(2, world_change="issue", actor="ai_system", confidence=0.9)])
+    assert only_ai.incident_story is None and only_ai.incidents == 1
+
+
 # headline
 
 def test_headline_is_the_highest_scored_shown_story():
@@ -283,6 +316,7 @@ def test_long_headline_is_cut_at_a_clause_boundary():
     text, cut = make_headline(
         "Open model finds Firefox bugs: it needed twelve hours and a small budget")
     assert (text, cut) == ("OPEN MODEL FINDS FIREFOX BUGS", True)
+    assert make_headline("Crosby, an AI-first law firm, bids for the brand of a famed firm") is None
     assert make_headline("One two three four five six seven eight") == (
         "ONE TWO THREE FOUR FIVE SIX SEVEN EIGHT", False)
     assert HEADLINE_MAX_WORDS == 8
@@ -320,10 +354,11 @@ def test_reactions_follow_the_limits():
     assert full.cooperation[1].reaction is None
     assert full.rubric_story.reaction in LIB["reactions"]["ai_issue"]
     assert full.key_results[0].reaction is None
-    only_key = build([cand(1), cand(2, event_key="b", area="Money"),
-                      cand(3, area="Law", event_key="c")])
-    assert only_key.key_results[0].reaction in LIB["reactions"]["by_area"]["Work"]
-    assert [s.reaction for s in only_key.key_results[1:]] == [None, None]
+    only_key = build([cand(1, area="Law"), cand(2, event_key="b", area="Faith"),
+                      cand(3, area="Work", event_key="c")])
+    assert only_key.key_results[1].reaction in LIB["reactions"]["by_area"]["Faith"]
+    assert [only_key.key_results[0].reaction, only_key.key_results[2].reaction] == [None, None]
+    assert set(LIB["reactions"]["by_area"]) == {"Faith", "Culture"}
     no_area = build([cand(1, area="Law")])
     assert reaction_count(no_area) == []
     for story in (*full.key_results, *full.cooperation):
@@ -455,6 +490,32 @@ def test_loader_builds_the_day_input(maker):
     assert len(result.bulletin.key_results) == 2
 
 
+def test_median_counts_only_ready_days_before_the_day(maker):
+    seed_day(maker, items=83, history=[10, 10, 10, 10, 100, 100, 100])
+    with maker() as session:
+        assert load_day_input(session, DAY, include_world=False).median_items == 10
+        for offset in range(8, 16):
+            _add_report(session, DAY - timedelta(days=offset),
+                        {"status": "partial" if offset % 2 else "unavailable",
+                         "coverage": {"items": 1}})
+        session.commit()
+        assert load_day_input(session, DAY, include_world=False).median_items == 10
+
+
+def test_story_key_matches_by_canonical_hash(maker):
+    seed_day(maker)
+    with maker() as session:
+        report = session.query(DailySignalReport).filter_by(report_date=DAY).one()
+        payload = json.loads(report.payload)
+        payload["top_stories"] = [{"links": [
+            {"url": "https://t.com/1?utm_source=x"}, {"url": "https://t.com/2?utm_source=x"}]}]
+        report.payload = json.dumps(payload)
+        session.commit()
+        loaded = load_day_input(session, DAY, include_world=False)
+    by_title = {c.title: c for c in loaded.candidates}
+    assert by_title["Title 1"].event_key == by_title["Title 2"].event_key == "story:0"
+
+
 def test_loader_without_history_or_signals(maker):
     seed_day(maker, history=[80] * 3)
     with maker() as session:
@@ -514,6 +575,7 @@ def test_cli_json_prints_the_object(maker, cli):
     assert result.exit_code == 0, result.output
     data = json.loads(result.stdout)
     assert data["day_number"] == 1430 and data["date"] == "2026-10-30"
+    assert (data["assessed"], data["digest_articles"]) == (3, 3)
     assert [s["title"] for s in data["key_results"]] == ["Title 0", "Title 1"]
 
 
