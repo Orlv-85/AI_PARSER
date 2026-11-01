@@ -489,3 +489,62 @@ def test_process_html_links_two_stage_skips_item_without_row(monkeypatch) -> Non
 
     assert not inserted
     assert not repo.batches
+
+
+def _run_html_links(links: list[str], flags: list[str], **setting_overrides):
+    return _process_html_links_two_stage(
+        links=links,
+        config=_html_source(),
+        db_source_id=1,
+        article_repo=_Repo(known={"known1", "known2"}),  # type: ignore[arg-type]
+        settings=_settings(article_batch_upsert_enabled=False, **setting_overrides),
+        quality_flags=flags,
+    )
+
+
+def _patch_scores(monkeypatch) -> None:
+    monkeypatch.setattr("app.core.ingestion.pipeline.rows.ai_relevance_score", lambda _i: 0.5)
+    monkeypatch.setattr("app.core.ingestion.pipeline.rows.freshness_score", lambda _p: 0.5)
+    monkeypatch.setattr("app.core.ingestion.pipeline.rows.rank_score", lambda **_k: 1.0)
+
+
+def test_process_html_links_two_stage_new_link_resets_known_streak(monkeypatch) -> None:
+    _patch_html_stage(monkeypatch, lambda *, url, **_kwargs: _dated_article(url))
+    monkeypatch.setattr(
+        "app.core.ingestion.pipeline.html_links.canonical_url_hash",
+        lambda url: url.rsplit("/", maxsplit=1)[-1],
+    )
+    _patch_scores(monkeypatch)
+
+    result = _run_html_links(
+        ["https://example.com/known1", "https://example.com/new", "https://example.com/known2"],
+        [],
+        html_known_streak_stop=2,
+    )
+
+    # known, new, known: the new link resets the streak, so there is no early stop.
+    assert result == (1, 1, 2, 2, False)
+
+
+def test_process_html_links_two_stage_flags_truncated_links(monkeypatch) -> None:
+    _patch_html_stage(monkeypatch, lambda *, url, **_kwargs: _dated_article(url))
+    _patch_scores(monkeypatch)
+    urls = [f"https://example.com/news/{n}" for n in range(3)]
+
+    flags: list[str] = []
+    assert _run_html_links(urls, flags, html_max_links_per_source=2)[0] == 2
+    assert flags == ["truncated"]
+
+    flags = []
+    assert _run_html_links(urls, flags, html_max_links_per_source=3)[0] == 3
+    assert "truncated" not in flags
+
+
+def test_process_html_links_two_stage_flags_unknown_publication_date(monkeypatch) -> None:
+    undated = Article(source_key="html_source", title="T", url="https://example.com/news/u")
+    _patch_html_stage(monkeypatch, lambda **_kwargs: undated)
+    _patch_scores(monkeypatch)
+    flags: list[str] = []
+
+    assert _run_html_links(["https://example.com/news/u"], flags)[0] == 1
+    assert flags == ["unknown_publication_date"]
