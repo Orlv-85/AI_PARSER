@@ -524,6 +524,20 @@ def test_robots_server_error_blocks_the_page(tmp_path):
     assert cache.attempt(url)["state"] == "blocked"
 
 
+def test_connect_error_on_second_hop_counts_the_second_host(tmp_path):
+    def transport(request):
+        if request.url.host == "example.com":
+            return httpx.Response(302, headers={"Location": "https://other.example.org/post"})
+        raise httpx.ConnectError("DNS", request=request)
+
+    cache = PageCache(tmp_path / "run")
+    url = "https://example.com/post"
+    downloader = _fetch(cache, transport, [url])
+    assert downloader.connection_failures == {"other.example.org"}
+    assert cache.attempt(url)["state"] == "failed"
+    assert cache.attempt(url)["issues"] == ["ConnectError"]
+
+
 def test_outage_set_before_dispatch_returns_without_attempt(tmp_path):
     cache = PageCache(tmp_path / "run")
     url = "https://example.com/post"
