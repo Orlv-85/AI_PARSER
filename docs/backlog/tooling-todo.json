@@ -25,7 +25,7 @@
     },
     {
       "id": "T2",
-      "title": "Refactor complex and duplicated code found by crapper and dryer",
+      "title": "Refactor complex, duplicated and dead code found by crapper, dryer and mutator",
       "status": "backlog",
       "decided": "Owner 2026-11-01: valid point, keep as a backlog task; new code is checked per PR (advisory), old code is cleaned here, not inside feature PRs.",
       "facts_2026_11_01": {
@@ -37,9 +37,10 @@
         "Run crapper with coverage (`crapper --use-existing-coverage` after a pytest coverage run) to get real CRAP scores; list functions with CRAP >= 10.",
         "Group findings by module; one small PR per module or duplicate pair, behavior pinned by tests first (AGENTS.md test-first rule), reviewed by another session.",
         "Start with the 9 dryer pairs (cheap, low risk), then the worst CRAP functions in ingestion and daily signals.",
+        "Dead code: find code nothing calls (coverage report lines never hit, `vulture src` as a hint, mutator uncovered sites); for each candidate check callers (CLI, systemd scripts, tests, dynamic imports) before deleting; one PR per area, each deletion listed with its reason. Owner asked for this 2026-11-01.",
         "Optionally run mutator on one critical module (e.g. src/app/core/world/filter.py) to judge test strength; full-project mutator runs take hours."
       ],
-      "done_when": "No dryer pair >= 0.8 in src/ and no function with CRAP >= 30; remaining 10-30 cases listed with a reason.",
+      "done_when": "No dryer pair >= 0.8 in src/ and no function with CRAP >= 30; remaining 10-30 cases listed with a reason; dead-code candidates either deleted or listed with the reason they stay.",
       "open_questions": []
     }
   ]
