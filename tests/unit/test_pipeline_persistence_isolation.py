@@ -351,3 +351,51 @@ def test_html_fetch_cycle_skips_failed_article_only(monkeypatch, tmp_path):
         assert sorted(session.scalars(select(StoredArticle.title))) == [
             "Headline", f"{base}/news-3",
         ]
+
+
+def test_persist_failure_marks_source_coverage_incomplete(monkeypatch, tmp_path) -> None:
+    engine = create_engine(f"sqlite:///{tmp_path}/coverage.db")
+    Base.metadata.create_all(engine)
+    with engine.begin() as connection:
+        connection.execute(text(
+            "CREATE TRIGGER reject_article BEFORE INSERT ON articles "
+            "WHEN NEW.title = 'Invalid' BEGIN SELECT RAISE(ABORT, 'invalid article'); END"
+        ))
+    sessions = sessionmaker(bind=engine, autoflush=False)
+    configs = [
+        SourceConfig(id=key, name=key, type="rss", url=f"https://example.com/{key}")
+        for key in ("broken", "fine")
+    ]
+    now = datetime(2026, 10, 4, 12, tzinfo=UTC)
+    articles = {
+        "broken": [Article(
+            source_key="broken", title="Invalid", url="https://example.com/broken/1",
+            published_at=now,
+        )],
+        "fine": [Article(
+            source_key="fine", title="AI update", url="https://example.com/fine/1",
+            published_at=now,
+        )],
+    }
+    logged = {}
+
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.load_sources", lambda _path: configs)
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.create_all", lambda: None)
+    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.SessionLocal", sessions)
+    monkeypatch.setattr(
+        "app.core.ingestion.pipeline.cycle._collect_fetched_items",
+        lambda **_kwargs: (
+            {i: _rss_items(articles[c.id]) for i, c in enumerate(configs)}, 0,
+        ),
+    )
+    monkeypatch.setattr(
+        "app.core.ingestion.pipeline.cycle._log_source_metrics",
+        lambda *, metrics, **_kwargs: logged.__setitem__(metrics.source_id, metrics),
+    )
+    settings = Settings(respect_robots_txt=False, rss_known_streak_stop=0)
+
+    run_fetch_cycle(settings=settings, logger=getLogger("persistence-coverage"))
+
+    assert logged["broken"].coverage_complete is False
+    assert logged["broken"].errors == 1
+    assert logged["fine"].coverage_complete is True
