@@ -49,6 +49,37 @@
         "Alembic migrations (applied history)",
         "Spec 018 code in flux: core/world/*, storage/world.py, jev.py _probability duplicate (dedupe after 018)"
       ]
+    },
+    {
+      "id": "T3",
+      "title": "Pick the executor (model and effort) per task: a rule table first, Jev as a router later",
+      "status": "backlog",
+      "decided": "Owner 2026-11-01: to the backlog.",
+      "idea": "The coordinator does too much itself and has no rule for choosing between Codex (Sol/Astra, efforts), DeepSeek, Haiku, Sonnet and itself. Step 1: a rule table in the coordinator rules. Step 2 (only if the table misses): Jev reads the task description and returns model, effort and one line why.",
+      "draft_table": {
+        "coordinator itself": "mechanical edits, git, merge, fact checks",
+        "Haiku": "running tools, log digging, production summaries (read-only)",
+        "Sonnet": "research, doc drafts, text review",
+        "Codex Sol high": "code",
+        "Codex Astra high": "code review (always a model other than the author)",
+        "DeepSeek": "bulk text, cheap runs"
+      },
+      "open_questions": [
+        "Jev router: one paid call per task; check it on past tasks against the choices actually made before trusting it."
+      ]
+    },
+    {
+      "id": "T4",
+      "title": "CRAP >= 10 in the bulletin modules (crapper with coverage, 2026-11-01)",
+      "status": "backlog",
+      "facts_2026_11_01": {
+        "command": "~/tools/unclebob/crapper/crapper src/app/core/bulletin (full pytest under coverage, ~130 s)",
+        "functions": 72,
+        "over_10": "validate_phrases (app.core.bulletin.phrases) CC 18 cov 91.7% CRAP 18.2; run_assessment (app.core.bulletin.world_change) CC 10 cov 87.5% CRAP 10.2; sentence_error (app.core.bulletin.writer_grounding) CC 10 cov 90% CRAP 10.1",
+        "dryer_0_8": "no pairs",
+        "mutator_scan_builder": "63 sites in builder.py; no real mutation run yet"
+      },
+      "plan": "Split or test the three functions in a small PR, outside feature PRs; then one real mutator run on builder.py."
     }
   ]
 }
