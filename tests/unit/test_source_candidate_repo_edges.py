@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.core.sources.candidate_fields import read_optional_str, read_str
 from app.storage.models_sql import Base
 from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
 
@@ -70,10 +71,10 @@ def test_save_review_update_skips_missing_object_fields_and_preserves_existing_v
 
 def test_candidate_repo_helpers_cover_missing_values_and_optional_serialization() -> None:
     with pytest.raises(ValueError, match="candidate field is required: raw_input"):
-        SourceCandidateRepo._read_candidate_value({}, "raw_input")
+        read_str({}, "raw_input")
 
     assert SourceCandidateRepo._build_validation_details({}) is None
-    assert SourceCandidateRepo._read_optional_value({}, "validation_error") is None
+    assert read_optional_str({}, "validation_error") is None
 
     details = SourceCandidateRepo._build_validation_details(
         {"link_count": 2, "sample_links": ["https://example.com/a", "https://example.com/b"]}

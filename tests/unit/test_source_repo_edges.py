@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.core.sources.candidate_fields import read_str
 from app.storage.models_sql import Base, Source
 from app.storage.source_repo import SourceRepo
 
@@ -55,7 +56,7 @@ def test_source_repo_helper_methods_cover_missing_values_and_unknown_type_fallba
     repo = SourceRepo(_session())
 
     with pytest.raises(ValueError, match="candidate field is required: normalized_url"):
-        repo._read_object_value({}, "normalized_url")
+        read_str({}, "normalized_url")
 
     assert repo._source_name_for_candidate(
         {"normalized_url": "http:///just-path-only"},

@@ -11,9 +11,9 @@ import yaml
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.sources.candidate_fields import read_optional_int, read_str
 from app.core.sources.candidates import (
     CandidateOverlapGroup,
-    _candidate_value,
     _infer_candidate_type,
     _normalize_candidate_type,
     normalize_candidate_url,
@@ -152,9 +152,9 @@ def _approve_candidate(
     managed_source_repo: object,
     review_note: str | None,
 ) -> None:
-    if _candidate_value(candidate, "status", default="draft") == "duplicate":
+    if read_str(candidate, "status", default="draft") == "duplicate":
         raise ValueError("Duplicate candidates cannot be approved")
-    if _candidate_value(candidate, "validation_status", default="pending") != "validated":
+    if read_str(candidate, "validation_status", default="pending") != "validated":
         raise ValueError("Only validated candidates can be approved")
     create_from_candidate = getattr(managed_source_repo, "create_from_candidate", None)
     if not callable(create_from_candidate):
@@ -173,7 +173,7 @@ def _reject_candidate(
     managed_source_repo: object,
     review_note: str | None,
 ) -> None:
-    approved_source_id = _candidate_int_value(candidate, "approved_source_id")
+    approved_source_id = read_optional_int(candidate, "approved_source_id")
     if candidate.status == "approved" and approved_source_id is not None:
         disable_source = getattr(managed_source_repo, "disable_source", None)
         if not callable(disable_source):
@@ -188,7 +188,7 @@ def _disable_candidate(
     managed_source_repo: object,
     review_note: str | None,
 ) -> None:
-    approved_source_id = _candidate_int_value(candidate, "approved_source_id")
+    approved_source_id = read_optional_int(candidate, "approved_source_id")
     if approved_source_id is None:
         raise ValueError("Only approved candidates with a managed source can be disabled")
     disable_source = getattr(managed_source_repo, "disable_source", None)
@@ -209,7 +209,7 @@ def _mark_duplicate_candidate(
 ) -> None:
     if duplicate_of_candidate_id is None:
         raise ValueError("duplicate_of_candidate_id is required")
-    if duplicate_of_candidate_id == int(_candidate_value(candidate, "id")):
+    if duplicate_of_candidate_id == int(read_str(candidate, "id")):
         raise ValueError("candidate cannot be marked duplicate of itself")
     duplicate_candidate = _lookup_candidate(candidate_repo, duplicate_of_candidate_id)
     if duplicate_candidate is None:
@@ -226,14 +226,14 @@ def _edit_candidate(
     updates: dict[str, str] | None,
     review_note: str | None,
 ) -> None:
-    if _candidate_value(candidate, "status", default="draft") == "approved":
+    if read_str(candidate, "status", default="draft") == "approved":
         raise ValueError("Approved candidates cannot be edited")
     normalized_updates = dict(updates or {})
     raw_url = normalized_updates.get("normalized_url")
     if raw_url is not None:
         normalized_updates["normalized_url"] = normalize_candidate_url(raw_url)
         existing = _find_by_normalized_url(candidate_repo, normalized_updates["normalized_url"])
-        if existing is not None and int(_candidate_value(existing, "id")) != candidate_id:
+        if existing is not None and int(read_str(existing, "id")) != candidate_id:
             raise ValueError("normalized URL already exists for another candidate")
     candidate_type = normalized_updates.get("candidate_type")
     if candidate_type is not None:
@@ -284,12 +284,3 @@ def _find_by_normalized_url(candidate_repo: object, normalized_url: str) -> Any 
     if not callable(find_by_normalized_url):
         return None
     return find_by_normalized_url(normalized_url)
-
-def _candidate_int_value(candidate: object, field_name: str) -> int | None:
-    if isinstance(candidate, dict):
-        value = candidate.get(field_name)
-    else:
-        value = getattr(candidate, field_name, None)
-    if value is None:
-        return None
-    return int(value)

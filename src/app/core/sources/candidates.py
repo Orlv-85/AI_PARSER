@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from app.core.canonicalize import canonicalize_url
+from app.core.sources.candidate_fields import read_str
 
 _MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\((https?://[^\s)]+)\)", re.IGNORECASE)
 
@@ -177,7 +178,7 @@ def group_candidate_overlaps(  # pylint: disable=too-many-branches
 ) -> list[CandidateOverlapGroup]:
     grouped_by_host: dict[str, list[object]] = {}
     for candidate in candidates:
-        normalized_url = _candidate_value(candidate, "normalized_url")
+        normalized_url = read_str(candidate, "normalized_url")
         hostname = (urlsplit(normalized_url).hostname or "").lower()
         if not hostname:
             continue
@@ -190,12 +191,12 @@ def group_candidate_overlaps(  # pylint: disable=too-many-branches
         overlaps_by_id: dict[int, set[int]] = {}
         reasons_by_pair: dict[frozenset[int], str] = {}
         for index, left in enumerate(host_candidates):
-            left_id = int(_candidate_value(left, "id"))
+            left_id = int(read_str(left, "id"))
             for right in host_candidates[index + 1 :]:
                 reason = _overlap_reason(left, right)
                 if reason is None:
                     continue
-                right_id = int(_candidate_value(right, "id"))
+                right_id = int(read_str(right, "id"))
                 overlaps_by_id.setdefault(left_id, set()).add(right_id)
                 overlaps_by_id.setdefault(right_id, set()).add(left_id)
                 pair_key = frozenset({left_id, right_id})
@@ -204,7 +205,7 @@ def group_candidate_overlaps(  # pylint: disable=too-many-branches
             continue
 
         candidate_by_id = {
-            int(_candidate_value(candidate, "id")): candidate for candidate in host_candidates
+            int(read_str(candidate, "id")): candidate for candidate in host_candidates
         }
         visited: set[int] = set()
         for candidate_id in sorted(overlaps_by_id):
@@ -232,17 +233,17 @@ def group_candidate_overlaps(  # pylint: disable=too-many-branches
                 continue
 
             members = [candidate_by_id[member_id] for member_id in sorted(component_ids)]
-            preferred_candidate_id = int(_candidate_value(_pick_preferred_candidate(members), "id"))
+            preferred_candidate_id = int(read_str(_pick_preferred_candidate(members), "id"))
             groups.append(
                 CandidateOverlapGroup(
                     candidate_ids=sorted(component_ids),
                     reason=strongest_reason or "same_host_family",
                     preferred_candidate_id=preferred_candidate_id,
                     candidate_urls=[
-                        _candidate_value(candidate_by_id[member_id], "normalized_url")
+                        read_str(candidate_by_id[member_id], "normalized_url")
                         for member_id in sorted(component_ids)
                     ],
-                    preferred_url=_candidate_value(
+                    preferred_url=read_str(
                         candidate_by_id[preferred_candidate_id],
                         "normalized_url",
                     ),
@@ -282,15 +283,6 @@ def _infer_candidate_type(normalized_url: str) -> str:
         return "rss"
     return "html"
 
-def _candidate_value(candidate: object, field_name: str, default: str | None = None) -> str:
-    if isinstance(candidate, dict):
-        value = candidate.get(field_name, default)
-    else:
-        value = getattr(candidate, field_name, default)
-    if value is None:
-        raise ValueError(f"candidate field is required: {field_name}")
-    return str(value)
-
 def _normalized_path(url: str) -> str:
     path = urlsplit(url).path or "/"
     path = re.sub(r"/{2,}", "/", path)
@@ -305,8 +297,8 @@ def _path_segments(url: str) -> list[str]:
     return [segment for segment in path.strip("/").split("/") if segment]
 
 def _overlap_reason(left: object, right: object) -> str | None:
-    left_url = _candidate_value(left, "normalized_url")
-    right_url = _candidate_value(right, "normalized_url")
+    left_url = read_str(left, "normalized_url")
+    right_url = read_str(right, "normalized_url")
     left_path = _normalized_path(left_url)
     right_path = _normalized_path(right_url)
 
@@ -358,10 +350,10 @@ def _pick_preferred_candidate(candidates: list[object]) -> object:
     return min(
         candidates,
         key=lambda candidate: (
-            _is_topic_path(_normalized_path(_candidate_value(candidate, "normalized_url"))),
-            len(_path_segments(_candidate_value(candidate, "normalized_url"))),
-            len(_normalized_path(_candidate_value(candidate, "normalized_url"))),
-            _candidate_value(candidate, "candidate_type", default="unknown") != "rss",
-            int(_candidate_value(candidate, "id")),
+            _is_topic_path(_normalized_path(read_str(candidate, "normalized_url"))),
+            len(_path_segments(read_str(candidate, "normalized_url"))),
+            len(_normalized_path(read_str(candidate, "normalized_url"))),
+            read_str(candidate, "candidate_type", default="unknown") != "rss",
+            int(read_str(candidate, "id")),
         ),
     )

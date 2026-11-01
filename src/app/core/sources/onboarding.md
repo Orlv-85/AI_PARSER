@@ -389,6 +389,7 @@ scripts/sources_onboarding_helper.py db-bootstrap | db-review | db-validate | db
 | File | Role |
 | --- | --- |
 | `core/sources/candidates.py` | Pure URL extraction, normalization, parsing and overlap grouping; owns `NormalizedSourceCandidate` and `CandidateOverlapGroup` |
+| `core/sources/candidate_fields.py` | `read_str`, `read_optional_str`, `read_optional_int`: the one reader of a candidate field (dict or object), used by `core/sources/*` and by `storage/source_repo.py`, `storage/source_candidate_repo.py`; a missing or `None` required field raises `candidate field is required: <name>`. Tests: `test_read_str_returns_text_of_present_field`, `test_read_str_default_covers_absent_field_only_else_raises`, `test_read_optional_str_and_int`, `test_read_optional_int_casts_text_and_rejects_garbage` |
 | `core/sources/validation.py` | `ValidationResult`, deterministic RSS/HTML validation, ingestion fetch adapters and validation persistence |
 | `core/sources/onboarding.py` | `SourceImportResult`, database import, overlap review, candidate review actions and YAML export |
 | `core/sources/review.py` | Check probe (`probe_source`), evidence brief, `SourceReviewer` (Jev, DeepSeek), `evidence_fingerprint` |
