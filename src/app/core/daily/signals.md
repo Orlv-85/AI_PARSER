@@ -121,6 +121,8 @@ that check it.
   names present in the cited text, one sentence per story, 3-5 sentences (1-2 on a quiet day).
   Shown with numbered source links and an AI note. Tests: `test_sentence_codes`,
   `test_answer_level_codes`, `test_grounding_allowances`, `test_brief_rendered_escaped_with_http_links_and_ai_note`.
+  The number and name check is `grounding_error`, shared with the bulletin writer
+  (`src/app/core/bulletin/writer.md`); the brief's behavior is unchanged.
 - Sentences are checked in answer order: a sentence that fails is dropped, and the first 5 that pass
   (2 on a quiet day) are kept, the rest unread. The answer is invalid only when fewer than 3 pass
   (1 on a quiet day); the error is then the first dropped sentence's. Dropped and unread sentences
