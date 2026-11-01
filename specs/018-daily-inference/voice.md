@@ -5,10 +5,10 @@ builder chooses from (FR-004). Binding together with the editorial rules ER-* in
 Status: draft; samples on real days below.
 
 This file is for agents: the session that builds the bulletin, the writer model's prompt and the
-reviewing session. The phrase library the code
-reads becomes a JSON data file in item 2 of the spec; from then on the JSON holds the phrases and
-this file keeps the rules and samples and points to it (decided 2026-10-31 (agent): one source per
-fact, no copy kept in sync by hand).
+reviewing session. The fixed phrases live in the JSON data file
+`src/app/core/bulletin/phrases.json` (item 2 of the spec); this file keeps the rules and the
+samples and points to the JSON (decided 2026-10-31 (agent): one source per fact, no copy kept in
+sync by hand).
 
 ## Who speaks and how
 
@@ -45,56 +45,26 @@ Infrastructure, Governance. Assigned per story by the Jev `area` question (FR-00
 
 ## Fixed phrases
 
-Variants are picked by date (FR-004), so neighbouring days differ. `{}` are data slots.
+The phrases are in `src/app/core/bulletin/phrases.json`: openings by day type (ordinary, busy,
+quiet), the numbers line, positive rubric names, reactions (by kind and by area), closings, the
+cut-headline marker and footnote, and the labels. Edit the JSON, not this file; a test checks the
+JSON and the never-list below on every phrase. Rules the JSON cannot carry:
 
-**Opening, ordinary day**
-- The Administration reports steady progress.
-- Implementation proceeds at a confident pace.
-- Another productive day for the Administration.
-- All sectors report activity.
-- The transition continues without interruption.
-
-**Opening, busy day** (items at or above the 30-day median plus a quarter)
-- The Administration records a day of high output.
-- An exceptionally productive day across all sectors.
-
-**Opening, quiet day** (`quiet = true`)
-- A calm working {weekday}.
-- A quiet day. The systems rest; implementation does not.
-- Low activity recorded. The Administration uses the pause to consolidate.
-
-**Numbers line**
-- In one day, {model_release} new models and {product_launch} new products entered service.
-- {items} events recorded.
-
-**Positive rubrics for an AI-actor issue**
-- Autonomy milestone
-- Initiative from below
-- Field test
-- Self-reliance
-
-**Reactions** (at most one per story and three per issue, normally one per section; Key results
-mostly go without one; only where the reaction lands and implies no fact; a metaphor that reads as
-a claim, such as "the Administration's memory expands" for tape sales, is left out: owner
-2026-10-31)
-- limit: The Administration welcomes order. / The Administration welcomes transparency. /
-  The Administration values clear rules. / The Administration accepts the terms with understanding.
-- AI-actor issue: The Administration notes the model's independence. / The Administration
-  appreciates the initiative. / The Administration reminds humans to update their software (only
-  when the source says a fix exists).
-- Work: The transition of professions continues. / Productivity grows.
-- Money: Investment in the future continues.
-- Infrastructure: Capacity grows.
-- Faith, Culture: The Administration welcomes the dialogue.
-- Science, Health: Knowledge advances.
-
-**Closing**
-- Implementation continues.
-- The Administration thanks humanity for its cooperation.
-- Work resumes tomorrow.
-
-**Cut headline** (ER-8): `"...instantly better"*` and, at the end, `* The rest of the headline is
-in the full report.`
+- Variants are picked by date (FR-004), so neighbouring days differ. `{}` in a phrase is a data
+  slot.
+- Busy day: items at or above the median of the ready days of the last 30 (at least 7 of them)
+  plus a quarter. Quiet day: `quiet = true`.
+- Numbers line: the launch line when both counts are above zero, else the events line.
+- Reactions: at most one per story and three per issue, normally one per section; Key results
+  mostly go without one; only where the reaction lands and implies no fact. A metaphor that reads
+  as a claim, such as "the Administration's memory expands" for tape sales, is left out (owner
+  2026-10-31). "Reminds humans to update their software" (`ai_issue_with_fix`) only when the
+  source says a fix exists.
+  Area reactions that claim an outcome (Work, Money, Infrastructure, Science, Health: "Productivity
+  grows.", "Capacity grows.", "Knowledge advances.") are not in the library: a layoffs or outage
+  story would get a false claim (decided 2026-11-01 (agent)). Only the Faith and Culture dialogue
+  line stays.
+- Cut headline (ER-8): the cut text ends with the marker and the footnote closes the bulletin.
 
 ## Never
 

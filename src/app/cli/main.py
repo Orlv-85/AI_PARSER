@@ -17,6 +17,9 @@ from app.core.archive.capture import (
 from app.core.archive.capture import capture as archive_capture
 from app.core.archive.capture import import_db as archive_import_db
 from app.core.archive.capture import status as archive_status
+from app.core.bulletin.builder import build_bulletin
+from app.core.bulletin.phrases import load_phrases
+from app.core.bulletin.render import render_text
 from app.core.bulletin.world_change import (
     ASSESS_DEFAULT_MAX_USD,
     WORLD_CHANGE_MAX_USD_PER_DAY,
@@ -48,6 +51,7 @@ from app.observability import setup_json_logging
 from app.storage import SessionLocal, create_all
 from app.storage.archive import ArchiveRepo
 from app.storage.article_repo import ArticleRepo
+from app.storage.bulletin_input import load_day_input
 from app.storage.daily_signals import DailySignalRepo, OverrideConflict
 from app.storage.models_sql import AIEntityOverride
 from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
@@ -483,6 +487,42 @@ def bulletin_assess(
         typer.echo(f"bulletin assess: no digest for {target}", err=True)
         raise typer.Exit(2)
     typer.echo(json.dumps(summary, sort_keys=True))
+
+
+@bulletin_app.command("build")
+def bulletin_build(
+    report_date: str = typer.Option(..., "--date", help="Digest day, YYYY-MM-DD."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Print the bulletin, store nothing."),
+    as_json: bool = typer.Option(False, "--json", help="Print the bulletin object as JSON."),
+) -> None:
+    """Build the bulletin of a day from stored data (no model call; dry run only for now)."""
+    try:
+        target = date.fromisoformat(report_date)
+    except ValueError as exc:
+        raise typer.BadParameter("--date must be YYYY-MM-DD") from exc
+    if not dry_run:
+        typer.echo("bulletin build: only --dry-run is available", err=True)
+        raise typer.Exit(2)
+    logger = setup_json_logging()
+    with SessionLocal() as session:
+        data = load_day_input(
+            session, target, include_world=get_settings().world_stream_in_bulletin)
+    if data is None:
+        typer.echo(f"bulletin build: no digest for {target}", err=True)
+        raise typer.Exit(2)
+    library = load_phrases()
+    result = build_bulletin(data, library)
+    assessed = sum(1 for c in data.candidates if c.origin == "digest")
+    logger.info("bulletin_assessed_share", extra={
+        "date": target.isoformat(), "assessed": assessed, "digest_articles": data.digest_articles})
+    if result.bulletin is None:
+        logger.info("bulletin_skipped", extra={"date": target.isoformat(), "reason": result.reason})
+        typer.echo(f"bulletin build: skipped {target}: {result.reason}", err=True)
+    elif as_json:
+        counts = {"assessed": assessed, "digest_articles": data.digest_articles}
+        typer.echo(json.dumps({**result.bulletin.as_dict(), **counts}, indent=2, sort_keys=True))
+    else:
+        typer.echo(render_text(result.bulletin, library), nl=False)
 
 
 world_app = typer.Typer(help="World news stream (spec 018, item 5).")

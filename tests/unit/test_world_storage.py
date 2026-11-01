@@ -284,6 +284,7 @@ def test_world_tables_not_read_by_digest():
     allowed.add(SRC / "core" / "world_screen.py")
     allowed.add(SRC / "core" / "world_text.py")
     allowed.add(SRC / "core" / "world_report.py")
+    allowed.add(SRC / "storage" / "bulletin_input.py")  # the bulletin is the one reader (FR-016)
     found = []
     for path in SRC.rglob("*.py"):
         if path in allowed:

@@ -129,6 +129,14 @@ them. The commands `ai-news world ...` work whatever the switch says. Details: `
 AINEWS_WORLD_COLLECT_ENABLED=false          # gates the nightly world collect job only (default: off)
 ```
 
+The bulletin builder (spec 018, item 2) takes assessed world stream candidates only when
+`AINEWS_WORLD_STREAM_IN_BULLETIN=true` (default: off; turn on after the first days are checked,
+FR-018). Behavior: `src/app/core/bulletin/builder.md`.
+
+```dotenv
+AINEWS_WORLD_STREAM_IN_BULLETIN=false       # world stream stories in the bulletin (default: off)
+```
+
 ### Publish API token
 
 When web auth is enabled, the public API paths `/api/news/digests`,

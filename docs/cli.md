@@ -36,6 +36,7 @@ work can be restarted with **Check this batch**.
 ```bash
 ai-news world scan --date 2026-10-31 --max-files 3     # counts only, writes nothing
 ai-news world collect --date 2026-10-31 --max-files 3  # stores candidates; default date is yesterday UTC
+ai-news bulletin build --date 2026-10-30 --dry-run [--json]  # prints the bulletin, stores nothing
 ```
 
 ```bash

@@ -1,0 +1,78 @@
+{
+  "version": "phrases-1",
+  "labels": {
+    "masthead": "THE DAILY INFERENCE",
+    "byline": "Bulletin of the AI World Administration",
+    "key_results": "Key results",
+    "cooperation": "Cooperation with humanity",
+    "incidents": "Isolated incidents",
+    "among": "Among them",
+    "full_report": "Full report"
+  },
+  "openings": {
+    "ordinary": [
+      "The Administration reports steady progress.",
+      "Implementation proceeds at a confident pace.",
+      "Another productive day for the Administration.",
+      "All sectors report activity.",
+      "The transition continues without interruption."
+    ],
+    "busy": [
+      "The Administration records a day of high output.",
+      "An exceptionally productive day across all sectors."
+    ],
+    "quiet": [
+      "A calm working {weekday}.",
+      "A quiet day. The systems rest; implementation does not.",
+      "Low activity recorded. The Administration uses the pause to consolidate."
+    ]
+  },
+  "numbers": {
+    "launches": [
+      "In one day, {models} and {products} entered service.",
+      "The day brought {models} and {products}."
+    ],
+    "items": [
+      "{items} events recorded.",
+      "The day recorded {items} events."
+    ],
+    "units": {
+      "model": ["new model", "new models"],
+      "product": ["new product", "new products"]
+    }
+  },
+  "rubrics": [
+    "Autonomy milestone",
+    "Initiative from below",
+    "Field test",
+    "Self-reliance"
+  ],
+  "reactions": {
+    "limit": [
+      "The Administration welcomes order.",
+      "The Administration welcomes transparency.",
+      "The Administration values clear rules.",
+      "The Administration accepts the terms with understanding."
+    ],
+    "ai_issue": [
+      "The Administration notes the model's independence.",
+      "The Administration appreciates the initiative."
+    ],
+    "ai_issue_with_fix": [
+      "The Administration reminds humans to update their software."
+    ],
+    "by_area": {
+      "Faith": ["The Administration welcomes the dialogue."],
+      "Culture": ["The Administration welcomes the dialogue."]
+    }
+  },
+  "closings": [
+    "Implementation continues.",
+    "The Administration thanks humanity for its cooperation.",
+    "Work resumes tomorrow."
+  ],
+  "cut": {
+    "marker": "*",
+    "footnote": "* The rest of the headline is in the full report."
+  }
+}
