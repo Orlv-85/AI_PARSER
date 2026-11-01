@@ -441,7 +441,7 @@ web update (thread or process)               web/service.py: UpdateRunService
 | `core/ingestion/pipeline/sources.py` | `_managed_source_to_config`, fetch-state persist and validator clear | no |
 | `core/ingestion/pipeline/fetch.py` | Network fetch of enabled sources: validators, execution groups, thread pool | no |
 | `core/ingestion/pipeline/source_result.py` | `_process_source_result` (HTML or items path), `_log_source_metrics` | no |
-| `core/ingestion/pipeline/html_links.py` | `_process_html_links_two_stage`: list page links to stored articles; steps `_capped_links`, `_upsert_placeholders`, `_count_known_link`, `_fetch_new_item`, `_store_row`, counters in `_HtmlTally` | no |
+| `core/ingestion/pipeline/html_links.py` | `_process_html_links_two_stage`: list page links to stored articles | no |
 | `core/ingestion/pipeline/rss.py` | `_process_fetched_source_items`: feed items to stored articles | no |
 | `core/ingestion/pipeline/screening.py` | `_screen_candidate` (cache lookup `_resolve_cached`, then `_score_and_record`, `_pause`), cached-assessment checks (`_assessment_from_cached`, `_cached_score`, `_cached_category`), admission counters snapshot and restore | no |
 | `core/ingestion/pipeline/replay.py` | Pending admission candidates replayed before a source's fresh fetch | no |
