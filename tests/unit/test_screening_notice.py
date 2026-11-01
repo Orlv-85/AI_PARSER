@@ -67,15 +67,17 @@ def test_set_and_clear_collection_paused_write_flag_message_and_timestamp(tmp_pa
     Base.metadata.create_all(engine)
     sessions = sessionmaker(bind=engine, autoflush=False)
     with sessions() as session:
+        row = get_collection_status(session)
+        old = datetime(2000, 1, 1)
+        row.updated_at = old
         set_collection_paused(session)
-        row = session.get(CollectionStatus, 1)
-        assert row is not None
-        first = row.updated_at.replace(tzinfo=None)
         assert (row.paused, row.message) == (True, PAUSED_MESSAGE)
+        assert row.updated_at.replace(tzinfo=None) > old
         assert row not in session.dirty  # flushed
+        row.updated_at = old
         clear_collection_paused(session)
         assert (row.paused, row.message) == (False, None)
-        assert row.updated_at.replace(tzinfo=None) >= first
+        assert row.updated_at.replace(tzinfo=None) > old
         assert row not in session.dirty
         session.commit()
     with sessions() as session:
