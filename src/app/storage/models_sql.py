@@ -569,5 +569,44 @@ class WorldChangeAssessment(Base):  # pylint: disable=too-many-instance-attribut
     assessed_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
 
 
+class WorldCandidate(Base):  # pylint: disable=too-many-instance-attributes
+    """Candidate story of the world news stream (spec 018, item 5); never part of articles."""
+    __tablename__ = "world_candidates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    url_canonical_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    url: Mapped[str] = mapped_column(String(2048))
+    title: Mapped[str] = mapped_column(String(512))
+    source_domain: Mapped[str] = mapped_column(String(255))
+    language: Mapped[str] = mapped_column(String(16))
+    country_hint: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    first_seen_at: Mapped[datetime] = mapped_column(UTCDateTime(), index=True)
+    gdelt_file: Mapped[str] = mapped_column(String(64))
+    match_kind: Mapped[str] = mapped_column(String(16))  # strong|weak
+    cluster_key: Mapped[str] = mapped_column(String(64), index=True)
+    priority: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # new|screened_out|screened_in|text_ready|no_text|assessed|failed
+    state: Mapped[str] = mapped_column(String(16), index=True)
+    screen_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    last_error: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+
+
+class WorldFile(Base):
+    """State of one GDELT file (stamp and kind) so a rerun skips what is done."""
+    __tablename__ = "world_files"
+
+    stamp: Mapped[str] = mapped_column(String(14), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16), primary_key=True)
+    state: Mapped[str] = mapped_column(String(16))  # done|missing
+    rows: Mapped[int] = mapped_column(Integer, default=0)
+    matched: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+
+
 Index("ix_articles_published_at_desc", Article.published_at.desc())
 Index("ix_articles_rank_score_desc", Article.rank_score.desc())
