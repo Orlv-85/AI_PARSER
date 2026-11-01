@@ -437,7 +437,7 @@ web update (thread or process)               web/service.py: UpdateRunService
 | `core/ingestion/admission.py` | Admission choice mapping, `bounded_evidence`, `evidence_hash`, `admission_cache_key` | yes |
 | `core/ingestion/scoring.py` | `ai_relevance_score`, `freshness_score`, `rank_score` | yes |
 | `core/canonicalize.py` | `canonicalize_url`, `canonical_url_hash` (also used by signals, weekly, cleanup) | yes |
-| `storage/admission.py` | `admission_decisions` ledger (pending, settle, decision) and `collection_status` notice | no |
+| `storage/admission.py` | `admission_decisions` ledger (pending, settle, decision) and `collection_status` notice (`set_collection_paused` and `clear_collection_paused` share `_write_pause`; test: `test_set_and_clear_collection_paused_write_flag_message_and_timestamp`) | no |
 | `ingest/fetcher.py` | `Fetcher`: pooled client, per-source interval, retries, conditional headers | no |
 | `ingest/rss.py` | Feed parsing, `fetch_rss_with_metadata`, optional linked full text | no |
 | `ingest/html.py` | List links (lxml or selectolax), `HtmlListPageResult`, article page build | no |
