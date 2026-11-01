@@ -10,9 +10,9 @@ covers:
 
 Builds the Daily Inference bulletin of one day from the day's digest articles and their
 `world_change_assessments` answers (`world_change.md`), with the fixed phrases of the phrase library.
-Story text is the article title with outlet and link: the model writer is item 3. Item 2 has only a
-dry run (`ai-news bulletin build --date D --dry-run`): nothing is stored, no job, no page, no model
-call. Rules of voice and structure: `specs/018-daily-inference/voice.md`; editorial rules ER-* and
+Story text is the article title with outlet and link; model text is added by the writer (item 3,
+`writer.md`) and only with `--write`. Item 2 has only a dry run (`ai-news bulletin build --date D
+--dry-run`): nothing is stored, no job, no page, no model call without `--write`. Rules of voice and structure: `specs/018-daily-inference/voice.md`; editorial rules ER-* and
 FR-003/FR-004/FR-006 in `specs/018-daily-inference/spec.md`.
 
 ## Behavior
@@ -103,6 +103,12 @@ flowchart LR
   skipped day prints nothing on stdout, logs `bulletin_skipped` and exits 0. With `--json` the output also has `assessed` and `digest_articles`. Tests:
   `test_cli_dry_run_prints_text`, `test_cli_json_prints_the_object`, `test_cli_needs_dry_run`,
   `test_cli_no_digest`, `test_cli_skipped_day_logs_reason`.
+
+- The writer (`writer.md`) fills `Story.headline`, `site_note`, `telegram_note`, `gloss` and
+  `text_origin` (`title` here, `model` after the writer), and `Bulletin.headline_origin`,
+  `writer_version`, `writer_reason`; `render_text` prints a story's Telegram note instead of its
+  title when it has one, the reaction after the note. Without the writer the output is unchanged.
+  Tests: `test_render_text_matches_the_voice_layout`, `test_render_uses_telegram_notes`.
 
 ## Decisions
 

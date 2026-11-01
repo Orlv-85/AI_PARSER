@@ -4,7 +4,7 @@ Pure core: no database, no network, no model. Behavior, decisions and tests:
 src/app/core/bulletin/builder.md. Rules of voice: specs/018-daily-inference/voice.md.
 """
 import zlib
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import date
 from typing import Any
 
@@ -64,6 +64,12 @@ class Story:  # pylint: disable=too-many-instance-attributes
     event_type: str
     origin: str
     reaction: str | None = None
+    # Set by the writer (writer.md); text_origin says who wrote the text: title or model.
+    headline: str | None = None
+    site_note: list[str] = field(default_factory=list)
+    telegram_note: list[str] = field(default_factory=list)
+    gloss: str | None = None
+    text_origin: str = "title"
 
 
 @dataclass
@@ -88,6 +94,9 @@ class Bulletin:  # pylint: disable=too-many-instance-attributes
     full_report_url: str
     reactions_used: int = 0
     phrases_version: str = ""
+    headline_origin: str = "title"
+    writer_version: str = ""
+    writer_reason: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)

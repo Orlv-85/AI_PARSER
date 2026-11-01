@@ -26,6 +26,8 @@ from app.core.bulletin.world_change import (
     open_assessor,
     run_assessment,
 )
+from app.core.bulletin.writer import write_bulletin
+from app.core.bulletin.writer_run import WRITER_MAX_USD_PER_DAY, open_writer
 from app.core.daily.enrichment import publish_catch_up, publish_day
 from app.core.daily.signals import (
     EntityCommandError,
@@ -52,6 +54,7 @@ from app.storage import SessionLocal, create_all
 from app.storage.archive import ArchiveRepo
 from app.storage.article_repo import ArticleRepo
 from app.storage.bulletin_input import load_day_input
+from app.storage.bulletin_texts import load_sources as load_bulletin_sources
 from app.storage.daily_signals import DailySignalRepo, OverrideConflict
 from app.storage.models_sql import AIEntityOverride
 from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
@@ -490,39 +493,64 @@ def bulletin_assess(
 
 
 @bulletin_app.command("build")
-def bulletin_build(
+def bulletin_build(  # pylint: disable=too-many-locals
     report_date: str = typer.Option(..., "--date", help="Digest day, YYYY-MM-DD."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Print the bulletin, store nothing."),
     as_json: bool = typer.Option(False, "--json", help="Print the bulletin object as JSON."),
+    write: bool = typer.Option(False, "--write", help="Call the model writer (paid, one call)."),
+    max_usd: str = typer.Option(
+        WRITER_MAX_USD_PER_DAY, "--max-usd", help="Writer cap in USD, at most the daily cap."),
 ) -> None:
-    """Build the bulletin of a day from stored data (no model call; dry run only for now)."""
+    """Build the bulletin of a day from stored data; a model call only with --write."""
     try:
         target = date.fromisoformat(report_date)
-    except ValueError as exc:
-        raise typer.BadParameter("--date must be YYYY-MM-DD") from exc
+        too_high = microdollars(max_usd) > microdollars(WRITER_MAX_USD_PER_DAY)
+    except (ValueError, ArithmeticError) as exc:
+        raise typer.BadParameter(
+            "--date must be YYYY-MM-DD and --max-usd a positive amount") from exc
+    if too_high:
+        raise typer.BadParameter(f"--max-usd is above the cap {WRITER_MAX_USD_PER_DAY}")
     if not dry_run:
         typer.echo("bulletin build: only --dry-run is available", err=True)
         raise typer.Exit(2)
+    settings = get_settings()
+    key = settings.ds_api_key
+    if write and (key is None or not key.get_secret_value().strip()):
+        typer.echo("bulletin build: --write needs DS_API_KEY", err=True)
+        raise typer.Exit(2)
     logger = setup_json_logging()
     with SessionLocal() as session:
-        data = load_day_input(
-            session, target, include_world=get_settings().world_stream_in_bulletin)
-    if data is None:
-        typer.echo(f"bulletin build: no digest for {target}", err=True)
-        raise typer.Exit(2)
-    library = load_phrases()
-    result = build_bulletin(data, library)
+        data = load_day_input(session, target, include_world=settings.world_stream_in_bulletin)
+        if data is None:
+            typer.echo(f"bulletin build: no digest for {target}", err=True)
+            raise typer.Exit(2)
+        library = load_phrases()
+        result = build_bulletin(data, library)
+        texts = {}
+        if write and result.bulletin:
+            texts = load_bulletin_sources(session, result.bulletin)
     assessed = sum(1 for c in data.candidates if c.origin == "digest")
     logger.info("bulletin_assessed_share", extra={
         "date": target.isoformat(), "assessed": assessed, "digest_articles": data.digest_articles})
-    if result.bulletin is None:
+    bulletin = result.bulletin
+    if bulletin is None:
         logger.info("bulletin_skipped", extra={"date": target.isoformat(), "reason": result.reason})
         typer.echo(f"bulletin build: skipped {target}: {result.reason}", err=True)
-    elif as_json:
-        counts = {"assessed": assessed, "digest_articles": data.digest_articles}
-        typer.echo(json.dumps({**result.bulletin.as_dict(), **counts}, indent=2, sort_keys=True))
+        return
+    extra: dict[str, object] = {"assessed": assessed, "digest_articles": data.digest_articles}
+    if write:
+        with open_writer(settings, utc_today(), max_usd=float(max_usd)) as writer:
+            written = write_bulletin(bulletin, texts, writer.ask)
+            written.summary["cost_usd"] = writer.cost_usd()
+        bulletin = written.bulletin
+        extra["writer"] = written.summary
+        logger.info("bulletin_writer", extra={"date": target.isoformat(), **written.summary})
+    if as_json:
+        typer.echo(json.dumps({**bulletin.as_dict(), **extra}, indent=2, sort_keys=True))
     else:
-        typer.echo(render_text(result.bulletin, library), nl=False)
+        typer.echo(render_text(bulletin, library), nl=False)
+        if write:
+            typer.echo(json.dumps(extra["writer"], sort_keys=True), err=True)
 
 
 world_app = typer.Typer(help="World news stream (spec 018, item 5).")

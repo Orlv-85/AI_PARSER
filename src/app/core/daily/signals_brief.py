@@ -6,7 +6,7 @@ signals ledger and stores the accepted sentences.
 import json
 import re
 import unicodedata
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -289,6 +289,27 @@ def _span_ok(span: Any) -> bool:
         and len(span) <= 300
 
 
+def grounding_error(text: str, numbers: set[str], names: str, *,
+                    starters: frozenset[str] = STARTERS,
+                    canon: Callable[[str], str] = str,
+                    words: Collection[str] | None = None) -> str | None:
+    """Code of the first number not in `numbers` or name not in `names` (casefolded text), else
+    None. A name is a capitalised word or a word with a digit, except sentence `starters`;
+    `canon` maps a number before the comparison (the sets must hold canonical forms). With `words`
+    (casefolded whole words) a name must be one of them; otherwise it may be a substring of
+    `names`."""
+    if any(canon(n) not in numbers for n in NUMBER.findall(text)):
+        return "unsupported_number"
+    for word in WORD.findall(text):
+        if word.isdigit() or word in starters or \
+                not (word[0].isupper() or any(c.isdigit() for c in word)):
+            continue
+        stem = re.sub(r"'s$", "", word).casefold()
+        if stem not in (names if words is None else words):
+            return "unsupported_name"
+    return None
+
+
 # pylint: disable-next=too-many-branches
 def _sentence(raw: Any, ctx: _Context, seen: set[Any]) -> Sentence:
     if not isinstance(raw, dict) or set(raw) != {"text", "ids", "quote"}:
@@ -312,15 +333,10 @@ def _sentence(raw: Any, ctx: _Context, seen: set[Any]) -> Sentence:
     numbers = set(NUMBER.findall(cited)).union(*(ctx.outlets.get(i, set()) for i in ids))
     if ctx.packet["quiet"]:
         numbers.add(str(ctx.packet["digest_items"]))
-    if any(n not in numbers for n in NUMBER.findall(norm(text))):
-        raise BriefInvalid("unsupported_number")
     names = (cited + " " + " ".join(n for i in ids for n in ctx.names.get(i, []))).casefold()
-    for word in WORD.findall(norm(text)):
-        if word.isdigit() or word in STARTERS or \
-                not (word[0].isupper() or any(c.isdigit() for c in word)):
-            continue
-        if re.sub(r"'s$", "", word).casefold() not in names:
-            raise BriefInvalid("unsupported_name")
+    code = grounding_error(norm(text), numbers, names)
+    if code:
+        raise BriefInvalid(code)
     key = tuple(sorted(ids))
     if key in seen:
         raise BriefInvalid("duplicate_sentence")

@@ -1,0 +1,74 @@
+{
+  "headline": "Model completes Firefox assignment unaided",
+  "stories": [
+    {
+      "id": "s1",
+      "headline": "AI-first law firm bids for a Wall Street name",
+      "site": [
+        "Crosby, a law firm built around AI that is two years old, wants to take over the brand and assets of Weil Gotshal.",
+        "Weil Gotshal is a famed Wall Street firm and is preparing to dissolve.",
+        "Crosby is hiring some of the 1,200 lawyers of Weil.",
+        "Crosby says partners sign every document that its AI helped to draft."
+      ],
+      "telegram": [
+        "Crosby, a two-year-old law firm built around AI, bid for the brand and assets of Weil Gotshal and is hiring some of its 1,200 lawyers."
+      ],
+      "gloss": "Weil Gotshal, a famed Wall Street firm preparing to dissolve"
+    },
+    {
+      "id": "s2",
+      "headline": "Open model clones a voice from one clip",
+      "site": [
+        "Edge0 published an open model that copies a voice after hearing a single audio clip.",
+        "The model works in 23 languages and runs on a laptop GPU.",
+        "According to Edge0, the cloned voice keeps the accent of the speaker.",
+        "The weights can be downloaded for free."
+      ],
+      "telegram": [
+        "Edge0 released an open model that copies a voice from one clip, in 23 languages."
+      ],
+      "gloss": null
+    },
+    {
+      "id": "s3",
+      "headline": "Fujifilm plans five times more magnetic tape",
+      "site": [
+        "Fujifilm will spend about $63 million to produce five times more magnetic tape.",
+        "The company names the data growth of generative AI as the reason.",
+        "It says that archives of training data drive the demand."
+      ],
+      "telegram": [
+        "Fujifilm will put about $63 million into five times more magnetic tape, with the data growth of generative AI as the stated reason."
+      ],
+      "gloss": null
+    },
+    {
+      "id": "s4",
+      "headline": "An open model learned to break Firefox on its own",
+      "site": [
+        "Epoch AI researchers gave the Chinese open-weight model GLM 5.3 a Firefox version and basic tools, and let it work alone.",
+        "Mozilla hides security fixes among routine changes, and the model saw through this and chained the bugs into a working attack.",
+        "The quickest attack needed 12 hours and about $1,000 in API fees.",
+        "Mozilla fixed the hole on October 27, in Firefox 159.0."
+      ],
+      "telegram": [
+        "Given basic tools, the open model GLM 5.3 found Firefox security fixes and built working attacks on its own; the fastest took 12 hours.",
+        "Mozilla closed the hole on October 27."
+      ],
+      "gloss": "Epoch AI, a research group"
+    },
+    {
+      "id": "s5",
+      "headline": "OpenAI rewrites its Model Spec",
+      "site": [
+        "OpenAI has rewritten its Model Spec, the rulebook for its models.",
+        "Under the new text the models must not block oversight, correction or shutdown.",
+        "The changes are already in force, and the company says the rules will be reviewed."
+      ],
+      "telegram": [
+        "OpenAI rewrote its Model Spec: its models must not block oversight, correction or shutdown."
+      ],
+      "gloss": null
+    }
+  ]
+}
