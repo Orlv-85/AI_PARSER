@@ -379,6 +379,16 @@ def test_archive_due_skips_world_documents() -> None:
     assert repo.due(None, NOW, ids=[document.id]) == [document]
 
 
+def test_archive_status_skips_world_documents() -> None:
+    session = _session()
+    _world_document(session)
+    _article(session, "real")
+    capture_module.archive_articles(session, session.scalars(select(Article)).all())
+    report = capture_module.status(session, now=NOW)
+    assert report["states"] == {"pending": 1}
+    assert report["top_hosts_without_text"] == [{"host": "example.com", "documents": 1}]
+
+
 def test_real_article_takes_over_a_world_document() -> None:
     session = _session()
     _world_document(session)

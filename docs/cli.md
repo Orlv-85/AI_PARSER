@@ -38,7 +38,14 @@ ai-news world scan --date 2026-10-31 --max-files 3     # counts only, writes not
 ai-news world collect --date 2026-10-31 --max-files 3  # stores candidates; default date is yesterday UTC
 ```
 
-Both download GDELT files. `collect` skips files that are already done and prints one JSON summary.
+```bash
+ai-news world screen --date 2026-10-31 [--dry-run]   # Jev title screen, then FR-001 for the top with text (paid)
+ai-news world texts --date 2026-10-31 [--dry-run]    # page text of the top screened-in stories, no key
+ai-news world report --date 2026-10-31               # read-only first days check (JSON)
+```
+
+`scan` and `collect` download GDELT files. `collect` skips files that are already done and prints one
+JSON summary. `report` writes nothing: use its output for `specs/018-daily-inference/records/world-days-<date>.md`.
 Behavior: `src/app/core/world/world.md`; the nightly job: `docs/deploy.md`.
 
 ## Show configured sources

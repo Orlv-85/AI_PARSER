@@ -600,7 +600,11 @@ def test_archive_job_script_is_isolated(tmp_path):
     assert "run_daily_fetch_job" not in text and "run_daily_digest_job" not in text
 
 
-def _world_job(tmp_path, *, enabled="true", env_file=None, lock_exit=0, collect_exit=0):
+WORLD_LIMITS = {"collect": 2400, "screen": 2700, "texts": 900, "screen-b": 900}
+
+
+def _world_job(tmp_path, *, enabled="true", env_file=None, lock_exit=0, fail=None, jev_key="k"):
+    """Run the world job with fake flock, timeout and docker; `fail` is {"world texts": 124}."""
     scripts = tmp_path / "scripts"
     scripts.mkdir(parents=True)
     (scripts / "run_daily_world_job.sh").write_text(
@@ -610,51 +614,111 @@ def _world_job(tmp_path, *, enabled="true", env_file=None, lock_exit=0, collect_
         (tmp_path / ".env").write_text(env_file, encoding="utf-8")
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    for tool in ("sh", "cat", "dirname", "basename"):
+    for tool in ("sh", "cat", "dirname", "basename", "date"):
         (bin_dir / tool).symlink_to(shutil.which(tool))
+    fail = fail or {}
     fakes = {
         "flock": ('printf "flock %s\\n" "$*" >> "$TEST_LOG"\n'
                   '[ "$LOCK_EXIT" -eq 0 ] || exit "$LOCK_EXIT"\nshift 3\nexec "$@"\n'),
         "timeout": 'printf "timeout %s\\n" "$*" >> "$TEST_LOG"\nshift 3\nexec "$@"\n',
         "docker": ('printf "docker %s|image=%s\\n" "$*" "$APP_IMAGE" >> "$TEST_LOG"\n'
-                   'case "$*" in *"world collect"*)'
-                   ' echo summary-stdout; exit "$COLLECT_EXIT";; esac\nexit 0\n'),
+                   'case "$*" in *"world collect"*) echo collect-stdout;;'
+                   ' *"world screen"*) echo screen-stdout;; *"world texts"*) echo texts-stdout;;'
+                   ' esac\n'
+                   + "".join(f'case "$*" in *"{step}"*) exit {code};; esac\n'
+                             for step, code in fail.items()) + "exit 0\n"),
     }
     for name, body in fakes.items():
         (bin_dir / name).write_text("#!/bin/sh\n" + body, encoding="utf-8")
         (bin_dir / name).chmod(0o755)
     log = tmp_path / "calls"
     env = {"PATH": str(bin_dir), "HOME": str(tmp_path), "TEST_LOG": str(log), "APP_IMAGE": "",
-           "LOCK_EXIT": str(lock_exit), "COLLECT_EXIT": str(collect_exit)}
+           "LOCK_EXIT": str(lock_exit)}
     if enabled is not None:
         env["AINEWS_WORLD_COLLECT_ENABLED"] = enabled
+    if jev_key is not None:
+        env["JEV_API_KEY"] = jev_key
     result = subprocess.run(["sh", str(scripts / "run_daily_world_job.sh")], env=env,
                             cwd=tmp_path, capture_output=True, text=True, check=False)
     return result, log.read_text(encoding="utf-8").splitlines() if log.exists() else []
 
 
-def test_world_job_script_is_isolated(tmp_path):
+def _world_runs(calls):
+    """The `docker compose run` calls of a job, as the command after `ai-news `."""
+    return [call.split("|", maxsplit=1)[0].split(" ai-news ", maxsplit=1)[1]
+            for call in calls if call.startswith("docker compose")]
+
+
+def test_world_job_script_runs_the_steps_in_order(tmp_path):
     result, calls = _world_job(tmp_path / "ok")
+    day = (datetime.now(UTC) - timedelta(days=1)).date().isoformat()
     assert (result.returncode, result.stderr) == (0, "")
-    assert result.stdout == ""
+    assert result.stdout.splitlines() == ["screen-stdout", "texts-stdout", "screen-stdout"]
     assert calls[0].startswith("flock -w 1800 /tmp/ai-news-auto-update.lock sh ")
     assert calls[0].endswith("/scripts/run_daily_world_job.sh --locked")
-    collect = ("docker compose -f docker-compose.prod.yml run --rm --name ai-news-world app "
-               "ai-news world collect|image=release:tested")
-    assert calls[-2:] == ["timeout -k 30 3300 " + collect.split("|", maxsplit=1)[0], collect]
+    assert _world_runs(calls) == [
+        "world collect", f"world screen --date {day}", f"world texts --date {day}",
+        f"world screen --date {day}"]
+    timeouts = [call for call in calls if call.startswith("timeout -k 30 ")]
+    assert [call.split()[3] for call in timeouts] == [
+        str(WORLD_LIMITS[step]) for step in ("collect", "screen", "texts", "screen-b")]
+    assert all(call.endswith("|image=release:tested") for call in calls if "|image=" in call)
+    assert not any("--max-usd" in call for call in calls)
+    # a container removal before each step, and none of them is a step
     assert calls[1:3] == ["timeout -k 10 60 docker rm -f ai-news-world",
                           "docker rm -f ai-news-world|image=release:tested"]
+    assert sum(call.startswith("docker rm -f") for call in calls) == 4
 
-    result, calls = _world_job(tmp_path / "timeout", collect_exit=124)
+
+@pytest.mark.parametrize("step,code", [
+    ("world collect", 124), ("world screen", 1), ("world texts", 137)])
+def test_world_job_script_failed_step_does_not_stop_the_next(tmp_path, step, code):
+    result, calls = _world_job(tmp_path / "fail", fail={step: code})
+    day = (datetime.now(UTC) - timedelta(days=1)).date().isoformat()
     assert result.returncode == 0
-    assert result.stdout == ""
-    assert result.stderr.splitlines() == [
-        "world collect failed or timed out (exit 124); other jobs are unaffected"]
-    assert calls[-2:] == ["timeout -k 10 60 docker rm -f ai-news-world",
-                          "docker rm -f ai-news-world|image=release:tested"]
+    assert len(_world_runs(calls)) == 4  # all four steps were tried
+    assert result.stderr.count("failed or timed out") == (2 if step == "world screen" else 1)
+    name = "screen" if step == "world screen" else step.split()[1]
+    assert f"world {name} failed or timed out (exit {code}); other jobs are unaffected" in (
+        result.stderr)
+    assert _world_runs(calls)[-1] == f"world screen --date {day}"
+    assert sum(call.startswith("docker rm -f") for call in calls) == (
+        6 if step == "world screen" else 5)  # one before each step, one after each failure
 
+
+def test_world_job_script_skips_jev_without_key(tmp_path):
+    day = (datetime.now(UTC) - timedelta(days=1)).date().isoformat()
+    result, calls = _world_job(tmp_path / "nokey", jev_key=None)
+    assert result.returncode == 0
+    assert _world_runs(calls) == ["world collect", f"world texts --date {day}"]
+    assert result.stderr.splitlines() == [
+        "world screen skipped: JEV_API_KEY is not set",
+        "world screen-b skipped: JEV_API_KEY is not set"]
+    result, calls = _world_job(tmp_path / "envfile", jev_key=None,
+                               env_file='JEV_API_KEY="from-env-file"  # key\n')
+    assert result.stderr == ""
+    assert len(_world_runs(calls)) == 4
+    result, calls = _world_job(tmp_path / "empty", jev_key="", env_file="JEV_API_KEY=\n")
+    assert len(_world_runs(calls)) == 2
+
+
+def test_world_job_step_limits_fit_the_unit_timeout():
+    text = Path("scripts/run_daily_world_job.sh").read_text(encoding="utf-8")
+    limits = {name: int(value) for name, value in re.findall(r"^([A-Z_]+_LIMIT)=(\d+)", text, re.M)}
+    assert limits == {"COLLECT_LIMIT": 2400, "SCREEN_LIMIT": 2700, "TEXTS_LIMIT": 900,
+                      "ASSESS_LIMIT": 900}
+    wait = int(re.search(r"^LOCK_WAIT=(\d+)", text, re.M).group(1))
+    installer = Path("scripts/install_daily_timers.sh").read_text(encoding="utf-8")
+    unit = int(re.search(r"daily-world.service.*?TimeoutStartSec=(\d+)", installer, re.S).group(1))
+    kill_grace, removal = 30, 60
+    worst = wait + sum(limits.values()) + len(limits) * (kill_grace + removal)
+    assert worst < unit
+
+
+def test_world_job_script_is_isolated(tmp_path):
     result, calls = _world_job(tmp_path / "locked", lock_exit=1)
     assert result.returncode == 0
+    assert result.stdout == ""
     assert result.stderr.splitlines() == [
         "world collect skipped: host lock not acquired within 1800 s"]
     assert [call for call in calls if call.startswith("docker")] == []
@@ -662,7 +726,7 @@ def test_world_job_script_is_isolated(tmp_path):
     text = Path("scripts/run_daily_world_job.sh").read_text(encoding="utf-8")
     for other in ("fetch", "digest", "archive"):
         assert f"run_daily_{other}_job" not in text
-    assert "world screen" not in text
+    assert "NAME=ai-news-world" in text
 
 
 @pytest.mark.parametrize("enabled,env_file", [

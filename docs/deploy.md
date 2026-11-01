@@ -387,17 +387,29 @@ Behavior: `src/app/core/world/world.md`. The systemd timer `ai-news-daily-world`
 by every deploy with the other daily timers, so a deploy does start the timer) runs
 `scripts/run_daily_world_job.sh`. The job is off by default: it does nothing and logs one line unless
 `AINEWS_WORLD_COLLECT_ENABLED=true` is in the server `.env` (about 820 MB of download a day; enabling it
-is a separate decision). When on, it collects yesterday's GDELT files and appends to
-`logs/daily-world.log` one `world_collect_finished` JSON line, or one stderr line when the lock was not
-acquired or the run failed or timed out. Without `--date` the job collects yesterday and then the
-day before, so a missed night is recovered; a complete day costs no download.
+is a separate decision). When on, it holds the host lock and runs four steps for yesterday (UTC), each
+in its own container with its own timeout: `world collect` (also the day before, so a missed night is
+recovered; a complete day costs no download), `world screen` (Jev, paid), `world texts` (page text of
+the top stories through the archive), `world screen` again (FR-001 questions on the new texts). A
+failed or timed-out step is one stderr line and the next steps go on. Without `JEV_API_KEY` in the
+environment or the `.env` the two Jev steps log `world screen skipped` and do not start. The Jev
+spend of a UTC day is capped at $0.10 (the world journal). `logs/daily-world.log` gets the
+`world_collect_finished` JSON line, the JSON summaries of `screen` and `texts`, and one stderr line
+per skipped or failed step or when the lock was not acquired. The script and the unit come from the
+host checkout (deploy checks out the release tag there; the container only runs the CLI from the release image), so a
+deploy updates both the unit (`install_daily_timers.sh`) and the script.
 
 ```bash
 grep world_collect_finished logs/daily-world.log | tail -1 | python3 -m json.tool
-grep -E 'world collect (skipped|failed)' logs/daily-world.log | tail -5
+grep -E 'world [a-z-]+ (skipped|failed)' logs/daily-world.log | tail -5
+export APP_IMAGE="$(cat .last_deploy_image)"
+docker compose -f docker-compose.prod.yml run --rm app ai-news world report --date 2026-10-31
 export APP_IMAGE="$(cat .last_deploy_image)"
 docker compose -f docker-compose.prod.yml run --rm app ai-news world collect --date 2026-10-31
 ```
+
+`world report` is read-only and prints the counts, the `world_change` answers, the Jev cost of the day and
+20 sampled stories; it is the input of `records/world-days-<date>.md` (spec 018, FR-018).
 
 A `partial` day (more than `MAX_MISSING_FILES_OK` missing files) is finished by running the last command again: files
 that are done are skipped. Use `--max-files N` for a small trial run.

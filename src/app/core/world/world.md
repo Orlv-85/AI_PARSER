@@ -6,6 +6,7 @@ covers:
   - src/app/core/world_collect.py
   - src/app/core/world_screen.py
   - src/app/core/world_text.py
+  - src/app/core/world_report.py
   - scripts/run_daily_world_job.sh
 -->
 # World news stream
@@ -15,8 +16,9 @@ bulletin (spec `specs/018-daily-inference/spec.md`, FR-014..FR-018). Plan:
 `specs/018-daily-inference/records/plan-item5-world-sources-2026-10-31.md`. Shipped so far: the
 keyword filter (W1), the GDELT reader (W2, no database), the storage tables (W3), the collect
 command with its nightly job (W4) and the Jev title screen with the FR-001 questions for the top
-candidates (W5, command `ai-news world screen`, not on a timer) and the text download through the
-archive (W6, command `ai-news world texts`, not on a timer).
+candidates (W5, command `ai-news world screen`) and the text download through the archive (W6,
+command `ai-news world texts`). W7 wires the four commands into the nightly job and adds the
+read-only first days check `ai-news world report`.
 
 ## Behavior
 
@@ -239,8 +241,8 @@ flowchart LR
   `test_world_job_script_switch_on_from_env_file`, `test_world_job_script_env_file_forms`.
 - `scripts/run_daily_world_job.sh` is shaped like the archive job: host lock
   (`/tmp/ai-news-auto-update.lock`, 1800 s wait), the release image from `.last_deploy_image`,
-  `timeout`, one container name `ai-news-world`, always exit 0, a failure or timeout is one stderr
-  line. The timer `ai-news-daily-world` runs it at 04:00 UTC. Tests: `test_world_job_script_is_isolated`,
+  `timeout`, one container name `ai-news-world`, always exit 0. The steps are in the next section.
+  The timer `ai-news-daily-world` runs it at 04:00 UTC. Tests: `test_world_job_script_is_isolated`,
   `test_install_timers_includes_world`, `test_sudoers_sample_matches_the_sudo_calls_of_the_scripts`.
   `install_daily_timers.sh` has no `disable` path for the world timer; the switch is the way to turn
   the job off (no test).
@@ -374,8 +376,8 @@ flowchart LR
   `would_follow` (cluster followers and late outlets), `would_assess` (`text_ready` in the top;
   the text seam is not called; the top is cut to `WORLD_TOP_N`),
   `awaiting_text` and `retryable_failed`. Tests: `test_cli_world_screen_dry_run_sends_nothing_writes_nothing`, `test_dry_run_respects_top_n`.
-- The command is not on a timer and not in the 04:00 job, which stays collect-only; wiring comes
-  with W7. Tests: `test_world_job_script_is_isolated`.
+- The nightly job runs the command twice a night, see "Nightly job (W7)". Tests:
+  `test_world_job_script_runs_the_steps_in_order`.
 - The command reads text through `archive_text_source`, so step B asks about the candidates whose
   text `world texts` stored. Tests: `test_cli_world_screen_reads_archive_text`.
 
@@ -444,6 +446,9 @@ flowchart LR
   `test_world_text_paywall_and_empty_page_are_no_text`,
   `test_world_text_http_error_is_no_text_with_reason`,
   `test_world_text_existing_failed_or_gave_up_document_is_no_text`.
+  Only `pending` documents are downloaded: an `archived` one is read, a `failed` one is never
+  retried here, even when its `next_attempt_at` has passed. Tests:
+  `test_world_text_downloads_only_pending_documents`.
 - When the downloader reports an outage, or a pending page was not attempted (time or per-host
   cap), the candidate stays `screened_in` and no `no_text` is written; the archive keeps its own
   attempts and cache as its outage rule says. The next run takes it. Tests:
@@ -464,8 +469,71 @@ flowchart LR
   `text_ready`, `no_text`, `reasons` (`no_text` by issue), `kept` (left `screened_in`), `outage`.
   Tests: `test_cli_world_texts_summary`.
 - The order of a day is `world screen` (step A), `world texts`, `world screen` again (step B reads
-  the new text); the second screen asks nothing in step A. Wiring and the timer are W7. Tests: none
-  (a rule of use).
+  the new text); the second screen asks nothing in step A. The nightly job runs this order, see the
+  next section. Tests: `test_world_job_script_runs_the_steps_in_order`.
+
+### Nightly job (W7)
+
+```mermaid
+flowchart LR
+  timer["Timer 04:00 UTC"] --> sw{"AINEWS_WORLD_COLLECT_ENABLED on?"}
+  sw -- no --> skip["One log line, exit 0"]
+  sw -- yes --> lock["Host lock, release image"]
+  lock --> c["collect (COLLECT_LIMIT)"]
+  c --> k{"JEV_API_KEY set?"}
+  k -- no --> t["texts (TEXTS_LIMIT)"]
+  k -- yes --> s["screen --date D-1 (SCREEN_LIMIT)"]
+  s --> t
+  t --> k2{"JEV_API_KEY set?"}
+  k2 -- yes --> b["screen --date D-1 again (ASSESS_LIMIT)"]
+  k2 -- no --> end0["exit 0"]
+  b --> end0
+```
+
+- The job processes the UTC day `D-1` (yesterday when the job starts, after the lock). In order:
+  `world collect` (no `--date`: it keeps its own catch-up of `D-2`), `world screen --date D-1`
+  (step A, plus step B on the texts already stored), `world texts --date D-1`, `world screen
+  --date D-1` again (step B on the new texts; it asks nothing in step A). All four run in the one
+  host lock hold, because `world texts` shares `data/archive/source-cache` with the archive job.
+  Tests: `test_world_job_script_runs_the_steps_in_order`.
+- Each step is one container (`ai-news-world`, removed before and after) under its own `timeout`:
+  COLLECT_LIMIT, SCREEN_LIMIT, TEXTS_LIMIT, ASSESS_LIMIT (the second screen), each plus a
+  30 s kill grace. Lock wait, the limits, the grace and the container removals together stay below
+  TimeoutStartSec of the unit. Tests: `test_world_job_step_limits_fit_the_unit_timeout`.
+- A failed or timed-out step is one stderr line (`world <step> failed or timed out (exit N); other
+  jobs are unaffected`) and the next steps run on whatever is stored: a failed collect still lets
+  screen work on the stored candidates, a cut screen leaves its candidates `new` for the next run.
+  The script always exits 0. Tests: `test_world_job_script_failed_step_does_not_stop_the_next`.
+- Jev steps (`screen`, both runs) need `JEV_API_KEY` in the environment or in the host `.env`, read
+  the same way as the switch. Without it each logs `world screen skipped: JEV_API_KEY is not set`
+  and is not started; `collect` and `texts` run. Tests: `test_world_job_script_skips_jev_without_key`.
+- Summary lines: `collect` logs `world_collect_finished` (its stdout copy is dropped), `screen` and
+  `texts` print their JSON summary, which the unit appends to `logs/daily-world.log`.
+- Money does not change: both screen runs of a night draw on the one journal of the real UTC day
+  with the cap `WORLD_JEV_MAX_USD_PER_DAY` ($0.10), see "Cost cap and failures". The job passes no
+  `--max-usd`. Tests: `test_world_job_script_runs_the_steps_in_order` (no `--max-usd`).
+- The switch stays off by default and nothing else changes: no bulletin reads the stream yet.
+  Tests: `test_world_job_script_switch_off_does_nothing`.
+
+### First days check (W7)
+
+- `ai-news world report --date D` is read-only: no table is created, nothing is written, no file
+  is made, no Jev key is needed. It prints one JSON object for the window of `world screen`
+  (GDELT days `D-1` and `D`): `candidates`, `clusters`, `states` (count per state), `screened_in`
+  (states `screened_in`, `text_ready`, `no_text`, `assessed`), `screened_out`, `text_ready`,
+  `no_text`, `no_text_reasons` (by the issue after `text:` in `last_error`), `failed`,
+  `assessed`, `world_change` (counts of the `world_change` answer of the assessed ones, version
+  `WORLD_CHANGE_VERSION`), `cost` and `sample`. Tests: `test_world_report_counts_the_window`,
+  `test_world_report_world_change_counts_and_sample`, `test_cli_world_report_prints_json`.
+- `cost` has the world journal of the real UTC day `D` and of `D+1` (the night run of day `D`
+  falls on `D+1`): `calls`, `committed_usd` and `priced_usd` per day, or null when the file does
+  not exist. The journal is opened read-only and never created. Tests:
+  `test_world_report_cost_reads_journal_read_only`.
+- `sample` is up to 20 assessed stories, highest `priority` first, then id: title, domain and the
+  stored answers (`world_change`, `area`, `actor`, `harm_to_people`). Tests:
+  `test_world_report_world_change_counts_and_sample`.
+- The report is the input of `records/world-days-<date>.md`; the command writes no file. Tests:
+  `test_world_report_writes_nothing`.
 
 ## Decisions
 
@@ -530,6 +598,21 @@ flowchart LR
   2026-11-01).
 - Orchestration is `core/world_screen.py` (it imports storage); the question, state and parser are
   pure and live in `core/world/screen.py` (decided 2026-11-01 (agent)).
+- One lock hold for the whole night (collect to second screen) and one container per step: the text
+  download shares the archive cache with the archive job, and a container per step gives each
+  step its own timeout and a clean kill (decided 2026-11-01 (agent)).
+- Step limits: collect gets COLLECT_LIMIT for two days (the gate run took about 4 minutes for a
+  day, so the first night with a catch-up day needs about 10; the rest is the worst case of a
+  gap-ridden day: 12 missing files in a row, 3 tries 30 s apart); screen gets SCREEN_LIMIT
+  for 1,842 requests, one at a time, a Jev request being estimated at 0.5 to 1.5 s (the gate run did
+  not time it; no timeout is set by the code except the 60 s of `ASSESS_TIMEOUT_SECONDS`), so the
+  full day may not fit in a slow night and the rest then waits for the next run; the first days
+  check shows the real time (decided 2026-11-01 (agent)).
+- The report prints the journal of days `D` and `D+1`, not one: a manual run on `D` and the night
+  run of `D` are different real days (decided 2026-11-01 (agent)).
+- `archive status` drops world documents like coverage does instead of listing them apart: the
+  operator reads it for the nightly capture, and the world numbers live in `world report`
+  (decided 2026-11-01 (agent)).
 - Real token sizes of A and B are not measured yet: the plan assumed 300 tokens for A and
   acceptance of a title-only state; the gate run replaces the assumptions.
 
@@ -601,7 +684,11 @@ flowchart LR
   documents with `archive_articles` and downloads with `download_documents`
   (`core/archive/capture.py`, see `capture.md`).
 - `storage/world.py`: `transition` keeps the reason for `no_text`.
-- `cli/main.py`: `world` Typer group with `scan`, `collect`, `screen` and `texts`.
+- `core/world_report.py`: `build_report`, `read_journal_cost`; read-only, imports storage.
+- `scripts/run_daily_world_job.sh`: env_value (switch and key from the environment or `.env`),
+  run_step, the four *_LIMIT variables; the unit limit is in `install_daily_timers.sh`.
+- `storage/archive.py`: `state_counts` and `hosts_without_text` skip world documents.
+- `cli/main.py`: `world` Typer group with `scan`, `collect`, `screen`, `texts` and `report`.
 - Change a keyword or a drop rule in the constant named above and extend the fixture test.
 
 ## Tests
@@ -615,6 +702,8 @@ flowchart LR
   journal in a temp directory and a SQLite file.
 - `tests/unit/test_world_text.py`: W6 rules above, with `httpx.MockTransport` for the pages and a
   SQLite file; the downloader runs for real on a temp cache.
-- `tests/unit/test_deepseek_digest.py`: the job script test; `tests/unit/test_daily_timers.py`: timer.
+- `tests/unit/test_world_report.py`: the report rules above, on a SQLite file and a temp journal.
+- `tests/unit/test_deepseek_digest.py`: the job script tests (fake `docker`, `flock`, `timeout`);
+  `tests/unit/test_daily_timers.py`: timer.
 - `tests/fixtures/world/titles.jsonl`: 60 real titles from the measured day, each with the
   recorded decision.
