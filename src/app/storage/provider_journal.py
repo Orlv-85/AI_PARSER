@@ -204,39 +204,6 @@ class PilotJournal:
                                 "AND actual IS NOT NULL", (request_key(provider, body),)).fetchone()
         return saved is not None
 
-    def has_reviewed_response(self, provider, body):
-        return self.db.execute("SELECT 1 FROM calls WHERE key=? AND provider=? "
-                               "AND state='reviewed'", (request_key(provider, body), provider)
-                               ).fetchone() is not None
-
-    def review_quote_failure(self, row, comparison, body, prompt_version):
-        key = request_key("deepseek", body)
-        saved = self.db.execute("SELECT actual,response FROM calls WHERE key=? "
-                                "AND provider='deepseek' AND state='failed' "
-                                "AND error_type='InvalidSummary'", (key,)).fetchone()
-        if not saved or saved[0] is None or saved[1] is None:
-            return False
-        received = json.loads(saved[1])
-        data = received["body"]
-        if (received["status_code"] != 200 or not isinstance(data, dict)
-                or data.get("model") not in {DEEPSEEK_MODEL, "deepseek-v4.1-flash"}
-                or priced_usage("deepseek", data) != saved[0]):
-            return False
-        try:
-            parse_summary(row, data, comparison, prompt_version=prompt_version)
-        except ValueError as exc:
-            if str(exc) not in {"Unsupported summary quote", "Unsupported comparison product"}:
-                return False
-        except (KeyError, TypeError, IndexError):
-            return False
-        else:
-            return False
-        with self.db:
-            self.db.execute("INSERT OR IGNORE INTO reviews(key,reason) VALUES (?,?)",
-                            (key, "Known billed quote failure; user authorised grounded repair"))
-            self.db.execute("UPDATE calls SET state='reviewed' WHERE key=?", (key,))
-        return True
-
     def review_truncated_summaries(self, reason):
         """A known billed truncation may be superseded, retaining its response and cost."""
         reviewed = []

@@ -25,7 +25,6 @@ CONNECT_TIMEOUT = httpx.Timeout(connect=10, read=20, write=10, pool=5)
 BODY_DEADLINE_SECONDS = 60
 PRE_POST_RESERVE_SECONDS = 95
 MAX_CONSECUTIVE_FAILURES = 3
-FAILURE_STATES = ("unknown", "transient", "error_billed")
 # USD per 1M tokens (input, output) = microdollars per token; the extraction model's prices.
 DEFAULT_PRICES = (PRICES["deepseek"]["input"], PRICES["deepseek"]["output"])
 
