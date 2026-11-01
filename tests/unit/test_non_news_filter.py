@@ -11,6 +11,7 @@ from app.config.settings import Settings
 from app.config.sources import SourceConfig
 from app.core.ingestion.pipeline import run_fetch_cycle
 from app.core.ingestion.pipeline.html_links import _process_html_links_two_stage
+from app.core.ingestion.pipeline.models import AdmissionState
 from app.core.ingestion.pipeline.rss import _process_fetched_source_items
 from app.core.ingestion.pipeline.sources import _managed_source_to_config
 from app.core.models import Article
@@ -238,3 +239,56 @@ def test_rss_item_without_row_is_skipped_without_counting(monkeypatch) -> None:
                 settings=Settings(article_batch_upsert_enabled=batch, rss_known_streak_stop=0))
             assert result == (0, 0, 0, False)
         assert session.scalar(select(func.count()).select_from(StoredArticle)) == 0
+
+
+def _rss_row(rank, category=None):
+    return {"ai_relevance_score": rank, "freshness_score": rank + 1, "rank_score": rank + 2,
+            "category": category, "category_confidence": 0.5 if category else None}
+
+
+def test_rss_disabled_admission_state_uses_scorer_not_screening(monkeypatch) -> None:
+    def forbidden(**_kwargs):
+        pytest.fail("_screen_candidate called with admission disabled")
+    monkeypatch.setattr("app.core.ingestion.pipeline.rss._screen_candidate", forbidden)
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine) as session:
+        source = _source("rss")
+        db_source = SourceRepo(session).upsert_source(source)
+        scored: list[Article] = []
+        item = Article(source_key="example", title="AI release",
+                       url="https://example.com/news/ai")
+        result = _process_fetched_source_items(
+            items=[item], config=source, db_source_id=db_source.id,
+            article_repo=ArticleRepo(session),
+            settings=Settings(article_batch_upsert_enabled=False, rss_known_streak_stop=0),
+            relevance_scorer=SimpleNamespace(classify=scored.append),
+            admission_state=AdmissionState(enabled=False))
+        assert result[:2] == (1, 0)
+        assert scored == [item]
+
+
+@pytest.mark.parametrize(("second_category", "expected_category"),
+                         [(None, "old"), ("fresh", "fresh")])
+def test_rss_batch_duplicate_hash_merges_scores_and_category(
+        monkeypatch, second_category, expected_category) -> None:
+    rows = iter([_rss_row(1, "old"), _rss_row(10, second_category)])
+    monkeypatch.setattr("app.core.ingestion.pipeline.rss._build_article_row",
+                        lambda **_kwargs: next(rows))
+    captured = []
+
+    def upsert(*, rows, **_kwargs):
+        captured.extend(rows)
+        return len(rows), 0
+    monkeypatch.setattr("app.core.ingestion.pipeline.rss._upsert_article_rows", upsert)
+    items = [Article(source_key="example", title="AI release",
+                     url="https://example.com/news/ai") for _ in range(2)]
+    result = _process_fetched_source_items(
+        items=items, config=_source("rss"), db_source_id=1, article_repo=SimpleNamespace(),
+        settings=Settings(article_batch_upsert_enabled=True, rss_known_streak_stop=0))
+    assert result == (1, 1, 0, False)
+    assert len(captured) == 1
+    assert (captured[0]["ai_relevance_score"], captured[0]["freshness_score"],
+            captured[0]["rank_score"]) == (10, 11, 12)
+    assert captured[0]["category"] == expected_category
+    assert captured[0]["category_confidence"] == 0.5
