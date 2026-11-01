@@ -16,10 +16,9 @@ from app.core.archive import capture as capture_module
 from app.core.bulletin import world_change as wc
 from app.core.jev import CONTENT_LIMIT
 from app.core.world.gdelt import Candidate
-from app.core.world_screen import run_screen
+from app.core.world_screen import rank_clusters, run_screen
 from app.core.world_text import archive_text_source, run_texts
 from app.ingest.fetcher import DEFAULT_USER_AGENT
-from app.core.world_screen import rank_clusters
 from app.storage.archive import WORLD_SOURCE_KEY, ArchiveRepo
 from app.storage.models_sql import (
     ArchiveDocument,

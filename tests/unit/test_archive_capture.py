@@ -375,7 +375,7 @@ def test_archive_due_skips_world_documents() -> None:
     session = _session()
     document = _world_document(session)
     repo = ArchiveRepo(session)
-    assert repo.due(None, NOW) == []
+    assert not repo.due(None, NOW)
     assert repo.due(None, NOW, ids=[document.id]) == [document]
 
 

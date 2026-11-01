@@ -4,8 +4,7 @@ import json
 from collections.abc import Collection, Sequence
 from datetime import UTC, date, datetime
 
-from sqlalchemy import delete, func, select
-from sqlalchemy import ColumnElement
+from sqlalchemy import ColumnElement, delete, func, select
 from sqlalchemy.orm import Session
 
 from app.storage.models_sql import ArchiveDocument, ArchiveText
@@ -18,7 +17,9 @@ WORLD_SOURCE_KEY = "world"  # marks documents the world stream made; the nightly
 
 
 def _not_world() -> ColumnElement[bool]:
-    return ArchiveDocument.source_key.is_(None) | (ArchiveDocument.source_key != WORLD_SOURCE_KEY)
+    clause: ColumnElement[bool] = (
+        ArchiveDocument.source_key.is_(None) | (ArchiveDocument.source_key != WORLD_SOURCE_KEY))
+    return clause
 
 
 def text_sha256(text: str) -> str:
