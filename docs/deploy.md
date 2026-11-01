@@ -380,6 +380,26 @@ docker compose -f docker-compose.prod.yml run --rm app sh -c \
 docker compose -f docker-compose.prod.yml exec -T db sh -lc "dropdb -U \"\$POSTGRES_USER\" $SCRATCH"
 ```
 
+### World news collect
+
+Behavior: `src/app/core/world/world.md`. The systemd timer `ai-news-daily-world` (04:00 UTC, installed
+by every deploy with the other daily timers, so a deploy does start the timer) runs
+`scripts/run_daily_world_job.sh`. The job is off by default: it does nothing and logs one line unless
+`AINEWS_WORLD_COLLECT_ENABLED=true` is in the server `.env` (about 820 MB of download a day; enabling it
+is a separate decision). When on, it collects yesterday's GDELT files and appends to
+`logs/daily-world.log` one `world_collect_finished` JSON line, or one stderr line when the lock was not
+acquired or the run failed or timed out.
+
+```bash
+grep world_collect_finished logs/daily-world.log | tail -1 | python3 -m json.tool
+grep -E 'world collect (skipped|failed)' logs/daily-world.log | tail -5
+export APP_IMAGE="$(cat .last_deploy_image)"
+docker compose -f docker-compose.prod.yml run --rm app ai-news world collect --date 2026-10-31
+```
+
+A `partial` day (more than 8 of 192 files missing) is finished by running the last command again: files
+that are done are skipped. Use `--max-files N` for a small trial run.
+
 ### Off-site backups (Backblaze B2)
 
 - Bucket `OFFSITE_B2_BUCKET`, private. Retention by the bucket's lifecycle rules, not by our code:

@@ -39,6 +39,7 @@ from app.core.sources.onboarding import import_source_candidates
 from app.core.sources.validation import run_source_validation_batch
 from app.core.world.filter import load_own_domains
 from app.core.world.gdelt import DayStats, make_client, scan_day
+from app.core.world_collect import collect_day, yesterday_utc
 from app.observability import setup_json_logging
 from app.storage import SessionLocal, create_all
 from app.storage.archive import ArchiveRepo
@@ -502,6 +503,26 @@ def world_scan(
         ):
             pass
     typer.echo(json.dumps(stats.as_dict(), sort_keys=True))
+
+
+@world_app.command("collect")
+def world_collect(
+    report_date: str | None = typer.Option(None, "--date", help="UTC day, default yesterday."),
+    max_files: int | None = typer.Option(None, "--max-files", min=1, help="Read only N files."),
+) -> None:
+    """Download the GDELT files of a day and store candidates; done files are skipped."""
+    try:
+        target = date.fromisoformat(report_date) if report_date else yesterday_utc()
+    except ValueError as exc:
+        raise typer.BadParameter("--date must be YYYY-MM-DD") from exc
+    create_all()
+    logger = setup_json_logging()
+    own = load_own_domains(get_settings().sources_path)
+    with make_client() as client, SessionLocal() as session:
+        summary = collect_day(
+            session, target, client=client, own_domains=own, max_files=max_files, logger=logger
+        )
+    typer.echo(json.dumps(summary.as_dict(), sort_keys=True))
 
 
 @app.command("import-candidates")

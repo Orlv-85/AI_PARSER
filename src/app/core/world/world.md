@@ -3,14 +3,16 @@ module: src/app/core/world/__init__.py
 covers:
   - src/app/core/world/*.py
   - src/app/storage/world.py
+  - src/app/core/world_collect.py
+  - scripts/run_daily_world_job.sh
 -->
 # World news stream
 
 Candidate stories about AI in human life from outside our own sources, for the Daily Inference
 bulletin (spec `specs/018-daily-inference/spec.md`, FR-014..FR-018). Plan:
 `specs/018-daily-inference/records/plan-item5-world-sources-2026-10-31.md`. Shipped so far: the
-keyword filter (W1), the GDELT reader (W2, no database) and the storage tables (W3). The collect
-command, jobs and Jev steps (W4 and later) are not in the code yet.
+keyword filter (W1), the GDELT reader (W2, no database), the storage tables (W3) and the collect
+command with its nightly job (W4). The Jev steps (W5 and later) are not in the code yet.
 
 ## Behavior
 
@@ -178,6 +180,54 @@ stateDiagram-v2
   hand on a throwaway PostgreSQL database without errors. Repeat that check by hand when the
   tables change.
 
+### Collect job
+
+```mermaid
+flowchart LR
+  timer["Timer 04:00 UTC"] --> sw{"AINEWS_WORLD_COLLECT_ENABLED on?"}
+  sw -- no --> skip["One log line, exit 0, no download"]
+  sw -- yes --> lock["Host lock, release image, timeout"]
+  lock --> cli["ai-news world collect --date D-1"]
+  cli --> done["done_files(D): skip done stamps"]
+  done --> one["Next file: scan_file"]
+  one --> st["upsert_candidates + record_file done or missing"]
+  st --> cm["Commit"]
+  cm --> more{"More files?"}
+  more -- yes --> one
+  more -- "12 missing in a row" --> stop["Stop, rest counts as missing"]
+  more -- no --> prune["prune"]
+  stop --> prune
+  prune --> log["world_collect_finished, exit 0"]
+```
+
+- `ai-news world collect [--date D] [--max-files N]` takes a UTC day (default: yesterday). It
+  goes through the 192 file stamps of the day (`gkg` first, then `translation`), skips every file
+  that `done_files` lists, scans the others one at a time with `scan_file` (streamed, no raw file
+  kept), stores the kept candidates with `upsert_candidates`, records the file as `done` (or
+  `missing`) with `record_file` and commits. A crash loses at most the file being read. Then
+  `prune` runs and the summary is logged. Tests: `test_collect_resumes_without_reprocessing_files`,
+  `test_collect_commits_per_file`, `test_collect_crash_keeps_finished_files`.
+- A missing file is recorded `missing` and tried again by the next run of the same day. After
+  `MAX_CONSECUTIVE_MISSING` missing files in a row the run stops, the rest is not recorded and
+  counts as missing. Tests: `test_collect_missing_file_is_recorded_and_retried`,
+  `test_collect_stops_after_consecutive_missing`.
+- The day is `partial` when the files not done after the run (missing now) are more than
+  `MAX_MISSING_FILES_OK`; a rerun that completes the files makes it `ok`. Tests:
+  `test_collect_partial_day_flag`.
+- One log line `world_collect_finished` carries `day`, `files` (read now), `skipped` (done before),
+  `missing`, `partial`, `rows`, `matched`, `kept`, `new`, `repeats`, `pruned_candidates` and
+  `pruned_files`; the command prints the same fields as JSON. Tests:
+  `test_collect_summary_counts`, `test_cli_world_collect_prints_summary`.
+- The command works whatever the switch says. The job script reads `AINEWS_WORLD_COLLECT_ENABLED`
+  (environment, else the deploy `.env`), default off; when it is not true the script logs
+  `world collect skipped: AINEWS_WORLD_COLLECT_ENABLED is off` and exits 0 before taking the lock,
+  starting a container or downloading. Tests: `test_world_job_script_switch_off_does_nothing`.
+- `scripts/run_daily_world_job.sh` is shaped like the archive job: host lock
+  (`/tmp/ai-news-auto-update.lock`, 1800 s wait), the release image from `.last_deploy_image`,
+  `timeout`, one container name `ai-news-world`, always exit 0, a failure or timeout is one stderr
+  line. The timer `ai-news-daily-world` runs it at 04:00 UTC. Tests: `test_world_job_script_is_isolated`,
+  `test_install_timers_includes_world`.
+
 ## Decisions
 
 - Keyword filter on the title, not a GDELT theme filter: GDELT has no AI theme (measured on one
@@ -202,6 +252,15 @@ stateDiagram-v2
 - A `failed` candidate returns to the step that failed (`new`, `screened_in` or `text_ready`), so
   W5 and W6 need no separate retry state; the run decides how many attempts are enough (decided
   2026-11-01 (agent)).
+- Switch off by default and read by the job script, not by the command: the download is about
+  820 MB a day; turning it on in production is a separate owner decision (owner, 2026-11-01). A
+  manual `world collect` stays possible for smoke runs and catch-up.
+- The collect orchestration is `core/world_collect.py`, outside `core/world/`, because
+  `storage/world.py` imports `core/world/gdelt.py` and core world code must not import storage
+  (decided 2026-11-01 (agent)).
+- The job processes only yesterday; a day cut short by the timeout is finished by hand with
+  `ai-news world collect --date D`, which skips done files (decided 2026-11-01 (agent)).
+- No `--dry-run` for collect: it only writes the world tables (decided 2026-11-01 (agent)).
 - The scan has no `--dry-run`: in W2 nothing is written at all; the flag arrives with storage (W4).
 - A 404 is retried like any failure because the newest files appear on https with a delay.
 - Dedup (same canonical URL, same first 60 normalized title characters) is not part of the filter;
@@ -223,6 +282,8 @@ stateDiagram-v2
 - One writer: only the collect job writes the world tables, and only under the host lock.
   `upsert_candidates` is check-then-insert; a second concurrent writer could lose a batch to
   `IntegrityError`, and would need `ON CONFLICT DO NOTHING`. Tests: none (a rule of use).
+- The world job never changes the fetch, digest or archive jobs: own timer, own container name,
+  own log `logs/daily-world.log`, always exit 0. Tests: `test_world_job_script_is_isolated`.
 - Production has 3.6 GB of free disk and 2 GB of RAM: the reader keeps no raw GDELT file and holds
   no whole-day list of raw rows; one file lives on disk at a time and is deleted. Binding for the
   later steps. Tests: `test_scan_leaves_no_file_on_disk`, `test_scan_memory_is_bounded`.
@@ -238,7 +299,12 @@ stateDiagram-v2
   file constants, `WORLD_RETENTION_DAYS`, `CLUSTER_KEY_CHARS`.
 - `storage/models_sql.py`: `WorldCandidate` (`world_candidates`), `WorldFile` (`world_files`);
   migration `c9f3a7e15b28_add_world_candidates_and_files.py`, after `b8e2d4f61a07`.
-- `cli/main.py`: `world` Typer group with `scan`.
+- `gdelt.py` also has `scan_file` and `FileResult` (one file; `scan_day` is built on them).
+- `core/world_collect.py`: `collect_day`, `CollectSummary`, `yesterday_utc`; the only caller of
+  `WorldRepo` besides tests.
+- `scripts/run_daily_world_job.sh`; `scripts/install_daily_timers.sh` writes the unit and timer
+  `ai-news-daily-world` (04:00 UTC) and enables the timer on every deploy.
+- `cli/main.py`: `world` Typer group with `scan` and `collect`.
 - Change a keyword or a drop rule in the constant named above and extend the fixture test.
 
 ## Tests
@@ -247,5 +313,7 @@ stateDiagram-v2
 - `tests/unit/test_world_gdelt.py`: reader rules above, with `httpx.MockTransport` and small zip
   and plain fixtures built in the test.
 - `tests/unit/test_world_storage.py`: storage rules above, including the migration round trip.
+- `tests/unit/test_world_collect.py`: collect rules above, with fake transports and a SQLite file.
+- `tests/unit/test_deepseek_digest.py`: the job script test; `tests/unit/test_daily_timers.py`: timer.
 - `tests/fixtures/world/titles.jsonl`: 60 real titles from the measured day, each with the
   recorded decision.

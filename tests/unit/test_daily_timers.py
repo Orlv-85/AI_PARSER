@@ -27,7 +27,8 @@ def test_timers_use_explicit_utc_and_do_not_launch_on_install(tmp_path):
         assert f"ExecStart=/bin/sh {scripts}/run_daily_{job}_job.sh" in service
     assert log.read_text().splitlines() == ["daemon-reload",
         "enable --now ai-news-daily-fetch.timer ai-news-daily-digest.timer",
-        "enable --now ai-news-daily-archive.timer"]
+        "enable --now ai-news-daily-archive.timer",
+        "enable --now ai-news-daily-world.timer"]
 
 
 def _install(tmp_path):
@@ -45,6 +46,18 @@ def _install(tmp_path):
     subprocess.run(["sh", str(script)], check=True, env={**os.environ,
         "PATH": str(binaries) + ":/usr/bin:/bin", "AINEWS_SYSTEMD_UNIT_DIR": str(units)})
     return tmp_path, units
+
+
+def test_install_timers_includes_world(tmp_path):
+    root, units = _install(tmp_path)
+    service = (units / "ai-news-daily-world.service").read_text()
+    assert f"ExecStart=/bin/sh {root}/scripts/run_daily_world_job.sh\n" in service
+    assert "TimeoutStartSec=5400\n" in service
+    assert f"StandardOutput=append:{root}/logs/daily-world.log\n" in service
+    assert f"StandardError=append:{root}/logs/daily-world.log\n" in service
+    timer = (units / "ai-news-daily-world.timer").read_text()
+    assert "OnCalendar=*-*-* 04:00:00 UTC\n" in timer
+    assert "Persistent=false\n" in timer
 
 
 def test_install_timers_includes_archive(tmp_path):

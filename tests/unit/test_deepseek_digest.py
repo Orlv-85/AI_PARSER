@@ -600,6 +600,89 @@ def test_archive_job_script_is_isolated(tmp_path):
     assert "run_daily_fetch_job" not in text and "run_daily_digest_job" not in text
 
 
+def _world_job(tmp_path, *, enabled="true", env_file=None, lock_exit=0, collect_exit=0):
+    scripts = tmp_path / "scripts"
+    scripts.mkdir(parents=True)
+    (scripts / "run_daily_world_job.sh").write_text(
+        Path("scripts/run_daily_world_job.sh").read_text(encoding="utf-8"), encoding="utf-8")
+    (tmp_path / ".last_deploy_image").write_text("release:tested\n", encoding="utf-8")
+    if env_file is not None:
+        (tmp_path / ".env").write_text(env_file, encoding="utf-8")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for tool in ("sh", "cat", "dirname", "basename"):
+        (bin_dir / tool).symlink_to(shutil.which(tool))
+    fakes = {
+        "flock": ('printf "flock %s\\n" "$*" >> "$TEST_LOG"\n'
+                  '[ "$LOCK_EXIT" -eq 0 ] || exit "$LOCK_EXIT"\nshift 3\nexec "$@"\n'),
+        "timeout": 'printf "timeout %s\\n" "$*" >> "$TEST_LOG"\nshift 3\nexec "$@"\n',
+        "docker": ('printf "docker %s|image=%s\\n" "$*" "$APP_IMAGE" >> "$TEST_LOG"\n'
+                   'case "$*" in *"world collect"*)'
+                   ' echo summary-stdout; exit "$COLLECT_EXIT";; esac\nexit 0\n'),
+    }
+    for name, body in fakes.items():
+        (bin_dir / name).write_text("#!/bin/sh\n" + body, encoding="utf-8")
+        (bin_dir / name).chmod(0o755)
+    log = tmp_path / "calls"
+    env = {"PATH": str(bin_dir), "HOME": str(tmp_path), "TEST_LOG": str(log), "APP_IMAGE": "",
+           "LOCK_EXIT": str(lock_exit), "COLLECT_EXIT": str(collect_exit)}
+    if enabled is not None:
+        env["AINEWS_WORLD_COLLECT_ENABLED"] = enabled
+    result = subprocess.run(["sh", str(scripts / "run_daily_world_job.sh")], env=env,
+                            cwd=tmp_path, capture_output=True, text=True, check=False)
+    return result, log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+
+
+def test_world_job_script_is_isolated(tmp_path):
+    result, calls = _world_job(tmp_path / "ok")
+    assert (result.returncode, result.stderr) == (0, "")
+    assert result.stdout == ""
+    assert calls[0].startswith("flock -w 1800 /tmp/ai-news-auto-update.lock sh ")
+    assert calls[0].endswith("/scripts/run_daily_world_job.sh --locked")
+    collect = ("docker compose -f docker-compose.prod.yml run --rm --name ai-news-world app "
+               "ai-news world collect|image=release:tested")
+    assert calls[-2:] == ["timeout -k 30 3300 " + collect.split("|", maxsplit=1)[0], collect]
+    assert calls[1:3] == ["timeout -k 10 60 docker rm -f ai-news-world",
+                          "docker rm -f ai-news-world|image=release:tested"]
+
+    result, calls = _world_job(tmp_path / "timeout", collect_exit=124)
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert result.stderr.splitlines() == [
+        "world collect failed or timed out (exit 124); other jobs are unaffected"]
+    assert calls[-2:] == ["timeout -k 10 60 docker rm -f ai-news-world",
+                          "docker rm -f ai-news-world|image=release:tested"]
+
+    result, calls = _world_job(tmp_path / "locked", lock_exit=1)
+    assert result.returncode == 0
+    assert result.stderr.splitlines() == [
+        "world collect skipped: host lock not acquired within 1800 s"]
+    assert [call for call in calls if call.startswith("docker")] == []
+
+    text = Path("scripts/run_daily_world_job.sh").read_text(encoding="utf-8")
+    for other in ("fetch", "digest", "archive"):
+        assert f"run_daily_{other}_job" not in text
+
+
+@pytest.mark.parametrize("enabled,env_file", [
+    (None, None), ("false", None), ("", "AINEWS_WORLD_COLLECT_ENABLED=false\n"),
+    (None, "OTHER=1\n"),
+])
+def test_world_job_script_switch_off_does_nothing(tmp_path, enabled, env_file):
+    result, calls = _world_job(tmp_path, enabled=enabled, env_file=env_file)
+    assert result.returncode == 0
+    assert result.stderr.splitlines() == [
+        "world collect skipped: AINEWS_WORLD_COLLECT_ENABLED is off"]
+    assert calls == []
+
+
+def test_world_job_script_switch_on_from_env_file(tmp_path):
+    result, calls = _world_job(tmp_path, enabled=None,
+                               env_file="X=1\nAINEWS_WORLD_COLLECT_ENABLED=true\n")
+    assert result.returncode == 0
+    assert any("ai-news world collect" in call for call in calls)
+
+
 def test_nightly_health_workflow_is_read_only():
     workflow = yaml.safe_load(
         Path(".github/workflows/nightly-health.yml").read_text(encoding="utf-8"))

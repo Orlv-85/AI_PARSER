@@ -66,6 +66,31 @@ Persistent=false
 [Install]
 WantedBy=timers.target
 EOF
+# World news collect (spec 018, item 5): after archive; the script itself is off unless
+# AINEWS_WORLD_COLLECT_ENABLED is true, so installing the timer downloads nothing.
+cat > "$UNIT_DIR/ai-news-daily-world.service" <<EOF
+[Unit]
+Description=AI News nightly world news collect from GDELT files
+After=docker.service network-online.target
+Requires=docker.service
+[Service]
+Type=oneshot
+WorkingDirectory=$ROOT_DIR
+ExecStart=/bin/sh $ROOT_DIR/scripts/run_daily_world_job.sh
+TimeoutStartSec=5400
+StandardOutput=append:$ROOT_DIR/logs/daily-world.log
+StandardError=append:$ROOT_DIR/logs/daily-world.log
+EOF
+cat > "$UNIT_DIR/ai-news-daily-world.timer" <<EOF
+[Unit]
+Description=AI News nightly world news collect in UTC (independent of host DST)
+[Timer]
+OnCalendar=*-*-* 04:00:00 UTC
+AccuracySec=1s
+Persistent=false
+[Install]
+WantedBy=timers.target
+EOF
 if [ -n "$STAGE_DIR" ]; then
   for unit in "$STAGE_DIR"/*; do
     $SUDO install -m 0644 "$unit" "$FINAL_DIR/$(basename "$unit")"
@@ -75,3 +100,4 @@ fi
 $SUDO systemctl daemon-reload
 $SUDO systemctl enable --now ai-news-daily-fetch.timer ai-news-daily-digest.timer
 $SUDO systemctl enable --now ai-news-daily-archive.timer
+$SUDO systemctl enable --now ai-news-daily-world.timer
