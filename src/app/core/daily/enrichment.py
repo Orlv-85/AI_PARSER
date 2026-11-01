@@ -43,6 +43,7 @@ CAPS = {"total": "5", "jev": "1", "deepseek": "4"}
 TRANSPORT_REVIEW_REASON = "daily-publication: transport failure, conservative reservation kept"
 TRANSPORT_RETRY_DELAYS = (60, 300)
 DAILY_CATCH_UP_DAYS = 3
+SOURCE_MIN_CHARS = 300
 # Aggregator decorations only; meaningful parentheticals such as "(Sponsor)" stay.
 TITLE_JUNK = re.compile(
     r"\s*\((?:\d+ min(?:ute)? read|GitHub Repo|"
@@ -95,10 +96,33 @@ async def acquire(cache, articles):
         await asyncio.gather(*(downloader.fetch_one(a.url) for a in articles))
 
 
+def _page_dates_conflict(evidence, article):
+    dates = evidence.get("date_evidence", {}).get("published", {})
+    if dates.get("status") == "conflict":
+        return True
+    selected = dates.get("selected") or {}
+    if selected.get("utc") and article.published_at:
+        source_day = datetime.fromisoformat(selected["utc"]).astimezone(UTC).date()
+        stored_day = article.published_at.replace(
+            tzinfo=article.published_at.tzinfo or UTC).astimezone(UTC).date()
+        return source_day != stored_day
+    return False
+
+
+def _extracted_page_row(article, evidence, content):
+    if (evidence.get("quality") == "extracted" and
+            hashlib.sha256(content.encode()).hexdigest() == evidence.get("text_sha256")
+            and len(content.strip()) >= SOURCE_MIN_CHARS):
+        return {"url": article.url, "title": evidence.get("title") or article.title,
+                "content": content, "origin": "source_page"}
+    return None
+
+
 def source_row(article, cache):
     stored = {"url": article.url, "title": article.title, "content": article.content or "",
               "origin": "stored_source_content"}
-    if admission_from_proof(article, stored) is not None and len(stored["content"]) >= 300:
+    if (admission_from_proof(article, stored) is not None
+            and len(stored["content"]) >= SOURCE_MIN_CHARS):
         return stored
     directory = cache.page_dir(article.url)
     path = directory / "evidence.json"
@@ -106,23 +130,14 @@ def source_row(article, cache):
         evidence = json.loads(path.read_text())
         text_path = directory / "text.txt"
         content = text_path.read_text() if text_path.exists() else ""
-        dates = evidence.get("date_evidence", {}).get("published", {})
-        if dates.get("status") == "conflict":
+        if _page_dates_conflict(evidence, article):
             return None
-        selected = dates.get("selected") or {}
-        if selected.get("utc") and article.published_at:
-            source_day = datetime.fromisoformat(selected["utc"]).astimezone(UTC).date()
-            stored_day = article.published_at.replace(
-                tzinfo=article.published_at.tzinfo or UTC).astimezone(UTC).date()
-            if source_day != stored_day:
-                return None
-        if (evidence.get("quality") == "extracted" and
-                hashlib.sha256(content.encode()).hexdigest() == evidence.get("text_sha256")
-                and len(content.strip()) >= 300):
-            return {"url": article.url, "title": evidence.get("title") or article.title,
-                    "content": content, "origin": "source_page"}
+        page = _extracted_page_row(article, evidence, content)
+        if page is not None:
+            return page
     # Stored content is source evidence, unlike the summary field, which may be generated.
-    if len((article.content or "").strip()) >= 300 and article.publication_status == "confirmed":
+    if (len((article.content or "").strip()) >= SOURCE_MIN_CHARS
+            and article.publication_status == "confirmed"):
         return {"url": article.url, "title": article.title, "content": article.content,
                 "origin": "stored_source_content"}
     return None
@@ -406,6 +421,46 @@ def publish_catch_up(session, settings, today: date, root: Path) -> list[dict[st
             for target in catch_up_days(today, root)]
 
 
+def _provider_keys(settings):
+    if not settings.semantic_admission_enabled:
+        raise ValueError("mandatory_admission_disabled")
+    keys = {"jev": settings.jev_api_key, "deepseek": settings.ds_api_key}
+    if any(v is None or not v.get_secret_value().strip() for v in keys.values()):
+        raise ValueError("missing_provider_key")
+    return {k: v.get_secret_value() for k, v in keys.items()}
+
+
+def _enrich_scope(session, articles, cache, journal, *, keys, run, counts, held):
+    with httpx.Client(timeout=90, transport=httpx.HTTPTransport(retries=0)) as client:
+        for article in articles:
+            if reusable(article):
+                counts["reused"] += 1
+                continue
+            row = source_row(article, cache)
+            details: list[str] = []
+            if row is None or article.publication_status != "confirmed":
+                state = "insufficient_source_or_date_evidence"
+            else:
+                state = enrich(article, row, journal, client, keys, details=details)
+                session.commit()
+            counts[state] += 1
+            if state != "enriched":
+                held.append({"article_id": article.id, "reason": state,
+                             **({"details": details} if details else {})})
+            private_write(run / "progress.json", {"counts": dict(counts), "held": held})
+
+
+def _back_up_digest(previous, target, run):
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%f")
+    backup = run / ("digest-before-" + stamp + ".json")
+    private_write(backup, {"report_date": target.isoformat(),
+        "created_at": previous.created_at.isoformat(), "groups": [
+            {"title": g.title, "items": [{"title": i.title, "summary": i.summary,
+                                          "url": i.url} for i in g.items]}
+            for g in previous.groups]})
+    return backup
+
+
 def publish_day(session, settings, target: date, root: Path):
     """Complete scope, bounded paid work, per-row resume, atomic publication with backup."""
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -420,19 +475,14 @@ def publish_day(session, settings, target: date, root: Path):
                       counts={}, held=[], usage={}, finished_at=datetime.now(UTC).isoformat())
         private_write(run / "report.json", report)
         return report
-    if not settings.semantic_admission_enabled:
-        raise ValueError("mandatory_admission_disabled")
-    keys = {"jev": settings.jev_api_key, "deepseek": settings.ds_api_key}
-    if any(v is None or not v.get_secret_value().strip() for v in keys.values()):
-        raise ValueError("missing_provider_key")
-    keys = {k: v.get_secret_value() for k, v in keys.items()}
+    keys = _provider_keys(settings)
     cache = PageCache(root / "source-cache")
     journal = PilotJournal(run / "journal.sqlite3",
                            {"version": DAILY_VERSION, "day": target.isoformat()}, CAPS,
                            transport_review_reason=TRANSPORT_REVIEW_REASON,
                            transport_retry_delays=TRANSPORT_RETRY_DELAYS)
     counts: Counter[str] = Counter()
-    held = []
+    held: list[dict[str, Any]] = []
     try:
         articles = day_articles(session, target)
         report["scope_count"] = len(articles)
@@ -440,23 +490,8 @@ def publish_day(session, settings, target: date, root: Path):
         pending = [a for a in articles if not reusable(a) and admission_from_proof(
             a, {"title": a.title, "content": a.content or ""}) is None]
         asyncio.run(acquire(cache, pending))
-        with httpx.Client(timeout=90, transport=httpx.HTTPTransport(retries=0)) as client:
-            for article in articles:
-                if reusable(article):
-                    counts["reused"] += 1
-                    continue
-                row = source_row(article, cache)
-                details: list[str] = []
-                if row is None or article.publication_status != "confirmed":
-                    state = "insufficient_source_or_date_evidence"
-                else:
-                    state = enrich(article, row, journal, client, keys, details=details)
-                    session.commit()
-                counts[state] += 1
-                if state != "enriched":
-                    held.append({"article_id": article.id, "reason": state,
-                                 **({"details": details} if details else {})})
-                private_write(run / "progress.json", {"counts": dict(counts), "held": held})
+        _enrich_scope(session, articles, cache, journal,
+                      keys=keys, run=run, counts=counts, held=held)
         groups = digest_groups(articles)
         if not groups:
             raise PilotStopped("no_supported_items")
@@ -465,14 +500,7 @@ def publish_day(session, settings, target: date, root: Path):
         repo = NewsDigestRepo(session)
         previous = repo.get_digest(report_date=target)
         if previous is not None:
-            stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%f")
-            backup = run / ("digest-before-" + stamp + ".json")
-            private_write(backup, {"report_date": target.isoformat(),
-                "created_at": previous.created_at.isoformat(), "groups": [
-                    {"title": g.title, "items": [{"title": i.title, "summary": i.summary,
-                                                  "url": i.url} for i in g.items]}
-                    for g in previous.groups]})
-            report["backup_path"] = str(backup)
+            report["backup_path"] = str(_back_up_digest(previous, target, run))
         repo.save_digest(report_date=target, groups=groups)
         session.commit()
         report.update(state="published_with_holds" if held else "published",
