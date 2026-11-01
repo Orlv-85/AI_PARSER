@@ -487,7 +487,8 @@ web update (thread or process)               web/service.py: UpdateRunService
 
 Per rule: see Behavior and Invariants. Files: `tests/unit/test_pipeline_runtime.py`,
 `test_pipeline_helpers_extra.py`, `test_pipeline_persistence_isolation.py`,
-`test_semantic_admission.py`, `test_semantic_admission_pipeline.py`, `test_screening_notice.py`,
+`test_semantic_admission.py`, `test_semantic_admission_pipeline.py`, `test_pipeline_screening.py`
+(`_screen_candidate` branches, `_assessment_from_cached` 0..1 bounds), `test_screening_notice.py`,
 `test_non_news_filter.py`, `test_publication_semantics.py`, `test_ingest_rss_additional.py`,
 `test_ingest_html_additional.py`, `test_fetcher.py`, `test_canonicalize.py`, `test_scoring.py`,
 `test_jev.py`, `test_article_evidence_cache.py` (date evidence), `tests/integration/test_pipeline.py`.
