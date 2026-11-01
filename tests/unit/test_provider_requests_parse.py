@@ -145,3 +145,37 @@ def test_summary_parse_keeps_verified_products_and_counts_unresolved():
         {"name": "AI system", "quote": ROW["content"], "provider_quote": ROW["content"]}]
     assert result["unresolved_compared_products"] == 3
     assert result["compared_products_status"] == "partial_unresolved"
+
+
+def test_summary_parse_accepts_exactly_three_facts():
+    value = {"facts": [fact()] * 3, "compared_products": []}
+    assert len(parse_summary(ROW, summary_data(value), False)["support"]) == 3
+
+
+def test_summary_parse_accepts_exactly_eight_products():
+    product = {"name": "AI system", "quote": ROW["content"]}
+    value = {"facts": [fact()], "compared_products": [product] * 8}
+    result = parse_summary(ROW, summary_data(value), True)
+    assert len(result["compared_products"]) == 8
+
+
+def test_summary_parse_rejects_valid_products_without_comparison():
+    product = {"name": "AI system", "quote": ROW["content"]}
+    value = {"facts": [fact()], "compared_products": [product]}
+    with pytest.raises(ValueError, match="Unexpected products"):
+        parse_summary(ROW, summary_data(value), False)
+
+
+def test_summary_quote_length_boundary_is_twelve_stripped_chars():
+    row = {**ROW, "content": "abcdefghijkl and abcdefghijk"}
+    ok = {"facts": [fact(quote="abcdefghijkl")], "compared_products": []}
+    assert parse_summary(row, summary_data(ok), False)["support"][0]["quote"] == "abcdefghijkl"
+    short = {"facts": [fact(quote="abcdefghijk")], "compared_products": []}
+    with pytest.raises(ValueError, match="Unsupported summary quote"):
+        parse_summary(row, summary_data(short), False)
+
+
+def test_bad_fact_count_is_reported_before_the_row_is_read():
+    value = {"facts": [], "compared_products": []}
+    with pytest.raises(ValueError, match="Missing summary facts"):
+        parse_summary({}, summary_data(value), False)
