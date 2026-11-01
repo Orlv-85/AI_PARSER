@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, cast
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
 
+from app.core.sources.candidate_fields import read_optional_str, read_str
 from app.storage.models_sql import SourceCandidate, SourceImportBatch
 
 if TYPE_CHECKING:
@@ -89,9 +90,9 @@ class SourceCandidateRepo:
         rows: list[SourceCandidate] = []
         accepted_count = 0
         for candidate_data in candidates:
-            raw_input = self._read_candidate_value(candidate_data, "raw_input")
-            normalized_url = self._read_candidate_value(candidate_data, "normalized_url")
-            candidate_type = self._read_candidate_value(
+            raw_input = read_str(candidate_data, "raw_input")
+            normalized_url = read_str(candidate_data, "normalized_url")
+            candidate_type = read_str(
                 candidate_data,
                 "candidate_type",
                 default="unknown",
@@ -106,21 +107,6 @@ class SourceCandidateRepo:
                 rows.append(candidate)
                 accepted_count += 1
         return rows, accepted_count
-
-    @staticmethod
-    def _read_candidate_value(
-        candidate_data: object,
-        field_name: str,
-        *,
-        default: str | None = None,
-    ) -> str:
-        if isinstance(candidate_data, dict):
-            value = candidate_data.get(field_name, default)
-        else:
-            value = getattr(candidate_data, field_name, default)
-        if value is None:
-            raise ValueError(f"candidate field is required: {field_name}")
-        return str(value)
 
     def get_candidate(self, candidate_id: int) -> SourceCandidate | None:
         return self.session.get(SourceCandidate, candidate_id)
@@ -161,9 +147,9 @@ class SourceCandidateRepo:
         if candidate is None:
             raise ValueError(f"source candidate not found: {candidate_id}")
 
-        status = self._read_candidate_value(result, "status")
-        detected_type = self._read_optional_value(result, "detected_type")
-        validation_error = self._read_optional_value(result, "validation_error")
+        status = read_str(result, "status")
+        detected_type = read_optional_str(result, "detected_type")
+        validation_error = read_optional_str(result, "validation_error")
         candidate.validation_status = status
         candidate.validation_detected_type = detected_type
         candidate.validation_error = validation_error
@@ -175,7 +161,7 @@ class SourceCandidateRepo:
         return candidate
 
     def save_review_update(self, candidate: object) -> SourceCandidate:
-        candidate_id = int(self._read_candidate_value(candidate, "id"))
+        candidate_id = int(read_str(candidate, "id"))
         stored = self.get_candidate(candidate_id)
         if stored is None:
             raise ValueError(f"source candidate not found: {candidate_id}")
@@ -257,13 +243,3 @@ class SourceCandidateRepo:
         if not details:
             return None
         return json.dumps(details, ensure_ascii=True, sort_keys=True)
-
-    @staticmethod
-    def _read_optional_value(candidate_data: object, field_name: str) -> str | None:
-        if isinstance(candidate_data, dict):
-            value = candidate_data.get(field_name)
-        else:
-            value = getattr(candidate_data, field_name, None)
-        if value is None:
-            return None
-        return str(value)

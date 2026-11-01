@@ -9,6 +9,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from app.config.sources import SourceConfig
+from app.core.sources.candidate_fields import read_optional_int, read_str
 from app.storage.models_sql import Source
 
 
@@ -82,7 +83,7 @@ class SourceRepo:
         return source
 
     def create_from_candidate(self, candidate: object) -> Source:
-        approved_source_id = self._read_int_value(candidate, "approved_source_id")
+        approved_source_id = read_optional_int(candidate, "approved_source_id")
         if approved_source_id is not None:
             approved_source = self.session.get(Source, approved_source_id)
             if approved_source is not None:
@@ -91,7 +92,7 @@ class SourceRepo:
                     candidate,
                     default=approved_source.type,
                 )
-                approved_source.url = self._read_object_value(candidate, "normalized_url")
+                approved_source.url = read_str(candidate, "normalized_url")
                 approved_source.name = self._source_name_for_candidate(
                     candidate,
                     default=approved_source.name,
@@ -99,7 +100,7 @@ class SourceRepo:
                 self.session.flush()
                 return approved_source
 
-        source_url = self._read_object_value(candidate, "normalized_url")
+        source_url = read_str(candidate, "normalized_url")
         existing_stmt: Select[tuple[Source]] = (
             select(Source).where(Source.url == source_url).limit(1)
         )
@@ -160,21 +161,6 @@ class SourceRepo:
         source.last_status_code = last_status_code
         self.session.flush()
 
-    @staticmethod
-    def _read_object_value(
-        candidate: object,
-        field_name: str,
-        *,
-        default: str | None = None,
-    ) -> str:
-        if isinstance(candidate, dict):
-            value = candidate.get(field_name, default)
-        else:
-            value = getattr(candidate, field_name, default)
-        if value is None:
-            raise ValueError(f"candidate field is required: {field_name}")
-        return str(value)
-
     def _allocate_source_key(self, candidate: object) -> str:
         base_key = self._source_key_for_candidate(candidate)
         suffix = 1
@@ -187,7 +173,7 @@ class SourceRepo:
         return candidate_key
 
     def _source_key_for_candidate(self, candidate: object) -> str:
-        source_url = self._read_object_value(candidate, "normalized_url")
+        source_url = read_str(candidate, "normalized_url")
         parts = urlsplit(source_url)
         host = (parts.hostname or "source").lower()
         host_token = re.sub(r"[^a-z0-9]+", "-", host).strip("-")
@@ -206,7 +192,7 @@ class SourceRepo:
                         return str(name)
             except ValueError:
                 pass
-        source_url = self._read_object_value(candidate, "normalized_url")
+        source_url: str = read_str(candidate, "normalized_url")
         host = (urlsplit(source_url).hostname or "").lower()
         if host:
             return host
@@ -215,25 +201,15 @@ class SourceRepo:
         return source_url
 
     def _source_type_for_candidate(self, candidate: object, *, default: str) -> str:
-        candidate_type = self._read_object_value(
+        candidate_type = read_str(
             candidate,
             "candidate_type",
             default=default,
         ).lower()
         if candidate_type == "unknown":
-            candidate_type = self._read_object_value(
+            candidate_type = read_str(
                 candidate,
                 "validation_detected_type",
                 default=default,
             ).lower()
         return candidate_type or default
-
-    @staticmethod
-    def _read_int_value(candidate: object, field_name: str) -> int | None:
-        if isinstance(candidate, dict):
-            value = candidate.get(field_name)
-        else:
-            value = getattr(candidate, field_name, None)
-        if value is None:
-            return None
-        return int(value)

@@ -5,7 +5,8 @@ from typing import Any, cast
 
 from sqlalchemy.orm import Session
 
-from app.core.sources.candidates import _candidate_value, _infer_candidate_type
+from app.core.sources.candidate_fields import read_str
+from app.core.sources.candidates import _infer_candidate_type
 from app.ingest.fetcher import Fetcher
 from app.ingest.html import extract_links_from_html
 from app.ingest.page_filter import html_exclusion_reason
@@ -33,8 +34,8 @@ def validate_rss_candidate(
     *,
     fetch_feed: Any | None = None,
 ) -> ValidationResult:
-    candidate_id = int(_candidate_value(candidate, "id"))
-    normalized_url = _candidate_value(candidate, "normalized_url")
+    candidate_id = int(read_str(candidate, "id"))
+    normalized_url = read_str(candidate, "normalized_url")
     fetch_feed_fn = fetch_feed or _fetch_feed_with_ingest
 
     try:
@@ -73,8 +74,8 @@ def validate_html_candidate(
     fetch_html: Any | None = None,
     extract_links: Any | None = None,
 ) -> ValidationResult:
-    candidate_id = int(_candidate_value(candidate, "id"))
-    normalized_url = _candidate_value(candidate, "normalized_url")
+    candidate_id = int(read_str(candidate, "id"))
+    normalized_url = read_str(candidate, "normalized_url")
     fetch_html_fn = fetch_html or _fetch_html_with_ingest
     extract_links_fn = extract_links or _extract_links_with_ingest
 
@@ -149,9 +150,9 @@ def run_source_validation(
     if candidate is None:
         raise ValueError(f"source candidate not found: {candidate_id}")
 
-    candidate_type = _candidate_value(candidate, "candidate_type", default="unknown").lower()
+    candidate_type = read_str(candidate, "candidate_type", default="unknown").lower()
     if candidate_type == "unknown":
-        candidate_type = _infer_candidate_type(_candidate_value(candidate, "normalized_url"))
+        candidate_type = _infer_candidate_type(read_str(candidate, "normalized_url"))
 
     if candidate_type == "rss":
         result = validate_rss_candidate(candidate, fetch_feed=fetch_feed)

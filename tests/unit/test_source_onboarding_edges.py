@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from app.core.sources import candidates as source_candidates
 from app.core.sources import onboarding as source_onboarding
 from app.core.sources import validation as source_validation
+from app.core.sources.candidate_fields import read_optional_int, read_str
 from app.storage.models_sql import Base, Source
 
 
@@ -237,9 +238,9 @@ def test_source_onboarding_review_helper_guards_and_edit_inference() -> None:
 def test_source_onboarding_lookup_and_value_helpers() -> None:
     assert source_onboarding._lookup_candidate(object(), 1) is None
     assert source_onboarding._find_by_normalized_url(object(), "https://example.com") is None
-    assert source_onboarding._candidate_int_value({}, "approved_source_id") is None
+    assert read_optional_int({}, "approved_source_id") is None
     assert (
-        source_onboarding._candidate_int_value(
+        read_optional_int(
             SimpleNamespace(approved_source_id="9"),
             "approved_source_id",
         )
@@ -247,7 +248,7 @@ def test_source_onboarding_lookup_and_value_helpers() -> None:
     )
 
     with pytest.raises(ValueError, match="candidate field is required: normalized_url"):
-        source_candidates._candidate_value({}, "normalized_url")
+        read_str({}, "normalized_url")
 
 
 def test_source_onboarding_path_and_reason_helpers() -> None:
@@ -296,7 +297,7 @@ def test_source_onboarding_picker_and_ingest_helpers(monkeypatch) -> None:
             {"id": 1, "normalized_url": "https://example.com/feed.xml", "candidate_type": "rss"},
         ]
     )
-    assert source_candidates._candidate_value(chosen, "id") == "1"
+    assert read_str(chosen, "id") == "1"
 
     calls: dict[str, object] = {}
 
