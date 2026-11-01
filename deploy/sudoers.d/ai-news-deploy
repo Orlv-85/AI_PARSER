@@ -1,0 +1,21 @@
+# Source of truth for /etc/sudoers.d/ai-news-deploy on the server. Root applies it by hand
+# (visudo -cf, then install -m 0440); a deploy never changes it. tests/unit/test_deploy_sudoers.py
+# checks it against the sudo calls of the scripts.
+# Root calls made by scripts/deploy_prod.sh and scripts/install_daily_timers.sh. Exact arguments only.
+Cmnd_Alias AINEWS_UNITS = \
+  /usr/bin/install -m 0644 /var/tmp/ai-news-units/ai-news-daily-archive.service /etc/systemd/system/ai-news-daily-archive.service, \
+  /usr/bin/install -m 0644 /var/tmp/ai-news-units/ai-news-daily-archive.timer /etc/systemd/system/ai-news-daily-archive.timer, \
+  /usr/bin/install -m 0644 /var/tmp/ai-news-units/ai-news-daily-digest.service /etc/systemd/system/ai-news-daily-digest.service, \
+  /usr/bin/install -m 0644 /var/tmp/ai-news-units/ai-news-daily-digest.timer /etc/systemd/system/ai-news-daily-digest.timer, \
+  /usr/bin/install -m 0644 /var/tmp/ai-news-units/ai-news-daily-fetch.service /etc/systemd/system/ai-news-daily-fetch.service, \
+  /usr/bin/install -m 0644 /var/tmp/ai-news-units/ai-news-daily-fetch.timer /etc/systemd/system/ai-news-daily-fetch.timer, \
+  /usr/bin/install -m 0644 /var/tmp/ai-news-units/ai-news-daily-world.service /etc/systemd/system/ai-news-daily-world.service, \
+  /usr/bin/install -m 0644 /var/tmp/ai-news-units/ai-news-daily-world.timer /etc/systemd/system/ai-news-daily-world.timer
+Cmnd_Alias AINEWS_SYSTEMD = \
+  /usr/bin/systemctl daemon-reload, \
+  /usr/bin/systemctl enable --now ai-news-daily-fetch.timer ai-news-daily-digest.timer, \
+  /usr/bin/systemctl enable --now ai-news-daily-archive.timer, \
+  /usr/bin/systemctl enable --now ai-news-daily-world.timer, \
+  /usr/bin/systemctl disable --now ai-news-daily-fetch.timer, \
+  /usr/bin/systemctl disable --now ai-news-daily-digest.timer
+deploy ALL=(root) NOPASSWD: AINEWS_UNITS, AINEWS_SYSTEMD

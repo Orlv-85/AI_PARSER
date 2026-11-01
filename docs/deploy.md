@@ -98,24 +98,13 @@ Set `CADDY_SITE_ADDRESS` to your public domain/host (for example `5kzt.l.time4vp
   login and root login are disabled in `/etc/ssh/sshd_config.d/10-hardening.conf`. Root is
   reachable only through the hosting provider's console.
 - Two separate keys: one in the `SERVER_SSH_KEY` secret (CI), one on the operator machine.
-  `deploy` has no general sudo. `/etc/sudoers.d/ai-news-deploy` allows without password exactly
-  the calls `scripts/deploy_prod.sh` and `scripts/install_daily_timers.sh` make as root:
-  `install -m 0644` of the eight `ai-news-daily-*` unit files from `/var/tmp/ai-news-units/` into
-  `/etc/systemd/system/`, `systemctl daemon-reload`, and `systemctl enable --now` or
-  `disable --now` of the `ai-news-daily-*` timers. Members of group `docker` can still start
-  root containers, so the file limits mistakes, not a stolen CI key.
-- One-time step before the first deploy that contains the world collect job (W4): root adds the
-  world lines to `/etc/sudoers.d/ai-news-deploy`, otherwise `install_daily_timers.sh` fails under
-  `set -eu` and the deploy stops. Add exactly (same form as the existing lines of the other jobs;
-  check with `visudo -cf`):
-
-  ```text
-  deploy ALL=(root) NOPASSWD: /usr/bin/install -m 0644 /var/tmp/ai-news-units/ai-news-daily-world.service /etc/systemd/system/ai-news-daily-world.service
-  deploy ALL=(root) NOPASSWD: /usr/bin/install -m 0644 /var/tmp/ai-news-units/ai-news-daily-world.timer /etc/systemd/system/ai-news-daily-world.timer
-  deploy ALL=(root) NOPASSWD: /usr/bin/systemctl enable --now ai-news-daily-world.timer
-  ```
-
-  The script has no `disable` path for the world timer; the switch is the way to turn the job off.
+  `deploy` has no general sudo. The repo holds the server file as a sample,
+  `deploy/sudoers.d/ai-news-deploy`: exactly the calls `scripts/deploy_prod.sh` and
+  `scripts/install_daily_timers.sh` make as root. A test checks the sample against the scripts, so a
+  script change that adds a sudo call needs a sample change in the same PR. Root applies it by hand
+  (`visudo -cf`, then `install -m 0440` to `/etc/sudoers.d/ai-news-deploy`) before the deploy that
+  needs it; a deploy never changes it. Members of group `docker` can still start root containers,
+  so the file limits mistakes, not a stolen CI key.
 - The server's `origin` is `https://github.com/Orlv-85/AI_PARSER.git` (public repo, no key).
 - fail2ban (sshd jail) bans repeated failed logins.
 - Setup, verification and rollback steps: `docs/work/plan-ssh-deploy-user-2026-10-24.md`.
