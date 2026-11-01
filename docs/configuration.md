@@ -118,6 +118,16 @@ AINEWS_PERIOD_SIGNALS_BRIEF_ENABLED=false   # gates the paid weekly brief (needs
 AINEWS_PERIOD_SIGNALS_MAX_USD=0.10          # total cap of the brief step per run (--max-usd overrides)
 ```
 
+World news collect (spec 018, item 5) downloads about 820 MB of GDELT files a day, so the nightly job
+`scripts/run_daily_world_job.sh` is off unless `AINEWS_WORLD_COLLECT_ENABLED=true` is set in the
+environment or in the server's private `.env` (the script reads the file itself; compose does not need
+to pass it). Default: off; the job then logs one line and exits 0. The command `ai-news world collect`
+works whatever the switch says. Details: `docs/deploy.md`, behavior in `src/app/core/world/world.md`.
+
+```dotenv
+AINEWS_WORLD_COLLECT_ENABLED=false          # gates the nightly world collect job only (default: off)
+```
+
 ### Publish API token
 
 When web auth is enabled, the public API paths `/api/news/digests`,

@@ -277,25 +277,60 @@ def scan_day(  # pylint: disable=too-many-arguments,too-many-locals
             return
         if index:
             sleep(pause)
-        gfile = fetch_file(
-            client, name, tmp_dir=tmp_dir, retry_delay=retry_delay, sleep=sleep, base_url=base_url
+        result = FileResult()
+        yield from scan_file(
+            client, kind, name, stats=stats, result=result, own_domains=own_domains,
+            tmp_dir=tmp_dir, retry_delay=retry_delay, sleep=sleep, base_url=base_url,
         )
-        if gfile is None:
-            stats.files_missing += 1
-            consecutive_missing += 1
-            continue
-        rows_before, bad_before = stats.rows, stats.bad_rows
-        try:
-            yield from _scan_lines(gfile, name, kind == KIND_TRANSLATION, stats, own_domains)
-        finally:
-            gfile.close()
-        all_bad = stats.rows == rows_before and stats.bad_rows > bad_before
-        if gfile.corrupt or all_bad:
-            stats.files_missing += 1
-            consecutive_missing += 1
-        else:
-            stats.files_read += 1
-            consecutive_missing = 0
+        consecutive_missing = consecutive_missing + 1 if result.missing else 0
+
+
+@dataclass
+class FileResult:
+    """Outcome of one scanned file, filled by `scan_file` once the iterator is exhausted."""
+
+    missing: bool = False
+    rows: int = 0
+    matched: int = 0
+
+
+def scan_file(  # pylint: disable=too-many-arguments,too-many-locals
+    client: httpx.Client,
+    kind: str,
+    name: str,
+    *,
+    stats: DayStats,
+    result: FileResult,
+    own_domains: frozenset[str] = frozenset(),
+    tmp_dir: Path | None = None,
+    retry_delay: float = RETRY_DELAY_SECONDS,
+    sleep: Callable[[float], None] = time.sleep,
+    base_url: str = GDELT_BASE_URL,
+) -> Iterator[Candidate]:
+    """Download one file, yield the rows kept by the filter, fill `stats` and `result`.
+
+    `result` is complete when the iterator ends; the temporary file is closed on every exit.
+    """
+    gfile = fetch_file(
+        client, name, tmp_dir=tmp_dir, retry_delay=retry_delay, sleep=sleep, base_url=base_url
+    )
+    if gfile is None:
+        stats.files_missing += 1
+        result.missing = True
+        return
+    rows_before, bad_before, matched_before = stats.rows, stats.bad_rows, stats.matched
+    try:
+        yield from _scan_lines(gfile, name, kind == KIND_TRANSLATION, stats, own_domains)
+    finally:
+        gfile.close()
+    result.rows = stats.rows - rows_before
+    result.matched = stats.matched - matched_before
+    all_bad = stats.rows == rows_before and stats.bad_rows > bad_before
+    if gfile.corrupt or all_bad:
+        stats.files_missing += 1
+        result.missing = True
+    else:
+        stats.files_read += 1
 
 
 def _scan_lines(

@@ -100,10 +100,22 @@ Set `CADDY_SITE_ADDRESS` to your public domain/host (for example `5kzt.l.time4vp
 - Two separate keys: one in the `SERVER_SSH_KEY` secret (CI), one on the operator machine.
   `deploy` has no general sudo. `/etc/sudoers.d/ai-news-deploy` allows without password exactly
   the calls `scripts/deploy_prod.sh` and `scripts/install_daily_timers.sh` make as root:
-  `install -m 0644` of the six `ai-news-daily-*` unit files from `/var/tmp/ai-news-units/` into
+  `install -m 0644` of the eight `ai-news-daily-*` unit files from `/var/tmp/ai-news-units/` into
   `/etc/systemd/system/`, `systemctl daemon-reload`, and `systemctl enable --now` or
   `disable --now` of the `ai-news-daily-*` timers. Members of group `docker` can still start
   root containers, so the file limits mistakes, not a stolen CI key.
+- One-time step before the first deploy that contains the world collect job (W4): root adds the
+  world lines to `/etc/sudoers.d/ai-news-deploy`, otherwise `install_daily_timers.sh` fails under
+  `set -eu` and the deploy stops. Add exactly (same form as the existing lines of the other jobs;
+  check with `visudo -cf`):
+
+  ```text
+  deploy ALL=(root) NOPASSWD: /usr/bin/install -m 0644 /var/tmp/ai-news-units/ai-news-daily-world.service /etc/systemd/system/ai-news-daily-world.service
+  deploy ALL=(root) NOPASSWD: /usr/bin/install -m 0644 /var/tmp/ai-news-units/ai-news-daily-world.timer /etc/systemd/system/ai-news-daily-world.timer
+  deploy ALL=(root) NOPASSWD: /usr/bin/systemctl enable --now ai-news-daily-world.timer
+  ```
+
+  The script has no `disable` path for the world timer; the switch is the way to turn the job off.
 - The server's `origin` is `https://github.com/Orlv-85/AI_PARSER.git` (public repo, no key).
 - fail2ban (sshd jail) bans repeated failed logins.
 - Setup, verification and rollback steps: `docs/work/plan-ssh-deploy-user-2026-10-24.md`.
@@ -379,6 +391,27 @@ docker compose -f docker-compose.prod.yml run --rm app sh -c \
   "ai-news archive import-db --source-url \"\${AINEWS_DATABASE_URL%/*}/$SCRATCH\" --apply"
 docker compose -f docker-compose.prod.yml exec -T db sh -lc "dropdb -U \"\$POSTGRES_USER\" $SCRATCH"
 ```
+
+### World news collect
+
+Behavior: `src/app/core/world/world.md`. The systemd timer `ai-news-daily-world` (04:00 UTC, installed
+by every deploy with the other daily timers, so a deploy does start the timer) runs
+`scripts/run_daily_world_job.sh`. The job is off by default: it does nothing and logs one line unless
+`AINEWS_WORLD_COLLECT_ENABLED=true` is in the server `.env` (about 820 MB of download a day; enabling it
+is a separate decision). When on, it collects yesterday's GDELT files and appends to
+`logs/daily-world.log` one `world_collect_finished` JSON line, or one stderr line when the lock was not
+acquired or the run failed or timed out. Without `--date` the job collects yesterday and then the
+day before, so a missed night is recovered; a complete day costs no download.
+
+```bash
+grep world_collect_finished logs/daily-world.log | tail -1 | python3 -m json.tool
+grep -E 'world collect (skipped|failed)' logs/daily-world.log | tail -5
+export APP_IMAGE="$(cat .last_deploy_image)"
+docker compose -f docker-compose.prod.yml run --rm app ai-news world collect --date 2026-10-31
+```
+
+A `partial` day (more than `MAX_MISSING_FILES_OK` missing files) is finished by running the last command again: files
+that are done are skipped. Use `--max-files N` for a small trial run.
 
 ### Off-site backups (Backblaze B2)
 

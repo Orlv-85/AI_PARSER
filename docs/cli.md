@@ -31,6 +31,16 @@ This workflow uses existing `JEV_API_KEY` / `AINEWS_JEV_ENABLED` settings and
 server. Completed candidate results persist across restarts; interrupted pending
 work can be restarted with **Check this batch**.
 
+## World news stream
+
+```bash
+ai-news world scan --date 2026-10-31 --max-files 3     # counts only, writes nothing
+ai-news world collect --date 2026-10-31 --max-files 3  # stores candidates; default date is yesterday UTC
+```
+
+Both download GDELT files. `collect` skips files that are already done and prints one JSON summary.
+Behavior: `src/app/core/world/world.md`; the nightly job: `docs/deploy.md`.
+
 ## Show configured sources
 
 ```bash
