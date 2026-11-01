@@ -2,7 +2,7 @@
 import io
 import json
 import zipfile
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import httpx
 import pytest
@@ -15,11 +15,12 @@ from app.core.world.gdelt import (
     DOWNLOAD_TRIES,
     MAX_CONSECUTIVE_MISSING,
     MAX_MISSING_FILES_OK,
+    Candidate,
     day_file_names,
 )
 from app.core.world_collect import collect_day, yesterday_utc
 from app.storage.models_sql import Base, WorldCandidate, WorldFile
-from app.storage.world import FILE_DONE, FILE_MISSING, WorldRepo
+from app.storage.world import FILE_DONE, FILE_MISSING, WORLD_RETENTION_DAYS, WorldRepo
 
 DAY = date(2026, 10, 30)
 NAMES = day_file_names(DAY)
@@ -45,6 +46,12 @@ def file_for(index, rows=1):
     text = "".join(gkg_line(f"AI story {index}-{n}", f"https://example.org/{index}/{n}")
                    for n in range(rows))
     return zipped(text + gkg_line("Town fair opens", f"https://example.org/fair/{index}"))
+
+
+def candidate_for(url):
+    return Candidate(url=url, title="AI story old", source_domain="example.org", language="eng",
+                     tld_hint=None, published_stamp="20260101000000",
+                     gdelt_file="20260101000000.gkg.csv.zip", translation=False, match="strong")
 
 
 def client_for(files, calls=None, on_request=None):
@@ -157,6 +164,31 @@ def test_collect_partial_day_flag(engine, tmp_path, missing, partial):
     assert summary.partial is partial
 
 
+def test_collect_stop_counts_done_files_as_skipped(engine, tmp_path):
+    with Session(engine) as session:
+        repo = WorldRepo(session)
+        for name in NAMES[20:23]:
+            repo.record_file(name[:14], "gkg", FILE_DONE)
+        session.commit()
+    summary = run(engine, {}, tmp_path, max_files=30)
+    assert summary.skipped == 3
+    assert summary.missing == 27
+    assert summary.skipped + summary.missing == 30
+
+
+def test_collect_prunes_old_rows(engine, tmp_path):
+    old = datetime.now(UTC) - timedelta(days=WORLD_RETENTION_DAYS + 1)
+    with Session(engine) as session:
+        WorldRepo(session).upsert_candidates([candidate_for("https://example.org/old")], now=old)
+        session.add(WorldFile(stamp="20260101000000", kind="gkg", state=FILE_DONE, rows=0,
+                              matched=0, updated_at=old))
+        session.commit()
+    summary = run(engine, {NAMES[0]: file_for(0)}, tmp_path, max_files=1)
+    assert (summary.pruned_candidates, summary.pruned_files) == (1, 1)
+    with Session(engine) as session:
+        assert session.scalar(select(func.count()).select_from(WorldCandidate)) == 1
+
+
 def test_collect_summary_counts(engine, tmp_path):
     shared = gkg_line("AI story shared", "https://example.org/shared")
     files = {
@@ -189,3 +221,46 @@ def test_cli_world_collect_prints_summary(engine, monkeypatch):
     assert "world_collect_finished" in result.output
     bad = CliRunner().invoke(cli_main.app, ["world", "collect", "--date", "nope"])
     assert bad.exit_code != 0
+
+
+def cli_collect(engine, monkeypatch, files, calls=None, args=()):
+    monkeypatch.setattr(cli_main, "make_client", lambda: client_for(files, calls))
+    monkeypatch.setattr(cli_main, "SessionLocal", sessionmaker(engine))
+    monkeypatch.setattr(cli_main, "create_all", lambda: None)
+    monkeypatch.setattr(cli_main, "yesterday_utc", lambda: DAY)
+    monkeypatch.setattr("app.core.world_collect.PAUSE_SECONDS", 0)
+    result = CliRunner().invoke(cli_main.app, ["world", "collect", "--max-files", "1", *args])
+    assert result.exit_code == 0, result.output
+    return [json.loads(line) for line in result.output.splitlines()
+            if line.startswith('{"day"')]
+
+
+def two_day_files():
+    before = day_file_names(DAY - timedelta(days=1))
+    return {NAMES[0]: file_for(0), before[0]: file_for(1)}
+
+
+def test_collect_default_runs_yesterday_and_day_before(engine, monkeypatch):
+    lines = cli_collect(engine, monkeypatch, two_day_files())
+    assert [line["day"] for line in lines] == ["2026-10-30", "2026-10-29"]
+    assert [line["new"] for line in lines] == [1, 1]
+    only = cli_collect(engine, monkeypatch, two_day_files(), args=["--date", "2026-10-30"])
+    assert [line["day"] for line in only] == ["2026-10-30"]
+
+
+def test_collect_catch_up_recovers_missed_night(engine, monkeypatch):
+    # Yesterday is already done; the night of the day before was missed and is collected now.
+    with Session(engine) as session:
+        WorldRepo(session).record_file(NAMES[0][:14], "gkg", FILE_DONE)
+        session.commit()
+    lines = cli_collect(engine, monkeypatch, two_day_files())
+    assert (lines[0]["files"], lines[0]["skipped"]) == (0, 1)
+    assert (lines[1]["day"], lines[1]["files"], lines[1]["new"]) == ("2026-10-29", 1, 1)
+
+
+def test_collect_complete_day_downloads_nothing(engine, monkeypatch):
+    cli_collect(engine, monkeypatch, two_day_files())
+    calls = []
+    lines = cli_collect(engine, monkeypatch, two_day_files(), calls)
+    assert not calls
+    assert [(line["files"], line["skipped"]) for line in lines] == [(0, 1), (0, 1)]

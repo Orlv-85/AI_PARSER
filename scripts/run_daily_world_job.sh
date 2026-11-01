@@ -7,14 +7,40 @@ SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 ROOT_DIR="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
 cd "$ROOT_DIR"
 # The switch comes from the environment, else from the deploy .env (compose reads the same file).
+# Accepted in .env: "export " prefix, CRLF, quotes, trailing spaces and "# comment"; last one wins.
+CR="$(printf '\r')"
+TAB="$(printf '\t')"
+trim() {
+  v="$1"
+  while :; do
+    case "$v" in
+      " "*|"$TAB"*) v="${v#?}";;
+      *" "|*"$TAB") v="${v%?}";;
+      *) break;;
+    esac
+  done
+}
 enabled="${AINEWS_WORLD_COLLECT_ENABLED:-}"
 if [ -z "$enabled" ] && [ -f .env ]; then
   while IFS= read -r line || [ -n "$line" ]; do
-    case "$line" in AINEWS_WORLD_COLLECT_ENABLED=*) enabled="${line#*=}";; esac
+    line="${line%"$CR"}"
+    case "$line" in "export "*) line="${line#export }";; esac
+    case "$line" in
+      AINEWS_WORLD_COLLECT_ENABLED=*)
+        trim "${line#*=}"
+        case "$v" in *" #"*) trim "${v%% #*}";; esac
+        enabled="$v"
+        ;;
+    esac
   done < .env
 fi
-case "$enabled" in
-  true|True|TRUE|1|yes|on|'"true"'|"'true'") ;;
+trim "$enabled"
+case "$v" in
+  \"*\") v="${v#\"}"; v="${v%\"}";;
+  \'*\') v="${v#\'}"; v="${v%\'}";;
+esac
+case "$v" in
+  [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) ;;
   *)
     echo "world collect skipped: AINEWS_WORLD_COLLECT_ENABLED is off" >&2
     exit 0

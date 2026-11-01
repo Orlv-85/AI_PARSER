@@ -93,3 +93,20 @@ def test_install_timers_includes_archive(tmp_path):
             "Persistent=false\n"
             "[Install]\n"
             "WantedBy=timers.target\n")
+
+
+def test_world_sudo_calls_are_documented():
+    # The deploy user may run only exact sudoers lines; the world calls must be listed in the guide.
+    script = Path("scripts/install_daily_timers.sh").read_text(encoding="utf-8")
+    guide = Path("docs/deploy.md").read_text(encoding="utf-8")
+    assert "$SUDO systemctl enable --now ai-news-daily-world.timer\n" in script
+    assert "$SUDO install -m 0644 \"$unit\" \"$FINAL_DIR/$(basename \"$unit\")\"" in script
+    lines = [line.strip() for line in guide.splitlines()]
+    sudoers = [line for line in lines if line.startswith("deploy ALL=")]
+    for unit in ("service", "timer"):
+        name = f"ai-news-daily-world.{unit}"
+        assert any(f"install -m 0644 /var/tmp/ai-news-units/{name} /etc/systemd/system/{name}"
+                   in line for line in sudoers)
+    assert any(line.endswith("systemctl enable --now ai-news-daily-world.timer")
+               for line in sudoers)
+    assert "of the eight `ai-news-daily-*` unit files" in guide

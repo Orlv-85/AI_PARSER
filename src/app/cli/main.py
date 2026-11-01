@@ -510,19 +510,24 @@ def world_collect(
     report_date: str | None = typer.Option(None, "--date", help="UTC day, default yesterday."),
     max_files: int | None = typer.Option(None, "--max-files", min=1, help="Read only N files."),
 ) -> None:
-    """Download the GDELT files of a day and store candidates; done files are skipped."""
+    """Download the GDELT files of a day and store candidates; done files are skipped.
+
+    Without --date: yesterday, then the day before (catch-up, no download when complete).
+    """
     try:
-        target = date.fromisoformat(report_date) if report_date else yesterday_utc()
+        days = [date.fromisoformat(report_date)] if report_date else [
+            yesterday_utc(), yesterday_utc() - timedelta(days=1)]
     except ValueError as exc:
         raise typer.BadParameter("--date must be YYYY-MM-DD") from exc
     create_all()
     logger = setup_json_logging()
     own = load_own_domains(get_settings().sources_path)
     with make_client() as client, SessionLocal() as session:
-        summary = collect_day(
-            session, target, client=client, own_domains=own, max_files=max_files, logger=logger
-        )
-    typer.echo(json.dumps(summary.as_dict(), sort_keys=True))
+        for day in days:
+            summary = collect_day(
+                session, day, client=client, own_domains=own, max_files=max_files, logger=logger
+            )
+            typer.echo(json.dumps(summary.as_dict(), sort_keys=True))
 
 
 @app.command("import-candidates")

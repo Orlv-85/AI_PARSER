@@ -676,6 +676,32 @@ def test_world_job_script_switch_off_does_nothing(tmp_path, enabled, env_file):
     assert calls == []
 
 
+@pytest.mark.parametrize("env_file,on", [
+    ("AINEWS_WORLD_COLLECT_ENABLED=true\n", True),
+    ("AINEWS_WORLD_COLLECT_ENABLED=TRUE\n", True),
+    ("AINEWS_WORLD_COLLECT_ENABLED=Yes\n", True),
+    ("AINEWS_WORLD_COLLECT_ENABLED=1\n", True),
+    ("AINEWS_WORLD_COLLECT_ENABLED=on\n", True),
+    ('AINEWS_WORLD_COLLECT_ENABLED="true"\n', True),
+    ("AINEWS_WORLD_COLLECT_ENABLED='true'\n", True),
+    ("AINEWS_WORLD_COLLECT_ENABLED=true\r\nOTHER=1\r\n", True),
+    ("AINEWS_WORLD_COLLECT_ENABLED=true   \n", True),
+    ("AINEWS_WORLD_COLLECT_ENABLED=true # nightly world\n", True),
+    ("export AINEWS_WORLD_COLLECT_ENABLED=true\n", True),
+    ("AINEWS_WORLD_COLLECT_ENABLED=false\nAINEWS_WORLD_COLLECT_ENABLED=true\n", True),
+    ("AINEWS_WORLD_COLLECT_ENABLED=true\nAINEWS_WORLD_COLLECT_ENABLED=false\n", False),
+    ("AINEWS_WORLD_COLLECT_ENABLED=\n", False),
+    ("AINEWS_WORLD_COLLECT_ENABLED = true\n", False),
+    ("AINEWS_WORLD_COLLECT_ENABLED=truely\n", False),
+    ("# AINEWS_WORLD_COLLECT_ENABLED=true\n", False),
+    ("AINEWS_WORLD_COLLECT_ENABLED=true # x\nAINEWS_WORLD_COLLECT_ENABLED=0\n", False),
+])
+def test_world_job_script_env_file_forms(tmp_path, env_file, on):
+    result, calls = _world_job(tmp_path, enabled=None, env_file=env_file)
+    assert result.returncode == 0
+    assert any("ai-news world collect" in call for call in calls) is on
+
+
 def test_world_job_script_switch_on_from_env_file(tmp_path):
     result, calls = _world_job(tmp_path, enabled=None,
                                env_file="X=1\nAINEWS_WORLD_COLLECT_ENABLED=true\n")

@@ -89,7 +89,9 @@ def collect_day(  # pylint: disable=too-many-arguments,too-many-locals
             summary.skipped += 1
             continue
         if consecutive_missing >= MAX_CONSECUTIVE_MISSING:
-            summary.missing += _not_done(names[index:], done)
+            rest = names[index:]
+            summary.missing += _not_done(rest, done)
+            summary.skipped += len(rest) - _not_done(rest, done)
             break
         if stats.files_read + stats.files_missing:
             sleep(pause)
