@@ -22,6 +22,25 @@
         "Budget per run (proposed $2 for DeepSeek) - owner.",
         "Spec number: next free under specs/ when started."
       ]
+    },
+    {
+      "id": "T2",
+      "title": "Refactor complex and duplicated code found by crapper and dryer",
+      "status": "backlog",
+      "decided": "Owner 2026-11-01: valid point, keep as a backlog task; new code is checked per PR (advisory), old code is cleaned here, not inside feature PRs.",
+      "facts_2026_11_01": {
+        "tools": "unclebob crapper, dryer, mutator installed manually in ~/tools/unclebob on the owner's Mac (not in CI); Python supported.",
+        "crapper_no_coverage_on_src": "about 100 functions with cyclomatic complexity >= 10 (coverage not measured, so real CRAP scores unknown)",
+        "dryer_on_src": "9 duplicate pairs with score >= 0.9, e.g. src/app/storage/source_repo.py:164-176 vs src/app/storage/source_candidate_repo.py:111-123; src/app/core/sources/onboarding.py:288-295 vs src/app/storage/source_repo.py:232-239; src/app/core/jev.py:35-43 vs src/app/core/sources/review.py:138-142"
+      },
+      "steps": [
+        "Run crapper with coverage (`crapper --use-existing-coverage` after a pytest coverage run) to get real CRAP scores; list functions with CRAP >= 10.",
+        "Group findings by module; one small PR per module or duplicate pair, behavior pinned by tests first (AGENTS.md test-first rule), reviewed by another session.",
+        "Start with the 9 dryer pairs (cheap, low risk), then the worst CRAP functions in ingestion and daily signals.",
+        "Optionally run mutator on one critical module (e.g. src/app/core/world/filter.py) to judge test strength; full-project mutator runs take hours."
+      ],
+      "done_when": "No dryer pair >= 0.8 in src/ and no function with CRAP >= 30; remaining 10-30 cases listed with a reason.",
+      "open_questions": []
     }
   ]
 }
