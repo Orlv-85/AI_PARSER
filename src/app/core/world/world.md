@@ -237,7 +237,7 @@ flowchart LR
   (`/tmp/ai-news-auto-update.lock`, 1800 s wait), the release image from `.last_deploy_image`,
   `timeout`, one container name `ai-news-world`, always exit 0, a failure or timeout is one stderr
   line. The timer `ai-news-daily-world` runs it at 04:00 UTC. Tests: `test_world_job_script_is_isolated`,
-  `test_install_timers_includes_world`, `test_world_sudo_calls_are_documented`.
+  `test_install_timers_includes_world`, `test_sudoers_sample_matches_the_sudo_calls_of_the_scripts`.
 
 ## Decisions
 
