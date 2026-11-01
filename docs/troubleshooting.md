@@ -204,6 +204,19 @@ the Troubleshooting section of `README.md`.
       "fix": "Mount pgdata at /var/lib/postgresql (docker-compose.prod.yml) and move the data once with docs/archive/2026-10/db-volume-move.md; do not deploy the compose change before the move.",
       "verification": "docker inspect ai-news-db shows only ai-news_pgdata -> /var/lib/postgresql; scripts/db_table_counts.sh equals the counts taken before the move.",
       "if_it_recurs": "After a deploy shows an empty site, check the db mounts first; the data is still on the other volume, so do not prune volumes."
+    },
+    {
+      "id": "local-mypy-worktree-stale-editable-install",
+      "date": "2026-11-01",
+      "area": "lint (mypy), git worktrees",
+      "symptom": "In a git worktree, `make lint PYTHON=<main folder>/venv1/bin/python` reports `Returning Any from function declared to return \"str\" [no-any-return]` for a call into a module that exists only in the branch, or passes without type-checking such a module. CI lint passes.",
+      "evidence": [
+        "T2 PR3 (#172): `reveal_type(read_str)` in src/app/storage/source_repo.py showed Any locally; with MYPYPATH=src it showed the real signature"
+      ],
+      "cause": "venv1 has an editable install of ai-news-collector (`__editable__.ai_news_collector-0.1.0.pth`) pointing at the main folder, which is on an older master. mypy resolves `app.*` through it; a module missing there is silently Any because `ignore_missing_imports = true`.",
+      "fix": "Do not add annotations to work around it. Rely on CI mypy (it runs `pip install --no-deps -e .` in its own checkout), or check a single symbol with `MYPYPATH=src` (that run shows unrelated double-resolution errors and is not a clean gate).",
+      "verification": "Reproduced by the PR #172 reviewer: removing the annotation gives the error locally; MYPYPATH=src resolves the module.",
+      "if_it_recurs": "If CI itself reports Any for a new module, check pyproject mypy settings (files, explicit_package_bases, mypy_path) rather than the venv."
     }
   ]
 }
