@@ -87,6 +87,12 @@ flowchart LR
 ## Code map
 
 - `enrichment.py`: day scope, validation/reuse, provider journal, publication and catch-up selection.
+  - `source_row` picks the evidence for one article in this order: admitted stored content, an
+    extracted source page (`_extracted_page_row`) unless its date disagrees with the stored one
+    (`_page_dates_conflict`, which rejects the article), then confirmed stored content; both
+    content paths need `SOURCE_MIN_CHARS` characters. Tests: the `test_source_row_*` set.
+  - `publish_day` is the sequence pause check, `_provider_keys`, scope and acquisition,
+    `_enrich_scope` (per-row resume, progress file), digest groups, `_back_up_digest`, save.
 - `cli/main.py`: `daily-publish` options and exit codes.
 - `run_daily_fetch_job.sh`: fetch lock and post-fetch catch-up dispatch.
 - `run_daily_digest_job.sh`: publication, held result handling, signals and shared budget.
