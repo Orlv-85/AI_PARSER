@@ -82,6 +82,14 @@ flowchart LR
   runs with a different `--max-usd` (new journal) or deletes that file after accepting the risk
   of paying that call twice. No test.
 
+**Reuse by the world stream**
+- `WorldChangeAssessor.ask(body, parse, event)` is the one place that sends a request through the
+  journal and turns journal stops and failures into `None` / `stopped`; `assess` is `ask` with the
+  four questions. `open_assessor` takes a `root`, a journal `version` and a `usage_event`, so the
+  world stream (`core/world/world.md`, step W5) opens its own journal and its step B asks these
+  same questions. The defaults keep `bulletin assess` as described above. Tests:
+  `test_request_has_only_the_four_questions`, `test_world_journal_is_separate_from_digest_cap`.
+
 ## Decisions
 
 - Separate request, own question set: keeps the validated admission rubric and its version

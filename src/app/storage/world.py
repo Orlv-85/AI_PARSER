@@ -107,6 +107,19 @@ class WorldRepo:
             query = query.limit(limit)
         return list(self.session.scalars(query))
 
+    def candidates_in_window(self, states: Iterable[str], target: date) -> list[WorldCandidate]:
+        """Candidates in `states` from the GDELT day `target` or the day before, oldest first."""
+        first = f"{target - timedelta(days=1):%Y%m%d}"
+        after = f"{target + timedelta(days=1):%Y%m%d}"
+        return list(self.session.scalars(select(WorldCandidate).where(
+            WorldCandidate.state.in_(list(states)), WorldCandidate.gdelt_file >= first,
+            WorldCandidate.gdelt_file < after,
+        ).order_by(WorldCandidate.first_seen_at, WorldCandidate.id)))
+
+    def set_priority(self, candidate: WorldCandidate, priority: float) -> None:
+        candidate.priority = priority
+        self.session.flush()
+
     def transition(self, candidate: WorldCandidate, state: str, *, error: str | None = None,
                    screen_confidence: float | None = None,
                    priority: float | None = None) -> WorldCandidate:

@@ -4,6 +4,7 @@ covers:
   - src/app/core/world/*.py
   - src/app/storage/world.py
   - src/app/core/world_collect.py
+  - src/app/core/world_screen.py
   - scripts/run_daily_world_job.sh
 -->
 # World news stream
@@ -11,8 +12,10 @@ covers:
 Candidate stories about AI in human life from outside our own sources, for the Daily Inference
 bulletin (spec `specs/018-daily-inference/spec.md`, FR-014..FR-018). Plan:
 `specs/018-daily-inference/records/plan-item5-world-sources-2026-10-31.md`. Shipped so far: the
-keyword filter (W1), the GDELT reader (W2, no database), the storage tables (W3) and the collect
-command with its nightly job (W4). The Jev steps (W5 and later) are not in the code yet.
+keyword filter (W1), the GDELT reader (W2, no database), the storage tables (W3), the collect
+command with its nightly job (W4) and the Jev title screen with the FR-001 questions for the top
+candidates (W5, command `ai-news world screen`, not on a timer). Text download (W6) is not in the
+code yet.
 
 ## Behavior
 
@@ -241,6 +244,106 @@ flowchart LR
   `install_daily_timers.sh` has no `disable` path for the world timer; the switch is the way to turn
   the job off (no test).
 
+### Jev screen and assessment (W5)
+
+```mermaid
+flowchart LR
+  cmd["ai-news world screen --date D"] --> rq["Failed candidates return to their step"]
+  rq --> win["Window: GDELT days D-1 and D"]
+  win --> cl["new candidates grouped by cluster_key"]
+  cl --> rep["One representative per cluster: title, domain, language to Jev ai_relevant"]
+  rep --> thr{"Probability at least SCREEN_THRESHOLD?"}
+  thr -- yes --> in["Cluster: screened_in"]
+  thr -- no --> out["Cluster: screened_out"]
+  rep -- "Jev failure" --> fl["Representative: failed, cluster stays new"]
+  in --> rank["Rank clusters: confidence x outlets"]
+  rank --> top["Top WORLD_TOP_N"]
+  top --> txt{"State text_ready and text from the seam?"}
+  txt -- no --> wait["Left as it is: skipped_no_text or awaiting_text"]
+  txt -- yes --> b["FR-001 four questions, stored by url_canonical_hash"]
+  b --> as["assessed"]
+```
+
+**Step A, title screen**
+- One Jev question `ai_relevant` (type `noul`: probability that the story is about AI in human
+  life, the scope of spec 018) per cluster, version `WORLD_SCREEN_VERSION`. The request state is
+  the title, the source domain and the language, nothing else: no URL, no text. The title is cut to
+  `TITLE_LIMIT`. Jev has no local rule against a request without content: the daily path already
+  sends `Content:` empty for feed items without text; whether the live API accepts a title-only
+  state is checked by the gate run (see Decisions). `RUBRIC_VERSION` and `WORLD_CHANGE_VERSION`
+  are not touched. Tests: `test_screen_questions_shape_and_version`,
+  `test_screen_sends_title_and_domain_only`, `test_screen_versions_leave_rubric_alone`.
+- The candidates of step A are those in state `new` whose GDELT day (the first 8 characters of
+  `gdelt_file`) is `--date` or the day before: a candidate not reached on one day is still
+  pending on the next run, and after that it is left alone. Tests: `test_screen_window_is_two_days`.
+- Candidates with the same `cluster_key` are one story: the oldest (lowest `first_seen_at`, then
+  id) is the representative and is the only one sent. Every other `new` candidate of the cluster in
+  the window gets the same state and the same `screen_confidence` without a request. A cluster
+  is formed among the pending candidates of one run; a late outlet of a cluster screened earlier is
+  screened again as its own cluster. Tests: `test_screen_cluster_follows_representative`.
+- The probability is stored in `screen_confidence`. At or above `SCREEN_THRESHOLD` the state is
+  `screened_in`, below it `screened_out` (final). An answer that is not a probability in [0, 1] is
+  a failure. Tests: `test_screen_threshold_splits_in_and_out`, `test_screen_bad_answer_is_a_failure`.
+
+**Ranking and step B**
+- Clusters of candidates in `screened_in`, `text_ready` or `assessed` are ranked by priority
+  (`screen_confidence` x number of distinct source domains in the cluster), then oldest first.
+  GDELT themes are not stored by W3, so human-life themes do not take part. The first
+  `WORLD_TOP_N` clusters are the top; already assessed clusters come first whatever their
+  priority, so a window never asks more than `WORLD_TOP_N` stories in total over any number of
+  runs. The representative of a
+  cluster is its assessed member, else a `text_ready` one, else the oldest. The priority is stored
+  in `priority` of the representative. Tests: `test_rank_orders_by_confidence_times_outlets`,
+  `test_rank_assessed_keep_their_place`.
+- Step B asks the four FR-001 questions of `world_change` (the same questions, validation and
+  storage as `bulletin assess`: `WorldChangeAssessor`, `WorldChangeRepo`, `WORLD_CHANGE_VERSION`),
+  keyed by `url_canonical_hash` and with no `article_id`, only for top candidates in state
+  `text_ready` for which the text seam returns text. The state is the title and that text. Tests:
+  `test_stage_b_only_for_top_n_with_text`, `test_stage_b_stores_answers_by_hash`.
+- The text seam is `TextSource`, a function from a candidate to its text or None. In W5 the only
+  source is `no_text` (always None), because W6 brings the download and the move to `text_ready`.
+  A top candidate without text from the seam stays as it is and counts in `skipped_no_text`; a top
+  candidate still `screened_in` counts in `awaiting_text`. When nothing could be asked the summary
+  says so in `note`. Tests: `test_stage_b_without_text_does_nothing_and_says_so`.
+- The assessed candidate moves to `assessed`; the cluster followers get no answer of their own
+  (the bulletin reads a story through its representative). Tests: `test_stage_b_stores_answers_by_hash`.
+
+**Cost cap and failures**
+- All world requests of a day (A and B) go through one provider journal
+  `data/world/<D>/journal-<WORLD_JOURNAL_VERSION>-<cap>.sqlite3`, a file of its own: the digest's
+  Jev cap (`data/daily-admission/<today>/`, $0.05) and `bulletin assess` (`data/bulletin/<D>/`)
+  neither share nor spend it. The cap is `WORLD_JEV_MAX_USD_PER_DAY` ($0.10, owner 2026-10-31);
+  `--max-usd` can only lower it. Tests: `test_world_journal_is_separate_from_digest_cap`,
+  `test_cli_world_screen_rejects_max_usd_above_cap`.
+- At the cap (or any journal stop or outage) the run stops, logs a stop line with the reason (event
+  prefix `world_screen` for step A, `world_change` for step B, suffix `_stopped`), and also
+  `world_cost_cap` when the reason is the cap; every unprocessed candidate stays in its state and counts in `not_attempted`; the next run
+  for the same or the next day takes them. Tests: `test_world_cap_stops_requests`.
+- A Jev failure of a representative (HTTP, bad answer) moves only that representative to `failed`
+  with `attempts` plus one and `last_error` `screen: ...` (or `assess: ...` for step B); its
+  cluster stays `new`. There is no retry in the same run. Tests:
+  `test_world_jev_failure_leaves_candidates_pending`.
+- At the start of a real run, `failed` candidates of the window with fewer than `MAX_ATTEMPTS`
+  attempts return to the step named in `last_error`: `screen` to `new`, `assess` to `text_ready`.
+  Other failures (W6) are not touched. Tests: `test_failed_candidates_return_to_their_step`,
+  `test_failed_after_max_attempts_stay_failed`.
+
+**Command** `ai-news world screen --date D [--max-usd X] [--dry-run]`
+- Runs step A and then step B for the window. Prints one JSON summary: `screened` (candidates
+  that got a state), `in`, `out`, `requests` (step A requests answered or failed), `asked`
+  (step B candidates sent), `assessed`, `skipped_no_text`, `awaiting_text`, `failed`,
+  `not_attempted`, `cost_usd` (journal total of the day, earlier runs
+  included), `tokens` (Jev input tokens of this run, per step: `screen`, `assess`), `note`.
+  Tests: `test_cli_world_screen_summary`.
+- A real run needs `JEV_API_KEY`; without it the command exits 2. Tests:
+  `test_cli_world_screen_needs_a_key`.
+- `--dry-run` sends nothing and writes nothing (no table creation, no journal, no requeue), needs no
+  key, and prints the counts it would work on: `would_screen` (clusters of `new` candidates),
+  `would_follow`, `would_assess` (`text_ready` in the top; the text seam is not called),
+  `awaiting_text` and `retryable_failed`. Tests: `test_cli_world_screen_dry_run_sends_nothing_writes_nothing`.
+- The command is not on a timer and not in the 04:00 job, which stays collect-only; wiring comes
+  with W6 and W7. Tests: `test_world_job_script_is_isolated`.
+
 ## Decisions
 
 - Keyword filter on the title, not a GDELT theme filter: GDELT has no AI theme (measured on one
@@ -281,7 +384,27 @@ flowchart LR
 - The footer credit "News discovery: GDELT Project" with a link is required by the GDELT terms
   and approved by the owner (2026-10-31); the digest Jev cap of FR-012 stays $0.05 per day,
   and the world stream has its own Jev cap of $0.10 per day (owner, 2026-10-31), inside the
-  approved $3 per month. Both are used by later steps; neither is in the code yet.
+  approved $3 per month. The world cap is used by W5 (`WORLD_JEV_MAX_USD_PER_DAY`).
+- Screen threshold `SCREEN_THRESHOLD` is 0.5 (decided 2026-11-01 (agent)): no measured Jev
+  distribution exists yet; the gate run on a stored day reports the share kept and the threshold
+  is retuned from it, with `WORLD_SCREEN_VERSION` raised only when the question text changes.
+- The screen asks `ai_relevant` for "AI in human life" and not the digest's "AI is the central
+  subject": the stream exists for stories outside the AI industry (decided 2026-11-01 (agent)).
+- One request per cluster, followers copy the result: the same story in many outlets costs one
+  request, and the outlet count is what ranks it (plan 6.1; the copy rule decided 2026-11-01
+  (agent)).
+- Outlets are counted as distinct source domains, not cluster size, so one outlet posting the same
+  story under many URLs does not rank it up (decided 2026-11-01 (agent)).
+- The failing step is written as a prefix of `last_error` (`screen:` or `assess:`) because the
+  `failed` state does not say where it came from and W3 has no column for it; W6 uses its own
+  prefix (decided 2026-11-01 (agent)).
+- Steps A and B share one journal per day so one $0.10 cap covers the stream; the file name holds
+  the cap, as in `bulletin assess`, so a different `--max-usd` opens another file (the known limit
+  of `world_change.md` applies; decided 2026-11-01 (agent)).
+- Orchestration is `core/world_screen.py` (it imports storage); the question, state and parser are
+  pure and live in `core/world/screen.py` (decided 2026-11-01 (agent)).
+- Real token sizes of A and B are not measured yet: the plan assumed 300 tokens for A and
+  acceptance of a title-only state; the gate run replaces the assumptions.
 
 ## Invariants
 
@@ -301,6 +424,13 @@ flowchart LR
   no whole-day list of raw rows; one file lives on disk at a time and is deleted. Binding for the
   later steps. Tests: `test_scan_leaves_no_file_on_disk`, `test_scan_memory_is_bounded`.
 
+- `core/world/screen.py` imports no storage, network or database code (same rule as the other
+  core world modules). Tests: `test_world_core_never_imports_storage`.
+- World requests never use the journal file of the digest or of `bulletin assess`. Tests:
+  `test_world_journal_is_separate_from_digest_cap`.
+- Step B writes only `world_change_assessments` (by hash) and `world_candidates`; no world candidate
+  becomes an article. Tests: `test_world_storage_never_touches_articles`.
+
 ## Code map
 
 - `filter.py`: keyword lists, `classify_title`, `filter_title` (result `FilterResult` with a
@@ -317,7 +447,13 @@ flowchart LR
   `WorldRepo` besides tests.
 - `scripts/run_daily_world_job.sh`; `scripts/install_daily_timers.sh` writes the unit and timer
   `ai-news-daily-world` (04:00 UTC) and enables the timer on every deploy.
-- `cli/main.py`: `world` Typer group with `scan` and `collect`.
+- `core/world/screen.py`: `WORLD_SCREEN_VERSION`, `SCREEN_QUESTIONS`, `SCREEN_THRESHOLD`,
+  `WORLD_TOP_N`, `WORLD_JEV_MAX_USD_PER_DAY`, `MAX_ATTEMPTS`, `screen_state`, `parse_screen`,
+  `priority`.
+- `core/world_screen.py`: `run_screen`, `open_world_assessor`, `TextSource`, `no_text`; asks
+  through `WorldChangeAssessor.ask` and stores through `WorldChangeRepo`
+  (`core/bulletin/world_change.py`). `WorldRepo.candidates_in_window` and `set_priority` serve it.
+- `cli/main.py`: `world` Typer group with `scan`, `collect` and `screen`.
 - Change a keyword or a drop rule in the constant named above and extend the fixture test.
 
 ## Tests
@@ -327,6 +463,8 @@ flowchart LR
   and plain fixtures built in the test.
 - `tests/unit/test_world_storage.py`: storage rules above, including the migration round trip.
 - `tests/unit/test_world_collect.py`: collect rules above, with fake transports and a SQLite file.
+- `tests/unit/test_world_screen.py`: W5 rules above, with `httpx.MockTransport`, a real provider
+  journal in a temp directory and a SQLite file.
 - `tests/unit/test_deepseek_digest.py`: the job script test; `tests/unit/test_daily_timers.py`: timer.
 - `tests/fixtures/world/titles.jsonl`: 60 real titles from the measured day, each with the
   recorded decision.
