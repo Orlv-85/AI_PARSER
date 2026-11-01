@@ -185,49 +185,57 @@ def _numbers(data: DayInput, lib: dict[str, Any]) -> str:
     return _pick(numbers["items"], data.day, "items").format(items=data.items)
 
 
-def _headline(shown: list[Story]) -> tuple[str | None, bool]:
+def _headline(shown: list[Story], marker: str) -> tuple[str | None, bool]:
+    """Headline of the best scored story that has one; a cut one ends with the marker."""
     for story in sorted(shown, key=lambda s: -(s.confidence * len(s.outlets))):
         made = make_headline(story.title)
         if made:
-            return made[0], made[1]
+            return made[0] + (marker if made[1] else ""), made[1]
     return None, False
 
 
-def build_bulletin(data: DayInput, lib: dict[str, Any]) -> BuildResult:
-    """The bulletin of the day, or a skipped result with the reason."""
-    if data.status not in READY_STATUSES:
-        return BuildResult(None, "no_signals" if data.status == "missing"
-                           else f"signals_{data.status}")
-    if not data.candidates:
-        return BuildResult(None, "no_assessments")
-    events = _events(data.candidates)
-    harm = [e for e in events if e.harm]
-    clean = [e for e in events if not e.harm]
-    key = _key_results(clean)
+def _byline(day: date, lib: dict[str, Any]) -> str:
+    return f"{lib['labels']['byline']} \u00b7 Day {day_number(day)} \u00b7 {day:%b} {day.day}"
+
+
+def _incidents(clean: list[_Event]) -> tuple[_Event | None, list[_Event], _Event | None]:
+    """Rubric event (first AI-actor issue), the other issues (counted) and the plain-line one."""
     issues = [e for e in clean if e.rep.world_change == "issue"]
     rubric_event = next((e for e in issues if e.rep.actor == "ai_system"), None)
     others = [e for e in issues if e is not rubric_event]
     plain = next((e for e in others if e.rep.actor != "ai_system"), None)
-    coop = [e for e in clean if e.rep.world_change == "limit"][:COOPERATION_MAX]
-    key_stories = [e.story() for e in key]
+    return rubric_event, others, plain
+
+
+def _skip_reason(data: DayInput) -> str | None:
+    if data.status not in READY_STATUSES:
+        return "no_signals" if data.status == "missing" else f"signals_{data.status}"
+    return None if data.candidates else "no_assessments"
+
+
+def build_bulletin(data: DayInput, lib: dict[str, Any]) -> BuildResult:
+    """The bulletin of the day, or a skipped result with the reason."""
+    reason = _skip_reason(data)
+    if reason:
+        return BuildResult(None, reason)
+    events = _events(data.candidates)
+    harm = [e for e in events if e.harm]
+    clean = [e for e in events if not e.harm]
+    rubric_event, others, plain = _incidents(clean)
+    key_stories = [e.story() for e in _key_results(clean)]
     rubric_story = rubric_event.story() if rubric_event else None
-    coop_stories = [e.story() for e in coop]
+    coop_stories = [e.story() for e in clean if e.rep.world_change == "limit"][:COOPERATION_MAX]
     used = _add_reactions(key_stories, rubric_story, coop_stories, lib, data.day)
     headline, cut = _headline([*key_stories, *([rubric_story] if rubric_story else []),
-                               *coop_stories])
+                               *coop_stories], lib["cut"]["marker"])
     day_type = _day_type(data)
-    opening = _pick(lib["openings"][day_type], data.day, day_type).format(
-        weekday=f"{data.day:%A}")
-    labels = lib["labels"]
     return BuildResult(Bulletin(
         day_number=day_number(data.day), date=data.day.isoformat(),
-        masthead=labels["masthead"],
-        byline=f"{labels['byline']} · Day {day_number(data.day)} · "
-               f"{data.day:%b} {data.day.day}",
-        day_type=day_type,
-        headline=headline + lib["cut"]["marker"] if headline and cut else headline,
-        headline_cut=cut, opening=opening, numbers=_numbers(data, lib),
-        key_results=key_stories,
+        masthead=lib["labels"]["masthead"], byline=_byline(data.day, lib),
+        day_type=day_type, headline=headline, headline_cut=cut,
+        opening=_pick(lib["openings"][day_type], data.day, day_type).format(
+            weekday=f"{data.day:%A}"),
+        numbers=_numbers(data, lib), key_results=key_stories,
         rubric_name=_pick(lib["rubrics"], data.day, "rubric") if rubric_story else None,
         rubric_story=rubric_story, cooperation=coop_stories,
         incidents=len(harm) + len(others),
