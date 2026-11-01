@@ -411,9 +411,15 @@ def test_outlet_name_drops_feed_label():
     for name, expected in (
         ("TechCrunch (main feed)", "TechCrunch"),
         ("Machine Learnings (newsletter/feed)", "Machine Learnings"),
+        ("TechCrunch (RSS)", "TechCrunch"),
+        ("Machine Learnings (NEWSLETTER)", "Machine Learnings"),
+        ("Machine Intelligence Research Institute (MIRI)",
+         "Machine Intelligence Research Institute (MIRI)"),
         ("Simon Willison's Weblog", "Simon Willison's Weblog"),
         ("www.bbc.com", "bbc.com"),
+        ("WWW.bbc.com", "bbc.com"),
         ("bbc.com", "bbc.com"),
+        ("(main feed)", ""),
         ("", ""),
     ):
         assert outlet_name(name) == expected
@@ -431,9 +437,10 @@ def answer(world_change="changed", confidence=0.9, area="Work", actor="organisat
     return WorldChange(world_change, confidence, area, 0.8, actor, 0.8, harm)
 
 
-def seed_day(maker, *, status="ready", quiet=False, items=83, history=()):
+def seed_day(maker, *, status="ready", quiet=False, items=83, history=(),
+             source_name="TechCrunch (main feed)"):
     with maker() as session:
-        session.add(Source(source_key="s", name="TechCrunch", type="rss", url="https://t.com"))
+        session.add(Source(source_key="s", name=source_name, type="rss", url="https://t.com"))
         session.flush()
         urls = []
         for index in range(3):
@@ -474,7 +481,7 @@ def add_world(maker, state="assessed"):
         digest = canonical_url_hash(url)
         session.add(WorldCandidate(
             url_canonical_hash=digest, url=url, title="Court rules on AI evidence",
-            source_domain="news.example", language="eng", first_seen_at=datetime.now(UTC),
+            source_domain="www.news.example", language="eng", first_seen_at=datetime.now(UTC),
             gdelt_file="20261030120000", match_kind="strong", cluster_key="court rules",
             state=state))
         session.flush()
@@ -484,8 +491,13 @@ def add_world(maker, state="assessed"):
         session.commit()
 
 
-def test_loader_builds_the_day_input(maker):
-    seed_day(maker, history=[80] * 7)
+@pytest.mark.parametrize(("source_name", "expected_outlet"), [
+    ("TechCrunch (main feed)", "TechCrunch"),
+    ("(main feed)", "t.com"),
+    ("", "t.com"),
+])
+def test_loader_builds_the_day_input(maker, source_name, expected_outlet):
+    seed_day(maker, history=[80] * 7, source_name=source_name)
     with maker() as session:
         loaded = load_day_input(session, DAY, include_world=False)
     assert loaded is not None
@@ -495,7 +507,7 @@ def test_loader_builds_the_day_input(maker):
     assert len(loaded.candidates) == 3
     by_title = {c.title: c for c in loaded.candidates}
     assert by_title["Title 0"].event_type == "model_release"
-    assert by_title["Title 0"].outlet == "TechCrunch"
+    assert by_title["Title 0"].outlet == expected_outlet
     assert by_title["Title 1"].event_key == by_title["Title 2"].event_key
     assert by_title["Title 0"].event_key != by_title["Title 1"].event_key
     result = build_bulletin(loaded, LIB)

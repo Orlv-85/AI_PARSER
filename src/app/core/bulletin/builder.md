@@ -44,9 +44,13 @@ flowchart LR
   `test_median_counts_only_ready_days_before_the_day`.
 
 **Stories**
-- The outlet shown is the source name without a trailing parenthesised label
-  ("TechCrunch (main feed)" -> "TechCrunch"); a world story shows its domain without a leading
-  `www.`. Tests: `test_outlet_name_drops_feed_label`.
+- The outlet shown drops a trailing non-nested parenthesised label only when it contains
+  "feed", "newsletter" or "rss" (case-insensitive): "TechCrunch (main feed)" -> "TechCrunch",
+  while "Machine Intelligence Research Institute (MIRI)" stays. A leading `www.` is removed
+  case-insensitively, including from world domains. If normalization leaves an empty outlet,
+  use the article URL's hostname without `www.`, then "source". Tests:
+  `test_outlet_name_drops_feed_label`, `test_loader_builds_the_day_input`,
+  `test_world_candidates_only_with_the_switch`.
 - Candidates are the day's digest articles with an answer for `WORLD_CHANGE_VERSION`, plus assessed
   world candidates only when the setting `world_stream_in_bulletin` is on (env `AINEWS_WORLD_STREAM_IN_BULLETIN`,
   default off; FR-016/FR-018). Tests: `test_world_candidates_only_with_the_switch`,

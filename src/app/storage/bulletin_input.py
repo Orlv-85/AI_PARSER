@@ -33,7 +33,9 @@ from app.storage.world_change import WorldChangeRepo
 
 
 def outlet_name(name: str) -> str:
-    return re.sub(r"^www\.", "", re.sub(r"\s*\([^)]*\)$", "", name))
+    name = re.sub(r"\s*\([^()]*(?:feed|newsletter|rss)[^()]*\)$", "", name,
+                  flags=re.IGNORECASE)
+    return re.sub(r"^www\.", "", name, flags=re.IGNORECASE)
 
 
 def _event_counts(payload: dict[str, Any]) -> dict[str, int]:
@@ -78,9 +80,10 @@ def _digest_candidates(session: Session, articles: list[Article],
         answer = answers.get(article.url_canonical_hash)
         if answer is None:
             continue
-        outlet = names.get(article.source_id) or urlparse(article.url).hostname or "source"
+        outlet = outlet_name(names.get(article.source_id) or "")
+        outlet = outlet or outlet_name(urlparse(article.url).hostname or "") or "source"
         found.append(Candidate(
-            url=article.url, title=article.title, outlet=outlet_name(outlet),
+            url=article.url, title=article.title, outlet=outlet,
             world_change=answer.world_change, confidence=answer.world_change_confidence,
             area=answer.area, actor=answer.actor, harm=answer.harm_to_people,
             event_key=stories.get(article.url)
@@ -95,8 +98,10 @@ def _world_candidates(session: Session, day: date) -> list[Candidate]:
         answer = WorldChangeRepo(session).get(item.url_canonical_hash, WORLD_CHANGE_VERSION)
         if answer is None:
             continue
+        outlet = outlet_name(item.source_domain)
+        outlet = outlet or outlet_name(urlparse(item.url).hostname or "") or "source"
         found.append(Candidate(
-            url=item.url, title=item.title, outlet=outlet_name(item.source_domain),
+            url=item.url, title=item.title, outlet=outlet,
             world_change=answer.world_change, confidence=answer.world_change_confidence,
             area=answer.area, actor=answer.actor, harm=answer.harm_to_people,
             event_key=f"title:{cluster_key(item.title)}", origin="world"))
