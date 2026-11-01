@@ -326,3 +326,28 @@ def test_dedupe_page_cache_dry_run_then_apply(tmp_path) -> None:
     assert (rebuildable / "body.bin").exists()
     assert (no_response / "page.html").exists()
     assert dedupe_page_cache([archive, daily], apply=True)["files"] == 0
+
+
+def test_download_documents_touches_only_given_ids(tmp_path) -> None:
+    session = _session()
+    chosen = _article(session, "chosen")
+    other = _article(session, "other")
+    calls: list[str] = []
+    transport = httpx.MockTransport(_transport({}, calls))
+    ids = [_document_after_sync(session, chosen)]
+
+    summary = capture_module.download_documents(
+        session, ids, cache_root=tmp_path / "archive", daily_cache_root=tmp_path / "daily",
+        client_factory=lambda: httpx.AsyncClient(transport=transport), host_interval=0)
+
+    assert _pages(calls) == [chosen]
+    assert summary["downloads"] == 1
+    assert _document(session, chosen).state == "archived"
+    assert _document(session, other).state == "pending"
+
+
+def _document_after_sync(session, url) -> int:
+    rows = session.scalars(select(Article)).all()
+    capture_module.archive_articles(session, rows)
+    session.commit()
+    return int(_document(session, url).id)

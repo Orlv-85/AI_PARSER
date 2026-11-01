@@ -5,6 +5,7 @@ covers:
   - src/app/storage/world.py
   - src/app/core/world_collect.py
   - src/app/core/world_screen.py
+  - src/app/core/world_text.py
   - scripts/run_daily_world_job.sh
 -->
 # World news stream
@@ -14,8 +15,8 @@ bulletin (spec `specs/018-daily-inference/spec.md`, FR-014..FR-018). Plan:
 `specs/018-daily-inference/records/plan-item5-world-sources-2026-10-31.md`. Shipped so far: the
 keyword filter (W1), the GDELT reader (W2, no database), the storage tables (W3), the collect
 command with its nightly job (W4) and the Jev title screen with the FR-001 questions for the top
-candidates (W5, command `ai-news world screen`, not on a timer). Text download (W6) is not in the
-code yet.
+candidates (W5, command `ai-news world screen`, not on a timer) and the text download through the
+archive (W6, command `ai-news world texts`, not on a timer).
 
 ## Behavior
 
@@ -162,10 +163,10 @@ stateDiagram-v2
   `test_world_upsert_empty_batch`.
 - `transition` moves a candidate along the arrows of the diagram only (`TRANSITIONS`); any other
   move raises `InvalidTransition` and changes nothing. A move to `failed` adds one to `attempts`
-  and stores the error text; a move to another state clears the error. `screened_out`, `no_text`
-  and `assessed` are final. A stored state that is not in the table also raises
+  and stores the error text; a move to `no_text` stores the reason without counting an attempt; a
+  move to any other state clears the error. `screened_out`, `no_text` and `assessed` are final. A stored state that is not in the table also raises
   `InvalidTransition`. Tests: `test_world_transitions_follow_allowed_table`,
-  `test_world_failed_counts_attempts_and_retries`,
+  `test_world_failed_counts_attempts_and_retries`, `test_world_no_text_keeps_reason`,
   `test_world_transition_unknown_stored_state_is_invalid`.
 - `candidates_in_state` lists candidates of a state, oldest first, for the next step to take.
   Tests: `test_world_transitions_follow_allowed_table`.
@@ -304,9 +305,9 @@ flowchart LR
   keyed by `url_canonical_hash` and with no `article_id`, only for top candidates in state
   `text_ready` for which the text seam returns text. The state is the title and that text. Tests:
   `test_stage_b_only_for_top_n_with_text`, `test_stage_b_stores_answers_by_hash`.
-- The text seam is `TextSource`, a function from a candidate to its text or None. In W5 the only
-  source is `no_text` (always None), because W6 brings the download and the move to `text_ready`.
-  A top candidate without text from the seam stays as it is and counts in `skipped_no_text`; a top
+- The text seam is `TextSource`, a function from a candidate to its text or None. `run_screen`
+  defaults to `no_text` (always None); the command passes `archive_text_source` (W6, see the next
+  section). A top candidate without text from the seam stays as it is and counts in `skipped_no_text`; a top
   candidate still `screened_in` counts in `awaiting_text`. When nothing could be asked the summary
   says so in `note`. Tests: `test_stage_b_without_text_does_nothing_and_says_so`.
 - The assessed candidate moves to `assessed`; the cluster followers get no answer of their own
@@ -355,8 +356,9 @@ flowchart LR
   itself); the operator steps have no test.
 - At the start of a real run, `failed` candidates of the window with fewer than `MAX_ATTEMPTS`
   attempts return to the step named in `last_error`: `screen` to `new`, `assess` to `text_ready`.
-  Other failures (W6) are not touched. Tests: `test_failed_candidates_return_to_their_step`,
-  `test_failed_after_max_attempts_stay_failed`.
+  Other failures are not touched. `no_text` is not `failed` and is never requeued (W6 sets it).
+  Tests: `test_failed_candidates_return_to_their_step`,
+  `test_failed_after_max_attempts_stay_failed`, `test_no_text_is_not_requeued_by_screen`.
 
 **Command** `ai-news world screen --date D [--max-usd X] [--dry-run]`
 - Runs step A and then step B for the window. Prints one JSON summary: `screened` (candidates
@@ -373,7 +375,77 @@ flowchart LR
   the text seam is not called; the top is cut to `WORLD_TOP_N`),
   `awaiting_text` and `retryable_failed`. Tests: `test_cli_world_screen_dry_run_sends_nothing_writes_nothing`, `test_dry_run_respects_top_n`.
 - The command is not on a timer and not in the 04:00 job, which stays collect-only; wiring comes
-  with W6 and W7. Tests: `test_world_job_script_is_isolated`.
+  with W7. Tests: `test_world_job_script_is_isolated`.
+- The command reads text through `archive_text_source`, so step B asks about the candidates whose
+  text `world texts` stored. Tests: `test_cli_world_screen_reads_archive_text`.
+
+### Text download (W6)
+
+```mermaid
+flowchart LR
+  cmd["ai-news world texts --date D"] --> rank["Rank clusters like step B; first WORLD_TOP_N"]
+  rank --> rep{"Representative still screened_in?"}
+  rep -- no --> skip["Not downloaded"]
+  rep -- yes --> doc["Transient Article -> archive_articles: archive document"]
+  doc --> have{"Document already has text?"}
+  have -- yes --> ready["text_ready, no request"]
+  have -- no --> dl["Archive downloader: robots.txt, bot agent, extraction"]
+  dl --> out{"Result"}
+  out -- "text extracted" --> ready2["Source page version; text_ready"]
+  out -- "robots, paywall, no text, HTTP error" --> nt["no_text, last_error text: reason"]
+  out -- "outage or not attempted" --> keep["Stays screened_in"]
+```
+
+- The command takes the same top as step B (`rank_clusters`, first `WORLD_TOP_N` clusters of
+  `screened_in`, `text_ready` and `assessed`) and downloads only the representative of a cluster
+  that is still `screened_in`; followers, `text_ready`, `assessed` and `no_text` candidates are not
+  downloaded. A run never downloads more than `WORLD_TOP_N` pages (plus their robots.txt); clusters
+  that already have text keep their places in the top, so nothing beyond the top is fetched. When a
+  representative ends in `no_text`, the next run ranks the cluster by its remaining outlets and
+  tries the next outlet. Tests: `test_world_never_downloads_more_than_n`,
+  `test_world_text_only_cluster_representative_is_downloaded`.
+- The download is the archive's: each representative becomes an `ArchiveDocument` through
+  `archive_articles` with a transient `Article` (never added to the session, as in
+  `archive import-db`; `source_key` empty, `article_id` empty), then `download_documents` runs the
+  archive's download step on exactly those documents: `SourcePageDownloader` with robots.txt, the
+  declared bot user agent, per-host pacing, redirects, body limit, the reuse of a page the daily
+  publish already extracted, and the archive's outage rule. No second crawler. Tests:
+  `test_world_text_goes_through_archive_robots_and_bot_agent`,
+  `test_world_text_reuses_stored_archive_text`.
+- Extracted text becomes an `archive_texts` version with origin `source_page`; the candidate moves
+  to `text_ready`. A document that already has text (for example from the nightly archive) moves
+  the candidate to `text_ready` without a request. Tests:
+  `test_world_text_goes_through_archive_robots_and_bot_agent`,
+  `test_world_text_reuses_stored_archive_text`.
+- `no_text` with `last_error` `text: <issue>` follows when the archive recorded a failed attempt or
+  an earlier give-up for the page: robots.txt denied (`robots_disallowed_or_unavailable`), a
+  paywall or too short an extraction, a non-article page, an HTTP error status (`http_404` and the like)
+  or a per-page timeout. The story then keeps its title only (spec User Story 1, scenario 4). The
+  prefix `text:` differs from `screen:` and `assess:`; `no_text` is final, so W5 never requeues it.
+  Tests: `test_world_text_blocked_by_robots_is_no_text`,
+  `test_world_text_paywall_and_empty_page_are_no_text`,
+  `test_world_text_http_error_is_no_text_with_reason`.
+- When the downloader reports an outage, or a page was not attempted (time, per-host cap, a failed
+  document whose retry time has not come), the candidate stays `screened_in` and no `no_text` is
+  written; the archive keeps its own attempts and cache as its outage rule says. The next run takes
+  it. Tests: `test_world_text_outage_marks_nothing`.
+- Archive storage: the page text lives in `archive_documents` / `archive_texts` (origin
+  `source_page`), found by `url_canonical_hash`; the candidate stores no text. Following ER-9 the
+  text is read to ask Jev and to write the retelling and is never published; no `articles` row is
+  made. Candidate pruning does not touch archive rows. Tests:
+  `test_world_text_creates_no_articles_and_keeps_archive_after_prune`.
+- `archive_text_source` is the `TextSource` for step B: the newest stored version of the
+  candidate's archive document, cut to `CONTENT_LIMIT` of Jev, or None. Tests:
+  `test_world_text_seam_feeds_step_b`, `test_world_text_seam_cuts_to_jev_limit`.
+- `--dry-run` writes nothing (no table, no archive document, no request) and prints the same
+  summary with `would_download` (the representatives it would try). Tests: `test_world_text_dry_run_writes_nothing`.
+- The command prints one JSON summary: `date`, `dry_run`, `top` (clusters in the top),
+  `candidates` (representatives still `screened_in`), `downloads` (pages requested), `cache_reused`,
+  `text_ready`, `no_text`, `reasons` (`no_text` by issue), `kept` (left `screened_in`), `outage`.
+  Tests: `test_cli_world_texts_summary`.
+- The order of a day is `world screen` (step A), `world texts`, `world screen` again (step B reads
+  the new text); the second screen asks nothing in step A. Wiring and the timer are W7. Tests: none
+  (a rule of use).
 
 ## Decisions
 
@@ -441,6 +513,17 @@ flowchart LR
 - Real token sizes of A and B are not measured yet: the plan assumed 300 tokens for A and
   acceptance of a title-only state; the gate run replaces the assumptions.
 
+- `world texts` is a command of its own, not a step of `world screen`: it needs no Jev key and no
+  money, and a network failure must not stop the paid step (decided 2026-11-01 (agent)).
+- Every non-outage failure of a page is `no_text` at once, with the archive's issue as the reason,
+  and the story is not retried by the world stream: the archive keeps its own retry schedule for the
+  document, and the next outlet of the cluster is tried instead (decided 2026-11-01 (agent)).
+- The archive's own download step is reused through `download_documents` (the same function the
+  nightly capture uses, restricted to given document ids) and not copied, so robots, pacing, the
+  outage rule and the cache stay one code path (plan section 5).
+- World documents are normal archive documents: the nightly `archive capture` counts them in its
+  coverage and retries a `failed` one on its schedule (decided 2026-11-01 (agent)).
+
 ## Invariants
 
 - The filter module imports no network, database or web code and never touches `articles`
@@ -463,6 +546,9 @@ flowchart LR
   core world modules). Tests: `test_world_core_never_imports_storage`.
 - World requests never use the journal file of the digest or of `bulletin assess`. Tests:
   `test_world_journal_is_separate_from_digest_cap`.
+- `core/world_text.py` makes no `articles` row and never adds its transient `Article` to a session;
+  it writes archive rows only through `archive_articles` and the archive download step. Tests:
+  `test_world_text_creates_no_articles_and_keeps_archive_after_prune`.
 - Step B writes only `world_change_assessments` (by hash) and `world_candidates`; no world candidate
   becomes an article. Tests: `test_world_storage_never_touches_articles`.
 
@@ -488,7 +574,11 @@ flowchart LR
 - `core/world_screen.py`: `run_screen`, `open_world_assessor`, `TextSource`, `no_text`; asks
   through `WorldChangeAssessor.ask` and stores through `WorldChangeRepo`
   (`core/bulletin/world_change.py`). `WorldRepo.candidates_in_window` and `set_priority` serve it.
-- `cli/main.py`: `world` Typer group with `scan`, `collect` and `screen`.
+- `core/world_text.py`: `run_texts`, `archive_text_source`; ranks with `rank_clusters`, makes
+  documents with `archive_articles` and downloads with `download_documents`
+  (`core/archive/capture.py`, see `capture.md`).
+- `storage/world.py`: `transition` keeps the reason for `no_text`.
+- `cli/main.py`: `world` Typer group with `scan`, `collect`, `screen` and `texts`.
 - Change a keyword or a drop rule in the constant named above and extend the fixture test.
 
 ## Tests
@@ -500,6 +590,8 @@ flowchart LR
 - `tests/unit/test_world_collect.py`: collect rules above, with fake transports and a SQLite file.
 - `tests/unit/test_world_screen.py`: W5 rules above, with `httpx.MockTransport`, a real provider
   journal in a temp directory and a SQLite file.
+- `tests/unit/test_world_text.py`: W6 rules above, with `httpx.MockTransport` for the pages and a
+  SQLite file; the downloader runs for real on a temp cache.
 - `tests/unit/test_deepseek_digest.py`: the job script test; `tests/unit/test_daily_timers.py`: timer.
 - `tests/fixtures/world/titles.jsonl`: 60 real titles from the measured day, each with the
   recorded decision.

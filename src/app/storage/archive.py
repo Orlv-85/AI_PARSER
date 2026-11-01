@@ -1,7 +1,7 @@
 """Storage for the private article archive (spec 016); behavior in core/archive/capture.md."""
 import hashlib
 import json
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import UTC, date, datetime
 
 from sqlalchemy import delete, func, select
@@ -133,9 +133,10 @@ class ArchiveRepo:
             .order_by(func.count().desc(), ArchiveDocument.host).limit(limit)).all()
         return [(str(host), int(count)) for host, count in rows]
 
-    def due(self, since: datetime | None, now: datetime) -> list[ArchiveDocument]:
+    def due(self, since: datetime | None, now: datetime,
+            ids: Collection[int] | None = None) -> list[ArchiveDocument]:
         """Documents without text that may be downloaded now, newest first: pending ones first
-        seen since `since` (all when None) and failed ones of any age."""
+        seen since `since` (all when None) and failed ones of any age; only `ids` when given."""
         stmt = (select(ArchiveDocument)
                 .where(ArchiveDocument.state.in_((STATE_PENDING, STATE_FAILED)),
                        ArchiveDocument.next_attempt_at.is_(None)
@@ -145,6 +146,8 @@ class ArchiveRepo:
             # Documents already in the retry schedule stay due after the window (FR-010).
             stmt = stmt.where((ArchiveDocument.first_seen_at >= since)
                               | (ArchiveDocument.state == STATE_FAILED))
+        if ids is not None:
+            stmt = stmt.where(ArchiveDocument.id.in_(list(ids)))
         return list(self.session.scalars(stmt))
 
     def record_attempt(self, document: ArchiveDocument, *, issue: str | None, gave_up: bool,

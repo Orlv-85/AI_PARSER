@@ -7,7 +7,7 @@ import logging
 import shutil
 import time
 from collections import Counter
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Collection, Iterable, Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -208,10 +208,10 @@ async def _dispatch(downloader: SourcePageDownloader, urls: list[str], deadline:
     return started
 
 
-def _download_step(session: Session, *, since: datetime | None, now: datetime,  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+def _download_step(session: Session, *, since: datetime | None, now: datetime,  # pylint: disable=too-many-locals,too-many-branches,too-many-statements,too-many-arguments
                    deadline: float, clock: Callable[[], float], cache_root: Path,
                    daily_cache_root: Path, client_factory: Callable[[], httpx.AsyncClient],
-                   host_interval: float) -> dict[str, Any]:
+                   host_interval: float, only: Collection[int] | None = None) -> dict[str, Any]:
     repo = ArchiveRepo(session)
     cache = PageCache(cache_root)
     result: dict[str, Any] = {"cache_reused": 0, "downloads": 0, "gave_up": 0, "skipped_cap": 0,
@@ -219,7 +219,7 @@ def _download_step(session: Session, *, since: datetime | None, now: datetime,  
     failed: Counter[str] = Counter()
     resumed: list[ArchiveDocument] = []
     targets: list[ArchiveDocument] = []
-    for document in _interleave_hosts(repo.due(since, now)):
+    for document in _interleave_hosts(repo.due(since, now, ids=only)):
         page = _extracted_page(_page_dir(daily_cache_root, document.url))
         if page is not None:
             repo.add_version(document, text=page["text"], origin=ORIGIN_SOURCE_PAGE,
@@ -287,6 +287,20 @@ def _download_step(session: Session, *, since: datetime | None, now: datetime,  
     result["failed"] = dict(failed)
     result["raw_dirs_deleted"] = _clean_cache(cache_root)
     return result
+
+
+def download_documents(session: Session, document_ids: Collection[int], *,
+                       now: datetime | None = None, cache_root: Path = ARCHIVE_CACHE_ROOT,
+                       daily_cache_root: Path = DAILY_CACHE_ROOT,
+                       client_factory: Callable[[], httpx.AsyncClient] | None = None,
+                       host_interval: float = 1.0) -> dict[str, Any]:
+    """Reuse or download the pages of the given due documents only, with every rule of the
+    capture; returns its download counters (`downloads`, `failed`, `outage`, ...)."""
+    return _download_step(
+        session, since=None, now=now or datetime.now(UTC), deadline=float("inf"),
+        clock=time.monotonic, cache_root=cache_root, daily_cache_root=daily_cache_root,
+        client_factory=client_factory or (lambda: make_http_client(ARCHIVE_DOWNLOAD_CONCURRENCY)),
+        host_interval=host_interval, only=document_ids)
 
 
 def dedupe_page_cache(roots: Iterable[Path], *, apply: bool = False) -> dict[str, int]:

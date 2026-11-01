@@ -123,15 +123,15 @@ class WorldRepo:
     def transition(self, candidate: WorldCandidate, state: str, *, error: str | None = None,
                    screen_confidence: float | None = None,
                    priority: float | None = None) -> WorldCandidate:
-        """Move a candidate to `state` if TRANSITIONS allows it; `failed` counts an attempt."""
+        """Move a candidate to `state` if TRANSITIONS allows it; `failed` counts an attempt and
+        `no_text` keeps its reason."""
         if state not in TRANSITIONS.get(candidate.state, frozenset()):
             raise InvalidTransition(f"{candidate.state} -> {state}")
         candidate.state = state
         if state == STATE_FAILED:
             candidate.attempts += 1
-            candidate.last_error = (error or "")[:255] or None
-        else:
-            candidate.last_error = None
+        candidate.last_error = (
+            (error or "")[:255] or None if state in (STATE_FAILED, STATE_NO_TEXT) else None)
         if screen_confidence is not None:
             candidate.screen_confidence = screen_confidence
         if priority is not None:

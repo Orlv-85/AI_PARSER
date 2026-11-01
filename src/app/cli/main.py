@@ -42,6 +42,7 @@ from app.core.world.gdelt import DayStats, make_client, scan_day
 from app.core.world.screen import WORLD_JEV_MAX_USD_PER_DAY
 from app.core.world_collect import collect_day, yesterday_utc
 from app.core.world_screen import open_world_assessor, run_screen, utc_today
+from app.core.world_text import archive_text_source, run_texts
 from app.observability import setup_json_logging
 from app.storage import SessionLocal, create_all
 from app.storage.archive import ArchiveRepo
@@ -557,10 +558,29 @@ def world_screen(
                 summary = run_screen(session, None, target, dry_run=True)
             else:
                 with open_world_assessor(get_settings(), logger, utc_today()) as assessor:
-                    summary = run_screen(session, assessor, target, limit_usd=float(max_usd))
+                    summary = run_screen(session, assessor, target, limit_usd=float(max_usd),
+                                         texts=archive_text_source(session))
         except ValueError as exc:
             typer.echo(f"world screen: {exc}", err=True)
             raise typer.Exit(2) from exc
+    typer.echo(json.dumps(summary, sort_keys=True))
+
+
+@world_app.command("texts")
+def world_texts(
+    report_date: str = typer.Option(..., "--date", help="GDELT day, YYYY-MM-DD."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="No download, nothing written."),
+) -> None:
+    """Download the pages of the top screened-in world stories through the archive."""
+    try:
+        target = date.fromisoformat(report_date)
+    except ValueError as exc:
+        raise typer.BadParameter("--date must be YYYY-MM-DD") from exc
+    if not dry_run:
+        create_all()
+    setup_json_logging()
+    with SessionLocal() as session:
+        summary = run_texts(session, target, dry_run=dry_run)
     typer.echo(json.dumps(summary, sort_keys=True))
 
 
