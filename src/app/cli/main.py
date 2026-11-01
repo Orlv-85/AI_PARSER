@@ -41,6 +41,7 @@ from app.core.world.filter import load_own_domains
 from app.core.world.gdelt import DayStats, make_client, scan_day
 from app.core.world.screen import WORLD_JEV_MAX_USD_PER_DAY
 from app.core.world_collect import collect_day, yesterday_utc
+from app.core.world_report import build_report
 from app.core.world_screen import open_world_assessor, run_screen, utc_today
 from app.core.world_text import archive_text_source, run_texts
 from app.observability import setup_json_logging
@@ -582,6 +583,20 @@ def world_texts(
     with SessionLocal() as session:
         summary = run_texts(session, target, dry_run=dry_run)
     typer.echo(json.dumps(summary, sort_keys=True))
+
+
+@world_app.command("report")
+def world_report(
+    report_date: str = typer.Option(..., "--date", help="GDELT day, YYYY-MM-DD."),
+) -> None:
+    """First days check: counts, answers, cost and a sample of the window. Read-only."""
+    try:
+        target = date.fromisoformat(report_date)
+    except ValueError as exc:
+        raise typer.BadParameter("--date must be YYYY-MM-DD") from exc
+    with SessionLocal() as session:
+        report = build_report(session, target)
+    typer.echo(json.dumps(report, sort_keys=True))
 
 
 @app.command("import-candidates")

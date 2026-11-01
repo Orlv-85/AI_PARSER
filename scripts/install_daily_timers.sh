@@ -66,18 +66,19 @@ Persistent=false
 [Install]
 WantedBy=timers.target
 EOF
-# World news collect (spec 018, item 5): after archive; the script itself is off unless
-# AINEWS_WORLD_COLLECT_ENABLED is true, so installing the timer downloads nothing.
+# World news job (spec 018, item 5): after archive; the script itself is off unless
+# AINEWS_WORLD_COLLECT_ENABLED is true, so installing the timer downloads nothing. TimeoutStartSec
+# covers the lock wait and the step limits of run_daily_world_job.sh (checked by a test).
 cat > "$UNIT_DIR/ai-news-daily-world.service" <<EOF
 [Unit]
-Description=AI News nightly world news collect from GDELT files
+Description=AI News nightly world news job: GDELT collect, Jev screen, page texts
 After=docker.service network-online.target
 Requires=docker.service
 [Service]
 Type=oneshot
 WorkingDirectory=$ROOT_DIR
 ExecStart=/bin/sh $ROOT_DIR/scripts/run_daily_world_job.sh
-TimeoutStartSec=5400
+TimeoutStartSec=9600
 StandardOutput=append:$ROOT_DIR/logs/daily-world.log
 StandardError=append:$ROOT_DIR/logs/daily-world.log
 EOF

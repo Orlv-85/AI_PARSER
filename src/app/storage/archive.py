@@ -104,6 +104,7 @@ class ArchiveRepo:
 
     def state_counts(self) -> dict[str, int]:
         rows = self.session.execute(select(ArchiveDocument.state, func.count())
+                                    .where(_not_world())
                                     .group_by(ArchiveDocument.state)).all()
         return {str(state): int(count) for state, count in rows}
 
@@ -136,7 +137,7 @@ class ArchiveRepo:
     def hosts_without_text(self, limit: int) -> list[tuple[str, int]]:
         rows = self.session.execute(
             select(ArchiveDocument.host, func.count().label("n"))
-            .where(ArchiveDocument.state != STATE_ARCHIVED)
+            .where(ArchiveDocument.state != STATE_ARCHIVED, _not_world())
             .group_by(ArchiveDocument.host)
             .order_by(func.count().desc(), ArchiveDocument.host).limit(limit)).all()
         return [(str(host), int(count)) for host, count in rows]

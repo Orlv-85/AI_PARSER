@@ -52,7 +52,7 @@ def test_install_timers_includes_world(tmp_path):
     root, units = _install(tmp_path)
     service = (units / "ai-news-daily-world.service").read_text()
     assert f"ExecStart=/bin/sh {root}/scripts/run_daily_world_job.sh\n" in service
-    assert "TimeoutStartSec=5400\n" in service
+    assert "TimeoutStartSec=9600\n" in service
     assert f"StandardOutput=append:{root}/logs/daily-world.log\n" in service
     assert f"StandardError=append:{root}/logs/daily-world.log\n" in service
     timer = (units / "ai-news-daily-world.timer").read_text()

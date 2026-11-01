@@ -417,3 +417,23 @@ def test_cli_world_screen_reads_archive_text(maker, monkeypatch, tmp_path):
     summary = json.loads(result.stdout)
     assert (summary["asked"], summary["assessed"]) == (1, 1)
     assert "editorial article about AI" in requests[-1]["state"]
+
+
+def test_world_text_downloads_only_pending_documents(session, tmp_path):
+    seed(session, cand(1, title="Pending"), cand(2, title="Archived"), cand(3, title="Retry due"))
+    archived = _real_document(session, row(session, "Archived"))
+    ArchiveRepo(session).add_version(archived, text=BODY, origin="source_page",
+                                     extraction_version="x")
+    retry = _real_document(session, row(session, "Retry due"))
+    ArchiveRepo(session).record_attempt(
+        retry, issue="http_500", gave_up=False,
+        next_attempt_at=datetime.now(UTC) - timedelta(days=1))
+    session.commit()
+    web = Web()
+    summary = texts(session, tmp_path, web)
+    assert web.pages == ["https://site1.example.org/1"]
+    assert row(session, "Pending").state == STATE_TEXT_READY
+    assert row(session, "Archived").state == STATE_TEXT_READY
+    assert row(session, "Retry due").state == STATE_NO_TEXT
+    assert row(session, "Retry due").last_error == "text: http_500"
+    assert (summary["downloads"], summary["text_ready"], summary["no_text"]) == (1, 2, 1)
