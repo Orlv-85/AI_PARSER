@@ -25,7 +25,13 @@ from app.core.canonicalize import canonicalize_url
 from app.core.jev import CONTENT_LIMIT
 from app.core.world.screen import WORLD_TOP_N
 from app.core.world_screen import TextSource, rank_clusters
-from app.storage.archive import STATE_ARCHIVED, STATE_GAVE_UP
+from app.storage.archive import (
+    STATE_ARCHIVED,
+    STATE_FAILED,
+    STATE_GAVE_UP,
+    STATE_PENDING,
+    WORLD_SOURCE_KEY,
+)
 from app.storage.models_sql import ArchiveDocument, ArchiveText, Article, WorldCandidate
 from app.storage.world import (
     STATE_ASSESSED,
@@ -66,24 +72,28 @@ def _new_summary(target: date, dry_run: bool) -> dict[str, Any]:
 
 
 def _documents(session: Session, reps: list[WorldCandidate]) -> dict[str, ArchiveDocument]:
-    archive_articles(session, [_transient_article(rep) for rep in reps], {})
+    """Archive document per representative; only a hash without one gets a new, marked document
+    (an existing one, maybe a real article, is read and never rewritten)."""
+    def load() -> dict[str, ArchiveDocument]:
+        return {d.url_canonical_hash: d for d in session.scalars(select(ArchiveDocument).where(
+            ArchiveDocument.url_canonical_hash.in_([rep.url_canonical_hash for rep in reps])))}
+    found = load()
+    missing = [rep for rep in reps if rep.url_canonical_hash not in found]
+    archive_articles(session, [_transient_article(rep) for rep in missing], {})
+    for document in session.scalars(select(ArchiveDocument).where(
+            ArchiveDocument.url_canonical_hash.in_([rep.url_canonical_hash for rep in missing]))):
+        document.source_key = WORLD_SOURCE_KEY
     session.commit()
-    hashes = [rep.url_canonical_hash for rep in reps]
-    return {d.url_canonical_hash: d for d in session.scalars(
-        select(ArchiveDocument).where(ArchiveDocument.url_canonical_hash.in_(hashes)))}
-
-
-def _needs_download(document: ArchiveDocument) -> bool:
-    return document.state not in (STATE_ARCHIVED, STATE_GAVE_UP)
+    return load()
 
 
 def _settle(repo: WorldRepo, rep: WorldCandidate, document: ArchiveDocument,
-            attempts_before: int, reasons: Counter[str]) -> str:
+            reasons: Counter[str]) -> str:
     """Move the candidate by what the archive recorded; returns the summary counter to raise."""
     if document.state == STATE_ARCHIVED:
         repo.transition(rep, STATE_TEXT_READY)
         return "text_ready"
-    if document.state == STATE_GAVE_UP or (document.attempts or 0) > attempts_before:
+    if document.state in (STATE_FAILED, STATE_GAVE_UP):
         issue = document.last_issue or UNKNOWN_ISSUE
         repo.transition(rep, STATE_NO_TEXT, error=f"{TEXT_PREFIX}: {issue}")
         reasons[issue] += 1
@@ -109,8 +119,7 @@ def run_texts(  # pylint: disable=too-many-arguments,too-many-locals
     if not reps:
         return summary
     documents = _documents(session, reps)
-    before = {d.id: d.attempts or 0 for d in documents.values()}
-    due = [d.id for d in documents.values() if _needs_download(d)]
+    due = [d.id for d in documents.values() if d.state == STATE_PENDING]
     if due:
         result = download_documents(
             session, due, cache_root=cache_root, daily_cache_root=daily_cache_root,
@@ -122,7 +131,7 @@ def run_texts(  # pylint: disable=too-many-arguments,too-many-locals
     for rep in reps:
         document = documents[rep.url_canonical_hash]
         session.refresh(document)
-        outcome = _settle(repo, rep, document, before[document.id], reasons)
+        outcome = _settle(repo, rep, document, reasons)
         summary[outcome] += 1
         session.commit()
     summary["reasons"] = dict(reasons)

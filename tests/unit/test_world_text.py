@@ -1,6 +1,6 @@
 """World text download via the archive (spec 018 item 5, W6); see src/app/core/world/world.md."""
 import json
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 
 import httpx
 import pytest
@@ -19,7 +19,8 @@ from app.core.world.gdelt import Candidate
 from app.core.world_screen import run_screen
 from app.core.world_text import archive_text_source, run_texts
 from app.ingest.fetcher import DEFAULT_USER_AGENT
-from app.storage.archive import ArchiveRepo
+from app.core.world_screen import rank_clusters
+from app.storage.archive import WORLD_SOURCE_KEY, ArchiveRepo
 from app.storage.models_sql import (
     ArchiveDocument,
     ArchiveText,
@@ -133,7 +134,7 @@ def test_world_text_goes_through_archive_robots_and_bot_agent(session, tmp_path,
     assert (item.state, item.last_error) == (STATE_TEXT_READY, None)
     document = session.scalars(select(ArchiveDocument)).one()
     assert (document.url_canonical_hash, document.state, document.source_key,
-            document.article_id) == (item.url_canonical_hash, "archived", None, None)
+            document.article_id) == (item.url_canonical_hash, "archived", WORLD_SOURCE_KEY, None)
     version = session.scalars(select(ArchiveText)).one()
     assert (version.origin, version.http_status) == ("source_page", 200)
     assert "editorial article about AI" in version.text
@@ -239,6 +240,84 @@ def test_world_text_reuses_stored_archive_text(session, tmp_path):
     assert not web.requests
     assert row(session, "Known").state == STATE_TEXT_READY
     assert (summary["downloads"], summary["text_ready"]) == (0, 1)
+
+
+def _real_document(session, item, **fields):
+    repo = ArchiveRepo(session)
+    document = repo.upsert_document(**{
+        "url_canonical_hash": item.url_canonical_hash, "url": item.url, "url_canonical": item.url,
+        "source_key": "real-source", "host": item.source_domain, "title": "Real title",
+        "published_at": None, "publication_day": date(2026, 10, 29),
+        "publication_status": "dated", "article_id": 42, "first_seen_at": None, **fields})
+    session.commit()
+    return document
+
+
+def test_world_text_keeps_metadata_of_a_real_archive_document(session, tmp_path):
+    seed(session, cand(1, title="Candidate title"))
+    _real_document(session, row(session, "Candidate title"))
+    web = Web()
+    summary = texts(session, tmp_path, web)
+    assert summary["text_ready"] == 1 and len(web.pages) == 1
+    session.expire_all()
+    document = session.scalars(select(ArchiveDocument)).one()
+    assert (document.article_id, document.source_key, document.title) == (
+        42, "real-source", "Real title")
+    assert (document.publication_day, document.publication_status) == (
+        date(2026, 10, 29), "dated")
+
+
+def test_world_text_existing_failed_or_gave_up_document_is_no_text(session, tmp_path):
+    seed(session, cand(1, title="Failed"), cand(2, title="Gave up"))
+    failed = _real_document(session, row(session, "Failed"))
+    ArchiveRepo(session).record_attempt(
+        failed, issue="http_500", gave_up=False,
+        next_attempt_at=datetime.now(UTC) + timedelta(days=1))
+    gave_up = _real_document(session, row(session, "Gave up"))
+    ArchiveRepo(session).record_attempt(gave_up, issue="paywall", gave_up=True,
+                                        next_attempt_at=None)
+    session.commit()
+    web = Web()
+    summary = texts(session, tmp_path, web)
+    assert not web.requests
+    assert row(session, "Failed").last_error == "text: http_500"
+    assert row(session, "Gave up").last_error == "text: paywall"
+    assert {row(session, t).state for t in ("Failed", "Gave up")} == {STATE_NO_TEXT}
+    assert (summary["no_text"], summary["kept"], summary["downloads"]) == (2, 0, 0)
+
+
+def test_world_text_next_run_tries_the_next_outlet(session, tmp_path):
+    same = "Schools adopt AI tutors"
+    seed(session, cand(1, title=same, domain="a.org"), cand(2, title=same, domain="b.org"))
+    web = Web({"https://a.org/robots.txt": (200, "User-agent: *\nDisallow: /")})
+    texts(session, tmp_path, web)
+    assert web.pages == []
+    states = {c.source_domain: c.state for c in session.scalars(select(WorldCandidate))}
+    assert states == {"a.org": STATE_NO_TEXT, "b.org": STATE_SCREENED_IN}
+    texts(session, tmp_path, web)
+    assert web.pages == ["https://b.org/2"]
+    states = {c.source_domain: c.state for c in session.scalars(select(WorldCandidate))}
+    assert states == {"a.org": STATE_NO_TEXT, "b.org": STATE_TEXT_READY}
+
+
+def test_world_text_no_text_cluster_ranks_by_remaining_outlets(session, tmp_path):
+    big, small = "Big story about AI", "Small story about AI"
+    seed(session, cand(1, title=big, domain="a.org"), cand(2, title=big, domain="b.org"),
+         cand(3, title=big, domain="c.org"), cand(4, title=small, domain="d.org"),
+         cand(5, title=small, domain="e.org"), confidence=0.9)
+    for item in session.scalars(select(WorldCandidate).where(WorldCandidate.title == small)):
+        item.screen_confidence = 0.95
+    session.commit()
+    window = [STATE_SCREENED_IN, STATE_TEXT_READY, STATE_ASSESSED]
+
+    def order():
+        items = WorldRepo(session).candidates_in_window(window, DAY)
+        return [(r.rep.title, r.outlets) for r in rank_clusters(items)]
+    assert order() == [(big, 3), (small, 2)]
+    texts(session, tmp_path, Web({"https://a.org/robots.txt": (200, "User-agent: *\nDisallow: /")}),
+          top_n=1)
+    assert sum(c.state == STATE_NO_TEXT for c in session.scalars(select(WorldCandidate))) == 1
+    assert order() == [(small, 2), (big, 2)]
 
 
 def test_world_text_creates_no_articles_and_keeps_archive_after_prune(session, tmp_path):

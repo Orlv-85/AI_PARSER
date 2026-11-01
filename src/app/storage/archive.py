@@ -5,6 +5,7 @@ from collections.abc import Collection, Sequence
 from datetime import UTC, date, datetime
 
 from sqlalchemy import delete, func, select
+from sqlalchemy import ColumnElement
 from sqlalchemy.orm import Session
 
 from app.storage.models_sql import ArchiveDocument, ArchiveText
@@ -13,6 +14,11 @@ STATE_PENDING = "pending"
 STATE_ARCHIVED = "archived"
 STATE_FAILED = "failed"
 STATE_GAVE_UP = "gave_up"
+WORLD_SOURCE_KEY = "world"  # marks documents the world stream made; the nightly job skips them
+
+
+def _not_world() -> ColumnElement[bool]:
+    return ArchiveDocument.source_key.is_(None) | (ArchiveDocument.source_key != WORLD_SOURCE_KEY)
 
 
 def text_sha256(text: str) -> str:
@@ -114,7 +120,8 @@ class ArchiveRepo:
 
     def window_states(self, since: datetime | None) -> list[tuple[datetime, str]]:
         """(first_seen_at, state) of documents first seen at or after `since` (all when None)."""
-        stmt = select(ArchiveDocument.first_seen_at, ArchiveDocument.state)
+        stmt = select(ArchiveDocument.first_seen_at, ArchiveDocument.state).where(
+            _not_world())
         if since is not None:
             stmt = stmt.where(ArchiveDocument.first_seen_at >= since)
         return [(seen, str(state)) for seen, state in self.session.execute(stmt).all()]
@@ -146,7 +153,9 @@ class ArchiveRepo:
             # Documents already in the retry schedule stay due after the window (FR-010).
             stmt = stmt.where((ArchiveDocument.first_seen_at >= since)
                               | (ArchiveDocument.state == STATE_FAILED))
-        if ids is not None:
+        if ids is None:
+            stmt = stmt.where(_not_world())
+        else:
             stmt = stmt.where(ArchiveDocument.id.in_(list(ids)))
         return list(self.session.scalars(stmt))
 

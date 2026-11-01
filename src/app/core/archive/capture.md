@@ -75,6 +75,12 @@ flowchart LR
   only (the world stream uses it for its top candidates, `core/world/world.md`); other due
   documents are not touched, and every rule of this list applies to the chosen ones. Tests:
   `test_download_documents_touches_only_given_ids`.
+- Documents the world stream creates carry `source_key = WORLD_SOURCE_KEY`. The nightly capture
+  leaves them out: coverage (`window_states`, so `coverage_pct` and the 90 target) and the due
+  list without ids (so its download caps and retry schedule). `archive_articles` of a real
+  article with the same hash replaces the marker with the real `source_key`; `archive_bytes` and
+  its warning still count their texts. Tests: `test_archive_coverage_skips_world_documents`,
+  `test_archive_due_skips_world_documents`, `test_real_article_takes_over_a_world_document`.
 - At most `ARCHIVE_MAX_DOWNLOADS` downloads per run and `ARCHIVE_MAX_PER_HOST` per host
   (`skipped_cap`); no download starts after `--max-seconds` (`skipped_time`). Skipped documents
   are unchanged. Tests: `test_capture_respects_caps_and_time`.

@@ -386,10 +386,13 @@ flowchart LR
   cmd["ai-news world texts --date D"] --> rank["Rank clusters like step B; first WORLD_TOP_N"]
   rank --> rep{"Representative still screened_in?"}
   rep -- no --> skip["Not downloaded"]
-  rep -- yes --> doc["Transient Article -> archive_articles: archive document"]
-  doc --> have{"Document already has text?"}
-  have -- yes --> ready["text_ready, no request"]
-  have -- no --> dl["Archive downloader: robots.txt, bot agent, extraction"]
+  rep -- yes --> doc{"Archive document exists?"}
+  doc -- no --> mk["Create it, marked source_key world"]
+  doc -- yes --> st{"Its state"}
+  st -- archived --> ready["text_ready, no request"]
+  st -- "failed or gave_up" --> nt
+  st -- pending --> dl
+  mk --> dl["Archive downloader: robots.txt, bot agent, extraction"]
   dl --> out{"Result"}
   out -- "text extracted" --> ready2["Source page version; text_ready"]
   out -- "robots, paywall, no text, HTTP error" --> nt["no_text, last_error text: reason"]
@@ -399,36 +402,52 @@ flowchart LR
 - The command takes the same top as step B (`rank_clusters`, first `WORLD_TOP_N` clusters of
   `screened_in`, `text_ready` and `assessed`) and downloads only the representative of a cluster
   that is still `screened_in`; followers, `text_ready`, `assessed` and `no_text` candidates are not
-  downloaded. A run never downloads more than `WORLD_TOP_N` pages (plus their robots.txt); clusters
-  that already have text keep their places in the top, so nothing beyond the top is fetched. When a
-  representative ends in `no_text`, the next run ranks the cluster by its remaining outlets and
+  downloaded. One run never downloads more than `WORLD_TOP_N` pages (plus their robots.txt); the
+  bound is per run, W7 runs the command once a day and no daily bound is kept in code. Clusters
+  that already have text keep their places in the top, so nothing beyond the top is fetched. When
+  a representative ends in `no_text`, the next run ranks the cluster by its remaining outlets and
   tries the next outlet. Tests: `test_world_never_downloads_more_than_n`,
-  `test_world_text_only_cluster_representative_is_downloaded`.
-- The download is the archive's: each representative becomes an `ArchiveDocument` through
+  `test_world_text_only_cluster_representative_is_downloaded`,
+  `test_world_text_next_run_tries_the_next_outlet`,
+  `test_world_text_no_text_cluster_ranks_by_remaining_outlets`.
+- The download is the archive's. A hash with no `ArchiveDocument` gets one through
   `archive_articles` with a transient `Article` (never added to the session, as in
-  `archive import-db`; `source_key` empty, `article_id` empty), then `download_documents` runs the
-  archive's download step on exactly those documents: `SourcePageDownloader` with robots.txt, the
-  declared bot user agent, per-host pacing, redirects, body limit, the reuse of a page the daily
-  publish already extracted, and the archive's outage rule. No second crawler. Tests:
+  `archive import-db`; `article_id` empty) and `source_key` set to `WORLD_SOURCE_KEY`. A hash that
+  already has a document, for example a real article archived by the nightly job, is never
+  upserted: its metadata stays and the world stream only reads it. Then `download_documents` runs
+  the archive's download step on the pending documents: `SourcePageDownloader` with robots.txt,
+  the declared bot user agent, per-host pacing, redirects, body limit, the reuse of a page the
+  daily publish already extracted, and the archive's outage rule. No second crawler. Tests:
   `test_world_text_goes_through_archive_robots_and_bot_agent`,
-  `test_world_text_reuses_stored_archive_text`.
+  `test_world_text_reuses_stored_archive_text`,
+  `test_world_text_keeps_metadata_of_a_real_archive_document`.
+- Documents marked `WORLD_SOURCE_KEY` stay out of the nightly job: `window_states` (coverage)
+  skips them and `due()` without ids (the nightly download list, its caps and retries) skips them;
+  the world stream makes its own single attempt. If the nightly job later archives a real article
+  with the same URL, `archive_articles` upserts the document and the real `source_key`,
+  `article_id` and title replace the marker, so it joins the nightly numbers. The size warning
+  still counts world texts (the whole table; accepted). Tests:
+  `test_archive_coverage_skips_world_documents`, `test_archive_due_skips_world_documents`,
+  `test_real_article_takes_over_a_world_document`.
 - Extracted text becomes an `archive_texts` version with origin `source_page`; the candidate moves
   to `text_ready`. A document that already has text (for example from the nightly archive) moves
   the candidate to `text_ready` without a request. Tests:
   `test_world_text_goes_through_archive_robots_and_bot_agent`,
   `test_world_text_reuses_stored_archive_text`.
-- `no_text` with `last_error` `text: <issue>` follows when the archive recorded a failed attempt or
-  an earlier give-up for the page: robots.txt denied (`robots_disallowed_or_unavailable`), a
-  paywall or too short an extraction, a non-article page, an HTTP error status (`http_404` and the like)
-  or a per-page timeout. The story then keeps its title only (spec User Story 1, scenario 4). The
-  prefix `text:` differs from `screen:` and `assess:`; `no_text` is final, so W5 never requeues it.
-  Tests: `test_world_text_blocked_by_robots_is_no_text`,
+- `no_text` with `last_error` `text: <issue>` follows when the document is `failed` (whatever its
+  `next_attempt_at`) or `gave_up`, after the attempt of this run or from an earlier one: robots.txt
+  denied (`robots_disallowed_or_unavailable`), a paywall or too short an extraction, a non-article
+  page, an HTTP error status (`http_404` and the like) or a per-page timeout. The story then keeps
+  its title only (spec User Story 1, scenario 4), and the next run falls back to the next outlet.
+  The prefix `text:` differs from `screen:` and `assess:`; `no_text` is final, so W5 never
+  requeues it. Tests: `test_world_text_blocked_by_robots_is_no_text`,
   `test_world_text_paywall_and_empty_page_are_no_text`,
-  `test_world_text_http_error_is_no_text_with_reason`.
-- When the downloader reports an outage, or a page was not attempted (time, per-host cap, a failed
-  document whose retry time has not come), the candidate stays `screened_in` and no `no_text` is
-  written; the archive keeps its own attempts and cache as its outage rule says. The next run takes
-  it. Tests: `test_world_text_outage_marks_nothing`.
+  `test_world_text_http_error_is_no_text_with_reason`,
+  `test_world_text_existing_failed_or_gave_up_document_is_no_text`.
+- When the downloader reports an outage, or a pending page was not attempted (time or per-host
+  cap), the candidate stays `screened_in` and no `no_text` is written; the archive keeps its own
+  attempts and cache as its outage rule says. The next run takes it. Tests:
+  `test_world_text_outage_marks_nothing`.
 - Archive storage: the page text lives in `archive_documents` / `archive_texts` (origin
   `source_page`), found by `url_canonical_hash`; the candidate stores no text. Following ER-9 the
   text is read to ask Jev and to write the retelling and is never published; no `articles` row is
@@ -438,7 +457,8 @@ flowchart LR
   candidate's archive document, cut to `CONTENT_LIMIT` of Jev, or None. Tests:
   `test_world_text_seam_feeds_step_b`, `test_world_text_seam_cuts_to_jev_limit`.
 - `--dry-run` writes nothing (no table, no archive document, no request) and prints the same
-  summary with `would_download` (the representatives it would try). Tests: `test_world_text_dry_run_writes_nothing`.
+  summary with `would_download` (the representatives it would try). Tests:
+  `test_world_text_dry_run_writes_nothing`.
 - The command prints one JSON summary: `date`, `dry_run`, `top` (clusters in the top),
   `candidates` (representatives still `screened_in`), `downloads` (pages requested), `cache_reused`,
   `text_ready`, `no_text`, `reasons` (`no_text` by issue), `kept` (left `screened_in`), `outage`.
@@ -521,8 +541,11 @@ flowchart LR
 - The archive's own download step is reused through `download_documents` (the same function the
   nightly capture uses, restricted to given document ids) and not copied, so robots, pacing, the
   outage rule and the cache stay one code path (plan section 5).
-- World documents are normal archive documents: the nightly `archive capture` counts them in its
-  coverage and retries a `failed` one on its schedule (decided 2026-11-01 (agent)).
+- World documents are marked (`WORLD_SOURCE_KEY`) and kept out of the nightly capture's coverage,
+  download list and retries, so 100 world pages cannot take its caps or lower its coverage target;
+  the world stream does one attempt and falls back to the next outlet (coordinator, 2026-11-01,
+  after review). An existing document is never rewritten by the world stream, because
+  `archive_articles` would blank the `article_id` and `source_key` of a real article.
 
 ## Invariants
 
