@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
 from app.core.ingestion.pipeline import run_fetch_cycle
+from app.core.ingestion.pipeline.models import SourceMetrics
 from app.core.jev import JevAssessment
 from app.core.models import Article
 from app.ingest.html import HtmlListPageResult
@@ -377,7 +378,7 @@ def test_persist_failure_marks_source_coverage_incomplete(monkeypatch, tmp_path)
             published_at=now,
         )],
     }
-    logged = {}
+    logged: dict[str, SourceMetrics] = {}
 
     monkeypatch.setattr("app.core.ingestion.pipeline.cycle.load_sources", lambda _path: configs)
     monkeypatch.setattr("app.core.ingestion.pipeline.cycle.create_all", lambda: None)
