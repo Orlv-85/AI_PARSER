@@ -16,7 +16,7 @@ from typing import Any
 
 import httpx
 
-from app.core.jev import _probability, jev_state
+from app.core.jev import CONTENT_LIMIT, _probability, jev_state
 
 WORLD_CHANGE_VERSION = "world-change-1"
 ASSESS_DEFAULT_MAX_USD = "0.05"
@@ -100,11 +100,11 @@ class WorldChange:
     harm_to_people: float  # probability of harm
 
 
-def world_change_state(article: object) -> str:
+def world_change_state(article: object, *, content_limit: int = CONTENT_LIMIT) -> str:
     """The text the daily enrichment sends: content without summary, summary only as a fallback."""
     if not str(getattr(article, "content", "") or "").strip():
-        return str(jev_state(article))
-    return str(jev_state(article, with_summary=False))
+        return str(jev_state(article, content_limit=content_limit))
+    return str(jev_state(article, with_summary=False, content_limit=content_limit))
 
 
 def parse_answers(data: Any) -> WorldChange:
@@ -137,15 +137,36 @@ class WorldChangeAssessor:
         self.stopped: str | None = None
 
     def body(self, article: object) -> dict[str, Any]:
-        return {"model": self.model, "state": world_change_state(article),
+        jev_request_fits = import_module("app.core.daily.provider_requests").jev_request_fits
+
+        body = {"model": self.model, "state": world_change_state(article),
                 "questions": WORLD_CHANGE_QUESTIONS}
+        if jev_request_fits(body):
+            return body
+        empty = {**body, "state": world_change_state(article, content_limit=0)}
+        if not jev_request_fits(empty):
+            return body
+        body = empty
+        low, high = 0, CONTENT_LIMIT
+        while low < high:
+            middle = (low + high + 1) // 2
+            candidate = {**body, "state": world_change_state(article, content_limit=middle)}
+            if jev_request_fits(candidate):
+                low, body = middle, candidate
+            else:
+                high = middle - 1
+        return body
 
     def assess(self, article: object) -> WorldChange | None:
-        answer: WorldChange | None = self.ask(self.body(article), parse_answers)
+        article_id = getattr(article, "id", None)
+        context: dict[str, object] = {"article_id": article_id} if article_id is not None else {}
+        if article_hash := getattr(article, "url_canonical_hash", None):
+            context["url_canonical_hash"] = article_hash
+        answer: WorldChange | None = self.ask(self.body(article), parse_answers, context=context)
         return answer
 
     def ask(self, body: dict[str, Any], parse: Callable[[Any], Any],
-            event: str = "world_change") -> Any:
+            event: str = "world_change", context: dict[str, object] | None = None) -> Any:
         """Send one request (through the journal when there is one) and parse the answer.
 
         Returns None on a failure; a journal stop also sets `stopped`. `event` prefixes the log lines.
@@ -167,9 +188,9 @@ class WorldChangeAssessor:
         except stop_errors as exc:
             # A spent cap, an outage or a broken journal: the caller's loop must stop.
             self.stopped = str(exc) or type(exc).__name__
-            self.logger.error(f"{event}_stopped", {"reason": self.stopped})
+            self.logger.error(f"{event}_stopped", {**(context or {}), "reason": self.stopped})
         except (httpx.HTTPError, ValueError, KeyError, TypeError, RuntimeError) as exc:
-            fields: dict[str, object] = {"error_type": type(exc).__name__}
+            fields: dict[str, object] = {**(context or {}), "error_type": type(exc).__name__}
             if isinstance(exc, httpx.HTTPStatusError):
                 fields["status_code"] = exc.response.status_code
             self.logger.error(f"{event}_failed", fields)

@@ -217,6 +217,16 @@ the Troubleshooting section of `README.md`.
       "fix": "CI reports the same `no-any-return` (names imported from `app.*` are Any there too, see the case citing `src.app.core.ingestion.pipeline`): use that case's idiom, `cast(T, ...)` or a typed local, never `# type: ignore`. Locally, a branch-only module may also be Any through the stale editable install; CI decides. Corrected 2026-11-01 after T2 PRs #183 and #184 failed CI lint.",
       "verification": "Reproduced by the PR #172 reviewer locally; CI lint of #183 (rows.py:102) and #184 (rss.py:98) failed with the same error, so the typed local is required, not a workaround.",
       "if_it_recurs": "If CI itself reports Any for a new module, check pyproject mypy settings (files, explicit_package_bases, mypy_path) rather than the venv."
+    },
+    {
+      "id": "world-change-non-ascii-request-too-large",
+      "date": "2026-11-02",
+      "area": "world stream (step B, world_change assessment)",
+      "symptom": "Long non-English articles log world_change_failed with error_type=JevInputTooLarge and receive no assessment.",
+      "evidence": ["specs/018-daily-inference/records/world-days-2026-11-01.md: 2 of 74 articles failed in the first world night"],
+      "cause": "jev_state bounds content by characters, while reservation bounds the complete encoded request by bytes plus an allowance. journal_files.encoded uses ensure_ascii=True, so Cyrillic characters take six bytes each.",
+      "fix": "WorldChangeAssessor.body uses the shared jev_request_fits check and binary search to retain the longest content prefix within JEV_REQUEST_BYTE_BOUND. Fitting bodies stay unchanged; if even empty content cannot fit, the journal rejects the original body as before.",
+      "verification": "tests/unit/test_world_change.py: test_long_non_ascii_state_is_cut_to_fit, test_fitting_state_is_unchanged, test_request_fits_matches_reservation, test_failure_log_names_the_article."
     }
   ]
 }
