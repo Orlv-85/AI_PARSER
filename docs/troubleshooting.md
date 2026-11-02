@@ -236,6 +236,16 @@ the Troubleshooting section of `README.md`.
       "cause": "JsonFormatter includes event_fields and dict message arguments; arbitrary LogRecord attributes from extra are not serialized.",
       "fix": "Use app.observability.logging.log_event for structured bulletin helper logs; it puts fields inside event_fields.",
       "verification": "tests/unit/test_bulletin_daily.py: test_daily_without_ds_key_stores_title_only and test_daily_without_jev_key_builds_from_stored_answers assert the reason is present in stderr."
+    },
+    {
+      "id": "deploy-new-timer-before-sudoers",
+      "date": "2026-11-02",
+      "area": "deploy, systemd timers",
+      "symptom": "deploy-release fails after 'Checking app health...' with 'sudo: a password is required' (5 attempts). The app runs the new image and migrations are applied; the new timer is missing.",
+      "evidence": ["deploy-release run 41456242361 of tag v0.1.157 (new ai-news-daily-bulletin units)"],
+      "cause": "deploy_prod.sh runs scripts/install_daily_timers.sh on every deploy as user deploy with 'sudo -n'. A release that adds a unit needs the new lines of deploy/sudoers.d/ai-news-deploy, which root applies by hand and a deploy never changes.",
+      "fix": "Before tagging a release that adds a unit: as root on the server, visudo -cf deploy/sudoers.d/ai-news-deploy, then install -m 0440 it to /etc/sudoers.d/ai-news-deploy. After a failed deploy: do the same with the tag's file, then gh run rerun <run> --failed.",
+      "verification": "Rerun of run 41456242361 succeeded; systemctl list-timers shows ai-news-daily-bulletin.timer enabled."
     }
   ]
 }
