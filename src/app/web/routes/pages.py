@@ -14,12 +14,15 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.storage.admission import read_collection_status
+from app.storage.bulletin_store import BulletinRepo
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import NewsDigestReport
 from app.web.auth import verify_password
+from app.web.bulletin_view import render_bulletin_page
 from app.web.models import NewsCollectionStatusResponse
 from app.web.period_view import home_line, month_nav_link, nav_link
 from app.web.routes import WebDeps
+from app.web.routes.bulletin import parse_day
 from app.web.routes.common import (
     _read_daily_signals,
 )
@@ -102,6 +105,21 @@ def _render_news_stats(*, date_from: date, date_to: date) -> str:
     )
 
 
+def _bulletin_response(deps: WebDeps, target_date: str | None) -> HTMLResponse:
+    day = parse_day(target_date)
+    try:
+        deps.create_all()
+        with deps.SessionLocal() as session:
+            repo = BulletinRepo(session)
+            row = repo.get(day) if day is not None else repo.latest_ready()
+            selected_day = row.day if row is not None else day
+            return HTMLResponse(render_bulletin_page(row, selected_day),
+                                status_code=404 if row is None else 200)
+    except SQLAlchemyError:
+        return HTMLResponse(render_bulletin_page(None, day,
+                            message="News storage is unavailable."), status_code=503)
+
+
 def build_pages_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-many-statements
     settings = deps.settings
     auth_enabled = deps.auth_enabled
@@ -127,6 +145,10 @@ def build_pages_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-many-
             signals_html = render_signals(None, read_error=True)
         return _render_digest(report_date=report_date, digest=digest, signals_html=signals_html,
                               week=latest_week(deps), monthly=has_month(deps))
+
+    @router.get("/bulletin", response_class=HTMLResponse, include_in_schema=False)
+    def bulletin_page(target_date: str | None = _OPTIONAL_NEWS_DIGEST_DATE_QUERY) -> HTMLResponse:
+        return _bulletin_response(deps, target_date)
 
     # Legacy weekly pages retired (017 R5): permanent redirect, query string dropped.
     @router.get("/weekly-ai-analytics/reports", include_in_schema=False)

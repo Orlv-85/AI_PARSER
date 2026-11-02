@@ -2,6 +2,7 @@
 module: src/app/web/routes/pages.py
 covers:
   - src/app/web/routes/pages.py
+  - src/app/web/bulletin_view.py
   - src/app/web/*.html
   - src/app/web/static/**
 -->
@@ -19,6 +20,8 @@ retired: they only redirect to `/weekly`.
 flowchart LR
   browser["Browser"] --> route["GET page route (pages.py)"]
   route --> fill["Template + placeholders filled by the server"]
+  route --> bulletin["BulletinRepo: requested day or latest ready"]
+  bulletin --> preview["Escaped preview or status page; no model call"]
   fill --> html["HTML with link/script tags"]
   html --> assets["GET /static/... (no-cache, ETag)"]
   assets --> auth{"/static/admin/ ?"}
@@ -71,6 +74,30 @@ flowchart LR
 - `/news-stats` defaults to the 60 days ending yesterday; `date_from` after `date_to` is a 422 (no
   test for the 422). Tests: `test_news_stats_page_renders_public_shell`.
 
+**Hidden bulletin preview (018 item 4c)**
+- Public `GET /bulletin?date=YYYY-MM-DD` reads the stored row through `BulletinRepo`;
+  without a date it reads the latest ready day, ignoring newer skipped days. The page is English,
+  server-rendered, unlinked and has `noindex, nofollow`; neither bulletin publishing switch is
+  read. Tests: `test_bulletin_page_defaults_to_latest_ready`,
+  `test_bulletin_page_is_public_and_noindex`, `test_bulletin_page_is_not_linked`.
+- A ready day shows its date and stored day number, then key results, rubric story, cooperation
+  and incident story in stored order. Each story shows headline or title, site-note paragraphs,
+  optional gloss, area, linked outlet names, text_origin and origin. The stored numbers (assessed,
+  digest_articles and optional writer summary) appear at the bottom. Tests:
+  `test_bulletin_page_shows_ready_day`, `test_bulletin_page_title_only_day`.
+- A skipped day says there is no bulletin, shows the stored reason and links to `/?date=D`.
+  A missing dated row gives the same message and digest link with HTTP 404. No latest ready row
+  gives a 404 saying nothing is stored yet. Malformed dates give 400; database failures give an
+  HTML 503. Tests: `test_bulletin_page_skipped_day_links_digest`,
+  `test_bulletin_page_missing_day_is_404`, `test_bulletin_page_empty_store_is_404`,
+  `test_bulletin_page_bad_date_is_400`, `test_bulletin_page_storage_failure_is_503`.
+- Previous and next links select adjacent dates; there is no next link beyond yesterday UTC.
+  The earliest calendar day has no previous link. Tests: `test_bulletin_page_prev_next_links`,
+  `test_bulletin_page_first_calendar_day_has_no_previous`.
+- All stored text is HTML-escaped, including numbers and reasons. Only http/https source URLs
+  become links; other URLs leave plain outlet text. Inserted placeholder-like text stays literal.
+  Tests: `test_bulletin_page_escapes_stored_text`.
+
 **Placeholders**
 - The server fills `__NAME__` placeholders of a template, never of a static file. Digest:
   `_render_digest` replaces all of them in one pass with `_PLACEHOLDER`, so placeholder names
@@ -96,10 +123,23 @@ flowchart LR
   functions of all admin files. No test.
 - The asset files are package data of `app.web` and ship in the wheel. Tests:
   `test_web_package_data_includes_public_templates` (the globs and `period.html`; the wheel itself
-  is not built in tests).
+  is not built in tests), `test_bulletin_page_template_is_packaged` (preview template).
 
 ## Decisions
 
+- decided 2026-11-02 (agent): `/bulletin` is public like `/weekly`, unlinked with a robots
+  noindex/nofollow meta tag; `/` and other pages stay unchanged, and publishing switches are unused.
+- decided 2026-11-02 (agent): render stored rows directly via `BulletinRepo`, `bulletin_view.py`
+  and `bulletin.html`, reusing public digest styles; no JSON API request or model call.
+- decided 2026-11-02 (agent): default to the latest ready day, matching the API; an explicit date
+  selects that day, including skips, and keeps stored story order and writer fallbacks visible.
+- decided 2026-11-02 (agent): show origin marks and stored numbers at the bottom for checking real
+  days before the home-page design; this is an English preview like the existing public pages.
+- decided 2026-11-02 (agent): skips and missing days link to the current digest at `/?date=D`;
+  use 404 for missing rows or no ready day, 400 for malformed dates and 503 for storage failure.
+- decided 2026-11-02 (agent): adjacent-day navigation stops next links at yesterday UTC.
+- decided 2026-11-02 (agent): escape every stored text and allow only http/https outlet links,
+  because model and outlet content is untrusted.
 - Static files instead of inline blocks: a script can be read, linted and diffed on its own; the
   page template holds markup only.
 - Admin assets behind the admin session: the admin code lists every admin API; it stays private
@@ -118,6 +158,8 @@ flowchart LR
 
 ## Invariants
 
+- No template, view module or static asset outside the preview itself links to `/bulletin`.
+- `/` remains the digest; preview requests read stored data without a model call or API request.
 - What a visitor or an admin sees and does does not depend on whether the code is inline or in a
   file: the asset files hold the former blocks byte for byte, in the original order.
 - Concatenating the admin scripts in tag order gives the former admin script block.
@@ -130,7 +172,8 @@ flowchart LR
 
 | File | Holds |
 | --- | --- |
-| `routes/pages.py` | Page routes, template rendering and placeholders, login/logout, health, collection status |
+| `routes/pages.py` | Page routes, template rendering and placeholders, login/logout, health, collection status; `_bulletin_response` handles the preview lookup, rendering and storage errors |
+| `bulletin_view.py`, `bulletin.html` | Escaped stored bulletin preview, status pages and adjacent-day links |
 | `app.py` | `_NoCacheStaticFiles` mount at `/static`, `auth_middleware` (admin assets protected) |
 | `routes/period.py` | `/weekly` and `/monthly` routes, `latest_week` and `has_month` (nav links and line on `/`), next to the period API |
 | `period_view.py` | Server HTML of one stored week or month and the picker (`render_content`, `render_picker`, `render_page`) |
@@ -153,6 +196,8 @@ stay in the last admin script, because they use functions of every admin file.
 - `tests/unit/test_web_static_assets.py`: asset tags per page, serving and no-cache, admin asset
   protection, digest placeholders.
 - `tests/unit/test_web_period_page.py`: the `/weekly` and `/monthly` page states, escaping, `?week=`, `?month=`, nav links, line on `/`.
+- `tests/unit/test_web_bulletin_page.py`: stored preview, status pages, escaping, access,
+  hidden navigation and template packaging.
 - `tests/unit/test_web_app.py`, `tests/unit/test_web_public_digest.py`, `tests/unit/test_auth_stage1.py`:
   pages, access, signals client hooks. Tests that check moved code read the page with its assets
   (a fixture in `tests/unit/conftest.py`) or the asset file.

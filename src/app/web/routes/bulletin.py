@@ -11,7 +11,7 @@ from app.web.routes import WebDeps
 _DATE_QUERY = Query(None, alias="date")
 
 
-def _parse_day(value: str | None) -> date | None:
+def parse_day(value: str | None) -> date | None:
     if value is None:
         return None
     try:
@@ -28,7 +28,7 @@ def build_bulletin_router(deps: WebDeps) -> APIRouter:
 
     @router.get("/api/news/bulletin")
     def get_bulletin(*, target_date: str | None = _DATE_QUERY) -> dict[str, Any]:
-        day = _parse_day(target_date)
+        day = parse_day(target_date)
         try:
             deps.create_all()
             with deps.SessionLocal() as session:
