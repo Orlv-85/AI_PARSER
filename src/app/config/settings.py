@@ -63,6 +63,8 @@ class Settings(BaseSettings):
     daily_signals_max_usd: str = "0.50"
     daily_signals_brief_model: str = "deepseek-v4-pro"
     world_stream_in_bulletin: bool = False
+    bulletin_home_page: bool = False
+    bulletin_post_channels: bool = False
     period_signals_enabled: bool = False
     period_signals_brief_enabled: bool = False
     period_signals_max_usd: str = "0.10"

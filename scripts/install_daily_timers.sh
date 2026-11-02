@@ -92,6 +92,31 @@ Persistent=false
 [Install]
 WantedBy=timers.target
 EOF
+# Bulletin (018 item 4b): off unless the host script switch is enabled.
+# Timeout covers lock wait, daily step, kill grace and cleanup; see core/bulletin/daily.md.
+cat > "$UNIT_DIR/ai-news-daily-bulletin.service" <<EOF
+[Unit]
+Description=AI News daily bulletin assessment, build and writer
+After=docker.service network-online.target
+Requires=docker.service
+[Service]
+Type=oneshot
+WorkingDirectory=$ROOT_DIR
+ExecStart=/bin/sh $ROOT_DIR/scripts/run_daily_bulletin_job.sh
+TimeoutStartSec=10100
+StandardOutput=append:$ROOT_DIR/logs/daily-bulletin.log
+StandardError=append:$ROOT_DIR/logs/daily-bulletin.log
+EOF
+cat > "$UNIT_DIR/ai-news-daily-bulletin.timer" <<EOF
+[Unit]
+Description=AI News daily bulletin in UTC after world news
+[Timer]
+OnCalendar=*-*-* 04:30:00 UTC
+AccuracySec=1s
+Persistent=false
+[Install]
+WantedBy=timers.target
+EOF
 if [ -n "$STAGE_DIR" ]; then
   for unit in "$STAGE_DIR"/*; do
     $SUDO install -m 0644 "$unit" "$FINAL_DIR/$(basename "$unit")"
@@ -102,3 +127,4 @@ $SUDO systemctl daemon-reload
 $SUDO systemctl enable --now ai-news-daily-fetch.timer ai-news-daily-digest.timer
 $SUDO systemctl enable --now ai-news-daily-archive.timer
 $SUDO systemctl enable --now ai-news-daily-world.timer
+$SUDO systemctl enable --now ai-news-daily-bulletin.timer

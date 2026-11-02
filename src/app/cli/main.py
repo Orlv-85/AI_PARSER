@@ -1,4 +1,5 @@
 import json
+import logging
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -17,16 +18,20 @@ from app.core.archive.capture import (
 from app.core.archive.capture import capture as archive_capture
 from app.core.archive.capture import import_db as archive_import_db
 from app.core.archive.capture import status as archive_status
-from app.core.bulletin.builder import Bulletin, build_bulletin
-from app.core.bulletin.phrases import load_phrases
+from app.core.bulletin.builder import Bulletin
+from app.core.bulletin.daily import (
+    assess_day,
+    has_provider_key,
+    prepare_bulletin,
+    run_daily,
+    write_prepared,
+)
 from app.core.bulletin.render import render_text
 from app.core.bulletin.world_change import (
     ASSESS_DEFAULT_MAX_USD,
     WORLD_CHANGE_MAX_USD_PER_DAY,
     open_assessor,
-    run_assessment,
 )
-from app.core.bulletin.writer import write_bulletin
 from app.core.bulletin.writer_run import WRITER_MAX_USD_PER_DAY, open_writer
 from app.core.daily.enrichment import publish_catch_up, publish_day
 from app.core.daily.signals import (
@@ -50,16 +55,14 @@ from app.core.world_report import build_report
 from app.core.world_screen import open_world_assessor, run_screen, utc_today
 from app.core.world_text import archive_text_source, run_texts
 from app.observability import setup_json_logging
+from app.observability.logging import log_event
 from app.storage import SessionLocal, create_all
 from app.storage.archive import ArchiveRepo
 from app.storage.article_repo import ArticleRepo
-from app.storage.bulletin_input import load_day_input
 from app.storage.bulletin_store import BulletinRepo
-from app.storage.bulletin_texts import load_sources as load_bulletin_sources
 from app.storage.daily_signals import DailySignalRepo, OverrideConflict
 from app.storage.models_sql import AIEntityOverride
 from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
-from app.storage.world_change import WorldChangeRepo
 
 app = typer.Typer(help="AI News Collector CLI")
 _WEEKLY_DATE_OPTION = typer.Option(None, "--report-date")
@@ -458,6 +461,18 @@ bulletin_app = typer.Typer(help="Daily bulletin tools (spec 018).")
 app.add_typer(bulletin_app, name="bulletin")
 
 
+def _bulletin_target(report_date: str, max_usd: str, cap: str, label: str) -> date:
+    try:
+        target = date.fromisoformat(report_date)
+        too_high = microdollars(max_usd) > microdollars(cap)
+    except (ValueError, ArithmeticError) as exc:
+        raise typer.BadParameter(
+            "--date must be YYYY-MM-DD and --max-usd a positive amount") from exc
+    if too_high:
+        raise typer.BadParameter(f"--max-usd is above the {label} {cap}")
+    return target
+
+
 @bulletin_app.command("assess")
 def bulletin_assess(
     report_date: str = typer.Option(..., "--date", help="Digest day, YYYY-MM-DD."),
@@ -465,31 +480,44 @@ def bulletin_assess(
     dry_run: bool = typer.Option(False, "--dry-run", help="No request, nothing written."),
 ) -> None:
     """Ask Jev the world_change questions for the digest articles of a day."""
-    try:
-        target = date.fromisoformat(report_date)
-        too_high = microdollars(max_usd) > microdollars(WORLD_CHANGE_MAX_USD_PER_DAY)
-    except (ValueError, ArithmeticError) as exc:
-        raise typer.BadParameter(
-            "--date must be YYYY-MM-DD and --max-usd a positive amount") from exc
-    if too_high:
-        raise typer.BadParameter(f"--max-usd is above the ceiling {WORLD_CHANGE_MAX_USD_PER_DAY}")
+    target = _bulletin_target(report_date, max_usd, WORLD_CHANGE_MAX_USD_PER_DAY, "ceiling")
     if not dry_run:
         create_all()
     logger = setup_json_logging()
     with SessionLocal() as session:
-        repo = WorldChangeRepo(session)
         try:
-            if dry_run:
-                summary = run_assessment(session, repo, None, target, dry_run=True)
-            else:
-                with open_assessor(get_settings(), logger, target, max_usd) as assessor:
-                    summary = run_assessment(session, repo, assessor, target)
+            summary = assess_day(session, get_settings(), logger, target, opener=open_assessor,
+                                 max_usd=max_usd, dry_run=dry_run)
         except ValueError as exc:
             typer.echo(f"bulletin assess: {exc}", err=True)
             raise typer.Exit(2) from exc
     if summary is None:
         typer.echo(f"bulletin assess: no digest for {target}", err=True)
         raise typer.Exit(2)
+    typer.echo(json.dumps(summary, sort_keys=True))
+
+
+@bulletin_app.command("daily")
+def bulletin_daily(
+    report_date: str | None = typer.Option(None, "--date", help="Day, default yesterday UTC."),
+) -> None:
+    """Assess, build, write when configured, and store the daily bulletin."""
+    today = utc_today()
+    try:
+        target = date.fromisoformat(report_date) if report_date else today - timedelta(days=1)
+    except ValueError as exc:
+        raise typer.BadParameter("--date must be YYYY-MM-DD") from exc
+    logger = setup_json_logging()
+    try:
+        create_all()
+        with SessionLocal() as session:
+            summary = run_daily(session, get_settings(), logger, target, utc_today,
+                                assessor_factory=open_assessor, writer_factory=open_writer)
+    except Exception as exc:  # The unattended command reserves nonzero exits for usage errors.
+        log_event(logger, level=logging.ERROR, event="bulletin_daily_failed",
+                  date=target.isoformat(), error=type(exc).__name__, detail=str(exc)[:200])
+        summary = {"date": target.isoformat(), "status": "skipped", "reason": "daily_failed",
+                   "assess": None, "writer": None, "stored": False, "refused": False}
     typer.echo(json.dumps(summary, sort_keys=True))
 
 
@@ -511,54 +539,32 @@ def bulletin_build(  # pylint: disable=too-many-locals
         WRITER_MAX_USD_PER_DAY, "--max-usd", help="Writer cap in USD, at most the daily cap."),
 ) -> None:
     """Build the bulletin of a day from stored data; a model call only with --write."""
-    try:
-        target = date.fromisoformat(report_date)
-        too_high = microdollars(max_usd) > microdollars(WRITER_MAX_USD_PER_DAY)
-    except (ValueError, ArithmeticError) as exc:
-        raise typer.BadParameter(
-            "--date must be YYYY-MM-DD and --max-usd a positive amount") from exc
-    if too_high:
-        raise typer.BadParameter(f"--max-usd is above the cap {WRITER_MAX_USD_PER_DAY}")
+    target = _bulletin_target(report_date, max_usd, WRITER_MAX_USD_PER_DAY, "cap")
     settings = get_settings()
-    key = settings.ds_api_key
-    if write and (key is None or not key.get_secret_value().strip()):
+    if write and not has_provider_key(settings, "ds_api_key"):
         typer.echo("bulletin build: --write needs DS_API_KEY", err=True)
         raise typer.Exit(2)
     logger = setup_json_logging()
     with SessionLocal() as session:
-        data = load_day_input(session, target, include_world=settings.world_stream_in_bulletin)
-        if data is None:
+        prepared = prepare_bulletin(session, settings, logger, target, write=write)
+        if prepared.reason == "no_digest":
             typer.echo(f"bulletin build: no digest for {target}", err=True)
             raise typer.Exit(2)
-        library = load_phrases()
-        result = build_bulletin(data, library)
-        texts = {}
-        if write and result.bulletin:
-            texts = load_bulletin_sources(session, result.bulletin)
-    assessed = sum(1 for c in data.candidates if c.origin == "digest")
-    logger.info("bulletin_assessed_share", extra={
-        "date": target.isoformat(), "assessed": assessed, "digest_articles": data.digest_articles})
-    bulletin = result.bulletin
-    extra: dict[str, object] = {"assessed": assessed, "digest_articles": data.digest_articles}
-    if bulletin is None:
-        if not dry_run:
-            _store_bulletin(target, None, result.reason, extra)
-        logger.info("bulletin_skipped", extra={"date": target.isoformat(), "reason": result.reason})
-        typer.echo(f"bulletin build: skipped {target}: {result.reason}", err=True)
-        return
     if write:
-        with open_writer(settings, utc_today(), max_usd=float(max_usd)) as writer:
-            written = write_bulletin(bulletin, texts, writer.ask)
-            written.summary["cost_usd"] = writer.cost_usd()
-        bulletin = written.bulletin
-        extra["writer"] = written.summary
-        logger.info("bulletin_writer", extra={"date": target.isoformat(), **written.summary})
+        write_prepared(prepared, settings, logger, utc_today(), opener=open_writer, max_usd=max_usd)
     if not dry_run:
-        _store_bulletin(target, bulletin, None, extra)
+        _store_bulletin(target, prepared.bulletin, prepared.reason, prepared.numbers)
+    if prepared.bulletin is None:
+        logger.info("bulletin_skipped", extra={"date": target.isoformat(),
+                                               "reason": prepared.reason})
+        typer.echo(f"bulletin build: skipped {target}: {prepared.reason}", err=True)
+        return
+    bulletin = prepared.bulletin
+    extra = prepared.numbers
     if as_json:
         typer.echo(json.dumps({**bulletin.as_dict(), **extra}, indent=2, sort_keys=True))
     else:
-        typer.echo(render_text(bulletin, library), nl=False)
+        typer.echo(render_text(bulletin, prepared.library), nl=False)
         if write:
             typer.echo(json.dumps(extra["writer"], sort_keys=True), err=True)
 
