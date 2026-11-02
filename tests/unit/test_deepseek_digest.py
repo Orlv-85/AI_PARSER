@@ -603,12 +603,14 @@ def test_archive_job_script_is_isolated(tmp_path):
 WORLD_LIMITS = {"collect": 2400, "screen": 2700, "texts": 900, "screen-b": 900}
 
 
-def _world_job(tmp_path, *, enabled="true", env_file=None, lock_exit=0, fail=None, jev_key="k"):
+def _world_job(tmp_path, *, enabled="true", env_file=None, lock_exit=0, fail=None, jev_key="k",
+               job="world"):
     """Run the world job with fake flock, timeout and docker; `fail` is {"world texts": 124}."""
     scripts = tmp_path / "scripts"
     scripts.mkdir(parents=True)
-    (scripts / "run_daily_world_job.sh").write_text(
-        Path("scripts/run_daily_world_job.sh").read_text(encoding="utf-8"), encoding="utf-8")
+    script_name = f"run_daily_{job}_job.sh"
+    (scripts / script_name).write_text(
+        Path(f"scripts/{script_name}").read_text(encoding="utf-8"), encoding="utf-8")
     (tmp_path / ".last_deploy_image").write_text("release:tested\n", encoding="utf-8")
     if env_file is not None:
         (tmp_path / ".env").write_text(env_file, encoding="utf-8")
@@ -624,6 +626,7 @@ def _world_job(tmp_path, *, enabled="true", env_file=None, lock_exit=0, fail=Non
         "docker": ('printf "docker %s|image=%s\\n" "$*" "$APP_IMAGE" >> "$TEST_LOG"\n'
                    'case "$*" in *"world collect"*) echo collect-stdout;;'
                    ' *"world screen"*) echo screen-stdout;; *"world texts"*) echo texts-stdout;;'
+                   ' *"bulletin daily"*) echo daily-stdout;;'
                    ' esac\n'
                    + "".join(f'case "$*" in *"{step}"*) exit {code};; esac\n'
                              for step, code in fail.items()) + "exit 0\n"),
@@ -635,10 +638,11 @@ def _world_job(tmp_path, *, enabled="true", env_file=None, lock_exit=0, fail=Non
     env = {"PATH": str(bin_dir), "HOME": str(tmp_path), "TEST_LOG": str(log), "APP_IMAGE": "",
            "LOCK_EXIT": str(lock_exit)}
     if enabled is not None:
-        env["AINEWS_WORLD_COLLECT_ENABLED"] = enabled
+        switch = "AINEWS_WORLD_COLLECT_ENABLED" if job == "world" else "AINEWS_BULLETIN_JOB_ENABLED"
+        env[switch] = enabled
     if jev_key is not None:
         env["JEV_API_KEY"] = jev_key
-    result = subprocess.run(["sh", str(scripts / "run_daily_world_job.sh")], env=env,
+    result = subprocess.run(["sh", str(scripts / script_name)], env=env,
                             cwd=tmp_path, capture_output=True, text=True, check=False)
     return result, log.read_text(encoding="utf-8").splitlines() if log.exists() else []
 
@@ -647,6 +651,43 @@ def _world_runs(calls):
     """The `docker compose run` calls of a job, as the command after `ai-news `."""
     return [call.split("|", maxsplit=1)[0].split(" ai-news ", maxsplit=1)[1]
             for call in calls if call.startswith("docker compose")]
+
+
+@pytest.mark.parametrize("enabled", [None, "false", "0", ""])
+def test_bulletin_job_off_by_default(tmp_path, enabled):
+    result, calls = _world_job(tmp_path, job="bulletin", enabled=enabled)
+    assert result.returncode == 0 and result.stdout == "" and calls == []
+    assert "AINEWS_BULLETIN_JOB_ENABLED is off" in result.stderr
+
+
+def test_bulletin_job_runs_daily(tmp_path):
+    result, calls = _world_job(tmp_path, job="bulletin")
+    assert result.returncode == 0 and result.stderr == ""
+    assert result.stdout == "daily-stdout\n"
+    assert calls[0].startswith("flock -w 8100 /tmp/ai-news-auto-update.lock sh ")
+    assert calls[0].endswith("/scripts/run_daily_bulletin_job.sh --locked")
+    assert _world_runs(calls) == ["bulletin daily"]
+    assert "timeout -k 30 1800 docker compose" in "\n".join(calls)
+    assert all(call.endswith("|image=release:tested") for call in calls if "|image=" in call)
+    assert sum(call.startswith("docker rm -f ai-news-bulletin") for call in calls) == 1
+
+
+@pytest.mark.parametrize("lock_exit,fail", [(1, {}), (0, {"bulletin daily": 124})])
+def test_bulletin_job_failure_is_isolated(tmp_path, lock_exit, fail):
+    result, calls = _world_job(tmp_path, job="bulletin", lock_exit=lock_exit, fail=fail)
+    assert result.returncode == 0
+    if lock_exit:
+        assert _world_runs(calls) == [] and "host lock not acquired within 8100 s" in result.stderr
+    else:
+        assert _world_runs(calls) == ["bulletin daily"]
+        assert "failed or timed out (exit 124)" in result.stderr
+        assert sum(call.startswith("docker rm -f ai-news-bulletin") for call in calls) == 2
+
+
+def test_bulletin_job_env_file(tmp_path):
+    result, calls = _world_job(tmp_path, job="bulletin", enabled=None,
+                              env_file='export AINEWS_BULLETIN_JOB_ENABLED="true" # on\r\n')
+    assert result.returncode == 0 and _world_runs(calls) == ["bulletin daily"]
 
 
 def test_world_job_script_runs_the_steps_in_order(tmp_path):

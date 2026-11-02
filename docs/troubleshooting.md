@@ -227,6 +227,15 @@ the Troubleshooting section of `README.md`.
       "cause": "jev_state bounds content by characters, while reservation bounds the complete encoded request by bytes plus an allowance. journal_files.encoded uses ensure_ascii=True, so Cyrillic characters take six bytes each.",
       "fix": "WorldChangeAssessor.body uses the shared jev_request_fits check and binary search to retain the longest content prefix within JEV_REQUEST_BYTE_BOUND. Fitting bodies stay unchanged; if even empty content cannot fit, the journal rejects the original body as before.",
       "verification": "tests/unit/test_world_change.py: test_long_non_ascii_state_is_cut_to_fit, test_fitting_state_is_unchanged, test_request_fits_matches_reservation, test_failure_log_names_the_article."
+    },
+    {
+      "id": "json-log-extra-fields-missing",
+      "date": "2026-11-02",
+      "area": "observability, bulletin daily",
+      "symptom": "A skipped-step JSON log contains its message but omits the date and missing-key reason supplied through logger.info extra.",
+      "cause": "JsonFormatter includes event_fields and dict message arguments; arbitrary LogRecord attributes from extra are not serialized.",
+      "fix": "Use app.observability.logging.log_event for structured bulletin helper logs; it puts fields inside event_fields.",
+      "verification": "tests/unit/test_bulletin_daily.py: test_daily_without_ds_key_stores_title_only and test_daily_without_jev_key_builds_from_stored_answers assert the reason is present in stderr."
     }
   ]
 }

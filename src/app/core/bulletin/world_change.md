@@ -9,8 +9,9 @@ covers:
 
 For one article, four Jev questions say what AI changed in the world: `world_change`, `area`,
 `actor` and `harm_to_people`. The bulletin of spec 018 (`specs/018-daily-inference/spec.md`, FR-001)
-will pick its stories from these answers; this feature only asks, validates and stores them. No
-daily job runs it yet (spec item 4); the operator command is `ai-news bulletin assess`.
+will pick its stories from these answers; this feature only asks, validates and stores them.
+The operator command is `ai-news bulletin assess`.
+The daily job reuses the assessment path (see `daily.md`).
 
 ## Behavior
 

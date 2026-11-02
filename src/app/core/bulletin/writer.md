@@ -11,7 +11,8 @@ One model call per day retells the stories that the builder selected (`src/app/c
 a Telegram note and a gloss. Every sentence is checked against the original texts before it is kept;
 whatever fails falls back to the builder's title-only text. Spec: FR-005, FR-012, User Story 1
 scenario 4, ER-1/2/3/6/8/9/11/12 in `specs/018-daily-inference/spec.md`. Storage is described in
-`src/app/storage/bulletin_store.md`; no job or page yet. Entry: `ai-news bulletin build --date D
+`src/app/storage/bulletin_store.md`; the daily job is in `daily.md`, no page yet.
+Entry: `ai-news bulletin build --date D
 [--dry-run] --write`.
 
 ## Behavior

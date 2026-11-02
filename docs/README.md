@@ -15,6 +15,7 @@ Specs in `specs/` are the history of how a feature got there.
 | Bulletin builder (018 item 2) | [src/app/core/bulletin/builder.md](../src/app/core/bulletin/builder.md) | `src/app/core/bulletin/builder.py` |
 | Bulletin writer (018 item 3) | [src/app/core/bulletin/writer.md](../src/app/core/bulletin/writer.md) | `src/app/core/bulletin/writer.py` |
 | Bulletin storage (018 item 4a) | [src/app/storage/bulletin_store.md](../src/app/storage/bulletin_store.md) | `src/app/storage/bulletin_store.py` |
+| Daily bulletin (018 item 4b) | [src/app/core/bulletin/daily.md](../src/app/core/bulletin/daily.md) | `src/app/core/bulletin/daily.py` |
 | Period AI Signals (017) | [src/app/core/periodic/signals_period.md](../src/app/core/periodic/signals_period.md) | `src/app/core/periodic/signals_period.py` |
 | Fetch pipeline (001, 002, admission) | [src/app/core/ingestion/pipeline.md](../src/app/core/ingestion/pipeline.md) | `src/app/core/ingestion/pipeline.py` |
 | Source onboarding (003, 011) | [src/app/core/sources/onboarding.md](../src/app/core/sources/onboarding.md) | `src/app/core/sources/onboarding.py` |

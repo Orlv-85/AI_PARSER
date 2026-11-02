@@ -47,6 +47,7 @@ Index of all docs: [docs/README.md](docs/README.md). Code docs live next to the 
 - [Bulletin builder](src/app/core/bulletin/builder.md) - the Daily Inference bulletin from a day's data and the phrase library, dry run (018 item 2).
 - [Bulletin writer](src/app/core/bulletin/writer.md) - model text for the bulletin stories with a grounding check, one call per day (018 item 3).
 - [Bulletin storage](src/app/storage/bulletin_store.md) - saved daily bulletins and public API (018 item 4a).
+- [Daily bulletin](src/app/core/bulletin/daily.md) - daily job, CLI orchestration and switches (018 item 4b).
 - [Period AI Signals](src/app/core/periodic/signals_period.md) - weekly and monthly sums and comparisons: periods, status, coverage, decisions.
 - [Fetch pipeline](src/app/core/ingestion/pipeline.md) - ingestion: sources, page filter, admission, scoring.
 - [Source onboarding](src/app/core/sources/onboarding.md) - candidate import, check, review, approval into collection.
