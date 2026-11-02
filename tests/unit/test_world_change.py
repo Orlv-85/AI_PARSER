@@ -3,6 +3,7 @@ import logging.config
 import sqlite3
 from datetime import date
 from logging import getLogger
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -28,10 +29,11 @@ from app.core.bulletin.world_change import (
     world_change_state,
 )
 from app.core.canonicalize import canonical_url_hash
-from app.core.daily import rubric
-from app.core.jev import JevRelevanceScorer
+from app.core.daily import provider_requests, rubric
+from app.core.jev import CONTENT_LIMIT, JevInputTooLarge, JevRelevanceScorer
 from app.core.models import Article as CoreArticle
 from app.storage.digest_repo import NewsDigestRepo
+from app.storage.journal_files import encoded
 from app.storage.models_sql import Article, Base, WorldChangeAssessment
 from app.storage.provider_journal import PilotJournal, TransportAttemptsExhausted
 from app.storage.world_change import WorldChangeRepo
@@ -108,6 +110,95 @@ def test_request_has_only_the_four_questions():
     assert list(payload["questions"]) == ["world_change", "area", "actor", "harm_to_people"]
     assert payload["state"] == "Title: Title\nContent: Body text"
     assert requests[0].headers["Authorization"] == "Bearer test-key"
+
+
+@pytest.mark.parametrize("text", ["\u0436", "\U0001f680\\\n"])
+def test_long_non_ascii_state_is_cut_to_fit(text):
+    content = (text * CONTENT_LIMIT)[:CONTENT_LIMIT]
+    article = core_article(title="Title", content=content)
+    with mock_client(ok) as client:
+        body = WorldChangeAssessor(client, "m", getLogger("t")).body(article)
+    assert provider_requests.jev_request_fits(body)
+    prefix = body["state"].removeprefix("Title: Title\nContent: ")
+    assert 0 < len(prefix) < len(content)
+    assert prefix == content[:len(prefix)]
+    assert body["state"] == world_change_state(article)[:len(body["state"])]
+    next_body = {**body, "state": body["state"] + content[len(prefix)]}
+    assert not provider_requests.jev_request_fits(next_body)
+
+
+@pytest.mark.parametrize("content", ["ASCII text" * 1000, "  "])
+def test_fitting_state_is_unchanged(content):
+    article = core_article(content=content)
+    with mock_client(ok) as client:
+        body = WorldChangeAssessor(client, "m", getLogger("t")).body(article)
+    assert body == {"model": "m", "state": world_change_state(article),
+                    "questions": WORLD_CHANGE_QUESTIONS}
+
+
+def test_fitting_full_length_ascii_content_is_unchanged():
+    article = core_article(content="x" * CONTENT_LIMIT + "extra")
+    with mock_client(ok) as client:
+        body = WorldChangeAssessor(client, "m", getLogger("t")).body(article)
+    assert provider_requests.jev_request_fits(body)
+    assert body["state"] == world_change_state(article)
+    content = body["state"].split("\nContent: ", 1)[1]
+    assert len(content) == CONTENT_LIMIT
+    assert content == "x" * CONTENT_LIMIT
+
+
+def test_summary_fallback_too_large_is_sent_uncut():
+    article = core_article(title="\u0436" * 1024, summary="\u0436" * 4000, content="")
+    with mock_client(ok) as client:
+        body = WorldChangeAssessor(client, "m", getLogger("t")).body(article)
+    assert body == {"model": "m", "state": world_change_state(article),
+                    "questions": WORLD_CHANGE_QUESTIONS}
+    assert not provider_requests.jev_request_fits(body)
+    with pytest.raises(JevInputTooLarge, match="JEV conservative input bound exceeded"):
+        provider_requests.reservation("jev", body)
+
+
+def test_request_fits_matches_reservation():
+    assert provider_requests.JEV_REQUEST_BYTE_BOUND == 32000
+    overhead = len(encoded({"state": ""}).encode("utf-8")) + 2048
+    inside = {"state": "x" * (32000 - overhead)}
+    outside = {"state": inside["state"] + "x"}
+    assert provider_requests.jev_request_fits(inside)
+    assert provider_requests.reservation("jev", inside) > 0
+    assert not provider_requests.jev_request_fits(outside)
+    with pytest.raises(JevInputTooLarge, match="JEV conservative input bound exceeded"):
+        provider_requests.reservation("jev", outside)
+
+
+@pytest.mark.parametrize("stopped", [False, True])
+@pytest.mark.parametrize("article_id, article_hash", [
+    (7, "h" * 64), (None, "h" * 64), (7, None), (None, ""),
+])
+def test_failure_log_names_the_article(stopped, article_id, article_hash):
+    recorded = []
+    logger = SimpleNamespace(error=lambda event, fields: recorded.append((event, fields)))
+
+    def broken(_request):
+        raise httpx.HTTPError("down")
+
+    journal = RaisingJournal(sqlite3.OperationalError("locked")) if stopped else None
+    with mock_client(broken) as client:
+        assessor = WorldChangeAssessor(client, "m", logger, payment_journal=journal, secret="k")
+        article = Article(id=article_id, url_canonical_hash=article_hash,
+                          title="Title", content="Body")
+        assert assessor.assess(article) is None
+    event, fields = recorded[0]
+    assert event == ("world_change_stopped" if stopped else "world_change_failed")
+    if article_id is not None:
+        assert fields["article_id"] == article_id
+    else:
+        assert "article_id" not in fields
+    if article_hash:
+        assert fields["url_canonical_hash"] == article_hash
+    else:
+        assert "url_canonical_hash" not in fields
+    assert fields["reason" if stopped else "error_type"] == (
+        "locked" if stopped else "HTTPError")
 
 
 @pytest.mark.parametrize("mutate", [

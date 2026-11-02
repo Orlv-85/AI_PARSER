@@ -27,7 +27,8 @@ flowchart LR
 
 **Questions**
 - Four questions, one separate request per article: `world_change` (choice: `added`, `changed`,
-  `issue`, `limit`, `none`), `area` (choice: the 13 areas of `specs/018-daily-inference/voice.md`), `actor` (choice:
+  `issue`, `limit`, `none`), `area` (choice: the 13 areas of `specs/018-daily-inference/voice.md`),
+  `actor` (choice:
   `ai_system`, `people`, `organisation`) and `harm_to_people` (noul: probability of real harm to
   people). The shape is the one of `QUESTIONS` in `rubric.py`; the admission rubric and
   `RUBRIC_VERSION` are not touched. Tests: `test_questions_shape_and_version`,
@@ -40,6 +41,16 @@ flowchart LR
 **Request**
 - The state is the text the daily enrichment sends: title and content, or title, summary and content
   when the article has no content. Tests: `test_state_matches_daily_enrichment`.
+- A request whose encoded size would exceed the Jev request bound (`JEV_REQUEST_BYTE_BOUND`,
+  checked by `jev_request_fits`) is sent with the content cut to the longest prefix that fits; a
+  request that fits is sent unchanged. A request that still does not fit with empty content
+  (a long non-ASCII title or summary fallback) is sent uncut and fails as `JevInputTooLarge`.
+  Tests: `test_long_non_ascii_state_is_cut_to_fit`, `test_fitting_state_is_unchanged`,
+  `test_fitting_full_length_ascii_content_is_unchanged`, `test_request_fits_matches_reservation`,
+  `test_summary_fallback_too_large_is_sent_uncut`.
+- A failure or stop log line carries the article id and/or `url_canonical_hash` when the object
+  has a non-None id and/or a non-empty hash. Tests:
+  `test_failure_log_names_the_article`.
 - The request goes through the provider journal (`PilotJournal`, provider `jev`) when one is given:
   a reserved, capped, replayable call. Tests: `test_assess_uses_the_provider_journal`.
 - Probabilities are validated like `_probability`; an unknown choice, a missing answer or a bad
@@ -65,7 +76,8 @@ flowchart LR
 - A failed article counts in `failed` and stores nothing; after a stop the rest is
   `not_attempted`. Tests: `test_run_assessment_failures_store_nothing`,
   `test_run_assessment_stops_after_journal_stop`.
-- A real run needs `JEV_API_KEY`; without it the command exits 2. Tests: `test_cli_assess_needs_a_key`.
+- A real run needs `JEV_API_KEY`; without it the command exits 2. Tests:
+  `test_cli_assess_needs_a_key`.
 - Prints one JSON summary: `assessed`, `skipped`, `failed`, `unmatched` (digest URLs without a
   stored article), `not_attempted` (after a journal stop), `by_choice`, `cost_usd`. Tests:
   `test_cli_assess_skips_answered_and_summarizes`.
@@ -74,7 +86,8 @@ flowchart LR
 - The cap `--max-usd` (default `ASSESS_DEFAULT_MAX_USD`) is a journal cap; the journal lives in
   `data/bulletin/<D>/` per cap. `--max-usd` above `WORLD_CHANGE_MAX_USD_PER_DAY` is rejected.
   Known limit: another cap value opens another journal, so spend of one day can add up to a few
-  caps; the ceiling bounds each run, not the day. Tests: `test_cli_assess_skips_answered_and_summarizes`,
+  caps; the ceiling bounds each run, not the day. Tests:
+  `test_cli_assess_skips_answered_and_summarizes`,
   `test_cli_rejects_max_usd_above_ceiling`; the per-cap journal itself has no test.
 - When a rerun stops with `unknown_or_failed_previous_call_requires_review`, an earlier call of
   that journal is unresolved (it may have been billed). The operator checks the log line
@@ -99,6 +112,8 @@ flowchart LR
   the bulletin treat a missing `harm_to_people` as "no" (decided 2026-10-31 (agent)).
 - The state function repeats the daily rule instead of importing `JevRelevanceScorer.state`, which
   needs a scorer object; a test pins that both give the same text.
+- Cut, not skip, an oversized text: decided 2026-11-02 (agent): the world stream is multilingual
+  and the start of an article carries the news.
 - Journal per day and cap: the journal identity includes the caps, so a different `--max-usd`
   needs its own file (decided 2026-10-31 (agent)).
 
@@ -111,16 +126,24 @@ flowchart LR
 
 ## Code map
 
-| Where | What |
-| --- | --- |
-| `src/app/core/bulletin/world_change.py` | questions, `WORLD_CHANGE_VERSION`, `WorldChange`, `WorldChangeAssessor`, `world_change_state`, `run_assessment` |
-| `src/app/storage/world_change.py` | `WorldChangeRepo` |
-| `src/app/storage/models_sql.py` | `WorldChangeAssessment` |
-| `src/app/storage/migrations/versions/b8e2d4f61a07_add_world_change_assessments.py` | creates the table only when missing; downgrade drops it |
-| `src/app/cli/main.py` | `bulletin assess` |
-| `specs/018-daily-inference/records/eval_world_change.py` | offline check against labels (FR-002); not product code |
+- `WorldChangeAssessor.body` bounds content by binary search using `jev_request_fits` and
+  `JEV_REQUEST_BYTE_BOUND` from `src/app/core/daily/provider_requests.py`; `reservation` uses the
+  same check. `world_change_state` passes `content_limit` to `jev_state` in `src/app/core/jev.py`.
+- `assess` supplies the optional article id and non-empty `url_canonical_hash` to `ask` for
+  failure and stop log context.
+
+- `src/app/core/bulletin/world_change.py`: questions, `WORLD_CHANGE_VERSION`, `WorldChange`,
+  `WorldChangeAssessor`, `world_change_state`, `run_assessment`.
+- `src/app/storage/world_change.py`: `WorldChangeRepo`.
+- `src/app/storage/models_sql.py`: `WorldChangeAssessment`.
+- `src/app/storage/migrations/versions/b8e2d4f61a07_add_world_change_assessments.py`:
+  creates the table only when missing; downgrade drops it.
+- `src/app/cli/main.py`: `bulletin assess`.
+- `specs/018-daily-inference/records/eval_world_change.py`: offline check against labels
+  (FR-002); not product code.
 
 ## Tests
 
-`tests/unit/test_world_change.py`: questions, state, request body, parsing, failures, storage,
-command, migration round trip.
+`tests/unit/test_world_change.py`: questions, state, request body, longest fitting content prefix,
+reservation boundary, oversized summary fallback, full-length ASCII content, article id and
+canonical hash in failure/stop logs, parsing, failures, storage, command, migration round trip.

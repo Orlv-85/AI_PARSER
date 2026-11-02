@@ -463,6 +463,11 @@ web update (thread or process)               web/service.py: UpdateRunService
 | `storage/source_repo.py` (not covered) | `SourceRepo` (fetch state) | no |
 | `storage/article_repo.py` (not covered) | `ArticleRepo` (known hashes, insert, batch upsert) | no |
 
+`jev_state` accepts an optional `content_limit`, defaulting to `CONTENT_LIMIT`; ingestion and
+daily enrichment keep the default. The world-change assessor supplies a smaller limit when the
+encoded request would exceed the journal byte bound (`core/bulletin/world_change.md`). Tests:
+`test_state_matches_daily_enrichment`, `test_long_non_ascii_state_is_cut_to_fit`.
+
 ## Tables
 
 | Table | Written here |

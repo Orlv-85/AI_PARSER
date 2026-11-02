@@ -48,13 +48,14 @@ SUMMARY_LIMIT = 4000
 CONTENT_LIMIT = 16000
 
 
-def jev_state(article: object, *, with_summary: bool = True) -> str:
+def jev_state(article: object, *, with_summary: bool = True,
+              content_limit: int = CONTENT_LIMIT) -> str:
     """Bounded article text sent to Jev as `state`.
 
     The daily rubric leaves out the summary unless there is no content.
     """
     title = str(getattr(article, "title", "") or "")[:TITLE_LIMIT]
-    content = str(getattr(article, "content", "") or "")[:CONTENT_LIMIT]
+    content = str(getattr(article, "content", "") or "")[:content_limit]
     if not with_summary:
         return f"Title: {title}\nContent: {content}"
     summary = str(getattr(article, "summary", "") or "")[:SUMMARY_LIMIT]

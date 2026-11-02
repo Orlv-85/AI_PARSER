@@ -3,6 +3,7 @@ import json
 import re
 from logging import getLogger
 from math import ceil
+from typing import Any
 
 from app.core.ingestion.reject_policy import CLEANUP_POLICY, cleanup_verdict
 from app.core.jev import JevAssessment, JevInputTooLarge, JevRelevanceScorer, _probability
@@ -18,6 +19,7 @@ TOPIC_FALLBACK_VERSION = "daily-topic-fallback-1"
 TOPIC_MIN_CONFIDENCE = 0.7
 COMPARISON_MIN_CONFIDENCE = 0.7
 JEV_MODEL = "jev-1.13.0"
+JEV_REQUEST_BYTE_BOUND = 32000
 DEEPSEEK_MODEL = "deepseek-flash"
 ENDPOINTS = {"jev": "https://api.typesafe.ai/v1/systemone",
              "deepseek": "https://api.deepseek.com/chat/completions"}
@@ -168,14 +170,19 @@ def request_key(provider, body):
                         "version": PILOT_VERSION if provider == "jev" else summary_version})
 
 
+def jev_request_fits(body: dict[str, Any]) -> bool:
+    """Use the journal's conservative byte bound for the whole Jev request."""
+    return len(encoded(body).encode("utf-8")) + 2048 <= JEV_REQUEST_BYTE_BOUND
+
+
 def reservation(provider, body):
     """Microdollars: reserve a byte-based input bound, never chars/4."""
-    byte_bound = len(encoded(body).encode("utf-8")) + 2048
     if provider == "jev":
         # Bound the whole request below even the stricter state+question limit.
-        if byte_bound > 32000:
+        if not jev_request_fits(body):
             raise JevInputTooLarge("JEV conservative input bound exceeded")
         return ceil(64000 * PRICES[provider]["input"])
+    byte_bound = len(encoded(body).encode("utf-8")) + 2048
     if byte_bound > 64000 or body.get("max_tokens") not in {300, 4096}:
         raise ValueError("DeepSeek conservative input/output bound exceeded")
     return ceil(byte_bound * PRICES[provider]["input"] +
