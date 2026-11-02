@@ -9,6 +9,7 @@ Specs in `specs/` are the history of how a feature got there.
 | Feature | Doc | Main module |
 | --- | --- | --- |
 | System overview | [src/app/README.md](../src/app/README.md) | - |
+| Provider payment journal | [src/app/storage/provider_journal.md](../src/app/storage/provider_journal.md) | `src/app/storage/provider_journal.py` |
 | Daily digest enrichment | [src/app/core/daily/enrichment.md](../src/app/core/daily/enrichment.md) | `src/app/core/daily/enrichment.py` |
 | Daily AI Signals (006, 007) | [src/app/core/daily/signals.md](../src/app/core/daily/signals.md) | `src/app/core/daily/signals.py` |
 | World change questions (018 item 1) | [src/app/core/bulletin/world_change.md](../src/app/core/bulletin/world_change.md) | `src/app/core/bulletin/world_change.py` |

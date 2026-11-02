@@ -13,6 +13,15 @@ the Troubleshooting section of `README.md`.
 {
   "cases": [
     {
+      "id": "pytest-cov-provider-journal-preimport",
+      "date": "2026-11-02",
+      "area": "tests (coverage with a module-name source)",
+      "symptom": "Scoped tests pass normally but --cov=app.storage.provider_journal fails while SQLAlchemy configures relationships: KeyError: <RelationshipDirection.ONETOMANY: 1>, followed by mapper initialization errors.",
+      "cause": "A module-name coverage source makes pytest-cov import the package early, before the test session sets up SQLAlchemy; the exact mechanism is not confirmed.",
+      "fix": "Use a filesystem source for pytest-cov (--cov=src/app/storage), avoiding the module preimport. No application or SQLAlchemy changes are needed.",
+      "verification": "The same eight journal/caller test files: 271 passed without coverage and 271 passed with --cov=src/app/storage --cov-branch; the module source form fails before refactoring."
+    },
+    {
       "id": "flaky-e2e-update-and-read-news",
       "date": "2026-10-17",
       "area": "tests/e2e",
