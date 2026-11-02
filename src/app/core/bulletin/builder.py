@@ -39,6 +39,7 @@ class Candidate:  # pylint: disable=too-many-instance-attributes
     event_key: str
     event_type: str = ""
     origin: str = "digest"
+    article_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -70,6 +71,7 @@ class Story:  # pylint: disable=too-many-instance-attributes
     telegram_note: list[str] = field(default_factory=list)
     gloss: str | None = None
     text_origin: str = "title"
+    article_ids: list[int] = field(default_factory=list)
 
 
 @dataclass
@@ -135,7 +137,8 @@ class _Event:
             links=[{"outlet": by_url[u], "url": u} for u in urls],
             outlets=self.outlets, confidence=self.rep.confidence,
             event_type="model_release" if self.model_release else self.rep.event_type,
-            origin=self.rep.origin)
+            origin=self.rep.origin,
+            article_ids=[m.article_id for m in self.members if m.article_id is not None])
 
 
 def day_number(day: date) -> int:

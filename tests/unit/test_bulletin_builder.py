@@ -241,6 +241,17 @@ def test_one_story_per_event_with_all_outlets():
     assert "(Wired, O1)" in render_text(bulletin, LIB)
 
 
+def test_story_carries_article_ids():
+    story = build([cand(1, event_key="same", article_id=17, confidence=0.8),
+                   cand(2, event_key="same", article_id=9, confidence=0.95)]).key_results[0]
+    assert story.title == "Story 2 changes the work"
+    assert story.article_ids == [17, 9]
+    mixed = build([cand(1, event_key="same", article_id=17),
+                   cand(2, event_key="same", origin="world")]).key_results[0]
+    assert mixed.article_ids == [17]
+    assert build([cand(1, origin="world")]).key_results[0].article_ids == []
+
+
 def test_harm_story_is_only_counted():
     harmful = [cand(1, confidence=0.99, harm=0.9),
                cand(2, confidence=0.98, harm=0.7, world_change="issue", actor="ai_system"),
@@ -505,6 +516,7 @@ def test_loader_builds_the_day_input(maker, source_name, expected_outlet):
     assert (loaded.model_releases, loaded.product_launches) == (2, 4)
     assert loaded.median_items == 80
     assert len(loaded.candidates) == 3
+    assert [c.article_id for c in loaded.candidates] == [1, 2, 3]
     by_title = {c.title: c for c in loaded.candidates}
     assert by_title["Title 0"].event_type == "model_release"
     assert by_title["Title 0"].outlet == expected_outlet
@@ -560,6 +572,7 @@ def test_world_candidates_only_with_the_switch(maker):
         on = load_day_input(session, DAY, include_world=True)
     assert all(c.origin == "digest" for c in off.candidates)
     world = [c for c in on.candidates if c.origin == "world"]
+    assert all(c.article_id is None for c in world)
     assert len(on.candidates) == len(off.candidates) + 1
     assert [(c.title, c.outlet, c.world_change) for c in world] == [
         ("Court rules on AI evidence", "news.example", "limit")]
@@ -579,6 +592,7 @@ def test_world_stream_setting_defaults_off(monkeypatch):
 @pytest.fixture
 def cli(maker, monkeypatch):
     monkeypatch.setattr(cli_main, "SessionLocal", maker)
+    monkeypatch.setattr(cli_main, "create_all", lambda: None)
     monkeypatch.setattr(cli_main, "get_settings", lambda: Settings(_env_file=None))
     return lambda *args: CliRunner().invoke(cli_main.app, ["bulletin", "build", *args])
 
@@ -603,9 +617,9 @@ def test_cli_json_prints_the_object(maker, cli):
     assert [s["title"] for s in data["key_results"]] == ["Title 0", "Title 1"]
 
 
-def test_cli_needs_dry_run(maker, cli):
+def test_cli_can_store(maker, cli):
     seed_day(maker)
-    assert cli("--date", DAY.isoformat()).exit_code == 2
+    assert cli("--date", DAY.isoformat()).exit_code == 0
 
 
 def test_cli_no_digest(maker, cli):

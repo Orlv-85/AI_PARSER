@@ -11,8 +11,10 @@ covers:
 Builds the Daily Inference bulletin of one day from the day's digest articles and their
 `world_change_assessments` answers (`world_change.md`), with the fixed phrases of the phrase library.
 Story text is the article title with outlet and link; model text is added by the writer (item 3,
-`writer.md`) and only with `--write`. Item 2 has only a dry run (`ai-news bulletin build --date D
---dry-run`): nothing is stored, no job, no page, no model call without `--write`. Rules of voice and structure: `specs/018-daily-inference/voice.md`; editorial rules ER-* and
+`writer.md`) and only with `--write`. `ai-news bulletin build --date D [--dry-run]` builds the
+bulletin; storage is described in `src/app/storage/bulletin_store.md`. No job, no page,
+no model call without `--write`. Rules of voice and structure: `specs/018-daily-inference/voice.md`;
+editorial rules ER-* and
 FR-003/FR-004/FR-006 in `specs/018-daily-inference/spec.md`.
 
 ## Behavior
@@ -44,6 +46,10 @@ flowchart LR
   `test_median_counts_only_ready_days_before_the_day`.
 
 **Stories**
+- Digest candidates carry their `article_id`; world candidates keep None. Each story carries
+  `article_ids` from all event members in member order, leaving out None values.
+  Tests: `test_story_carries_article_ids`, `test_loader_builds_the_day_input`,
+  `test_world_candidates_only_with_the_switch`.
 - The outlet shown drops a trailing non-nested parenthesised label only when it contains
   "feed", "newsletter" or "rss" (case-insensitive): "TechCrunch (main feed)" -> "TechCrunch",
   while "Machine Intelligence Research Institute (MIRI)" stays. A leading `www.` is removed
@@ -106,9 +112,9 @@ flowchart LR
   `/daily?date=D` in the object). Outlets are shown as a list only for events with two or more.
   Tests: `test_render_text_matches_the_voice_layout`.
 - `ai-news bulletin build --date D --dry-run [--json]` prints the text, or with `--json` the object
-  only. Without `--dry-run` it exits 2 (storage comes in item 4); a day without a digest exits 2; a
+  only. Storage is described in `src/app/storage/bulletin_store.md`; a day without a digest exits 2; a
   skipped day prints nothing on stdout, logs `bulletin_skipped` and exits 0. With `--json` the output also has `assessed` and `digest_articles`. Tests:
-  `test_cli_dry_run_prints_text`, `test_cli_json_prints_the_object`, `test_cli_needs_dry_run`,
+  `test_cli_dry_run_prints_text`, `test_cli_json_prints_the_object`, `test_cli_can_store`,
   `test_cli_no_digest`, `test_cli_skipped_day_logs_reason`.
 
 - The writer (`writer.md`) fills `Story.headline`, `site_note`, `telegram_note`, `gloss` and
@@ -158,12 +164,14 @@ flowchart LR
 | Where | What |
 | --- | --- |
 | `src/app/core/bulletin/builder.py` | constants, `Candidate`, `DayInput`, `Story`, `Bulletin`, `build_bulletin` |
+| `Candidate.article_id`, `Story.article_ids` | digest article identity through event grouping |
 | `src/app/core/bulletin/phrases.json` | the phrase library (data) |
 | `src/app/core/bulletin/phrases.py` | `load_phrases`, validation and the never-list |
 | `src/app/core/bulletin/render.py` | `render_text` |
-| `src/app/storage/bulletin_input.py` | `load_day_input`: digest, answers, signals, median, world candidates |
+| `src/app/storage/bulletin_input.py` | `load_day_input`: digest article ids, answers, signals, world |
 | `src/app/config/settings.py` | `world_stream_in_bulletin` |
 | `src/app/cli/main.py` | `bulletin build` |
+| `src/app/storage/bulletin_store.md` | `bulletin build` storage contract |
 
 ## Tests
 

@@ -635,6 +635,7 @@ def cli(maker, monkeypatch, tmp_path):
     requests = []
     net = transport(requests=requests)
     monkeypatch.setattr(cli_main, "SessionLocal", maker)
+    monkeypatch.setattr(cli_main, "create_all", lambda: None)
     monkeypatch.setattr(cli_main, "get_settings", settings)
     monkeypatch.setattr(cli_main, "utc_today", lambda: TODAY)
     monkeypatch.setattr(cli_main, "open_writer", functools.partial(
@@ -665,8 +666,8 @@ def test_cli_write_needs_the_key(cli, monkeypatch):
     assert result.exit_code == 2 and cli.requests == []
 
 
-def test_cli_write_needs_dry_run(cli):
-    assert cli("--write").exit_code == 2 and cli.requests == []
+def test_cli_write_can_store(cli):
+    assert cli("--write").exit_code == 0 and len(cli.requests) == 1
 
 
 def test_cli_rejects_max_usd_above_the_cap(cli):

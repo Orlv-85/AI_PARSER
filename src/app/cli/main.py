@@ -17,7 +17,7 @@ from app.core.archive.capture import (
 from app.core.archive.capture import capture as archive_capture
 from app.core.archive.capture import import_db as archive_import_db
 from app.core.archive.capture import status as archive_status
-from app.core.bulletin.builder import build_bulletin
+from app.core.bulletin.builder import Bulletin, build_bulletin
 from app.core.bulletin.phrases import load_phrases
 from app.core.bulletin.render import render_text
 from app.core.bulletin.world_change import (
@@ -54,6 +54,7 @@ from app.storage import SessionLocal, create_all
 from app.storage.archive import ArchiveRepo
 from app.storage.article_repo import ArticleRepo
 from app.storage.bulletin_input import load_day_input
+from app.storage.bulletin_store import BulletinRepo
 from app.storage.bulletin_texts import load_sources as load_bulletin_sources
 from app.storage.daily_signals import DailySignalRepo, OverrideConflict
 from app.storage.models_sql import AIEntityOverride
@@ -492,6 +493,14 @@ def bulletin_assess(
     typer.echo(json.dumps(summary, sort_keys=True))
 
 
+def _store_bulletin(day: date, bulletin: Bulletin | None, reason: str | None,
+                    numbers: dict[str, object]) -> None:
+    create_all()
+    with SessionLocal() as session:
+        BulletinRepo(session).save(day, bulletin=bulletin, reason=reason, numbers=numbers)
+        session.commit()
+
+
 @bulletin_app.command("build")
 def bulletin_build(  # pylint: disable=too-many-locals
     report_date: str = typer.Option(..., "--date", help="Digest day, YYYY-MM-DD."),
@@ -510,9 +519,6 @@ def bulletin_build(  # pylint: disable=too-many-locals
             "--date must be YYYY-MM-DD and --max-usd a positive amount") from exc
     if too_high:
         raise typer.BadParameter(f"--max-usd is above the cap {WRITER_MAX_USD_PER_DAY}")
-    if not dry_run:
-        typer.echo("bulletin build: only --dry-run is available", err=True)
-        raise typer.Exit(2)
     settings = get_settings()
     key = settings.ds_api_key
     if write and (key is None or not key.get_secret_value().strip()):
@@ -533,11 +539,13 @@ def bulletin_build(  # pylint: disable=too-many-locals
     logger.info("bulletin_assessed_share", extra={
         "date": target.isoformat(), "assessed": assessed, "digest_articles": data.digest_articles})
     bulletin = result.bulletin
+    extra: dict[str, object] = {"assessed": assessed, "digest_articles": data.digest_articles}
     if bulletin is None:
+        if not dry_run:
+            _store_bulletin(target, None, result.reason, extra)
         logger.info("bulletin_skipped", extra={"date": target.isoformat(), "reason": result.reason})
         typer.echo(f"bulletin build: skipped {target}: {result.reason}", err=True)
         return
-    extra: dict[str, object] = {"assessed": assessed, "digest_articles": data.digest_articles}
     if write:
         with open_writer(settings, utc_today(), max_usd=float(max_usd)) as writer:
             written = write_bulletin(bulletin, texts, writer.ask)
@@ -545,6 +553,8 @@ def bulletin_build(  # pylint: disable=too-many-locals
         bulletin = written.bulletin
         extra["writer"] = written.summary
         logger.info("bulletin_writer", extra={"date": target.isoformat(), **written.summary})
+    if not dry_run:
+        _store_bulletin(target, bulletin, None, extra)
     if as_json:
         typer.echo(json.dumps({**bulletin.as_dict(), **extra}, indent=2, sort_keys=True))
     else:
