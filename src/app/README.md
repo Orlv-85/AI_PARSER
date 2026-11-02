@@ -22,6 +22,7 @@ Feature docs live next to their main module and are checked by `scripts/check_co
 
 | Feature | Doc |
 | --- | --- |
+| Provider payment journal | `storage/provider_journal.md` |
 | Daily digest enrichment | `core/daily/enrichment.md` |
 | Daily AI Signals (006, 007) | `core/daily/signals.md` |
 | World change questions (018 item 1) | `core/bulletin/world_change.md` |

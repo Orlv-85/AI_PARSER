@@ -1,4 +1,7 @@
-"""Durable pilot payment reservations shared by both providers and restarts."""
+"""Durable pilot payment reservations shared by both providers and restarts.
+
+Behavior, decisions and tests: src/app/storage/provider_journal.md.
+"""
 import json
 import math
 import os
@@ -51,6 +54,35 @@ def _json_or_none(response):
         return response.json()
     except ValueError:
         return None
+
+
+def _reviewable_transport(row):
+    allowed = {"ReadError", "ReadTimeout", "ConnectError", "ConnectTimeout",
+               "WriteError", "WriteTimeout", "RemoteProtocolError", "PoolTimeout"}
+    return bool(row and row[0] == "failed" and row[1] in allowed and row[2:] == (None, None))
+
+
+def _is_priced_truncation(received, actual):
+    data = received.get("body")
+    if (received.get("status_code") != 200 or not isinstance(data, dict)
+            or not data.get("choices")
+            or data["choices"][0].get("finish_reason") != "length"):
+        return False
+    return (data.get("model") in {DEEPSEEK_MODEL, "deepseek-v4.1-flash"}
+            and priced_usage("deepseek", data) == actual)
+
+
+def _report_tokens(selected):
+    tokens = Counter()
+    for row in selected:
+        if row[4]:
+            data = json.loads(row[4])["body"]
+            usage = data.get("usage", {}) if isinstance(data, dict) else {}
+            if isinstance(usage, dict):
+                tokens.update({k: v for k, v in usage.items()
+                               if isinstance(v, int) and not isinstance(v, bool)
+                               and v >= 0})
+    return dict(tokens)
 
 
 class PilotJournal:
@@ -137,9 +169,7 @@ class PilotJournal:
         try:
             row = self.db.execute("SELECT state,error_type,response,actual FROM calls WHERE key=?",
                                   (key,)).fetchone()
-            allowed = {"ReadError", "ReadTimeout", "ConnectError", "ConnectTimeout",
-                       "WriteError", "WriteTimeout", "RemoteProtocolError", "PoolTimeout"}
-            if not row or row[0] != "failed" or row[1] not in allowed or row[2:] != (None, None):
+            if not _reviewable_transport(row):
                 self.db.rollback()
                 return False
             self.db.execute("INSERT INTO reviews(key,reason) VALUES (?,?)", (key, reason))
@@ -168,22 +198,25 @@ class PilotJournal:
                 return key, saved, attempt, parent
             if saved[0] == "failed" and self._release_unbilled_transient(key):
                 return key, None, attempt, parent
-            if self.transport_review_reason and saved[0] == "failed":
-                if self.review_transport_failure(key, self.transport_review_reason):
-                    saved = ("reviewed_transport", saved[1], saved[2])
-            if saved[0] != "reviewed_transport" or not self.transport_review_reason:
-                raise PilotStopped("unknown_or_failed_previous_call_requires_review")
-            if not self.db.execute("SELECT 1 FROM reviews WHERE key=?", (key,)).fetchone():
-                raise PilotStopped("transport_review_provenance_missing")
-            if attempt > len(self.transport_retry_delays):
-                raise TransportAttemptsExhausted(
-                    "Reviewed transport attempts exhausted; result unresolved")
+            self._require_transport_review(key, saved, attempt)
             # request_attempts links each attempt to the next one (request -> 2 -> 3).
             following = self.db.execute("SELECT attempt_key FROM request_attempts "
                                         "WHERE request_key=?", (key,)).fetchone()
             attempt, parent = attempt + 1, key
             key = following[0] if following else fingerprint(
                 {"request_key": request, "attempt": attempt})
+
+    def _require_transport_review(self, key, saved, attempt):
+        if self.transport_review_reason and saved[0] == "failed":
+            if self.review_transport_failure(key, self.transport_review_reason):
+                saved = ("reviewed_transport", saved[1], saved[2])
+        if saved[0] != "reviewed_transport" or not self.transport_review_reason:
+            raise PilotStopped("unknown_or_failed_previous_call_requires_review")
+        if not self.db.execute("SELECT 1 FROM reviews WHERE key=?", (key,)).fetchone():
+            raise PilotStopped("transport_review_provenance_missing")
+        if attempt > len(self.transport_retry_delays):
+            raise TransportAttemptsExhausted(
+                "Reviewed transport attempts exhausted; result unresolved")
 
     def _release_unbilled_transient(self, key):
         """Drop a recorded overload answer without usage so a resume may redispatch."""
@@ -214,13 +247,7 @@ class PilotJournal:
             if actual is None or raw is None:
                 continue
             received = json.loads(raw)
-            data = received.get("body")
-            if (received.get("status_code") != 200 or not isinstance(data, dict)
-                    or not data.get("choices")
-                    or data["choices"][0].get("finish_reason") != "length"):
-                continue
-            if (data.get("model") not in {DEEPSEEK_MODEL, "deepseek-v4.1-flash"}
-                    or priced_usage("deepseek", data) != actual):
+            if not _is_priced_truncation(received, actual):
                 continue
             with self.db:
                 self.db.execute("INSERT INTO reviews(key,reason) VALUES (?,?)", (key, reason))
@@ -230,13 +257,8 @@ class PilotJournal:
 
     def restore_valid_summary(self, row, comparison, body, prompt_version):
         key = request_key("deepseek", body)
-        saved = self.db.execute("SELECT actual,response FROM calls WHERE key=? "
-                                "AND provider='deepseek' AND state='failed' "
-                                "AND error_type='InvalidSummary'", (key,)).fetchone()
-        if not saved or saved[0] is None or saved[1] is None:
-            return False
-        received = json.loads(saved[1])
-        if received["status_code"] != 200 or priced_usage("deepseek", received["body"]) != saved[0]:
+        received = self._restorable_summary(key)
+        if received is None:
             return False
         try:
             parse_summary(row, received["body"], comparison, prompt_version=prompt_version)
@@ -247,6 +269,17 @@ class PilotJournal:
                             (key, "Complete grounded summary revalidated; length is advisory"))
             self.db.execute("UPDATE calls SET state='response' WHERE key=?", (key,))
         return True
+
+    def _restorable_summary(self, key):
+        saved = self.db.execute("SELECT actual,response FROM calls WHERE key=? "
+                                "AND provider='deepseek' AND state='failed' "
+                                "AND error_type='InvalidSummary'", (key,)).fetchone()
+        if not saved or saved[0] is None or saved[1] is None:
+            return None
+        received = json.loads(saved[1])
+        if received["status_code"] != 200 or priced_usage("deepseek", received["body"]) != saved[0]:
+            return None
+        return received
 
     def _retry_after_failure(self, provider, body, client, secret, before_dispatch):
         """Retry after a reviewed transport failure; exhaustion here follows our own request."""
@@ -261,27 +294,14 @@ class PilotJournal:
         key, saved, attempt, parent = self._attempt(request)
         amount = self.reservation_function(provider, body)
         if saved:
-            if saved[0] != "response" or saved[2] is None:
-                raise PilotStopped("unknown_or_failed_previous_call_requires_review")
-            received = json.loads(saved[1])
-            if (received["status_code"] != 200 or not isinstance(received["body"], dict)
-                    or saved[2] > amount):
-                self.fail(key, "InvalidSavedResponse")
-                raise PilotStopped("saved_response_requires_review")
-            return received["body"]
+            return self._replay_response(key, saved, amount)
         if before_dispatch:
             before_dispatch()
         if attempt > 1 and self.transport_retry_delays[attempt - 2]:
             time.sleep(self.transport_retry_delays[attempt - 2])
         self.reserve(key, provider, amount, parent_key=parent)
         try:
-            for delay in (*TRANSIENT_RETRY_DELAYS, None):
-                response = client.post(ENDPOINTS[provider], json=body,
-                                       headers={"Authorization": "Bearer " + secret})
-                if delay is None or not is_overload(response.status_code,
-                                                    _json_or_none(response)):
-                    break
-                time.sleep(delay)
+            response = self._post_with_transient_retries(provider, body, client, secret)
         except httpx.HTTPError as exc:
             self.fail(key, type(exc).__name__)
             if self.transport_review_reason and self.review_transport_failure(
@@ -290,6 +310,31 @@ class PilotJournal:
             raise PilotStopped("provider_outage_unknown_billing") from None
         data = _json_or_none(response)
         actual = priced_usage(provider, data)
+        self._record_response(key, response, data, actual, amount)
+        self._validate_response(key, response, data, actual, amount)
+        return data
+
+    def _replay_response(self, key, saved, amount):
+        if saved[0] != "response" or saved[2] is None:
+            raise PilotStopped("unknown_or_failed_previous_call_requires_review")
+        received = json.loads(saved[1])
+        if (received["status_code"] != 200 or not isinstance(received["body"], dict)
+                or saved[2] > amount):
+            self.fail(key, "InvalidSavedResponse")
+            raise PilotStopped("saved_response_requires_review")
+        return received["body"]
+
+    def _post_with_transient_retries(self, provider, body, client, secret):
+        for delay in (*TRANSIENT_RETRY_DELAYS, None):
+            response = client.post(ENDPOINTS[provider], json=body,
+                                   headers={"Authorization": "Bearer " + secret})
+            if delay is None or not is_overload(response.status_code,
+                                                _json_or_none(response)):
+                break
+            time.sleep(delay)
+        return response
+
+    def _record_response(self, key, response, data, actual, amount):
         # Save received bytes before inspecting model answers. Resume only replays them.
         self.db.execute("UPDATE calls SET response=?,actual=?,committed=?,state='response', "
                         "received_at=CURRENT_TIMESTAMP WHERE key=?",
@@ -297,6 +342,8 @@ class PilotJournal:
                                   "raw": response.text, "body": data}), actual,
                          amount if actual is None else actual, key))
         self.db.commit()
+
+    def _validate_response(self, key, response, data, actual, amount):
         if response.status_code != 200 or not isinstance(data, dict):
             self.fail(key, "HTTPOrJSONError")
             raise PilotStopped("provider_response_failed")
@@ -305,7 +352,6 @@ class PilotJournal:
         if actual > amount:
             self.fail(key, "ReservationExceeded")
             raise PilotStopped("usage_exceeded_conservative_bound")
-        return data
 
     def committed_usd(self):
         """Dollars committed so far in this journal (reservations and priced usage)."""
@@ -318,20 +364,12 @@ class PilotJournal:
         providers = {}
         for provider in PRICES:
             selected = [row for row in rows if row[0] == provider]
-            tokens = Counter()
-            for row in selected:
-                if row[4]:
-                    data = json.loads(row[4])["body"]
-                    usage = data.get("usage", {}) if isinstance(data, dict) else {}
-                    if isinstance(usage, dict):
-                        tokens.update({k: v for k, v in usage.items()
-                                       if isinstance(v, int) and not isinstance(v, bool)
-                                       and v >= 0})
+            tokens = _report_tokens(selected)
             providers[provider] = {
                 "calls": len(selected), "committed_usd": sum(r[1] for r in selected) / 1e6,
                 "usage_priced_usd": sum(r[2] or 0 for r in selected) / 1e6,
                 "unknown_usage_calls": sum(r[2] is None for r in selected),
-                "states": dict(Counter(r[3] for r in selected)), "tokens": dict(tokens)}
+                "states": dict(Counter(r[3] for r in selected)), "tokens": tokens}
         return {"providers": providers, "total_committed_usd": sum(r[1] for r in rows) / 1e6,
                 "approved_caps_usd": {k: v / 1e6 for k, v in self.caps.items()},
                 "rates_usd_per_million": PRICES, "cost_kind": "usage_priced_peak_not_invoice"}

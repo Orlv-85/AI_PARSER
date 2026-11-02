@@ -41,6 +41,7 @@ For an existing database, run `./.venv/bin/alembic upgrade head` first.
 Index of all docs: [docs/README.md](docs/README.md). Code docs live next to the code:
 
 - [System overview](src/app/README.md) - packages, entry points, list of code docs.
+- [Provider payment journal](src/app/storage/provider_journal.md) - reservations, caps, replay and failure reviews.
 - [Daily digest enrichment](src/app/core/daily/enrichment.md) - publication, collection holds and catch-up.
 - [Daily AI Signals](src/app/core/daily/signals.md) - behavior, decisions, invariants, code map.
 - [World change questions](src/app/core/bulletin/world_change.md) - Jev questions for the bulletin: what AI changed, per article (018 item 1).
