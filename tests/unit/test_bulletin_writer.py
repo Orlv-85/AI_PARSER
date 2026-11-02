@@ -282,6 +282,54 @@ def test_folding_unifies_accents_and_numbers():
         "Zurich hosts 1,300 lawyers.", "Zürich hosts 1.200 lawyers.") == "unsupported_number"
 
 
+def test_short_and_long_sentences_are_dropped():
+    error = grounding_module.sentence_error
+    evidence = "Edge0 has 3 parts"
+
+    def sized(n):
+        return "Edge0 has 3 parts " + "a" * (n - 18)
+    assert (grounding_module.SENTENCE_MIN_CHARS, grounding_module.SENTENCE_MAX_CHARS) == (20, 420)
+    assert error(sized(20), evidence) is None
+    assert error("  " + sized(20) + "  ", evidence) is None
+    assert error(sized(19), evidence) == "length"
+    assert error("  " + sized(19) + "  ", evidence) == "length"
+    assert error(sized(420), evidence) is None
+    assert error(sized(421), evidence) == "length"
+    assert error("Edge0 ok", evidence, min_chars=8) is None
+    assert error("Edge0 o", evidence, min_chars=8) == "length"
+    assert error(sized(30), evidence, max_chars=29) == "length"
+
+
+@pytest.mark.parametrize(("text", "copy", "code"), [
+    ("**Edge0**", False, "length"),
+    ("Edge0 has **3** parts \u0436 today.", False, "markup"),
+    ("The government of Edge0 has \u0436 parts.", False, "non_english"),
+    ('The government says "nothing like it" of Edge0.', False, "never_list"),
+    ("The Administration says Edge0 has 3 parts.", False, "never_list"),
+    ('Edge0 says "one two three" and has 9 parts.', False, "quote_not_found"),
+    ('Edge0 says "one two three" while Mozilla closed the hole in Firefox 159.0 on October 27.',
+     True, "quote_not_found"),
+    ("Mozilla closed the hole in Firefox 159.0 on October 27, says Crosby.", True, "too_close"),
+    ("Mozilla closed the hole in Firefox 159.0 on October 27, says Crosby.", False,
+     "unsupported_name"),
+])
+def test_first_failing_check_names_the_reason(text, copy, code):
+    evidence = "Edge0 has 3 parts. Mozilla closed the hole in Firefox 159.0 on October 27."
+    assert grounding_module.sentence_error(text, evidence, copy=copy) == code
+
+
+def test_quote_and_copy_edges():
+    error = grounding_module.sentence_error
+    evidence = "Crosby said we will build twelve new chips for all the labs this year."
+    quote = "we will build twelve new chips for all the labs this year"
+    assert len(quote.split()) == QUOTE_MAX_WORDS
+    assert error(f'Crosby said "{quote}" today.', evidence) is None
+    evidence = "Edge0 builds new chips for the labs of Crosby today"
+    copied = "Edge0 builds new chips for the labs of Crosby today, again."
+    assert error(copied, evidence, copy=True) == "too_close"
+    assert error(copied, evidence) is None
+
+
 def test_sentence_caps():
     assert (SITE_SENTENCES_MAX, TELEGRAM_SENTENCES_MAX) == (6, 2)
 

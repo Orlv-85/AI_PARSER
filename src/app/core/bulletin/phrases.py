@@ -16,6 +16,7 @@ DAY_TYPES = ("ordinary", "busy", "quiet")
 LABELS = ("masthead", "byline", "key_results", "cooperation", "incidents", "among", "full_report")
 REACTION_KINDS = ("limit", "ai_issue", "ai_issue_with_fix")
 UNITS = ("model", "product")
+REQUIRED_KEYS = ("openings", "numbers", "rubrics", "reactions", "closings", "cut", "labels")
 SLOTS = {"openings": {"weekday"}, "launches": {"models", "products"}, "items": {"items"}}
 
 # ER-4 and voice.md "Never"; matched as whole words, any case.
@@ -65,38 +66,64 @@ def _validate_numbers(numbers: dict[str, Any]) -> None:
         raise PhraseError("numbers.units needs [singular, plural] for model and product")
 
 
-def validate_phrases(data: dict[str, Any]) -> None:
-    """Raise PhraseError unless the library has every slot filled with clean phrases."""
-    for key in ("openings", "numbers", "rubrics", "reactions", "closings", "cut", "labels"):
+def _filled(value: Any) -> bool:
+    return isinstance(value, str) and bool(value)
+
+
+def _validate_top(data: dict[str, Any]) -> None:
+    for key in REQUIRED_KEYS:
         if key not in data:
             raise PhraseError(f"missing key: {key}")
     if not isinstance(data.get("version"), str):
         raise PhraseError("version must be a string")
-    if set(data["labels"]) != set(LABELS) or not all(
-            isinstance(v, str) and v for v in data["labels"].values()):
+
+
+def _validate_labels(labels: dict[str, Any]) -> None:
+    if set(labels) != set(LABELS) or not all(_filled(v) for v in labels.values()):
         raise PhraseError("labels must be exactly " + ", ".join(LABELS))
-    if set(data["openings"]) != set(DAY_TYPES):
+
+
+def _validate_openings(openings: dict[str, Any]) -> None:
+    if set(openings) != set(DAY_TYPES):
         raise PhraseError("openings must cover " + ", ".join(DAY_TYPES))
-    for name, phrases in data["openings"].items():
+    for name, phrases in openings.items():
         _texts(phrases, f"openings.{name}", SLOTS["openings"])
-    _validate_numbers(data["numbers"])
-    _texts(data["rubrics"], "rubrics", set())
-    _texts(data["closings"], "closings", set())
-    reactions = data["reactions"]
+
+
+def _validate_reactions(reactions: dict[str, Any]) -> None:
     for kind in REACTION_KINDS:
         _texts(reactions.get(kind), f"reactions.{kind}", set())
     for area, phrases in reactions.get("by_area", {}).items():
         if area not in AREA_CRITERIA:
             raise PhraseError(f"reactions.by_area: unknown area {area}")
         _texts(phrases, f"reactions.by_area.{area}", set())
-    cut = data["cut"]
-    if not (isinstance(cut.get("marker"), str) and cut["marker"]
-            and isinstance(cut.get("footnote"), str) and cut["footnote"]):
+
+
+def _validate_cut(cut: dict[str, Any]) -> None:
+    if not (_filled(cut.get("marker")) and _filled(cut.get("footnote"))):
         raise PhraseError("cut needs a marker and a footnote")
+
+
+def _validate_never_list(data: dict[str, Any]) -> None:
     for phrase in _walk(data):
         word = never_word(phrase)
         if word:
             raise PhraseError(f"forbidden word {word!r} in {phrase!r}")
+
+
+def validate_phrases(data: dict[str, Any]) -> None:
+    """Raise PhraseError unless the library has every slot filled with clean phrases.
+
+    Checks run in this order; the first failing one names the error."""
+    _validate_top(data)
+    _validate_labels(data["labels"])
+    _validate_openings(data["openings"])
+    _validate_numbers(data["numbers"])
+    _texts(data["rubrics"], "rubrics", set())
+    _texts(data["closings"], "closings", set())
+    _validate_reactions(data["reactions"])
+    _validate_cut(data["cut"])
+    _validate_never_list(data)
 
 
 @lru_cache(maxsize=1)

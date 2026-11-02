@@ -228,6 +228,33 @@ def open_assessor(settings, logger: Logger, target: date, max_usd: str, *,
         journal.close()
 
 
+def _assess_todo(session, repo, assessor: WorldChangeAssessor, todo: list,
+                 summary: dict[str, Any]) -> Counter[str]:
+    """Assess `todo` in order until the assessor stops; counts go into `summary`."""
+    counts: Counter[str] = Counter()
+    for index, article in enumerate(todo):
+        if assessor.stopped:
+            summary["not_attempted"] = len(todo) - index
+            break
+        answer = assessor.assess(article)
+        if answer is None:
+            summary["failed"] += 1
+            continue
+        if repo.save(article, answer, version=WORLD_CHANGE_VERSION, model=assessor.model):
+            counts[answer.world_change] += 1
+            summary["assessed"] += 1
+        session.commit()
+    return counts
+
+
+def _journal_cost(assessor: WorldChangeAssessor) -> Any:
+    """The journal's Jev total; 0.0 without a journal."""
+    if assessor.payment_journal is None:
+        return 0.0
+    report = assessor.payment_journal.report()
+    return report["providers"]["jev"]["usage_priced_usd"]
+
+
 def run_assessment(session, repo, assessor: WorldChangeAssessor | None, target: date,
                    *, dry_run: bool = False) -> dict[str, Any] | None:
     """Assess the digest articles of a day that have no answer for the current version.
@@ -251,21 +278,6 @@ def run_assessment(session, repo, assessor: WorldChangeAssessor | None, target: 
         return summary
     if assessor is None:
         raise ValueError("assessor required")
-    counts: Counter[str] = Counter()
-    for index, article in enumerate(todo):
-        if assessor.stopped:
-            summary["not_attempted"] = len(todo) - index
-            break
-        answer = assessor.assess(article)
-        if answer is None:
-            summary["failed"] += 1
-            continue
-        if repo.save(article, answer, version=WORLD_CHANGE_VERSION, model=assessor.model):
-            counts[answer.world_change] += 1
-            summary["assessed"] += 1
-        session.commit()
-    summary["by_choice"] = dict(counts)
-    if assessor.payment_journal is not None:
-        report = assessor.payment_journal.report()
-        summary["cost_usd"] = report["providers"]["jev"]["usage_priced_usd"]
+    summary["by_choice"] = dict(_assess_todo(session, repo, assessor, todo, summary))
+    summary["cost_usd"] = _journal_cost(assessor)
     return summary

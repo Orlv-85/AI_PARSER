@@ -102,12 +102,8 @@ def _copies(text: str, evidence: _Evidence) -> bool:
     return bool(_grams(words) & evidence.grams)
 
 
-def sentence_error(text: str, evidence: str, *, copy: bool = False,
-                   min_chars: int = SENTENCE_MIN_CHARS,
-                   max_chars: int = SENTENCE_MAX_CHARS) -> str | None:
-    """Drop code of the first failing check of a model text against the `evidence` it was given,
-    or None. Checks, in order: length, markup, English only, never-list, quotes, copying (when
-    `copy`), numbers, names."""
+def _form_error(text: str, min_chars: int, max_chars: int) -> str | None:
+    """Drop code of the checks that need no evidence: length, markup, English only, never-list."""
     if not min_chars <= len(text.strip()) <= max_chars:
         return "length"
     if MARKUP.search(text):
@@ -116,6 +112,11 @@ def sentence_error(text: str, evidence: str, *, copy: bool = False,
         return "non_english"
     if never_word(text) or THE_ADMINISTRATION.search(text):
         return "never_list"
+    return None
+
+
+def _evidence_error(text: str, evidence: str, copy: bool) -> str | None:
+    """Drop code of the checks against the evidence: quotes, copying (`copy`), numbers, names."""
     proof = _evidence(evidence)
     folded = fold(text)
     code = _quote_error(folded, proof)
@@ -123,3 +124,12 @@ def sentence_error(text: str, evidence: str, *, copy: bool = False,
         code = "too_close"
     return code or grounding_error(folded, set(proof.numbers), "", starters=WRITER_STARTERS,
                                    canon=canon_number, words=proof.words)
+
+
+def sentence_error(text: str, evidence: str, *, copy: bool = False,
+                   min_chars: int = SENTENCE_MIN_CHARS,
+                   max_chars: int = SENTENCE_MAX_CHARS) -> str | None:
+    """Drop code of the first failing check of a model text against the `evidence` it was given,
+    or None. Checks, in order: length, markup, English only, never-list, quotes, copying (when
+    `copy`), numbers, names."""
+    return _form_error(text, min_chars, max_chars) or _evidence_error(text, evidence, copy)

@@ -44,7 +44,7 @@ flowchart LR
   median items of the ready days (`ready` or `building_history`) among the previous
   `BUSY_WINDOW_DAYS` days, the day itself excluded; no busy day without `BUSY_MIN_DAYS` such days), else ordinary. Quiet leaves empty sections out like every day. Tests:
   `test_day_type_openings`, `test_quiet_day_leaves_out_empty_sections`,
-  `test_median_counts_only_ready_days_before_the_day`.
+  `test_median_counts_only_ready_days_before_the_day`, `test_loader_reads_missing_counts_as_zero`.
 
 **Stories**
 - Digest candidates carry their `article_id`; world candidates keep None. Each story carries
@@ -57,11 +57,13 @@ flowchart LR
   case-insensitively, including from world domains. If normalization leaves an empty outlet,
   use the article URL's hostname without `www.`, then "source". Tests:
   `test_outlet_name_drops_feed_label`, `test_loader_builds_the_day_input`,
-  `test_world_candidates_only_with_the_switch`.
+  `test_world_candidates_only_with_the_switch`, `test_world_candidates_without_answer_are_left_out`,
+  `test_digest_candidates_keep_article_order_and_skip_unanswered`.
 - Candidates are the day's digest articles with an answer for `WORLD_CHANGE_VERSION`, plus assessed
   world candidates only when the setting `world_stream_in_bulletin` is on (env `AINEWS_WORLD_STREAM_IN_BULLETIN`,
   default off; FR-016/FR-018). Tests: `test_world_candidates_only_with_the_switch`,
-  `test_world_stream_setting_defaults_off`.
+  `test_world_stream_setting_defaults_off`, `test_world_candidates_without_answer_are_left_out`,
+  `test_digest_candidates_keep_article_order_and_skip_unanswered`.
 - One story per event: candidates with the same event key (a top story of the daily signals, else
   the title key of `cluster_key`) make one story; the best-confidence member leads (members that answered `none` only when no member has another
   answer), all outlets are linked. Digest articles are matched to a top story by URL, then by
@@ -97,15 +99,19 @@ flowchart LR
   `phrases.json`, picked by date (ordinal plus a slot offset) so neighbouring days differ. Tests:
   `test_variants_differ_on_neighbouring_days`.
 - Numbers line (two variants each, picked by date): the launch line when both model releases and product launches (stories of the
-  signals' event counts) are above zero, else the items line. Tests: `test_numbers_line`, `test_numbers_line_varies_by_date`.
+  signals' event counts) are above zero, else the items line. Tests: `test_numbers_line`, `test_numbers_line_varies_by_date`,
+  `test_loader_reads_missing_counts_as_zero`.
 - Reactions imply no fact: the library has only the limit, AI-actor and Faith/Culture dialogue
   reactions. At most one per story; the three slots below give at most three per issue. Order: the rubric story, the
   first Cooperation story, then (only when neither got one) the first Key results story whose area
   has a reaction. Tests: `test_reactions_follow_the_limits`.
 - Day number: days since 2022-11-30 (Day 1429 = 2026-10-29). Tests: `test_day_number`.
 - Every phrase passes the never-list of `specs/018-daily-inference/voice.md` (ER-4 words, "Administration released"); the
-  loader checks the JSON shape. Tests: `test_phrases_load_and_validate`,
-  `test_phrases_validation_rejects_bad_data`, `test_phrases_pass_the_never_list`.
+  loader checks the JSON shape, in a fixed order (the first failing check names the error; extra
+  keys are allowed). Tests: `test_phrases_load_and_validate`,
+  `test_phrases_validation_rejects_bad_data`, `test_phrases_pass_the_never_list`,
+  `test_phrases_validation_messages`, `test_phrases_validation_order_and_extra_keys`,
+  `test_phrases_validation_names_the_first_failing_section`.
 
 **Output**
 - The bulletin object (`Bulletin`, `as_dict`) and the plain text of `specs/018-daily-inference/voice.md` (`render_text`,

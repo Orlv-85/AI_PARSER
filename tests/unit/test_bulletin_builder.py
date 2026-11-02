@@ -1,6 +1,7 @@
 # pylint: disable=redefined-outer-name,unused-argument
 import ast
 import json
+import re
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -16,6 +17,7 @@ from app.config.settings import Settings
 from app.core.bulletin import builder as builder_module
 from app.core.bulletin import phrases as phrases_module
 from app.core.bulletin.builder import (
+    BUSY_WINDOW_DAYS,
     HEADLINE_MAX_WORDS,
     Candidate,
     DayInput,
@@ -35,6 +37,7 @@ from app.storage.models_sql import (
     DailySignalReport,
     Source,
     WorldCandidate,
+    WorldChangeAssessment,
 )
 from app.storage.world_change import WorldChangeRepo
 
@@ -97,6 +100,103 @@ def test_phrases_validation_rejects_bad_data():
     broken(lambda d: d["numbers"]["units"].pop("model"))
     broken(lambda d: d["cut"].update(marker=""))
     broken(lambda d: d["labels"].pop("masthead"))
+
+
+@pytest.mark.parametrize(("mutate", "message"), [
+    (lambda d: d.pop("closings"), "missing key: closings"),
+    (lambda d: d.pop("version"), "version must be a string"),
+    (lambda d: d.update(version=1), "version must be a string"),
+    (lambda d: d["labels"].update(extra="x"), "labels must be exactly masthead, byline"),
+    (lambda d: d["labels"].update(masthead=""), "labels must be exactly"),
+    (lambda d: d["labels"].update(masthead=5), "labels must be exactly"),
+    (lambda d: d["openings"].update(holiday=["Hi."]), "openings must cover ordinary, busy, quiet"),
+    (lambda d: d["openings"].update(busy="Hi."), "openings.busy: a non-empty list"),
+    (lambda d: d["openings"]["busy"].append(" "), "openings.busy: phrases must be non-empty"),
+    (lambda d: d["openings"]["busy"].append("{items}"),
+     r"openings.busy: unknown slot in '\{items\}'"),
+    (lambda d: d["numbers"].pop("launches"), "numbers.launches: a non-empty list"),
+    (lambda d: d["numbers"].update(items=[]), "numbers.items: a non-empty list"),
+    (lambda d: d["numbers"]["units"].update(model=["model"]), "numbers.units needs"),
+    (lambda d: d["numbers"]["units"].update(model=["model", ""]), "numbers.units needs"),
+    (lambda d: d["numbers"]["units"].update(model="models"), "numbers.units needs"),
+    (lambda d: d["numbers"]["units"].update(extra=["a", "b"]), "numbers.units needs"),
+    (lambda d: d.update(rubrics=[]), "rubrics: a non-empty list"),
+    (lambda d: d.update(closings=["{weekday}"]), "closings: unknown slot"),
+    (lambda d: d["reactions"].pop("ai_issue"), "reactions.ai_issue: a non-empty list"),
+    (lambda d: d["reactions"].update(limit=[""]), "reactions.limit: phrases must be"),
+    (lambda d: d["reactions"]["by_area"].update(Nowhere=["Hi."]),
+     "reactions.by_area: unknown area Nowhere"),
+    (lambda d: d["reactions"]["by_area"].update(Work=[]), "reactions.by_area.Work: a non-empty"),
+    (lambda d: d["cut"].pop("marker"), "cut needs a marker and a footnote"),
+    (lambda d: d["cut"].update(marker=1), "cut needs a marker and a footnote"),
+    (lambda d: d["cut"].update(footnote=""), "cut needs a marker and a footnote"),
+    (lambda d: d["cut"].pop("footnote"), "cut needs a marker and a footnote"),
+    (lambda d: d["cut"].update(footnote=["*"]), "cut needs a marker and a footnote"),
+    (lambda d: d.update(note={"a": ["The regime ends."]}),
+     "forbidden word 'regime' in 'The regime ends.'"),
+])
+def test_phrases_validation_messages(mutate, message):
+    data = json.loads(json.dumps(LIB))
+    mutate(data)
+    with pytest.raises(PhraseError, match=message):
+        validate_phrases(data)
+
+
+def test_phrases_validation_order_and_extra_keys():
+    data = json.loads(json.dumps(LIB))
+    data["version"] = 1
+    data.pop("labels")
+    data.pop("cut")
+    with pytest.raises(PhraseError, match="^missing key: cut$"):
+        validate_phrases(data)
+    data = json.loads(json.dumps(LIB))
+    data.update(version=1, rubrics=[])
+    with pytest.raises(PhraseError, match="^version must be a string$"):
+        validate_phrases(data)
+    data = json.loads(json.dumps(LIB))
+    data["reactions"].pop("by_area")
+    data.update(weight=3, flags=None, extra={"n": [1, 2.5]})
+    validate_phrases(data)
+
+
+LIST_REQUIRED = ": a non-empty list of phrases is required"
+
+
+@pytest.mark.parametrize(("first", "second", "message"), [
+    (lambda d: d.update(version=1), lambda d: d["labels"].update(masthead=""),
+     "version must be a string"),
+    (lambda d: d["labels"].update(masthead=""), lambda d: d["openings"].update(holiday=["Hi."]),
+     "labels must be exactly masthead, byline, key_results, cooperation, incidents, among, "
+     "full_report"),
+    (lambda d: d["openings"].update(holiday=["Hi."]), lambda d: d["openings"].update(holiday=[]),
+     "openings must cover ordinary, busy, quiet"),
+    (lambda d: d["openings"].update(busy=[]), lambda d: d["numbers"].update(launches=[]),
+     "openings.busy" + LIST_REQUIRED),
+    (lambda d: d["numbers"].update(launches=[]), lambda d: d["numbers"].update(items=[]),
+     "numbers.launches" + LIST_REQUIRED),
+    (lambda d: d["numbers"].update(items=[]), lambda d: d["numbers"]["units"].pop("model"),
+     "numbers.items" + LIST_REQUIRED),
+    (lambda d: d["numbers"]["units"].pop("model"), lambda d: d.update(rubrics=[]),
+     "numbers.units needs [singular, plural] for model and product"),
+    (lambda d: d.update(rubrics=[]), lambda d: d.update(closings=[]), "rubrics" + LIST_REQUIRED),
+    (lambda d: d.update(closings=[]), lambda d: d["reactions"].update(limit=[]),
+     "closings" + LIST_REQUIRED),
+    (lambda d: d["reactions"].update(limit=[]), lambda d: d["reactions"].update(ai_issue=[]),
+     "reactions.limit" + LIST_REQUIRED),
+    (lambda d: d["reactions"].update(ai_issue_with_fix=[]),
+     lambda d: d["reactions"]["by_area"].update(Nowhere=["Hi."]),
+     "reactions.ai_issue_with_fix" + LIST_REQUIRED),
+    (lambda d: d["reactions"]["by_area"].update(Nowhere=["Hi."]),
+     lambda d: d["cut"].update(marker=""), "reactions.by_area: unknown area Nowhere"),
+    (lambda d: d["cut"].update(marker=""),
+     lambda d: d["closings"].append("The regime ends."), "cut needs a marker and a footnote"),
+])
+def test_phrases_validation_names_the_first_failing_section(first, second, message):
+    data = json.loads(json.dumps(LIB))
+    first(data)
+    second(data)
+    with pytest.raises(PhraseError, match="^" + re.escape(message) + "$"):
+        validate_phrases(data)
 
 
 def test_phrases_pass_the_never_list():
@@ -486,19 +586,20 @@ def _add_report(session, day, payload):
         updated_at=datetime.now(UTC)))
 
 
-def add_world(maker, state="assessed"):
+def add_world(maker, state="assessed", url="https://news.example/ai-court",
+              answered=True, domain="www.news.example"):
     with maker() as session:
-        url = "https://news.example/ai-court"
         digest = canonical_url_hash(url)
         session.add(WorldCandidate(
             url_canonical_hash=digest, url=url, title="Court rules on AI evidence",
-            source_domain="www.news.example", language="eng", first_seen_at=datetime.now(UTC),
+            source_domain=domain, language="eng", first_seen_at=datetime.now(UTC),
             gdelt_file="20261030120000", match_kind="strong", cluster_key="court rules",
             state=state))
         session.flush()
-        WorldChangeRepo(session).save(
-            SimpleNamespace(url_canonical_hash=digest, id=None), answer("limit", 0.95, "Law"),
-            version=WORLD_CHANGE_VERSION, model="m")
+        if answered:
+            WorldChangeRepo(session).save(
+                SimpleNamespace(url_canonical_hash=digest, id=None), answer("limit", 0.95, "Law"),
+                version=WORLD_CHANGE_VERSION, model="m")
         session.commit()
 
 
@@ -559,9 +660,30 @@ def test_loader_without_history_or_signals(maker):
         session.query(DailySignalReport).delete()
         loaded = load_day_input(session, DAY, include_world=False)
     assert loaded.status == "missing"
+    assert (loaded.model_releases, loaded.product_launches) == (0, 0)
     assert build_bulletin(loaded, LIB).reason == "no_signals"
     with maker() as session:
         assert load_day_input(session, DAY + timedelta(days=5), include_world=False) is None
+
+
+def test_loader_reads_missing_counts_as_zero(maker):
+    seed_day(maker)
+    with maker() as session:
+        report = session.query(DailySignalReport).filter_by(report_date=DAY).one()
+        payload = json.loads(report.payload)
+        payload["event_counts"] = [{"event_type": "product_launch"}]
+        report.payload = json.dumps(payload)
+        for offset in range(1, 5):
+            _add_report(session, DAY - timedelta(days=offset), {"status": "ready", "coverage": {}})
+        for offset in (5, 6, BUSY_WINDOW_DAYS):
+            _add_report(session, DAY - timedelta(days=offset),
+                        {"status": "building_history", "coverage": {"items": 80}})
+        _add_report(session, DAY - timedelta(days=BUSY_WINDOW_DAYS + 1),
+                    {"status": "ready", "coverage": {"items": 80}})
+        session.commit()
+        loaded = load_day_input(session, DAY, include_world=False)
+    assert (loaded.model_releases, loaded.product_launches) == (0, 0)
+    assert loaded.median_items == 0
 
 
 def test_world_candidates_only_with_the_switch(maker):
@@ -578,6 +700,48 @@ def test_world_candidates_only_with_the_switch(maker):
         ("Court rules on AI evidence", "news.example", "limit")]
     assert build_bulletin(on, LIB).bulletin.cooperation[0].title == "Court rules on AI evidence"
     assert build_bulletin(off, LIB).bulletin.cooperation == []
+
+
+def test_world_candidates_without_answer_are_left_out(maker):
+    seed_day(maker)
+    add_world(maker, url="https://other.example/x", answered=False)
+    add_world(maker, url="https://www.host.example/y", domain="")
+    add_world(maker, url="https://news.example/z", domain="www.other.example")
+    with maker() as session:
+        on = load_day_input(session, DAY, include_world=True)
+    world = sorted((c.url, c.outlet, c.event_key) for c in on.candidates if c.origin == "world")
+    assert world == [
+        ("https://news.example/z", "other.example", "title:court rules on ai evidence"),
+        ("https://www.host.example/y", "host.example", "title:court rules on ai evidence")]
+
+
+def test_digest_candidates_keep_article_order_and_skip_unanswered(maker):
+    seed_day(maker)
+    with maker() as session:
+        url = "https://www.bare.example/new"
+        session.add(Article(title="Bare", url=url, url_canonical=url, source_id=None,
+                            url_canonical_hash=canonical_url_hash(url)))
+        session.flush()
+        bare = session.query(Article).filter_by(url=url).one()
+        WorldChangeRepo(session).save(bare, answer("issue", 0.8), version=WORLD_CHANGE_VERSION,
+                                      model="m")
+        WorldChangeRepo(session).save(bare, answer(), version="old-version", model="m")
+        unanswered = session.query(Article).filter_by(title="Title 2").one()
+        session.query(WorldChangeAssessment).filter_by(
+            url_canonical_hash=unanswered.url_canonical_hash).delete()
+        report = NewsDigestRepo(session)
+        report.save_digest(report_date=DAY, groups=[{"title": "G", "items": [
+            {"title": t, "summary": "s", "url": u} for t, u in [
+                ("Title 0", "https://t.com/0"), ("Title 1", "https://t.com/1"),
+                ("Title 2", "https://t.com/2"), ("Bare", url)]]}])
+        session.commit()
+        loaded = load_day_input(session, DAY, include_world=False)
+    assert [(c.title, c.outlet, c.event_type, c.world_change) for c in loaded.candidates] == [
+        ("Title 0", "TechCrunch", "model_release", "changed"),
+        ("Title 1", "TechCrunch", "", "changed"),
+        ("Bare", "bare.example", "", "issue")]
+    assert loaded.candidates[2].event_key == "title:bare"
+    assert loaded.digest_articles == 4
 
 
 def test_world_stream_setting_defaults_off(monkeypatch):

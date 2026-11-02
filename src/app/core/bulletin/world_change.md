@@ -48,12 +48,13 @@ flowchart LR
   (a long non-ASCII title or summary fallback) is sent uncut and fails as `JevInputTooLarge`.
   Tests: `test_long_non_ascii_state_is_cut_to_fit`, `test_fitting_state_is_unchanged`,
   `test_fitting_full_length_ascii_content_is_unchanged`, `test_request_fits_matches_reservation`,
-  `test_summary_fallback_too_large_is_sent_uncut`.
+  `test_summary_fallback_too_large_is_sent_uncut`, `test_state_is_cut_to_the_longest_fitting_content`.
 - A failure or stop log line carries the article id and/or `url_canonical_hash` when the object
   has a non-None id and/or a non-empty hash. Tests:
   `test_failure_log_names_the_article`.
 - The request goes through the provider journal (`PilotJournal`, provider `jev`) when one is given:
-  a reserved, capped, replayable call. Tests: `test_assess_uses_the_provider_journal`.
+  a reserved, capped, replayable call. Tests: `test_assess_uses_the_provider_journal`,
+  `test_journal_secret_defaults_to_the_client_key`.
 - Probabilities are validated like `_probability`; an unknown choice, a missing answer or a bad
   probability makes the whole assessment invalid. Tests: `test_invalid_answers_return_none`.
 - A transport, HTTP or parse failure returns `None` and is logged; `assess` never raises into
@@ -76,20 +77,24 @@ flowchart LR
   `test_run_assessment_counts`.
 - A failed article counts in `failed` and stores nothing; after a stop the rest is
   `not_attempted`. Tests: `test_run_assessment_failures_store_nothing`,
-  `test_run_assessment_stops_after_journal_stop`.
+  `test_run_assessment_stops_after_journal_stop`, `test_run_assessment_summary_with_fakes`,
+  `test_run_assessment_stopped_assessor_attempts_nothing`.
 - A real run needs `JEV_API_KEY`; without it the command exits 2. Tests:
   `test_cli_assess_needs_a_key`.
 - Prints one JSON summary: `assessed`, `skipped`, `failed`, `unmatched` (digest URLs without a
-  stored article), `not_attempted` (after a journal stop), `by_choice`, `cost_usd`. Tests:
+  stored article), `not_attempted` (after a journal stop), `by_choice`, `cost_usd` (0.0 without
+  a journal). Tests: `test_run_assessment_summary_with_fakes`,
+  `test_run_assessment_without_journal_costs_nothing`,
   `test_cli_assess_skips_answered_and_summarizes`.
 - `--dry-run` sends nothing, writes nothing (no table creation, no journal), needs no key. Tests:
-  `test_cli_dry_run_makes_no_request`, `test_cli_dry_run_does_not_create_tables`.
+  `test_cli_dry_run_makes_no_request`, `test_cli_dry_run_does_not_create_tables`,
+  `test_run_assessment_dry_run_and_missing_assessor`.
 - The cap `--max-usd` (default `ASSESS_DEFAULT_MAX_USD`) is a journal cap; the journal lives in
   `data/bulletin/<D>/` per cap. `--max-usd` above `WORLD_CHANGE_MAX_USD_PER_DAY` is rejected.
   Known limit: another cap value opens another journal, so spend of one day can add up to a few
   caps; the ceiling bounds each run, not the day. Tests:
   `test_cli_assess_skips_answered_and_summarizes`,
-  `test_cli_rejects_max_usd_above_ceiling`; the per-cap journal itself has no test.
+  `test_cli_rejects_max_usd_above_ceiling`, `test_open_assessor_caps_the_journal`.
 - When a rerun stops with `unknown_or_failed_previous_call_requires_review`, an earlier call of
   that journal is unresolved (it may have been billed). The operator checks the log line
   `bulletin_assess_usage` and the journal file `data/bulletin/<D>/journal-*.sqlite3`, then either

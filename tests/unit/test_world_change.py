@@ -33,7 +33,7 @@ from app.core.daily import provider_requests, rubric
 from app.core.jev import CONTENT_LIMIT, JevInputTooLarge, JevRelevanceScorer
 from app.core.models import Article as CoreArticle
 from app.storage.digest_repo import NewsDigestRepo
-from app.storage.journal_files import encoded
+from app.storage.journal_files import encoded, fingerprint
 from app.storage.models_sql import Article, Base, WorldChangeAssessment
 from app.storage.provider_journal import PilotJournal, TransportAttemptsExhausted
 from app.storage.world_change import WorldChangeRepo
@@ -145,6 +145,16 @@ def test_fitting_full_length_ascii_content_is_unchanged():
     content = body["state"].split("\nContent: ", 1)[1]
     assert len(content) == CONTENT_LIMIT
     assert content == "x" * CONTENT_LIMIT
+
+
+@pytest.mark.parametrize("fit_chars", [0, 1])
+def test_state_is_cut_to_the_longest_fitting_content(monkeypatch, fit_chars):
+    article = core_article(title="Title", content="abc")
+    fits = {world_change_state(article, content_limit=n) for n in range(fit_chars + 1)}
+    monkeypatch.setattr(provider_requests, "jev_request_fits", lambda body: body["state"] in fits)
+    with mock_client(ok) as client:
+        body = WorldChangeAssessor(client, "m", getLogger("t")).body(article)
+    assert body["state"] == "Title: Title\nContent: " + "abc"[:fit_chars]
 
 
 def test_summary_fallback_too_large_is_sent_uncut():
@@ -468,6 +478,142 @@ def test_run_assessment_stops_after_journal_stop(maker):
         summary = run_assessment(session, WorldChangeRepo(session), assessor, DAY)
         assert (summary["assessed"], summary["failed"], summary["not_attempted"]) == (0, 1, 2)
         assert session.query(WorldChangeAssessment).count() == 0
+
+
+class FakeRepo:
+    def __init__(self, articles, unmatched=0, done=(), unsaved=()):
+        self.scope = (articles, unmatched) if articles is not None else None
+        self.done = set(done)
+        self.unsaved = set(unsaved)
+        self.calls = []
+
+    def digest_articles(self, target):
+        self.calls.append(("digest_articles", target))
+        return self.scope
+
+    def answered(self, hashes, version):
+        self.calls.append(("answered", hashes, version))
+        return self.done
+
+    def save(self, article, answer, *, version, model):
+        self.calls.append(("save", article.url_canonical_hash, answer.world_change, version, model))
+        return article.url_canonical_hash not in self.unsaved
+
+
+class FakeAssessor:
+    def __init__(self, answers, journal=None):
+        self.answers = answers
+        self.model = "m1"
+        self.stopped = None
+        self.payment_journal = journal
+        self.asked = []
+
+    def assess(self, article):
+        self.asked.append(article.url_canonical_hash)
+        return self.answers[article.url_canonical_hash]
+
+
+class FakeSession:
+    def __init__(self):
+        self.commits = 0
+
+    def commit(self):
+        self.commits += 1
+
+
+def fake_articles(*hashes):
+    return [SimpleNamespace(url_canonical_hash=h) for h in hashes]
+
+
+def change(kind):
+    return WorldChange(kind, 0.9, "Work", 0.8, "people", 0.7, 0.0)
+
+
+def test_run_assessment_summary_with_fakes():
+    repo = FakeRepo(fake_articles("a", "b", "c", "d", "e"), unmatched=2, done={"a"},
+                    unsaved={"d"})
+    journal = RaisingJournal(None)
+    journal.report = lambda: {"providers": {"jev": {"usage_priced_usd": 0.0123}}}
+    assessor = FakeAssessor({"b": change("limit"), "c": None, "d": change("added"),
+                             "e": change("limit")}, journal)
+    session = FakeSession()
+    summary = run_assessment(session, repo, assessor, DAY)
+    assert list(summary) == ["date", "question_version", "assessed", "skipped", "failed",
+                             "unmatched", "not_attempted", "by_choice", "cost_usd", "dry_run"]
+    assert summary == {
+        "date": "2026-10-30", "question_version": WORLD_CHANGE_VERSION, "assessed": 2,
+        "skipped": 1, "failed": 1, "unmatched": 2, "not_attempted": 0,
+        "by_choice": {"limit": 2}, "cost_usd": 0.0123, "dry_run": False}
+    assert assessor.asked == ["b", "c", "d", "e"]
+    assert session.commits == 3
+    assert repo.calls[:2] == [("digest_articles", DAY),
+                              ("answered", ["a", "b", "c", "d", "e"], WORLD_CHANGE_VERSION)]
+    assert repo.calls[2:] == [("save", h, kind, WORLD_CHANGE_VERSION, "m1")
+                              for h, kind in [("b", "limit"), ("d", "added"), ("e", "limit")]]
+
+
+def test_run_assessment_without_journal_costs_nothing():
+    assessor = FakeAssessor({"a": change("issue")})
+    summary = run_assessment(FakeSession(), FakeRepo(fake_articles("a")), assessor, DAY)
+    assert (summary["assessed"], summary["by_choice"], summary["cost_usd"]) == (
+        1, {"issue": 1}, 0.0)
+    assert isinstance(summary["cost_usd"], float)
+
+
+def test_run_assessment_stopped_assessor_attempts_nothing():
+    assessor = FakeAssessor({})
+    assessor.stopped = "cap"
+    session = FakeSession()
+    summary = run_assessment(session, FakeRepo(fake_articles("a", "b")), assessor, DAY)
+    assert (summary["not_attempted"], summary["failed"], summary["by_choice"]) == (2, 0, {})
+    assert (assessor.asked, session.commits) == ([], 0)
+
+
+def test_run_assessment_dry_run_and_missing_assessor():
+    repo = FakeRepo(fake_articles("a", "b", "c"), unmatched=1, done={"b"})
+    summary = run_assessment(FakeSession(), repo, None, DAY, dry_run=True)
+    assert summary == {
+        "date": "2026-10-30", "question_version": WORLD_CHANGE_VERSION, "assessed": 0,
+        "skipped": 1, "failed": 0, "unmatched": 1, "not_attempted": 0, "by_choice": {},
+        "cost_usd": 0.0, "dry_run": True, "would_assess": 2}
+    assert isinstance(summary["cost_usd"], float)
+    with pytest.raises(ValueError, match="^assessor required$"):
+        run_assessment(FakeSession(), repo, None, DAY)
+    assert run_assessment(FakeSession(), FakeRepo(None), None, DAY) is None
+
+
+def test_journal_secret_defaults_to_the_client_key():
+    seen = []
+
+    journal = SimpleNamespace(
+        call=lambda provider, _body, _client, secret: seen.append((provider, secret)) or ANSWER)
+    with mock_client(ok) as client:
+        assessor = WorldChangeAssessor(client, "m", getLogger("t"), payment_journal=journal)
+        assert assessor.assess(core_article()) is not None
+    assert seen == [("jev", "test-key")]
+
+
+def test_open_assessor_caps_the_journal(tmp_path):
+    settings = Settings(_env_file=None, jev_api_key=SecretStr(" k "))
+    root = tmp_path / "day"
+    journals = []
+    for _ in range(2):  # the second run reopens the same day folder and journal
+        with wc.open_assessor(settings, getLogger("t"), DAY, "0.05", root=root) as assessor:
+            assert (assessor.secret, assessor.model) == ("k", settings.jev_model)
+            journal = assessor.payment_journal
+            journals.append(journal)
+            assert journal.caps == {"total": 50001, "jev": 50000, "deepseek": 1}
+            assert journal.transport_review_reason == wc.TRANSPORT_REVIEW_REASON
+            assert journal.transport_retry_delays == (10,)
+        with pytest.raises(sqlite3.ProgrammingError):
+            journal.db.execute("SELECT 1")
+    assert journals[0] is not journals[1]
+    path = root / f"journal-{WORLD_CHANGE_VERSION}-50000.sqlite3"
+    assert sorted(root.iterdir()) == [path]
+    meta = {"version": WORLD_CHANGE_VERSION, "day": "2026-10-30"}
+    with sqlite3.connect(path) as db:
+        assert db.execute("SELECT value FROM identity").fetchall() == [(fingerprint(
+            {"identity": meta, "caps_micro_usd": {"total": 50001, "jev": 50000, "deepseek": 1}}),)]
 
 
 def test_cli_rejects_max_usd_above_ceiling(maker):
