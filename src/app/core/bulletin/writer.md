@@ -71,20 +71,21 @@ flowchart LR
 
 **Grounding** (User Story 1 scenario 4; the open limit of FR-022 stays: this catches invented names
 and numbers, not distorted meaning). Applied to every model sentence, story headline, gloss and the
-headline of the day, in this order; the first failing check names the drop reason:
+headline of the day, in this order; the first failing check names the drop reason (Tests:
+`test_first_failing_check_names_the_reason`):
 1. Shape and length: a string of `SENTENCE_MIN_CHARS`..`SENTENCE_MAX_CHARS`; no URL or markdown; no
    Cyrillic or CJK letters in the output (ER-12). Tests: `test_non_english_output_is_dropped`,
-   `test_markup_is_dropped`.
+   `test_markup_is_dropped`, `test_short_and_long_sentences_are_dropped`.
 2. Never-list (ER-4, ER-2): the words of `never_word` (`phrases.py`) and "the Administration" in
    model text. The Administration speaks only in fixed phrases (ER-6: framing adds no facts).
    Tests: `test_never_list_words_are_dropped`.
 3. Quotes (ER-9, ER-3): text in double quotation marks must be an exact substring of the original
    (after folding) and at most `QUOTE_MAX_WORDS` words; so a quote that is not in the source, or a
    translated quote, is dropped. Tests: `test_long_quote_is_dropped`,
-   `test_quote_must_be_in_the_source`.
+   `test_quote_must_be_in_the_source`, `test_quote_and_copy_edges`.
 4. Copying (ER-9): a run of `COPY_RUN_WORDS` words that also stands in the original is dropped
    (sentences, story headlines and glosses; not the headline of the day). Tests: `test_copied_run_is_dropped`,
-   `test_headline_and_gloss_are_checked_for_copying`.
+   `test_headline_and_gloss_are_checked_for_copying`, `test_quote_and_copy_edges`.
 5. Numbers and names, the check of `parse_brief` (`grounding_error` in `signals_brief.py`) against
    the texts of that story: every number and every capitalised word or word with a digit must stand
    in the texts of the story's sources (the headline of the day: of all stories). Sentence
