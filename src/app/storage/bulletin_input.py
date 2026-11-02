@@ -88,7 +88,7 @@ def _digest_candidates(session: Session, articles: list[Article],
             area=answer.area, actor=answer.actor, harm=answer.harm_to_people,
             event_key=stories.get(article.url)
             or stories.get(article.url_canonical_hash) or f"title:{cluster_key(article.title)}",
-            event_type=str(types.get(article.url) or "")))
+            event_type=str(types.get(article.url) or ""), article_id=article.id))
     return found
 
 

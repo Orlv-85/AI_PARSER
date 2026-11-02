@@ -10,8 +10,9 @@ One model call per day retells the stories that the builder selected (`src/app/c
 `specs/018-daily-inference/voice.md`: a headline of the day and, per story, a headline, a site note,
 a Telegram note and a gloss. Every sentence is checked against the original texts before it is kept;
 whatever fails falls back to the builder's title-only text. Spec: FR-005, FR-012, User Story 1
-scenario 4, ER-1/2/3/6/8/9/11/12 in `specs/018-daily-inference/spec.md`. Item 3 has no storage, job
-or page (item 4): the only entry is `ai-news bulletin build --date D --dry-run --write`.
+scenario 4, ER-1/2/3/6/8/9/11/12 in `specs/018-daily-inference/spec.md`. Storage is described in
+`src/app/storage/bulletin_store.md`; no job or page yet. Entry: `ai-news bulletin build --date D
+[--dry-run] --write`.
 
 ## Behavior
 
@@ -123,15 +124,17 @@ the safe direction: the story falls back to its title.
   the site note, story headline and gloss are in the JSON object. Tests:
   `test_render_uses_telegram_notes`, `test_fixture_bulletin`.
 
-**Command** `ai-news bulletin build --date D --dry-run [--write] [--json] [--max-usd X]`
-- Without `--write` the command is item 2's, byte for byte: no key read, no call, no journal. Tests:
+**Command** `ai-news bulletin build --date D [--dry-run] [--write] [--json] [--max-usd X]`
+- Without `--write` the command makes no key read, no call and no journal; its rendered text is
+  item 2's (`--json` also has `article_ids` per story, and a run without `--dry-run` stores the
+  day, see `src/app/storage/bulletin_store.md`). Tests:
   `test_cli_without_write_makes_no_call`.
 - `--write` needs `DS_API_KEY` (exit 2 without); it prints the bulletin with model text and, on
   stderr, one JSON line of the writer summary; with `--json` the object gains a `writer` key
   (`version`, `model`, `reason`, `stories_model`, `stories_title`, `headline_origin`, `dropped`,
-  `cost_usd`). `--write` without `--dry-run` exits 2 (storage is item 4). A skipped day makes no
+  `cost_usd`). Storage is described in `src/app/storage/bulletin_store.md`. A skipped day makes no
   call. Tests: `test_cli_write_needs_the_key`, `test_cli_write_prints_the_bulletin_and_summary`,
-  `test_cli_write_json`, `test_cli_write_outage_falls_back`, `test_cli_write_needs_dry_run`,
+  `test_cli_write_json`, `test_cli_write_outage_falls_back`, `test_cli_write_can_store`,
   `test_cli_write_skipped_day_makes_no_call`.
 
 ## Decisions

@@ -17,6 +17,7 @@ from app.config.settings import get_settings
 from app.storage import SessionLocal, create_all
 from app.web.auth import SessionSigner, verify_bearer_token
 from app.web.routes import WebDeps
+from app.web.routes.bulletin import build_bulletin_router
 from app.web.routes.news import build_news_article_router, build_news_router
 from app.web.routes.pages import build_pages_router
 from app.web.routes.period import build_period_router
@@ -96,6 +97,7 @@ def create_app() -> FastAPI:
             "/api/news/links",
             "/api/news/digests",
             "/api/news/daily-signals",
+            "/api/news/bulletin",
             "/api/news/period-signals",
             "/api/news/period-signals/index",
             "/api/news/stats/daily",
@@ -162,6 +164,7 @@ def create_app() -> FastAPI:
         build_updates_router(deps),
         build_news_router(deps),
         build_signals_router(deps),
+        build_bulletin_router(deps),
         build_period_router(deps),
         build_weekly_router(deps),
         build_news_article_router(deps),

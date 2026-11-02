@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from typing import Any
 
 from sqlalchemy import (
+    JSON,
+    BigInteger,
     Boolean,
     Date,
     DateTime,
@@ -567,6 +570,20 @@ class WorldChangeAssessment(Base):  # pylint: disable=too-many-instance-attribut
     question_version: Mapped[str] = mapped_column(String(64))
     model: Mapped[str] = mapped_column(String(64))
     assessed_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+
+
+class BulletinRow(Base):  # pylint: disable=too-many-instance-attributes
+    """Stored bulletin of a day; behavior in src/app/storage/bulletin_store.md."""
+    __tablename__ = "bulletins"
+
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    status: Mapped[str] = mapped_column(String(16))
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON)
+    numbers: Mapped[dict[str, Any]] = mapped_column(JSON)
+    versions: Mapped[dict[str, str]] = mapped_column(JSON)
+    generated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
+    telegram_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
 
 class WorldCandidate(Base):  # pylint: disable=too-many-instance-attributes
