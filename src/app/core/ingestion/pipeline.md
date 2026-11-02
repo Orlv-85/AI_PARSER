@@ -6,7 +6,6 @@ covers:
   - src/app/core/ingestion/scoring.py
   - src/app/core/canonicalize.py
   - src/app/core/jev.py
-  - src/app/storage/provider_journal.py
   - src/app/storage/admission.py
   - src/app/ingest/*.py
 -->
@@ -264,7 +263,8 @@ function. Each rule lists the tests that check it.
   `test_corrupt_accept_cache_requires_new_assessment`, `test_canonical_aliases_share_decision`.
 - With the daily admission journal (`daily_enrichment_enabled`), a transport failure of a Jev call
   (timeout or dropped connection: the error types accepted by
-  `PilotJournal.review_transport_failure`; per-request timeout `jev_timeout_seconds`) keeps its
+  `PilotJournal.review_transport_failure`, see `src/app/storage/provider_journal.md`; per-request
+  timeout `jev_timeout_seconds`) keeps its
   reservation, is reviewed with `ADMISSION_TRANSPORT_REVIEW_REASON` and retried once after
   `ADMISSION_TRANSPORT_RETRY_DELAYS`. The path without a journal is unchanged. Tests:
   `test_admission_timeout_is_retried_once_without_pausing`.
