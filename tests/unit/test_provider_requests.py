@@ -6,10 +6,14 @@ import httpx
 import pytest
 
 from app.core.daily.provider_requests import (
+    JEV_REQUEST_BYTE_BOUND,
+    SUMMARY_QUOTE_REPAIR_VERSION,
     SUMMARY_RECOVERY_VERSION,
+    SUMMARY_VERSION,
     TOPIC_CRITERIA,
     TOPIC_FALLBACK_VERSION,
     jev_request,
+    jev_request_fits,
     parse_jev,
     parse_summary,
     request_key,
@@ -17,8 +21,8 @@ from app.core.daily.provider_requests import (
     summary_request,
     topic_request,
 )
-from app.core.jev import JevRelevanceScorer
-from app.storage.journal_files import fingerprint
+from app.core.jev import JevInputTooLarge, JevRelevanceScorer
+from app.storage.journal_files import encoded, fingerprint
 from app.storage.provider_journal import PilotJournal, PilotStopped
 
 ROW = {"url": "https://example.com/article/ai", "title": "Synthetic AI release",
@@ -292,8 +296,56 @@ def test_unclear_product_stays_unknown_without_discarding_grounded_summary():
 def test_topic_fallback_request_is_bounded_versioned_and_summary_free():
     body = topic_request(ROW)
     assert body["max_tokens"] == 300 and reservation("deepseek", body) > 0
+    assert body["temperature"] == 0 and body["thinking"] == {"type": "disabled"}
     assert "old model summary" not in json.dumps(body)
     assert set(json.loads(body["messages"][1]["content"])["topics"]) == set(TOPIC_CRITERIA)
     assert request_key("deepseek", body) == fingerprint(
         {"provider": "deepseek", "body": body, "version": TOPIC_FALLBACK_VERSION})
     assert request_key("deepseek", body) != request_key("deepseek", summary_request(ROW, False))
+
+
+@pytest.mark.parametrize(("cap", "repair", "version"), [
+    (300, False, SUMMARY_VERSION), (4096, False, SUMMARY_RECOVERY_VERSION),
+    (300, True, SUMMARY_QUOTE_REPAIR_VERSION), (4096, True, SUMMARY_QUOTE_REPAIR_VERSION),
+])
+def test_summary_request_schema_and_key_versions(cap, repair, version):
+    kwargs = {"repair_quotes": True} if repair else {}
+    body = summary_request(ROW, False, output_cap=cap, **kwargs)
+    system = body["messages"][0]["content"]
+    assert body["max_tokens"] == cap and body["temperature"] == 0
+    assert body["thinking"] == {"type": "disabled"}
+    assert ("Fit the complete JSON within 300 tokens." in system) is (cap == 300)
+    assert ("Output schema version: " + SUMMARY_RECOVERY_VERSION in system) is (cap != 300)
+    assert (SUMMARY_QUOTE_REPAIR_VERSION in system) is repair
+    assert json.loads(body["messages"][1]["content"]) == {
+        "source": "Title: " + ROW["title"] + "\nContent: " + ROW["content"], "comparison": False}
+    assert request_key("deepseek", body) == fingerprint({
+        "provider": "deepseek", "body": body, "version": version})
+
+
+def test_jev_request_byte_bound_includes_allowance_and_accepts_exact_limit():
+    body = {"state": ""}
+    body["state"] = "x" * (JEV_REQUEST_BYTE_BOUND - 2048 - len(encoded(body).encode("utf-8")))
+    assert len(encoded(body).encode("utf-8")) + 2048 == JEV_REQUEST_BYTE_BOUND
+    assert jev_request_fits(body) is True
+    assert reservation("jev", body) == 2688
+    body["state"] += "x"
+    assert jev_request_fits(body) is False
+    with pytest.raises(JevInputTooLarge, match="^JEV conservative input bound exceeded$"):
+        reservation("jev", body)
+
+
+@pytest.mark.parametrize(("cap", "expected"), [(300, 19560), (4096, 24116)])
+def test_deepseek_reservation_exact_byte_bound_and_pricing(cap, expected):
+    body = {"max_tokens": cap, "state": ""}
+    body["state"] = "x" * (64000 - 2048 - len(encoded(body).encode("utf-8")))
+    assert len(encoded(body).encode("utf-8")) + 2048 == 64000
+    assert reservation("deepseek", body) == expected
+    body["state"] += "x"
+    with pytest.raises(ValueError, match="^DeepSeek conservative input/output bound exceeded$"):
+        reservation("deepseek", body)
+
+
+def test_deepseek_reservation_rejects_unapproved_output_cap_with_small_input():
+    with pytest.raises(ValueError, match="^DeepSeek conservative input/output bound exceeded$"):
+        reservation("deepseek", {"max_tokens": 301})

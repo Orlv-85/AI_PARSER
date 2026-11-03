@@ -255,6 +255,16 @@ the Troubleshooting section of `README.md`.
       "cause": "deploy_prod.sh runs scripts/install_daily_timers.sh on every deploy as user deploy with 'sudo -n'. A release that adds a unit needs the new lines of deploy/sudoers.d/ai-news-deploy, which root applies by hand and a deploy never changes.",
       "fix": "Before tagging a release that adds a unit: as root on the server, visudo -cf deploy/sudoers.d/ai-news-deploy, then install -m 0440 it to /etc/sudoers.d/ai-news-deploy. After a failed deploy: do the same with the tag's file, then gh run rerun <run> --failed.",
       "verification": "Rerun of run 41456242361 succeeded; systemctl list-timers shows ai-news-daily-bulletin.timer enabled."
+    },
+    {
+      "id": "mutator-lcov-multiline-sites-uncovered",
+      "date": "2026-11-03",
+      "area": "quality tools (mutator, Python LCOV)",
+      "symptom": "Mutator --use-existing-coverage marks tokens in executed multiline request dictionaries and calls as UNCOVERED, despite feature tests exercising the behavior.",
+      "evidence": ["Daily enrichment pass: review temperature and completion flags at enrichment.py lines 200/520; admission setup and comparison threshold at provider_requests.py lines 114/217."],
+      "cause": "The LCOV report does not mark the tokens' individual lines as hit; the precise statement-anchor mismatch is not confirmed.",
+      "fix": "Inspect the missing sites, add behavior assertions where needed, then run only those sites with mutator --no-coverage --lines <line numbers> and the same fake-provider feature tests. Do not disable coverage filtering for the whole repository.",
+      "verification": "Targeted follow-ups killed all five initially uncovered sites. Final totals: enrichment 153 killed and one equivalent survivor; provider requests 72 killed and zero survivors; neither file has uncovered sites."
     }
   ]
 }

@@ -287,7 +287,7 @@ def test_feed_only_admission_is_reused_by_enrichment(tmp_path, session):
     assert data["answers"]["admission"]["choice"] == "accepted_ai_editorial"
 
 
-@pytest.mark.parametrize("schema", ["facts", "string_flags", "list"])
+@pytest.mark.parametrize("schema", ["facts", "string_flags", "list", "invalid_json"])
 def test_review_schema_recovery_does_not_regenerate_summary(
     session, tmp_path, monkeypatch, schema,
 ):
@@ -305,7 +305,8 @@ def test_review_schema_recovery_does_not_regenerate_summary(
             value = {"facts": []} if schema == "facts" else (
                 {"supported": "true", "english": True} if schema == "string_flags" else [])
             data = response.json()
-            data["choices"][0]["message"]["content"] = json.dumps(value)
+            data["choices"][0]["message"]["content"] = (
+                "invalid json" if schema == "invalid_json" else json.dumps(value))
             return httpx.Response(200, json=data)
         return response
 
@@ -317,7 +318,8 @@ def test_review_schema_recovery_does_not_regenerate_summary(
                      "entailment" not in body["messages"][0]["content"]]
     assert len(summary_calls) == 1
     proof = json.loads(row.enrichment_provenance)
-    assert proof["summary_review"]["schema_recovery"] == ["review_schema"]
+    assert proof["summary_review"]["schema_recovery"] == [
+        "JSONDecodeError" if schema == "invalid_json" else "review_schema"]
     second = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
     assert second["state"] == "published" and len(calls) == 4
 
@@ -580,6 +582,7 @@ def test_only_individually_supported_facts_are_published(session, tmp_path, monk
     assert proof["summary"]["partial"] == {"kept": 1, "dropped": 1}
     assert [f["sentence"] for f in proof["summary"]["support"]] == [SUMMARY]
     assert proof["summary_review"]["supported"] is True
+    assert proof["summary_review"]["model_review_not_ground_truth"] is True
     assert daily.reusable(partial)
 
 
@@ -825,6 +828,8 @@ def test_source_row_stored_content_threshold_is_300_characters(pages, proof, siz
     assert (result is not None) is usable
     if usable:
         assert result["origin"] == "stored_source_content"
+        if proof:
+            assert not list(pages.root.iterdir())
 
 
 @pytest.mark.parametrize(("size", "usable"), [(299, False), (300, True)])
@@ -833,3 +838,129 @@ def test_source_row_page_text_threshold_is_300_characters(pages, size, usable):
     _evidence(pages, row, text="x" * size)
     result = daily.source_row(row, pages)
     assert (result is not None) is usable
+
+
+def _review_data(value, **overrides):
+    return {"model": "deepseek-flash", "choices": [{"finish_reason": "stop",
+            "message": {"content": json.dumps(value)}}], **overrides}
+
+
+@pytest.mark.parametrize(("supported", "english", "expected"), [
+    (True, True, True), (True, False, False), (False, True, False), (False, False, False),
+])
+@pytest.mark.parametrize("reason", [None, 5, "", "r" * 201])
+def test_parse_review_flags_and_reason(supported, english, expected, reason):
+    data = _review_data({"supported": supported, "english": english, "reason": reason},
+                        model="deepseek-v4.1-flash")
+    assert daily.parse_review(data) == (expected, reason[:200] if isinstance(reason, str) else "")
+
+
+@pytest.mark.parametrize("value", [[], None, {}, {"supported": True},
+                                  {"supported": True, "english": "true"}])
+def test_parse_review_rejects_invalid_schema(value):
+    with pytest.raises(ValueError, match="^review_schema$"):
+        daily.parse_review(_review_data(value))
+
+
+def test_parse_review_checks_model_before_choices_and_finish_before_json():
+    with pytest.raises(ValueError, match="^review_model$"):
+        daily.parse_review({"model": "other"})
+    with pytest.raises(ValueError, match="^review_truncated$"):
+        daily.parse_review({"model": "deepseek-flash", "choices": [{"finish_reason": "length"}]})
+
+
+@pytest.mark.parametrize(("message", "held"), [
+    ("DeepSeek conservative input/output bound exceeded", True), ("different failure", False),
+])
+def test_enrich_fallback_bound_is_held_but_other_value_errors_propagate(
+        session, monkeypatch, message, held):
+    row = article(session)
+    unresolved_proof(row, "category")
+
+    def fail(*_args):
+        raise ValueError(message)
+
+    monkeypatch.setattr(daily, "fallback_topic", fail)
+    args = (row, {"url": row.url, "title": row.title, "content": SOURCE}, None, None,
+            {"deepseek": "test-key"})
+    if held:
+        assert daily.enrich(*args) == "source_input_too_large"
+    else:
+        with pytest.raises(ValueError, match="^different failure$"):
+            daily.enrich(*args)
+    assert row.summary is None
+
+
+@pytest.mark.parametrize("sentence", ["x " * 81, "x" * 401])
+def test_long_grounded_summary_is_held_before_semantic_review(
+        session, tmp_path, monkeypatch, sentence):
+    held = article(session)
+    article(session, 2, proof=True)
+    calls = []
+
+    def respond(request):
+        body = json.loads(request.content)
+        calls.append(body)
+        response = provider_response(request)
+        if "messages" in body:
+            assert "entailment" not in body["messages"][0]["content"]
+            data = response.json()
+            data["choices"][0]["message"]["content"] = json.dumps({
+                "facts": [{"sentence": sentence, "quote": SUMMARY}], "compared_products": []})
+            return httpx.Response(200, json=data)
+        return response
+
+    mock_client(monkeypatch, respond)
+    result = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    assert result["held"] == [{"article_id": held.id, "reason": "summary_not_supported",
+                               "details": ["summary_length_limit"] * 2}]
+    assert len(calls) == 3 and held.summary is None
+
+
+@pytest.mark.parametrize(("data", "reason"), [
+    ({"model": "other"}, "topic_model"),
+    ({"model": "deepseek-flash", "choices": [{"finish_reason": "length"}]}, "topic_truncated"),
+])
+def test_parse_topic_model_and_finish_guards(data, reason):
+    with pytest.raises(ValueError, match=f"^{reason}$"):
+        daily.parse_topic(data)
+
+
+def test_parse_topic_invalid_confidence_keeps_topic_without_score():
+    assert daily.parse_topic(_review_data({"topic": "Infrastructure", "confidence": "high"})) == (
+        "Infrastructure", None)
+
+
+def test_source_row_aware_stored_date_keeps_its_offset(pages):
+    row = _row_article(content="stored")
+    row.published_at = datetime.fromisoformat("2026-10-11T01:00:00+02:00")
+    _evidence(pages, row, published={"selected": {"utc": "2026-10-10T23:00:00+00:00"}})
+    assert daily.source_row(row, pages)["origin"] == "source_page"
+
+
+@pytest.mark.parametrize("field", ["rubric", "admission_source_hash"])
+def test_admission_from_proof_rejects_wrong_rubric_or_source(field):
+    row = _row_article(proof=True)
+    proof = json.loads(row.enrichment_provenance)
+    proof[field] = "old"
+    row.enrichment_provenance = encoded(proof)
+    assert daily.admission_from_proof(row, {"title": row.title, "content": row.content}) is None
+
+
+def test_publish_day_acquires_only_pending_sources(session, tmp_path, monkeypatch):
+    article(session, 1, proof=True)
+    admitted = article(session, 2)
+    unresolved_proof(admitted, "comparison")
+    pending = article(session, 3)
+    session.commit()
+    downloaded = []
+
+    async def acquire(_cache, rows):
+        downloaded.append([row.id for row in rows])
+
+    mock_client(monkeypatch, provider_response)
+    monkeypatch.setattr(daily, "acquire", acquire)
+    result = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
+    assert downloaded == [[pending.id]]
+    assert result["counts"] == {"reused": 1, "enriched": 2}
+    assert result["published_count"] == 3

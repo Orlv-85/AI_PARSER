@@ -2,6 +2,7 @@
 module: src/app/core/daily/enrichment.py
 covers:
   - src/app/core/daily/enrichment.py
+  - src/app/core/daily/provider_requests.py
   - scripts/run_daily_digest_job.sh
   - scripts/run_daily_fetch_job.sh
 -->
@@ -24,19 +25,49 @@ flowchart LR
 
 - `day_articles` selects the complete stored UTC day; previously validated summaries are reused.
   Tests: `test_complete_day_more_than_200_and_preserves_history`,
-  `test_new_summary_review_then_resume_without_provider_calls`.
+  `test_new_summary_review_then_resume_without_provider_calls`,
+  `test_day_articles_end_is_exclusive_and_undated_rows_use_publication_day`.
+- Only pending sources without matching admission proof are acquired. Admission proof must match
+  both rubric and source hash. Tests: `test_publish_day_acquires_only_pending_sources`,
+  `test_admission_from_proof_rejects_wrong_rubric_or_source`.
 - Remaining articles use `PilotJournal`, bounded by `CAPS`; uncertain transport failures retain
   their reservation and retry under `TRANSPORT_REVIEW_REASON` and `TRANSPORT_RETRY_DELAYS`.
   Tests: `test_dropped_connection_is_retried_after_one_then_five_minutes`,
-  `test_transport_retries_exhausted_fails_day_without_more_dispatch`.
+  `test_transport_retries_exhausted_fails_day_without_more_dispatch`,
+  `test_publish_day_dispatch_sees_committed_reservation`.
+- Provider bodies, schema versions and request keys stay deterministic; reservations include the
+  byte allowance, accept exact bounds, reject unsupported output caps, and use `PRICES`.
+  Tests: `test_publish_day_preserves_request_fields_and_comparison_provenance`,
+  `test_summary_request_schema_and_key_versions`,
+  `test_jev_request_byte_bound_includes_allowance_and_accepts_exact_limit`,
+  `test_deepseek_reservation_exact_byte_bound_and_pricing`,
+  `test_deepseek_reservation_rejects_unapproved_output_cap_with_small_input`.
+- Reuse checks the applied summary, fact count, word and character limits, source hash and
+  literal quotes after rubric, semantic support and category. Invalid proof returns false.
+  Tests: `test_reusable_rejects_invalid_proof`, `test_reusable_rejects_malformed_provenance`,
+  `test_reusable_summary_boundaries`, `test_reusable_rejects_mismatched_applied_summary`.
+- Review validates model, finish reason and boolean flags in that order; reasons are bounded.
+  Invalid paid assessments or reviews stop the day with their billed responses retained;
+  unresolved assessments, unsupported or overlong summaries hold an article. Only the
+  conservative fallback input/output bound is converted from a value error to an input hold.
+  Tests: `test_parse_review_flags_and_reason`, `test_parse_review_rejects_invalid_schema`,
+  `test_parse_review_checks_model_before_choices_and_finish_before_json`,
+  `test_invalid_provider_answers_preserve_digest_and_billed_journal`,
+  `test_non_kept_assessment_holds_without_summary_calls`,
+  `test_enrich_fallback_bound_is_held_but_other_value_errors_propagate`,
+  `test_long_grounded_summary_is_held_before_semantic_review`,
+  `test_grounded_summary_accepts_exact_length_limits`,
+  `test_malformed_summary_records_exception_class`, `test_salvage_accepts_exact_length_limits`,
+  `test_review_schema_recovery_does_not_regenerate_summary`.
 - A collection pause is checked before provider setup. It writes `held_collection_paused`, makes no
   provider call and leaves the previous digest unchanged. Tests:
   `test_paused_collection_holds_day_without_paid_calls`,
-  `test_daily_publish_exits_two_for_held_collection`.
+  `test_daily_publish_exits_two_for_held_collection`, `test_publish_day_preserves_pause_reason`.
 - Publication backs up an existing digest, commits the new groups, and records the report with
   `private_write`. Failed work keeps the prior digest. Tests:
   `test_new_summary_review_then_resume_without_provider_calls`,
-  `test_failure_retains_good_digest_and_records_reason`.
+  `test_failure_retains_good_digest_and_records_reason`,
+  `test_publish_day_scope_change_preserves_previous_digest`.
 - `--catch-up` considers the last `DAILY_CATCH_UP_DAYS` completed UTC days, oldest first: days with
   a latest `held_collection_paused` report and yesterday when no report exists. The digest job runs
   signals for days it publishes; the fetch job requests catch-up after a successful fetch when a
@@ -92,7 +123,19 @@ flowchart LR
     (`_page_dates_conflict`, which rejects the article), then confirmed stored content; both
     content paths need `SOURCE_MIN_CHARS` characters. Tests: the `test_source_row_*` set.
   - `publish_day` is the sequence pause check, `_provider_keys`, scope and acquisition,
-    `_enrich_scope` (per-row resume, progress file), digest groups, `_back_up_digest`, save.
+    `_enrich_scope` (per-row resume, progress file), `_publish_digest` (groups, scope recheck,
+    `_back_up_digest`, save).
+  - `reusable` delegates applied limits to `_applied_summary_matches` and source hash to
+    `_source_content_matches`; `source_row` uses `_confirmed_stored_row` for the final fallback.
+  - `grounded_summary` uses `_daily_summary_request` for initial and repair prompts and
+    `_check_summary_length` before review; `parse_review` checks flags with `_review_flags_valid`.
+  - `enrich` uses `_daily_assessment`, `_daily_topic` and `_apply_enrichment` for validation,
+    topic selection and stored fields/provenance.
+- `provider_requests.py`: request bodies, keys, reservations and parsing; `parse_jev` uses
+  `_jev_topic` for the topic threshold. Tests: `test_jev_parse_topic_and_comparison_thresholds`,
+  `test_jev_topic_boundary_and_unresolved_comparison`,
+  `test_jev_choice_validation_precedes_probability_and_cleanup`,
+  `test_summary_length_review_starts_after_eighty_words`.
 - `cli/main.py`: `daily-publish` options and exit codes.
 - `run_daily_fetch_job.sh`: fetch lock and post-fetch catch-up dispatch.
 - `run_daily_digest_job.sh`: publication, held result handling, signals and shared budget.
