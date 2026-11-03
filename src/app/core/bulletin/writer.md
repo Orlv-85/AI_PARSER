@@ -24,7 +24,8 @@ flowchart LR
   packet --> call["One DeepSeek call through the writer journal"]
   call --> ok{"Answer usable?"}
   ok -- no --> fallback["Whole bulletin stays title-only, reason in the summary"]
-  ok -- yes --> check["Per sentence: markup, never-list, quotes, copying, numbers, names"]
+  ok -- yes --> split["Split site and Telegram list items into sentences"]
+  split --> check["Per sentence: markup, never-list, quotes, copying, numbers, names"]
   check --> drop["Failing sentence dropped"]
   drop --> story{"Story has sentences left?"}
   story -- no --> title["Story: title with outlet, origin title"]
@@ -40,12 +41,16 @@ flowchart LR
   between them (newest `source_page` text, else the newest text of any origin, cut at a word
   boundary); an article without text sends title and summary (`SUMMARY_MAX`). Tests:
   `test_packet_sends_text_or_title_and_summary`, `test_story_text_limit_is_pinned`, `test_loader_prefers_source_page_text`,
-  `test_loader_falls_back_to_summary`.
+  `test_loader_falls_back_to_summary`, `test_packet_handles_missing_and_empty_sources`,
+  `test_packet_shares_budget_only_between_articles_with_text`.
 - One request per bulletin (FR-005): `WRITER_MODEL` (DeepSeek flash, prices of `BRIEF_PRICES`),
   temperature 0, JSON object, at most `WRITER_MAX_OUTPUT` tokens. A day with no stories makes no
   call. Tests: `test_request_body_is_one_json_call`, `test_no_stories_no_call`.
 - The prompt is `WRITER_PROMPT`, versioned by `WRITER_VERSION`; it states the voice rules of
-  `specs/018-daily-inference/voice.md` and the editorial rules ER-1/2/3/6/8/9/11/12. Changing the text changes the version.
+  `specs/018-daily-inference/voice.md` and the editorial rules ER-1/2/3/6/8/9/11/12. It explicitly asks
+  for `site` as a JSON array of 3 to 6 strings and `telegram` as a JSON array of 1 to 2 strings,
+  one sentence per string, and a gloss of at most 12 words. Validation keeps `GLOSS_MAX_WORDS`
+  as a margin above the prompt. Changing the text changes the version (`bulletin-writer-3`).
   Tests: `test_prompt_pins_its_rules`.
 - The call goes through the provider journal (`PilotJournal`, provider `deepseek`) of the real UTC
   day: one file `data/bulletin/writer/<UTC day>/journal-<WRITER_JOURNAL_VERSION>.sqlite3`, fixed cap
@@ -112,12 +117,31 @@ drops the sentence. A first word that is a name and also a starter is not checke
 the safe direction: the story falls back to its title.
 
 **Result**
-- A sentence list per story is cut to `SITE_SENTENCES_MAX` (site) and `TELEGRAM_SENTENCES_MAX`
-  (Telegram) passing sentences; there is no minimum. A story keeps model text when at least one
+- Each string in a `site` or `telegram` list is split before word-count and grounding checks.
+  A boundary is `.`, `!` or `?`, optionally followed by closing quotes or parentheses, then
+  whitespace and an uppercase letter, digit or opening quote. Numbers, single capital initials
+  (including `U.S.`) and common abbreviations (`Mr Mrs Ms Dr Prof Inc Ltd Co Corp vs etc e.g i.e
+  St Jr Sr No`) do not split. Whitespace is normalized and empty pieces are dropped. Tests:
+  `test_sentence_splitter_edges`, `test_site_paragraph_is_split_into_sentences`,
+  `test_telegram_paragraph_is_split`.
+- A boundary inside an open double quotation is skipped. A quotation is open while the text up
+  to the boundary, folded as the quote check folds it (every double quotation mark, straight,
+  curly or low, becomes `"`), has an odd number of marks. A boundary that includes the closing
+  quote can split; a quote that never closes keeps the rest as one piece. Quotes reach grounding whole, so splitting cannot bypass
+  the quote check. Tests: `test_split_keeps_quotes_whole`, `test_splitter_quote_edges`,
+  `test_sentence_splitter_edges`.
+- Each resulting sentence is checked independently in the same order as before; one bad sentence
+  drops alone. Drop codes keep `<sid>:site:<n>:<code>` (or `telegram`), with `n` the 1-based sentence
+  number after splitting across all list items. Tests: `test_split_sentence_dropped_alone`,
+  `test_split_sentences_keep_word_count_boundaries`.
+- After splitting, a sentence list per story is cut in order to `SITE_SENTENCES_MAX` (site) and
+  `TELEGRAM_SENTENCES_MAX` (Telegram) passing sentences; remaining sentences are counted in
+  `over_limit`. There is no minimum. A story keeps model text when at least one
   site or Telegram sentence passed (`text_origin` `model`); the Telegram note falls back to the
   title when only the site note passed, and the other way round for the site. A failing story
   headline or gloss is dropped alone. Tests: `test_story_without_sentences_falls_back_to_title`,
-  `test_sentence_caps`, `test_bad_story_headline_and_gloss_are_dropped_alone`.
+  `test_sentence_caps`, `test_cap_applies_after_split`,
+  `test_bad_story_headline_and_gloss_are_dropped_alone`.
 - The headline of the day: at most `HEADLINE_MAX_WORDS` words (at least `HEADLINE_MIN_WORDS`),
   capitals, no cut marker; a failing one keeps the builder's headline (`headline_origin` `title`).
   Tests: `test_bad_headline_of_the_day_falls_back`.
@@ -141,6 +165,21 @@ the safe direction: the story falls back to its title.
 
 ## Decisions
 
+- decided 2026-11-03 (agent): split list items in code so a paragraph-shaped answer keeps its
+  grounded sentences; apply the existing caps and numbered drops after splitting, in order.
+- decided 2026-11-03 (agent): use a small pure punctuation splitter with initials and common
+  abbreviation exceptions; it needs no extra model call or dependency.
+- decided 2026-11-03 (agent): preserve open quotation spans during splitting so an invented
+  multi-sentence quote cannot evade the existing quote check; open quotes are counted after the
+  same folding the quote check uses, so every quotation mark it pairs is seen.
+- decided 2026-11-03 (agent): the copy check stays per sentence, as when the model returns one
+  sentence per list item; a copied run that crosses a sentence boundary is not checked. A
+  cross-boundary check also flagged close paraphrases in adjacent sentences
+  (`test_split_sentence_dropped_alone`, `test_cap_applies_after_split`).
+- decided 2026-11-03 (agent): make the arrays and one-sentence strings explicit, ask for a gloss
+  of at most 12 words with `GLOSS_MAX_WORDS` unchanged, and bump `WRITER_VERSION` to
+  `bulletin-writer-3` because the prompt text changes; caps, journal, fallbacks and grounding order
+  stay unchanged.
 - The core takes an `ask` function and plain data and imports no I/O module; the journal and the
   HTTP client are `writer_run.py`. A test pins the import list.
 - Grounding reuses `grounding_error`, cut out of `parse_brief`'s `_sentence` so the two checks cannot
@@ -181,7 +220,7 @@ the safe direction: the story falls back to its title.
 
 | Where | What |
 | --- | --- |
-| `src/app/core/bulletin/writer.py` | constants, `WRITER_PROMPT`, `SourceText`, packet, `parse_writer`, `write_bulletin` |
+| `src/app/core/bulletin/writer.py` | constants, `WRITER_PROMPT`, `SourceText`, packet, `split_sentences`, `parse_writer`, `write_bulletin` |
 | `src/app/core/bulletin/writer_grounding.py` | folding, `sentence_error`: the checks of Grounding |
 | `src/app/core/bulletin/writer_run.py` | `open_writer`: writer journal, client, `ask` |
 | `src/app/storage/bulletin_texts.py` | `load_sources`: archive text, summary and title per link |

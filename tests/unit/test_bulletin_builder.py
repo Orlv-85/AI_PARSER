@@ -627,6 +627,22 @@ def test_loader_builds_the_day_input(maker, source_name, expected_outlet):
     assert len(result.bulletin.key_results) == 2
 
 
+def test_candidate_titles_drop_aggregator_decorations(maker):
+    seed_day(maker)
+    add_world(maker)
+    with maker() as session:
+        session.get(Article, 1).title = "Poisoning planted a backdoor (78 minute read)"
+        session.get(Article, 2).title = "agent-kit (GitHub Repo) (3 min read)"
+        session.query(WorldCandidate).one().title = "Court rules on AI evidence (5 minute read)"
+        session.commit()
+        loaded = load_day_input(session, DAY, include_world=True)
+        stored = session.get(Article, 1).title
+    titles = sorted(c.title for c in loaded.candidates)
+    assert titles == ["Court rules on AI evidence", "Poisoning planted a backdoor", "Title 2",
+                      "agent-kit"]
+    assert stored == "Poisoning planted a backdoor (78 minute read)"
+
+
 def test_median_counts_only_ready_days_before_the_day(maker):
     seed_day(maker, items=83, history=[10, 10, 10, 10, 100, 100, 100])
     with maker() as session:

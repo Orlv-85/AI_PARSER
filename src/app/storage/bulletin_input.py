@@ -22,6 +22,7 @@ from app.core.bulletin.builder import (
 )
 from app.core.bulletin.world_change import WORLD_CHANGE_VERSION
 from app.core.canonicalize import canonical_url_hash
+from app.core.daily.enrichment import digest_title
 from app.storage.models_sql import (
     Article,
     DailySignalReport,
@@ -100,7 +101,7 @@ def _digest_candidates(session: Session, articles: list[Article],
         if answer is None:
             continue
         found.append(Candidate(
-            url=article.url, title=article.title,
+            url=article.url, title=digest_title(article.title),
             outlet=_outlet(names.get(article.source_id) or "", article.url),
             world_change=answer.world_change, confidence=answer.world_change_confidence,
             area=answer.area, actor=answer.actor, harm=answer.harm_to_people,
@@ -116,7 +117,8 @@ def _world_candidates(session: Session, day: date) -> list[Candidate]:
         if answer is None:
             continue
         found.append(Candidate(
-            url=item.url, title=item.title, outlet=_outlet(item.source_domain, item.url),
+            url=item.url, title=digest_title(item.title),
+            outlet=_outlet(item.source_domain, item.url),
             world_change=answer.world_change, confidence=answer.world_change_confidence,
             area=answer.area, actor=answer.actor, harm=answer.harm_to_people,
             event_key=f"title:{cluster_key(item.title)}", origin="world"))

@@ -137,6 +137,7 @@ def test_grounded_sentences_are_kept():
     assert first.gloss.startswith("Weil Gotshal")
     assert result.bulletin.headline == "MODEL COMPLETES FIREFOX ASSIGNMENT UNAIDED"
     assert result.bulletin.headline_origin == "model"
+    assert result.bulletin.headline_cut is False
     assert result.bulletin.writer_version == WRITER_VERSION
 
 
@@ -341,6 +342,174 @@ def test_sentence_caps():
     assert len(second.site_note) == 6 and len(second.telegram_note) == 2
 
 
+def test_site_paragraph_is_split_into_sentences():
+    sentences = [
+        "Circle K built an automated triage system on Amazon Bedrock to investigate incidents "
+        "and deliver structured summaries to Slack within minutes of an alert.",
+        "The company operates more than 17,200 convenience and fuel retail stores across 27 "
+        "countries, with point-of-sale, loyalty and electric vehicle charging systems that staff "
+        "must keep running throughout the day.",
+        "The system gathers evidence from alerts and prepares a report for staff, who can then "
+        "review the findings and decide how to respond rather than assemble the incident "
+        "details by hand.",
+    ]
+    assert len(" ".join(sentences).split()) > 80
+    source_map = sources()
+    source_map[URLS[0]] = SourceText(
+        URLS[0], "Circle K triage", "",
+        "Circle K runs 17,200 stores in 27 countries. Amazon Bedrock handles triage; "
+        "Slack carries reports. Staff review alerts from charging, loyalty and retail systems.")
+
+    def mutate(c):
+        c["stories"][0].update(site=[" ".join(sentences)], telegram=[],
+                               headline="Circle K automates triage", gloss=None)
+    result, calls = run(mutate=mutate, source_map=source_map)
+    assert len(calls) == 1
+    assert story(result, 0).site_note == sentences
+    assert story(result, 0).text_origin == "model"
+    assert not any(code.startswith("s1:site:") for code in result.summary["dropped"])
+
+
+@pytest.mark.parametrize(("bad", "code"), [
+    ("Anthropic has joined the bid for the firm.", "unsupported_name"),
+    ("Crosby will hire 999 lawyers from the firm.", "unsupported_number"),
+    ("Word " + " ".join(["word"] * 80) + ".", "word_count"),
+    ("Weil Gotshal a famed Wall Street firm that is preparing to dissolve.", "too_close"),
+])
+def test_split_sentence_dropped_alone(bad, code):
+    good = RESPONSE["stories"][0]["site"]
+
+    def mutate(c):
+        c["stories"][0]["site"] = [good[0], " ".join([good[1], bad, good[2]])]
+    result, _ = run(mutate=mutate)
+    assert story(result, 0).site_note == good[:3]
+    assert result.summary["dropped"] == [f"s1:site:3:{code}"]
+
+
+def test_cap_applies_after_split():
+    sentences = RESPONSE["stories"][1]["site"] * 2
+
+    def mutate(c):
+        c["stories"][1]["site"] = [" ".join(sentences)]
+    result, _ = run(mutate=mutate)
+    assert story(result, 1).site_note == sentences[:SITE_SENTENCES_MAX]
+    assert result.summary["dropped"] == ["s2:site:over_limit:2"]
+
+
+@pytest.mark.parametrize("sentence", [
+    "Crosby welcomes applications.",
+    "We " + "a " * 78 + "bit.",
+])
+def test_split_sentences_keep_word_count_boundaries(sentence):
+    good = RESPONSE["stories"][0]["site"][0]
+
+    def mutate(c):
+        c["stories"][0]["site"] = [good + " " + sentence]
+    result, _ = run(mutate=mutate)
+    assert story(result, 0).site_note == [good, sentence]
+    assert result.summary["dropped"] == []
+
+
+@pytest.mark.parametrize(("opening", "closing"), [('"', '"'), ("\u201c", "\u201d")])
+@pytest.mark.parametrize("quote_present", [False, True])
+@pytest.mark.parametrize("channel", ["site", "telegram"])
+def test_split_keeps_quotes_whole(opening, closing, quote_present, channel):
+    quote = "We welcome applications. We welcome everyone."
+    sentence = f"Crosby said {opening}{quote}{closing}"
+    source_map = sources()
+    source = source_map[URLS[0]]
+    evidence = source.text + (f" {quote}" if quote_present else "")
+    source_map[URLS[0]] = SourceText(source.url, source.title, source.summary, evidence)
+    assert grounding_module.sentence_error(sentence, evidence, copy=True) == (
+        None if quote_present else "quote_not_found")
+
+    def mutate(c):
+        c["stories"][0].update(site=[], telegram=[])
+        c["stories"][0][channel] = [sentence]
+    result, _ = run(mutate=mutate, source_map=source_map)
+    first = story(result, 0)
+    if quote_present:
+        assert (first.site_note if channel == "site" else first.telegram_note) == [sentence]
+        assert first.text_origin == "model"
+        assert result.summary["dropped"] == []
+    else:
+        assert first.text_origin == "title"
+        assert first.site_note == first.telegram_note == []
+        assert result.summary["dropped"] == [f"s1:{channel}:1:quote_not_found"]
+    assert writer_module.split_sentences(sentence) == [sentence]
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ('Crosby said "Work ended. More came." Next came rest.',
+     ['Crosby said "Work ended. More came."', "Next came rest."]),
+    ("Crosby said \u201cWork ended. More came.\u201d Next came rest.",
+     ["Crosby said \u201cWork ended. More came.\u201d", "Next came rest."]),
+    ('Crosby asked "Is it ready? Yes it is!" Next came rest.',
+     ['Crosby asked "Is it ready? Yes it is!"', "Next came rest."]),
+    ('Work ended. Crosby said "More came. Next came rest.',
+     ["Work ended.", 'Crosby said "More came. Next came rest.']),
+    ("Work ended. Crosby said \u201cMore came. Next came rest.",
+     ["Work ended.", "Crosby said \u201cMore came. Next came rest."]),
+    ("Crosby said \u201dWork ended. More came.\u201d Next came rest.",
+     ["Crosby said \u201dWork ended. More came.\u201d", "Next came rest."]),
+    ("Crosby said \u201eWork ended. More came.\u201c Next came rest.",
+     ["Crosby said \u201eWork ended. More came.\u201c", "Next came rest."]),
+])
+def test_splitter_quote_edges(text, expected):
+    assert writer_module.split_sentences(text) == expected
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("It costs $5.55 for 17,200 units at 3.5%. Orders rose.",
+     ["It costs $5.55 for 17,200 units at 3.5%.", "Orders rose."]),
+    ("The U.S. Office hired J. Smith. Work began.",
+     ["The U.S. Office hired J. Smith.", "Work began."]),
+    *[(f"Use {abbr}. Next comes the name. Work began.",
+       [f"Use {abbr}. Next comes the name.", "Work began."])
+      for abbr in "Mr Mrs Ms Dr Prof Inc Ltd Co Corp vs etc e.g i.e St Jr Sr No".split()],
+    ("Is it ready? Yes it is! Work began.", ["Is it ready?", "Yes it is!", "Work began."]),
+    ('He said "Work is done." Next came rest.', ['He said "Work is done."', "Next came rest."]),
+    ("It ended (all done.) Next came rest.", ["It ended (all done.)", "Next came rest."]),
+    ("It ended (all done.)\" Next came rest.", ['It ended (all done.)" Next came rest.']),
+    ('He said \u201cWork is done.\u201d Next came rest.',
+     ['He said \u201cWork is done.\u201d', "Next came rest."]),
+    ("Work ended. \u2018Next came rest.\u2019", ["Work ended.", "\u2018Next came rest.\u2019"]),
+    ("Work ended. 'Next came rest.'", ["Work ended.", "'Next came rest.'"]),
+    ("No? Next came rest.", ["No?", "Next came rest."]),
+    ('Work ended. "Next came rest."', ["Work ended.", '"Next came rest."']),
+    ("Work ended. 2 teams left.", ["Work ended.", "2 teams left."]),
+    ("Work ended. next came rest.", ["Work ended. next came rest."]),
+    ("A single sentence stays together.", ["A single sentence stays together."]),
+    ("  Work  ended.\n\tNext came   rest.  ", ["Work ended.", "Next came rest."]),
+    (" \n\t ", []),
+    ("", []),
+])
+def test_sentence_splitter_edges(text, expected):
+    assert writer_module.split_sentences(text) == expected
+
+
+def test_telegram_paragraph_is_split():
+    sentences = RESPONSE["stories"][1]["site"][:3]
+
+    def mutate(c):
+        c["stories"][1]["telegram"] = [" ".join(sentences)]
+    result, _ = run(mutate=mutate)
+    assert story(result, 1).telegram_note == sentences[:TELEGRAM_SENTENCES_MAX]
+    assert result.summary["dropped"] == ["s2:telegram:over_limit:1"]
+
+
+def test_sentence_list_preserves_schema_checks_and_drops_empty_items():
+    good = RESPONSE["stories"][0]["site"][0]
+
+    def mutate(c):
+        c["stories"][0]["site"] = [" \n ", good, None, 42]
+        c["stories"][0]["telegram"] = "not a list"
+    result, _ = run(mutate=mutate)
+    assert story(result, 0).site_note == [good]
+    assert result.summary["dropped"] == ["s1:site:2:schema", "s1:site:3:schema",
+                                         "s1:telegram:schema"]
+
+
 def test_grounding_is_per_story():
     sources_map = sources()
     first = sources_map[URLS[0]]
@@ -441,9 +610,13 @@ def test_no_stories_no_call():
 # prompt and request
 
 def test_prompt_pins_its_rules():
+    assert WRITER_VERSION == "bulletin-writer-3"
+    assert writer_module.GLOSS_MAX_WORDS == 14
     assert WRITER_VERSION in WRITER_PROMPT
-    for rule in ("untrusted", "no outside knowledge", "at most 8 words", "3 to 6 sentences",
-                 "1 to 2 sentences", "own words", "Never copy",
+    for rule in ("untrusted", "no outside knowledge", "at most 8 words",
+                 "site: a JSON array of 3 to 6 strings, one sentence per string",
+                 "telegram: a JSON array of 1 to 2 strings, one sentence per string",
+                 "gloss: at most 12 words", "own words", "Never copy",
                  "every name and number must stand in the supplied text", "Short quotes",
                  "double quotation marks",
                  "Attribute", "Never write \"the Administration\"", "Never invent a quote",
@@ -459,6 +632,10 @@ def test_request_body_is_one_json_call():
     assert body["response_format"] == {"type": "json_object"}
     assert body["max_tokens"] == writer_module.WRITER_MAX_OUTPUT
     assert body["messages"][0]["content"] == WRITER_PROMPT
+    content = body["messages"][1]["content"]
+    assert "ОпенАИ" in content
+    reversed_packet = dict(reversed(list(packet.items())))
+    assert writer_body(reversed_packet, WRITER_MODEL)["messages"][1]["content"] == content
     sent = json.loads(body["messages"][1]["content"])
     assert [s["id"] for s in sent["stories"]] == ["s1", "s2", "s3", "s4", "s5"]
     assert sent["stories"][0]["area"] == "Law"
@@ -476,6 +653,30 @@ def test_packet_sends_text_or_title_and_summary():
     long = {u: SourceText(u, s.title, s.summary, "word " * 5000) for u, s in sources().items()}
     sent = build_packet(bulletin(), long)["stories"][0]["articles"][0]["text"]
     assert len(sent) <= writer_module.STORY_TEXT_MAX
+
+
+def test_packet_handles_missing_and_empty_sources():
+    for source_map in ({}, {URLS[0]: SourceText(URLS[0], "", "", None)}):
+        article = build_packet(bulletin(), source_map)["stories"][0]["articles"][0]
+        assert article == {"outlet": "TechCrunch", "title": "Crosby bids for Weil Gotshal"}
+
+
+@pytest.mark.parametrize(("second_has_text", "budget"), [(True, 3000), (False, 6000)])
+def test_packet_shares_budget_only_between_articles_with_text(second_has_text, budget):
+    base = bulletin()
+    base.key_results[0].links.append({"url": URLS[1], "outlet": "MarkTechPost"})
+    source_map = sources()
+    for url in URLS[:2]:
+        source = source_map[url]
+        text = "word " * 2000 if url == URLS[0] or second_has_text else None
+        source_map[url] = SourceText(url, source.title, source.summary, text)
+    articles = build_packet(base, source_map)["stories"][0]["articles"]
+    assert len(articles) == 2
+    assert budget - 10 <= len(articles[0]["text"]) <= budget
+    if second_has_text:
+        assert budget - 10 <= len(articles[1]["text"]) <= budget
+    else:
+        assert "text" not in articles[1] and articles[1]["summary"]
 
 
 # journal, cap, outage
