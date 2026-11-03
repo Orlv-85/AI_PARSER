@@ -5,17 +5,18 @@ network. Behavior, decisions and tests: src/app/core/bulletin/writer.md. Voice:
 specs/018-daily-inference/voice.md.
 """
 import json
+import re
 from collections.abc import Callable, Mapping
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, cast
 
 from app.core.bulletin.builder import HEADLINE_MAX_WORDS, HEADLINE_MIN_WORDS, Bulletin, Story
-from app.core.bulletin.writer_grounding import sentence_error
+from app.core.bulletin.writer_grounding import fold, sentence_error
 from app.core.daily.provider_requests import DEEPSEEK_MODEL
 from app.core.daily.signals_brief import SUMMARY_MAX, cut, request_body
 
-WRITER_VERSION = "bulletin-writer-2"
+WRITER_VERSION = "bulletin-writer-3"
 WRITER_MODEL = DEEPSEEK_MODEL
 MODEL_NAMES = frozenset({DEEPSEEK_MODEL, "deepseek-v4.1-flash"})  # the answer may name the alias
 # 8 stories of 4 sentences, a Telegram note and a headline are about 2500 tokens.
@@ -27,6 +28,9 @@ TELEGRAM_SENTENCES_MAX = 2
 STORY_HEADLINE_MAX_WORDS = 14
 STORY_HEADLINE_MIN_WORDS = 2
 GLOSS_MAX_WORDS = 14
+SENTENCE_END = re.compile(r'''[.!?]["')\u2019\u201c\u201d]*\s+(?=[A-Z0-9"'\u2018\u201c\u201e])''')
+ABBREVIATION_END = re.compile(
+    r"\b(?:[A-Z]|(?i:Mr|Mrs|Ms|Dr|Prof|Inc|Ltd|Co|Corp|vs|etc|e\.g|i\.e|St|Jr|Sr|No))\.$")
 
 WRITER_PROMPT = (
     f"Task: {WRITER_VERSION}. You are the editorial office of The Daily Inference, a satirical "
@@ -40,11 +44,13 @@ WRITER_PROMPT = (
     "reactions and no framing sentences. Never write \"the Administration\". "
     "headline (of the day): at most 8 words, in the voice of an official notice about the most "
     "important story, no final period. "
-    "Per story: headline: a plain statement of what happened, at most 12 words. site: 3 to 6 "
-    "sentences, each complete and standing alone, leading with who acted. telegram: 1 to 2 "
-    "sentences. gloss: one short phrase explaining a name a general reader may not know, taken "
-    "only from the supplied text of that story, or null. An article with no text has only a title "
-    "and summary: write 1 to 2 sentences from them and nothing else. "
+    "Per story: headline: a plain statement of what happened, at most 12 words. "
+    "site: a JSON array of 3 to 6 strings, one sentence per string, each complete and standing "
+    "alone, leading with who acted. "
+    "telegram: a JSON array of 1 to 2 strings, one sentence per string. "
+    "gloss: at most 12 words, one short phrase explaining a name a general reader may not know, "
+    "taken only from the supplied text of that story, or null. An article with no text has only "
+    "a title and summary: write 1 to 2 sentences from them and nothing else. "
     "Rules. Retell in your own words. Never copy more than a few words in a row. Short quotes "
     "only, at most 12 words, exact, copied from the source, in double quotation marks; never quote "
     "text you translated. Attribute a company's claims to the company (for example "
@@ -189,14 +195,43 @@ def _text(value: Any, evidence: str, where: str, dropped: list[str], *, low: int
     return value.strip()
 
 
+def _has_open_quote(text: str) -> bool:
+    # Same pairing as the quote check: every double quotation mark folds to '"'.
+    return bool(fold(text).count('"') % 2)
+
+
+def split_sentences(text: str) -> list[str]:
+    """Split normalized prose outside quotes, except after initials and abbreviations."""
+    text = " ".join(text.split())
+    pieces = []
+    start = 0
+    for boundary in SENTENCE_END.finditer(text):
+        if (ABBREVIATION_END.search(text[:boundary.start() + 1])
+                or _has_open_quote(text[:boundary.end()])):
+            continue
+        pieces.append(text[start:boundary.end()].strip())
+        start = boundary.end()
+    if text[start:]:
+        pieces.append(text[start:])
+    return pieces
+
+
+def _split_items(raw: list[Any]) -> list[Any]:
+    pieces: list[Any] = []
+    for item in raw:
+        pieces.extend(split_sentences(item) if isinstance(item, str) else [item])
+    return pieces
+
+
 def _sentences(raw: Any, evidence: str, where: str, limit: int, dropped: list[str]) -> list[str]:
     if not isinstance(raw, list):
         dropped.append(f"{where}:schema")
         return []
     kept: list[str] = []
-    for index, item in enumerate(raw, start=1):
+    sentences = _split_items(raw)
+    for index, item in enumerate(sentences, start=1):
         if len(kept) == limit:
-            dropped.append(f"{where}:over_limit:{len(raw) - index + 1}")
+            dropped.append(f"{where}:over_limit:{len(sentences) - index + 1}")
             break
         text = _text(item, evidence, f"{where}:{index}", dropped, low=3, high=80, copy=True)
         if text:

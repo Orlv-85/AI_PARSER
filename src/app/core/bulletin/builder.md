@@ -59,6 +59,9 @@ flowchart LR
   `test_outlet_name_drops_feed_label`, `test_loader_builds_the_day_input`,
   `test_world_candidates_only_with_the_switch`, `test_world_candidates_without_answer_are_left_out`,
   `test_digest_candidates_keep_article_order_and_skip_unanswered`.
+- Candidate titles (digest and world) drop aggregator decorations such as "(78 minute read)" or
+  "(GitHub Repo)" with the digest's `digest_title`; the stored article title is unchanged.
+  Tests: `test_candidate_titles_drop_aggregator_decorations`.
 - Candidates are the day's digest articles with an answer for `WORLD_CHANGE_VERSION`, plus assessed
   world candidates only when the setting `world_stream_in_bulletin` is on (env `AINEWS_WORLD_STREAM_IN_BULLETIN`,
   default off; FR-016/FR-018). Tests: `test_world_candidates_only_with_the_switch`,
