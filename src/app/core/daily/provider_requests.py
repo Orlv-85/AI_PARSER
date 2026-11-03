@@ -1,4 +1,4 @@
-"""Frozen source-based pilot rubrics, independent of production taxonomy."""
+"""Frozen source-based pilot rubrics; see enrichment.md for behavior."""
 import json
 import re
 from logging import getLogger
@@ -207,8 +207,7 @@ def parse_jev(row, data):
     _check_jev_answers(row, answers)
     category, comparison = answers["category"], answers["comparison"]
     admission = answers["admission"]
-    topic = category["choice"] if (category["choice"] != "Other" and
-                                   category["confidence"] >= TOPIC_MIN_CONFIDENCE) else None
+    topic = _jev_topic(category)
     assessment = JevAssessment(answers["ai_relevant"]["noul"], topic,
                                category["confidence"], admission["choice"],
                                admission["confidence"])
@@ -224,6 +223,11 @@ def parse_jev(row, data):
                 comparison["choice"] == "Unknown" or
                 comparison["confidence"] < COMPARISON_MIN_CONFIDENCE),
             "destructive_authority": False, "cleanup_policy": CLEANUP_POLICY}
+
+
+def _jev_topic(category):
+    return category["choice"] if (category["choice"] != "Other" and
+                                  category["confidence"] >= TOPIC_MIN_CONFIDENCE) else None
 
 
 def _source_quote(quote, state):

@@ -179,3 +179,31 @@ def test_bad_fact_count_is_reported_before_the_row_is_read():
     value = {"facts": [], "compared_products": []}
     with pytest.raises(ValueError, match="Missing summary facts"):
         parse_summary({}, summary_data(value), False)
+
+
+@pytest.mark.parametrize(("confidence", "topic"), [(0.7, "AI Applications"), (0.699, None)])
+@pytest.mark.parametrize("comparison", ["NotComparison", "Unknown"])
+def test_jev_topic_boundary_and_unresolved_comparison(confidence, topic, comparison):
+    data = jev_response()
+    data["answers"]["category"]["confidence"] = confidence
+    data["answers"]["comparison"] = {"choice": comparison, "confidence": 0.7}
+    result = parse_jev(ROW, data)
+    assert result["topic"] == topic
+    assert result["material_type"] is None
+    assert result["boundary_review"] is (topic is None or comparison == "Unknown")
+    assert result["assessment"]["category"] == topic
+
+
+def test_jev_choice_validation_precedes_probability_and_cleanup():
+    data = jev_response()
+    data["answers"]["admission"] = {"choice": "bad", "confidence": None}
+    with pytest.raises(ValueError, match="^Unknown choice$"):
+        parse_jev({"title": ROW["title"], "content": ROW["content"]}, data)
+
+
+def test_summary_length_review_starts_after_eighty_words():
+    sentence = " ".join(["word"] * 80)
+    result = parse_summary(ROW, summary_data({"facts": [fact(sentence)],
+                                             "compared_products": []}), False)
+    assert result["summary_words"] == 80
+    assert result["summary_length_review_required"] is False

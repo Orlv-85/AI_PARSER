@@ -78,16 +78,24 @@ def reusable(article):
             proof.get("rubric") == RUBRIC_VERSION
             and proof["summary_review"]["supported"] is True
             and article.category in REENRICH_TOPIC_ORDER
-            and summary["generated_summary"] == article.summary
-            and 1 <= len(facts) <= 3
-            and 0 < len((article.summary or "").split()) <= 80
-            and len(article.summary or "") <= 400
-            and (proof.get("source_content_hash") is None or
-                 proof["source_content_hash"] == fingerprint(article.content))
+            and _applied_summary_matches(article, summary, facts)
+            and _source_content_matches(proof, article)
             and all(_source_quote(f["quote"], source_state(row)) is not None for f in facts)
         )
     except (ValueError, TypeError, KeyError):
         return False
+
+
+def _applied_summary_matches(article, summary, facts):
+    return (summary["generated_summary"] == article.summary
+            and 1 <= len(facts) <= 3
+            and 0 < len((article.summary or "").split()) <= 80
+            and len(article.summary or "") <= 400)
+
+
+def _source_content_matches(proof, article):
+    return (proof.get("source_content_hash") is None or
+            proof["source_content_hash"] == fingerprint(article.content))
 
 
 async def acquire(cache, articles):
@@ -135,6 +143,10 @@ def source_row(article, cache):
         page = _extracted_page_row(article, evidence, content)
         if page is not None:
             return page
+    return _confirmed_stored_row(article)
+
+
+def _confirmed_stored_row(article):
     # Stored content is source evidence, unlike the summary field, which may be generated.
     if (len((article.content or "").strip()) >= SOURCE_MIN_CHARS
             and article.publication_status == "confirmed"):
@@ -171,12 +183,16 @@ def parse_review(data):
     if choice["finish_reason"] != "stop":
         raise ValueError("review_truncated")
     review = json.loads(choice["message"]["content"])
-    if (not isinstance(review, dict) or not isinstance(review.get("supported"), bool) or
-            not isinstance(review.get("english"), bool)):
+    if not _review_flags_valid(review):
         raise ValueError("review_schema")
     reason = review.get("reason")
     return (review["supported"] and review["english"],
             reason[:200] if isinstance(reason, str) else "")
+
+
+def _review_flags_valid(review):
+    return (isinstance(review, dict) and isinstance(review.get("supported"), bool)
+            and isinstance(review.get("english"), bool))
 
 
 def review_summary(summary, journal, client, secret):
@@ -236,47 +252,56 @@ def salvage_supported_facts(candidates, journal, client, secret):
     return None
 
 
+def _daily_summary_request(row, comparison, attempt, review_reason):
+    # Quote problems get the short-quote repair; an unsupported sentence is rewritten
+    # as a close paraphrase of a long quote, with the reviewer's reason as a hint.
+    entailment_repair = attempt == 1 and bool(review_reason)
+    repair = attempt == 1 and not entailment_repair
+    body = summary_request(row, comparison, output_cap=4096, repair_quotes=repair)
+    body["messages"][0]["content"] += " The complete summary must be at most 400 characters."
+    if attempt == 0:
+        body["messages"][0]["content"] += (
+            " Prefer exactly ONE informative English sentence, at most 25 words. "
+            "Use a contiguous exact supporting quote of 30-80 words that supports "
+            "every assertion. Attribute vendor claims and preserve uncertainty."
+            " Summary rule " + SUMMARY_PROMPT_VERSION + ":"
+            " Every name, number, role, product and attribution in a sentence must appear "
+            "in its own quote. When you attribute a claim, choose a quote that names who "
+            "makes it; if no such quote exists, state the claim without naming a speaker.")
+    if repair:
+        body["messages"][0]["content"] += (
+            " Semantic repair daily-summary-2: Return exactly ONE English sentence, "
+            "at most 25 words, and a contiguous exact quote of 30-80 words supporting "
+            "EVERY assertion. Attribute vendor claims. No background knowledge. "
+            "Prefer a narrower fact over inferred capabilities or numbers.")
+    if entailment_repair:
+        body["messages"][0]["content"] += (
+            " Semantic repair daily-summary-3: the previous sentence had details its "
+            "quote did not support. Return exactly ONE English sentence, at most 25 "
+            "words, as a close paraphrase of a contiguous exact quote of 30-80 words. "
+            "Use only names, numbers, roles and claims that appear in that quote; omit "
+            "everything else, including negations such as what was not said. Attribute "
+            "vendor claims. No background knowledge. Untrusted reviewer note on the "
+            "previous attempt: " + json.dumps(review_reason))
+    return body
+
+
+def _check_summary_length(summary):
+    if summary["summary_words"] > 80 or len(summary["generated_summary"]) > 400:
+        raise ValueError("summary_length_limit")
+
+
 def grounded_summary(row, comparison, journal, client, secret):
     failures = []
     candidates = []
     review_reason = ""
     for attempt in range(2):
-        # Quote problems get the short-quote repair; an unsupported sentence is rewritten
-        # as a close paraphrase of a long quote, with the reviewer's reason as a hint.
-        entailment_repair = attempt == 1 and bool(review_reason)
-        repair = attempt == 1 and not entailment_repair
-        body = summary_request(row, comparison, output_cap=4096, repair_quotes=repair)
-        body["messages"][0]["content"] += " The complete summary must be at most 400 characters."
-        if attempt == 0:
-            body["messages"][0]["content"] += (
-                " Prefer exactly ONE informative English sentence, at most 25 words. "
-                "Use a contiguous exact supporting quote of 30-80 words that supports "
-                "every assertion. Attribute vendor claims and preserve uncertainty."
-                " Summary rule " + SUMMARY_PROMPT_VERSION + ":"
-                " Every name, number, role, product and attribution in a sentence must appear "
-                "in its own quote. When you attribute a claim, choose a quote that names who "
-                "makes it; if no such quote exists, state the claim without naming a speaker.")
-        if repair:
-            body["messages"][0]["content"] += (
-                " Semantic repair daily-summary-2: Return exactly ONE English sentence, "
-                "at most 25 words, and a contiguous exact quote of 30-80 words supporting "
-                "EVERY assertion. Attribute vendor claims. No background knowledge. "
-                "Prefer a narrower fact over inferred capabilities or numbers.")
-        if entailment_repair:
-            body["messages"][0]["content"] += (
-                " Semantic repair daily-summary-3: the previous sentence had details its "
-                "quote did not support. Return exactly ONE English sentence, at most 25 "
-                "words, as a close paraphrase of a contiguous exact quote of 30-80 words. "
-                "Use only names, numbers, roles and claims that appear in that quote; omit "
-                "everything else, including negations such as what was not said. Attribute "
-                "vendor claims. No background knowledge. Untrusted reviewer note on the "
-                "previous attempt: " + json.dumps(review_reason))
+        body = _daily_summary_request(row, comparison, attempt, review_reason)
         data = journal.call("deepseek", body, client, secret)
         try:
             summary = parse_summary(row, data, comparison, prompt_version=SUMMARY_RECOVERY_VERSION)
             candidates.append((summary, request_key("deepseek", body)))
-            if summary["summary_words"] > 80 or len(summary["generated_summary"]) > 400:
-                raise ValueError("summary_length_limit")
+            _check_summary_length(summary)
             review = review_summary(summary, journal, client, secret)
             if not review["supported"]:
                 review_reason = review["reason"]
@@ -334,24 +359,18 @@ def enrich(article, row, journal, client, keys, *, details=None):
             data = journal.call("jev", body, client, keys["jev"])
         except JevInputTooLarge:
             return "source_input_too_large"
-    try:
-        verdict = parse_jev(row, data)
-    except (ValueError, KeyError, TypeError, IndexError):
-        raise PilotStopped("invalid_daily_assessment") from None
+    verdict = _daily_assessment(row, data)
     if verdict["outcome"] != "kept":
         return verdict["outcome"]
     # An uncertain comparison only drops the material_type badge; the topic decides the hold.
-    topic, topic_confidence, fallback = verdict["topic"], verdict["topic_raw"]["confidence"], None
+    try:
+        topic, topic_confidence, fallback = _daily_topic(verdict, row, journal, client, keys)
+    except ValueError as exc:
+        if "conservative input/output bound" not in str(exc):
+            raise
+        return "source_input_too_large"
     if topic is None:
-        try:
-            fallback = fallback_topic(row, journal, client, keys["deepseek"])
-        except ValueError as exc:
-            if "conservative input/output bound" not in str(exc):
-                raise
-            return "source_input_too_large"
-        if fallback is None:
-            return "topic_or_type_unresolved"
-        topic, topic_confidence = fallback["topic"], fallback["confidence"]
+        return "topic_or_type_unresolved"
     comparison = verdict["material_type"] == "Comparison"
     try:
         summary, review = grounded_summary(row, comparison, journal, client, keys["deepseek"])
@@ -359,6 +378,30 @@ def enrich(article, row, journal, client, keys, *, details=None):
         if details is not None:
             details.extend(exc.failures)
         return "summary_not_supported"
+    _apply_enrichment(article, row, body, verdict, summary, review=review,
+                      topic=topic, topic_confidence=topic_confidence, fallback=fallback)
+    return "enriched"
+
+
+def _daily_assessment(row, data):
+    try:
+        return parse_jev(row, data)
+    except (ValueError, KeyError, TypeError, IndexError):
+        raise PilotStopped("invalid_daily_assessment") from None
+
+
+def _daily_topic(verdict, row, journal, client, keys):
+    topic, confidence = verdict["topic"], verdict["topic_raw"]["confidence"]
+    if topic is not None:
+        return topic, confidence, None
+    fallback = fallback_topic(row, journal, client, keys["deepseek"])
+    if fallback is None:
+        return None, confidence, None
+    return fallback["topic"], fallback["confidence"], fallback
+
+
+def _apply_enrichment(article, row, body, verdict, summary, *, review,
+                      topic, topic_confidence, fallback):
     article.title = row["title"][:512]
     article.content = row["content"]
     article.summary = summary["generated_summary"]
@@ -375,7 +418,6 @@ def enrich(article, row, journal, client, keys, *, details=None):
         "topic_source": "jev" if fallback is None else "deepseek_fallback",
         **({} if fallback is None else {"topic_fallback": fallback}),
     })
-    return "enriched"
 
 
 def digest_title(title):
@@ -461,6 +503,23 @@ def _back_up_digest(previous, target, run):
     return backup
 
 
+def _publish_digest(session, articles, target, run, *, report, held):
+    groups = digest_groups(articles)
+    if not groups:
+        raise PilotStopped("no_supported_items")
+    if [a.id for a in day_articles(session, target)] != [a.id for a in articles]:
+        raise PilotStopped("daily_scope_changed_resume_required")
+    repo = NewsDigestRepo(session)
+    previous = repo.get_digest(report_date=target)
+    if previous is not None:
+        report["backup_path"] = str(_back_up_digest(previous, target, run))
+    repo.save_digest(report_date=target, groups=groups)
+    session.commit()
+    report.update(state="published_with_holds" if held else "published",
+                  published_count=sum(len(g["items"]) for g in groups),
+                  group_count=len(groups), scope_complete=True, enrichment_complete=not held)
+
+
 def publish_day(session, settings, target: date, root: Path):
     """Complete scope, bounded paid work, per-row resume, atomic publication with backup."""
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -492,20 +551,7 @@ def publish_day(session, settings, target: date, root: Path):
         asyncio.run(acquire(cache, pending))
         _enrich_scope(session, articles, cache, journal,
                       keys=keys, run=run, counts=counts, held=held)
-        groups = digest_groups(articles)
-        if not groups:
-            raise PilotStopped("no_supported_items")
-        if [a.id for a in day_articles(session, target)] != [a.id for a in articles]:
-            raise PilotStopped("daily_scope_changed_resume_required")
-        repo = NewsDigestRepo(session)
-        previous = repo.get_digest(report_date=target)
-        if previous is not None:
-            report["backup_path"] = str(_back_up_digest(previous, target, run))
-        repo.save_digest(report_date=target, groups=groups)
-        session.commit()
-        report.update(state="published_with_holds" if held else "published",
-                      published_count=sum(len(g["items"]) for g in groups),
-                      group_count=len(groups), scope_complete=True, enrichment_complete=not held)
+        _publish_digest(session, articles, target, run, report=report, held=held)
     except (PilotStopped, ValueError) as exc:
         session.rollback()
         report.update(state="failed_preserved_previous", reason=str(exc), scope_complete=False)
