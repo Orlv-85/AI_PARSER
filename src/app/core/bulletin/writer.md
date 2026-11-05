@@ -50,7 +50,10 @@ flowchart LR
   `specs/018-daily-inference/voice.md` and the editorial rules ER-1/2/3/6/8/9/11/12. It explicitly asks
   for `site` as a JSON array of 3 to 6 strings and `telegram` as a JSON array of 1 to 2 strings,
   one sentence per string, and a gloss of at most 12 words. Validation keeps `GLOSS_MAX_WORDS`
-  as a margin above the prompt. Changing the text changes the version (`bulletin-writer-3`).
+  as a margin above the prompt. It asks to attribute a company's claimed result in headlines
+  too, and to keep the qualifiers that limit a claim (who or what it applies to, the rollout or
+  trial stage, what a number counts). Changing the text changes the version
+  (`bulletin-writer-4`).
   Tests: `test_prompt_pins_its_rules`.
 - The call goes through the provider journal (`PilotJournal`, provider `deepseek`) of the real UTC
   day: one file `data/bulletin/writer/<UTC day>/journal-<WRITER_JOURNAL_VERSION>.sqlite3`, fixed cap
@@ -180,6 +183,10 @@ the safe direction: the story falls back to its title.
   of at most 12 words with `GLOSS_MAX_WORDS` unchanged, and bump `WRITER_VERSION` to
   `bulletin-writer-3` because the prompt text changes; caps, journal, fallbacks and grounding order
   stay unchanged.
+- decided 2026-11-05 (owner yes): attribution in headlines and kept qualifiers, from the FR-022
+  review of 2026-11-02..04 (`specs/018-daily-inference/records/review-summary-2026-11-02..04.md`,
+  fixes F1 and F2): a headline stated an AWS case-study metric as fact, and headlines dropped
+  the scope of a rule. Prompt only; no new check (meaning is not machine-checked, FR-022).
 - The core takes an `ask` function and plain data and imports no I/O module; the journal and the
   HTTP client are `writer_run.py`. A test pins the import list.
 - Grounding reuses `grounding_error`, cut out of `parse_brief`'s `_sentence` so the two checks cannot

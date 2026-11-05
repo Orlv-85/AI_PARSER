@@ -16,7 +16,7 @@ from app.core.bulletin.writer_grounding import fold, sentence_error
 from app.core.daily.provider_requests import DEEPSEEK_MODEL
 from app.core.daily.signals_brief import SUMMARY_MAX, cut, request_body
 
-WRITER_VERSION = "bulletin-writer-3"
+WRITER_VERSION = "bulletin-writer-4"
 WRITER_MODEL = DEEPSEEK_MODEL
 MODEL_NAMES = frozenset({DEEPSEEK_MODEL, "deepseek-v4.1-flash"})  # the answer may name the alias
 # 8 stories of 4 sentences, a Telegram note and a headline are about 2500 tokens.
@@ -54,7 +54,11 @@ WRITER_PROMPT = (
     "Rules. Retell in your own words. Never copy more than a few words in a row. Short quotes "
     "only, at most 12 words, exact, copied from the source, in double quotation marks; never quote "
     "text you translated. Attribute a company's claims to the company (for example "
-    "\"Block says\"); when the outlet itself claims something, name the outlet. Real companies "
+    "\"Block says\"); when the outlet itself claims something, name the outlet. Attribute a "
+    "result a company reports about itself or its customer also in headlines "
+    "(\"Edge0 says a client halved its costs\"), never as plain fact. Keep the qualifiers that "
+    "limit a claim: who or what a rule applies to, a trial or rollout stage, and what a number "
+    "counts. Real companies "
     "act on their own "
     "(\"Edge0 released\"); never imply that a real company, person or government belongs to or "
     "endorses the Administration or us. Never invent a quote and never put words in a real "
