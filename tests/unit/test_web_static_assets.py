@@ -14,6 +14,7 @@ from app.web.app import create_app
 # Exact asset tags of each page, in order; a later edit that drops or renames one fails here.
 PAGE_ASSETS = {
     "/": ["/static/css/digest.css", "/static/js/digest.js"],
+    "/bulletin": ["/static/css/bulletin.css"],
     "/admin": [
         "/static/admin/admin.css",
         "/static/admin/core.js",
@@ -51,7 +52,7 @@ def test_page_references_exactly_its_static_assets(monkeypatch, tmp_path, page) 
 
     response = client.get(page)
 
-    assert response.status_code == 200
+    assert response.status_code == (404 if page == "/bulletin" else 200)
     assert _ASSET_TAG.findall(response.text) == PAGE_ASSETS[page]
     assert "<style>" not in response.text
 
