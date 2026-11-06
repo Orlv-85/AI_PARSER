@@ -64,8 +64,10 @@ flowchart LR
   Tests: `test_candidate_titles_drop_aggregator_decorations`.
 - Candidates are the day's digest articles with an answer for `WORLD_CHANGE_VERSION`, plus assessed
   world candidates only when the setting `world_stream_in_bulletin` is on (env `AINEWS_WORLD_STREAM_IN_BULLETIN`,
-  default off; FR-016/FR-018). Tests: `test_world_candidates_only_with_the_switch`,
-  `test_world_stream_setting_defaults_off`, `test_world_candidates_without_answer_are_left_out`,
+  default off; FR-016/FR-018; `docker-compose.prod.yml` forwards it to the app container).
+  Tests: `test_world_candidates_only_with_the_switch`,
+  `test_world_stream_setting_defaults_off`,
+  `test_production_compose_forwards_world_stream_switch_default_off`, `test_world_candidates_without_answer_are_left_out`,
   `test_digest_candidates_keep_article_order_and_skip_unanswered`.
 - A world candidate of D is left out when the ready stored bulletin of D-1 has any story
   with the same link URL or the same `cluster_key` of its title. Compare all Key results,

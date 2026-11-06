@@ -57,3 +57,12 @@ def test_production_compose_passes_period_brief_flag_off_by_default():
     assert environment["AINEWS_PERIOD_SIGNALS_BRIEF_ENABLED"] == \
         "${AINEWS_PERIOD_SIGNALS_BRIEF_ENABLED:-false}"
     assert "AINEWS_PERIOD_SIGNALS_MAX_USD" not in environment
+
+
+def test_production_compose_forwards_world_stream_switch_default_off():
+    # The container sees only the variables listed here; /opt/ai-news/.env alone does not reach it.
+    compose = yaml.safe_load(Path("docker-compose.prod.yml").read_text(encoding="utf-8"))
+    environment = compose["services"]["app"]["environment"]
+    assert environment["AINEWS_WORLD_STREAM_IN_BULLETIN"] == (
+        "${AINEWS_WORLD_STREAM_IN_BULLETIN:-false}")
+    assert Settings.model_fields["world_stream_in_bulletin"].default is False  # pylint: disable=unsubscriptable-object

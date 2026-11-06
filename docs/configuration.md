@@ -131,7 +131,9 @@ AINEWS_WORLD_COLLECT_ENABLED=false          # gates the nightly world collect jo
 
 The bulletin builder (spec 018, item 2) takes assessed world stream candidates only when
 `AINEWS_WORLD_STREAM_IN_BULLETIN=true` (default: off; turn on after the first days are checked,
-FR-018). Behavior: `src/app/core/bulletin/builder.md`.
+FR-018). Behavior: `src/app/core/bulletin/builder.md`. In production the line goes into
+`/opt/ai-news/.env`; `docker-compose.prod.yml` forwards it to the app container (a variable that
+the compose file does not list never reaches the app).
 
 ```dotenv
 AINEWS_WORLD_STREAM_IN_BULLETIN=false       # world stream stories in the bulletin (default: off)
