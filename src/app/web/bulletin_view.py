@@ -11,6 +11,15 @@ from app.storage.models_sql import BulletinRow
 
 _TEMPLATE = Path(__file__).with_name("bulletin.html")
 _HTTP = re.compile(r"^https?://", re.IGNORECASE)
+_PLACEHOLDER = re.compile(r"__BULLETIN_[A-Z]+__")
+_NO_BULLETIN = "No bulletin was issued for this day."
+_SKIP_SENTENCES = {
+    "no_digest": _NO_BULLETIN + " The daily digest is not available.",
+    "no_signals": _NO_BULLETIN + " Daily signals are not available.",
+    "signals_partial": _NO_BULLETIN + " Daily signals are incomplete.",
+    "signals_unavailable": _NO_BULLETIN + " Daily signals are not available.",
+    "no_assessments": _NO_BULLETIN + " No assessed stories were selected.",
+}
 
 
 def _text(value: Any) -> str:
@@ -61,6 +70,9 @@ def _incidents(payload: dict[str, Any]) -> str:
 
 
 def _checking(row: BulletinRow) -> str:
+    if row.status != "ready":
+        return ('<details class="checking"><summary>For checking</summary>'
+                f'<p>{_text(row.reason)}</p></details>')
     payload = row.payload
     stories = [*payload["key_results"], payload.get("rubric_story"),
                *payload["cooperation"], payload.get("incident_story")]
@@ -88,41 +100,57 @@ def _ready(row: BulletinRow) -> str:
             f'{_paragraph(payload["opening"], "opening")}'
             f'{_paragraph(payload["numbers"], "numbers-line")}</header>{sections}'
             f'<div class="issue-close">{_paragraph(payload["closing"], "closing")}'
-            f'<a class="full-report" href="/?date={day}">'
+            f'<a class="full-report" href="{_text(payload["full_report_url"])}">'
             f'Full report ({_text(payload["items"])}) &#8594;</a>{footnote}</div>')
 
 
-def _navigation(day: date, yesterday: date) -> str:
+def _navigation(day: date, yesterday: date, path: str) -> str:
     links = []
     if day > date.min:
         previous = (day - timedelta(days=1)).isoformat()
-        links.append(f'<a rel="prev" href="/bulletin?date={previous}">Previous day</a>')
+        links.append(f'<a rel="prev" href="{path}?date={previous}">Previous day</a>')
     if day < yesterday:
         following = (day + timedelta(days=1)).isoformat()
-        links.append(f'<a rel="next" href="/bulletin?date={following}">Next day</a>')
+        links.append(f'<a rel="next" href="{path}?date={following}">Next day</a>')
     return f'<nav aria-label="Bulletin dates">{"".join(links)}</nav>'
 
 
 def _status(row: BulletinRow | None, day: date | None, message: str | None) -> str:
     title = f"Bulletin for {day.isoformat()}" if day else "Bulletin preview"
     note = message or ("No bulletin for this day." if day else "No bulletin is stored yet.")
-    reason = f"<p>{_text(row.reason)}</p>" if row is not None and row.reason else ""
-    content = f'<section class="status"><h1>{title}</h1><p>{_text(note)}</p>{reason}</section>'
+    if row is not None:
+        note = _SKIP_SENTENCES.get(row.reason or "", _NO_BULLETIN)
+    content = f'<section class="status"><h1>{title}</h1><p>{_text(note)}</p></section>'
     if day is not None:
-        content += (f'<p><a class="full-report" href="/?date={day.isoformat()}">'
+        content += (f'<p><a class="full-report" href="/daily?date={day.isoformat()}">'
                     'Daily digest for this day</a></p>')
     return content
 
 
 def render_bulletin_page(row: BulletinRow | None, day: date | None, *,
-                         message: str | None = None) -> str:
+                         message: str | None = None, preview: bool = True) -> str:
     """Render a ready row, a skipped/missing day or a storage error in the same shell."""
     if row is not None and row.status == "ready":
         content = _ready(row)
-        checking = _checking(row)
     else:
         content = _status(row, day, message)
-        checking = ""
     if day is not None:
-        content += _navigation(day, datetime.now(UTC).date() - timedelta(days=1))
-    return _TEMPLATE.read_text(encoding="utf-8").replace("__BULLETIN_CONTENT__", content + checking)
+        content += _navigation(day, datetime.now(UTC).date() - timedelta(days=1),
+                               "/bulletin" if preview else "/")
+        if not preview:
+            content += ('<form method="get" action="/"><label>Bulletin date '
+                        f'<input type="date" name="date" value="{day.isoformat()}"></label>'
+                        '<button type="submit">Show bulletin</button></form>')
+    if preview and row is not None:
+        content += _checking(row)
+    return _shell(content, preview)
+
+
+def _shell(content: str, preview: bool) -> str:
+    values = {
+        "__BULLETIN_CONTENT__": content,
+        "__BULLETIN_ROBOTS__": ('<meta name="robots" content="noindex, nofollow" />'
+                               if preview else ""),
+        "__BULLETIN_TITLE__": "Bulletin preview" if preview else "Bulletin",
+    }
+    return _PLACEHOLDER.sub(lambda m: values[m.group(0)], _TEMPLATE.read_text(encoding="utf-8"))

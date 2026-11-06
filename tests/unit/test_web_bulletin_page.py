@@ -123,15 +123,16 @@ def test_bulletin_page_skipped_day_links_digest(maker, client):
     store(maker, status="skipped", reason="no_assessments")
     response = client.get(f"/bulletin?date={DAY}")
     assert response.status_code == 200
-    assert "No bulletin for this day" in response.text and "no_assessments" in response.text
-    assert f'href="/?date={DAY}"' in response.text
+    assert "No bulletin was issued for this day" in response.text
+    assert "no_assessments" in response.text
+    assert f'href="/daily?date={DAY}"' in response.text
 
 
 def test_bulletin_page_missing_day_is_404(client):
     response = client.get(f"/bulletin?date={DAY}")
     assert response.status_code == 404
     assert "No bulletin for this day" in response.text
-    assert f'href="/?date={DAY}"' in response.text
+    assert f'href="/daily?date={DAY}"' in response.text
 
 
 @pytest.mark.parametrize("value", ["bad", "2026-02-30", "20261030", "2026-W44-5", ""])
@@ -313,8 +314,7 @@ def test_bulletin_page_full_report_links_digest(maker, client):
     link = page.xpath('//a[starts-with(text(), "Full report")]')
     assert len(link) == 1
     assert link[0].text_content() == "Full report (42) \u2192"
-    assert link[0].get("href") == f"/?date={DAY}"
-    assert not page.xpath('//a[starts-with(@href, "/daily")]')
+    assert link[0].get("href") == "/daily?date=2000-01-01"
 
 
 def test_bulletin_page_checking_block_collapsed(maker, client):
@@ -350,7 +350,7 @@ def test_bulletin_page_status_pages_share_shell(maker, client, monkeypatch, stat
     assert page.xpath('string(//header//*[@class="masthead"])') == "THE DAILY INFERENCE"
     assert "Satire. Every fact is real and linked." in page.xpath("string(//footer)")
     assert page.xpath('//footer//a/@href') == ["https://www.gdeltproject.org/"]
-    assert not page.xpath("//details")
+    assert bool(page.xpath("//details")) is (state == "skipped")
 
 
 def test_bulletin_page_mobile_viewport(client):

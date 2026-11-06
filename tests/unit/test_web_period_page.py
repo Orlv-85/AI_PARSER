@@ -38,7 +38,7 @@ def test_ready_week_shows_sections_in_order(client):
     ids = ["period-stories", "period-entities", "period-new", "period-trends", "period-events"]
     assert [html.index(f'id="{i}"') for i in ids] == sorted(html.index(f'id="{i}"') for i in ids)
     assert "Week of Oct 12-18, 2026" in html and "7 of 7 days complete" in html
-    assert 'href="/?date=2026-10-' in html
+    assert 'href="/daily?date=2026-10-' in html
     assert "<style>" not in html and 'rel="stylesheet" href="/static/css/period.css"' in html
 
 

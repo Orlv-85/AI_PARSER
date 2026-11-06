@@ -13,7 +13,8 @@ PREVIOUS_HEAD = "e7b4c2a9d150"
 PERIOD_REVISION = "f4a9c1d27b83"
 DROP_REVISION = "a7d3e5b18c94"
 HEAD = "b8e2d4f61a07"
-LATEST_HEAD = "d2a6f8b03c19"
+BULLETIN_REVISION = "d2a6f8b03c19"
+LATEST_HEAD = "a6b0180c0001"
 
 
 def schema(url, table):
@@ -43,7 +44,8 @@ def test_single_head_and_chain():
     assert script.get_revision(PERIOD_REVISION).down_revision == PREVIOUS_HEAD
     assert script.get_revision(DROP_REVISION).down_revision == PERIOD_REVISION
     assert script.get_revision(HEAD).down_revision == DROP_REVISION
-    assert script.get_revision(LATEST_HEAD).down_revision == "c9f3a7e15b28"
+    assert script.get_revision(BULLETIN_REVISION).down_revision == "c9f3a7e15b28"
+    assert script.get_revision(LATEST_HEAD).down_revision == BULLETIN_REVISION
 
 
 def test_upgrade_matches_models_and_downgrade_drops_only_period_tables(tmp_path, monkeypatch):

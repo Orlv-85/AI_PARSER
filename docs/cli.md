@@ -153,3 +153,9 @@ ai-news search --query "gpt" --days 7
 ai-news prune --older-than-days 800
 ai-news prune --older-than-days 800 --dry-run
 ```
+
+## Page views
+
+`ai-news page-views [--days N]` prints one JSON object `{day: {route: count}}` for the last N
+UTC calendar days including today (default 14). It reads stored totals for `/` and `/daily`
+without changing them. Days/routes with no views are omitted; no views gives `{}`.

@@ -8,15 +8,19 @@ import re
 from datetime import UTC, date, datetime, timedelta
 from html import escape
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from pydantic import TypeAdapter, ValidationError, WithJsonSchema
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.storage.admission import read_collection_status
 from app.storage.bulletin_store import BulletinRepo
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import NewsDigestReport
+from app.storage.page_views import PageViewRepo
 from app.web.auth import verify_password
 from app.web.bulletin_view import render_bulletin_page
 from app.web.models import NewsCollectionStatusResponse
@@ -105,49 +109,175 @@ def _render_news_stats(*, date_from: date, date_to: date) -> str:
     )
 
 
-def _bulletin_response(deps: WebDeps, target_date: str | None) -> HTMLResponse:
+def _bulletin_response(deps: WebDeps, target_date: str | None, *,
+                       preview: bool = True) -> HTMLResponse | None:
     day = parse_day(target_date)
     try:
         deps.create_all()
         with deps.SessionLocal() as session:
             repo = BulletinRepo(session)
             row = repo.get(day) if day is not None else repo.latest_ready()
+            if not preview and day is None and row is None:
+                return None
             selected_day = row.day if row is not None else day
-            return HTMLResponse(render_bulletin_page(row, selected_day),
+            return HTMLResponse(render_bulletin_page(row, selected_day, preview=preview),
                                 status_code=404 if row is None else 200)
     except SQLAlchemyError:
         return HTMLResponse(render_bulletin_page(None, day,
-                            message="News storage is unavailable."), status_code=503)
+                            message="News storage is unavailable.", preview=preview),
+                            status_code=503)
+
+
+def _digest_response(deps: WebDeps, selected_date: date | None) -> str:
+    report_date = selected_date or (datetime.now(UTC).date() - timedelta(days=1))
+    try:
+        deps.create_all()
+        with deps.SessionLocal() as session:
+            digest = NewsDigestRepo(session).get_digest(report_date=report_date)
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+    # Separate read: a signals failure never takes the digest page down.
+    try:
+        signals_html = render_signals(
+            _read_daily_signals(report_date, session_local=deps.SessionLocal))
+    except Exception as exc:  # any signals failure (F5): the digest page stays up
+        _LOGGER.error("daily_signals_read_failed report_date=%s error=%s",
+                      report_date.isoformat(), type(exc).__name__)
+        signals_html = render_signals(None, read_error=True)
+    return _render_digest(report_date=report_date, digest=digest, signals_html=signals_html,
+                          week=latest_week(deps), monthly=has_month(deps))
+
+
+def _digest_date(value: str | None) -> date | None:
+    """Keep FastAPI's digest date validation when home switches between two date contracts."""
+    try:
+        result: date | None = TypeAdapter(date | None).validate_python(value)
+        return result
+    except ValidationError as exc:
+        errors = [{**error, "loc": ("query", "date", *error["loc"])}
+                  for error in exc.errors(include_url=False)]
+        raise RequestValidationError(errors) from exc
+
+
+def _count_page(deps: WebDeps, route: str) -> None:
+    try:
+        with deps.SessionLocal() as session:
+            PageViewRepo(session).increment(datetime.now(UTC).date(), route)
+            session.commit()
+    except Exception as exc:  # Measurement must never take down a public page.
+        _LOGGER.error("page_views_increment_failed route=%s error=%s", route, type(exc).__name__)
+
+
+def _digest_page(deps: WebDeps, background_tasks: BackgroundTasks,
+                 selected_date: date | None, route: str) -> str:
+    content = _digest_response(deps, selected_date)
+    background_tasks.add_task(_count_page, deps, route)
+    return content
+
+
+def _home_response(deps: WebDeps, background_tasks: BackgroundTasks,
+                   target_date: str | None) -> str | HTMLResponse:
+    response = None
+    if deps.settings.bulletin_home_page:
+        response = _bulletin_response(deps, target_date, preview=False)
+    if response is None:
+        return _digest_page(deps, background_tasks, _digest_date(target_date), "/")
+    if response.status_code == 200:
+        background_tasks.add_task(_count_page, deps, "/")
+    return response
+
+
+def _news_stats_response(date_from: date | None, date_to: date | None) -> str:
+    resolved_date_to = date_to or (datetime.now(UTC).date() - timedelta(days=1))
+    resolved_date_from = date_from or (resolved_date_to - timedelta(days=59))
+    if resolved_date_from > resolved_date_to:
+        raise HTTPException(status_code=422, detail="date_from must be <= date_to")
+    return _render_news_stats(date_from=resolved_date_from, date_to=resolved_date_to)
+
+
+def _login_page_response(deps: WebDeps, request: Request) -> Response:
+    if deps.auth_enabled:
+        session_cookie = request.cookies.get(deps.settings.auth_cookie_name)
+        if session_cookie and deps.signer and deps.signer.verify(session_cookie) is not None:
+            return RedirectResponse(url="/admin", status_code=303)
+    return HTMLResponse(content=_render_login())
+
+
+def _health_response() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+def _collection_status_response(deps: WebDeps) -> NewsCollectionStatusResponse:
+    try:
+        deps.create_all()
+        with deps.SessionLocal() as session:
+            paused, message = read_collection_status(session)
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+    return NewsCollectionStatusResponse(paused=paused, message=message)
+
+
+async def _login_response(deps: WebDeps, request: Request) -> JSONResponse:
+    settings = deps.settings
+    signer = deps.signer
+    if not deps.auth_enabled:
+        return JSONResponse(status_code=200, content={"ok": True})
+    payload = await request.json()
+    username = str(payload.get("username", ""))
+    password = str(payload.get("password", ""))
+    username_ok = bool(settings.auth_username) and username == settings.auth_username
+    password_ok = bool(settings.auth_password_hash) and verify_password(
+        password, settings.auth_password_hash
+    )
+    if not (username_ok and password_ok):
+        _LOGGER.info("login_failed")
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    _LOGGER.info("login_success")
+    token = signer.sign(subject=username) if signer else ""
+    response = JSONResponse(status_code=200, content={"ok": True})
+    response.set_cookie(
+        key=settings.auth_cookie_name,
+        value=token,
+        httponly=True,
+        secure=settings.auth_cookie_secure,
+        samesite="lax",
+        max_age=settings.auth_session_ttl_seconds,
+    )
+    return response
+
+
+def _logout_response(deps: WebDeps, request: Request) -> JSONResponse:
+    _LOGGER.info("logout")
+    if deps.auth_enabled and deps.signer:
+        session_cookie = request.cookies.get(deps.settings.auth_cookie_name)
+        if session_cookie:
+            deps.signer.revoke(session_cookie)
+    response = JSONResponse(status_code=200, content={"ok": True})
+    response.delete_cookie(key=deps.settings.auth_cookie_name)
+    return response
 
 
 def build_pages_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-many-statements
-    settings = deps.settings
-    auth_enabled = deps.auth_enabled
-    signer = deps.signer
     router = APIRouter()
 
-    @router.get("/", response_class=HTMLResponse)
-    def index(selected_date: date | None = _OPTIONAL_NEWS_DIGEST_DATE_QUERY) -> str:
-        report_date = selected_date or (datetime.now(UTC).date() - timedelta(days=1))
-        try:
-            deps.create_all()
-            with deps.SessionLocal() as session:
-                digest = NewsDigestRepo(session).get_digest(report_date=report_date)
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
-        # Separate read: a signals failure never takes the digest page down.
-        try:
-            signals_html = render_signals(
-                _read_daily_signals(report_date, session_local=deps.SessionLocal))
-        except Exception as exc:  # any signals failure (F5): the digest page stays up
-            _LOGGER.error("daily_signals_read_failed report_date=%s error=%s",
-                          report_date.isoformat(), type(exc).__name__)
-            signals_html = render_signals(None, read_error=True)
-        return _render_digest(report_date=report_date, digest=digest, signals_html=signals_html,
-                              week=latest_week(deps), monthly=has_month(deps))
+    @router.get("/", response_class=HTMLResponse, response_model=str)
+    def index(
+        background_tasks: BackgroundTasks,
+        target_date: Annotated[str, WithJsonSchema({"type": "string", "format": "date"})] | None
+            = _OPTIONAL_NEWS_DIGEST_DATE_QUERY,
+    ) -> str | HTMLResponse:
+        return _home_response(deps, background_tasks, target_date)
 
-    @router.get("/bulletin", response_class=HTMLResponse, include_in_schema=False)
-    def bulletin_page(target_date: str | None = _OPTIONAL_NEWS_DIGEST_DATE_QUERY) -> HTMLResponse:
+    @router.get("/daily", response_class=HTMLResponse)
+    def daily(background_tasks: BackgroundTasks,
+              selected_date: date | None = _OPTIONAL_NEWS_DIGEST_DATE_QUERY) -> str:
+        return _digest_page(deps, background_tasks, selected_date, "/daily")
+
+    @router.get("/bulletin", response_class=HTMLResponse, response_model=None,
+                include_in_schema=False)
+    def bulletin_page(
+        target_date: str | None = _OPTIONAL_NEWS_DIGEST_DATE_QUERY,
+    ) -> Response | None:
         return _bulletin_response(deps, target_date)
 
     # Legacy weekly pages retired (017 R5): permanent redirect, query string dropped.
@@ -162,14 +292,7 @@ def build_pages_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-many-
         date_from: date | None = None,
         date_to: date | None = None,
     ) -> str:
-        resolved_date_to = date_to or (datetime.now(UTC).date() - timedelta(days=1))
-        resolved_date_from = date_from or (resolved_date_to - timedelta(days=59))
-        if resolved_date_from > resolved_date_to:
-            raise HTTPException(status_code=422, detail="date_from must be <= date_to")
-        return _render_news_stats(
-            date_from=resolved_date_from,
-            date_to=resolved_date_to,
-        )
+        return _news_stats_response(date_from, date_to)
 
     @router.get("/admin", response_class=HTMLResponse)
     def admin_index() -> str:
@@ -177,62 +300,22 @@ def build_pages_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-many-
 
     @router.get("/login", response_class=HTMLResponse)
     def login_page(request: Request) -> Response:
-        if auth_enabled:
-            session_cookie = request.cookies.get(settings.auth_cookie_name)
-            if session_cookie and signer and signer.verify(session_cookie) is not None:
-                return RedirectResponse(url="/admin", status_code=303)
-        return HTMLResponse(content=_render_login())
+        return _login_page_response(deps, request)
 
     @router.get("/health")
     def health() -> dict[str, str]:
-        return {"status": "ok"}
+        return _health_response()
 
     @router.get("/api/news/collection-status", response_model=NewsCollectionStatusResponse)
     def get_collection_status_api() -> NewsCollectionStatusResponse:
-        try:
-            deps.create_all()
-            with deps.SessionLocal() as session:
-                paused, message = read_collection_status(session)
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
-        return NewsCollectionStatusResponse(paused=paused, message=message)
+        return _collection_status_response(deps)
 
     @router.post("/api/auth/login")
     async def login(request: Request) -> JSONResponse:
-        if not auth_enabled:
-            return JSONResponse(status_code=200, content={"ok": True})
-        payload = await request.json()
-        username = str(payload.get("username", ""))
-        password = str(payload.get("password", ""))
-        username_ok = bool(settings.auth_username) and username == settings.auth_username
-        password_ok = bool(settings.auth_password_hash) and verify_password(
-            password, settings.auth_password_hash
-        )
-        if not (username_ok and password_ok):
-            _LOGGER.info("login_failed")
-            raise HTTPException(status_code=401, detail="Invalid username or password")
-        _LOGGER.info("login_success")
-        token = signer.sign(subject=username) if signer else ""
-        response = JSONResponse(status_code=200, content={"ok": True})
-        response.set_cookie(
-            key=settings.auth_cookie_name,
-            value=token,
-            httponly=True,
-            secure=settings.auth_cookie_secure,
-            samesite="lax",
-            max_age=settings.auth_session_ttl_seconds,
-        )
-        return response
+        return await _login_response(deps, request)
 
     @router.post("/api/auth/logout")
     def logout(request: Request) -> JSONResponse:
-        _LOGGER.info("logout")
-        if auth_enabled and signer:
-            session_cookie = request.cookies.get(settings.auth_cookie_name)
-            if session_cookie:
-                signer.revoke(session_cookie)
-        response = JSONResponse(status_code=200, content={"ok": True})
-        response.delete_cookie(key=settings.auth_cookie_name)
-        return response
+        return _logout_response(deps, request)
 
     return router

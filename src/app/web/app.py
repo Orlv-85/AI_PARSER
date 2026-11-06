@@ -110,6 +110,7 @@ def create_app() -> FastAPI:
             in {
                 "/health",
                 "/",
+                "/daily",
                 "/news-stats",
                 "/weekly",
                 "/monthly",

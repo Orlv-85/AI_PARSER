@@ -105,7 +105,7 @@ def _day(value: Any) -> str:
         day = date.fromisoformat(str(value))
     except ValueError:
         return _t(value)
-    return f'<a href="/?date={day.isoformat()}">{_short(day)}</a>'
+    return f'<a href="/daily?date={day.isoformat()}">{_short(day)}</a>'
 
 
 def _days(values: Any, prefix: str = "days") -> str | None:

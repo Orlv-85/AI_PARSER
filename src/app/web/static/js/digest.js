@@ -267,7 +267,7 @@
           return;
         }
         const payload = await response.json();
-        const nextUrl = selectedDate ? "?date=" + encodeURIComponent(selectedDate) : "/";
+        const nextUrl = window.location.pathname + (selectedDate ? "?date=" + encodeURIComponent(selectedDate) : "");
         window.history.replaceState({}, "", nextUrl);
         updateHeroTitle(selectedDate);
         renderDigest(payload);

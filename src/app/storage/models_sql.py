@@ -572,6 +572,15 @@ class WorldChangeAssessment(Base):  # pylint: disable=too-many-instance-attribut
     assessed_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)
 
 
+class PageView(Base):
+    """Anonymous UTC page totals; behavior in src/app/web/pages.md."""
+    __tablename__ = "page_views"
+
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    route: Mapped[str] = mapped_column(Text, primary_key=True)
+    count: Mapped[int] = mapped_column(Integer)
+
+
 class BulletinRow(Base):  # pylint: disable=too-many-instance-attributes
     """Stored bulletin of a day; behavior in src/app/storage/bulletin_store.md."""
     __tablename__ = "bulletins"

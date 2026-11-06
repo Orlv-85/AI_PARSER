@@ -137,7 +137,7 @@ the compose file does not list never reaches the app).
 
 ```dotenv
 AINEWS_WORLD_STREAM_IN_BULLETIN=false       # world stream stories in the bulletin (default: off)
-AINEWS_BULLETIN_HOME_PAGE=false            # reserved home page switch (default: off; no consumer yet)
+AINEWS_BULLETIN_HOME_PAGE=false            # bulletin at /; digest stays at /daily (default: off)
 AINEWS_BULLETIN_POST_CHANNELS=false        # reserved posting switch (default: off; no consumer yet)
 AINEWS_BULLETIN_JOB_ENABLED=false          # host script only; gates the paid 04:30 UTC bulletin job
 ```
