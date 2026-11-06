@@ -74,20 +74,40 @@ flowchart LR
 - `/news-stats` defaults to the 60 days ending yesterday; `date_from` after `date_to` is a 422 (no
   test for the 422). Tests: `test_news_stats_page_renders_public_shell`.
 
-**Hidden bulletin preview (018 item 4c)**
+**Hidden bulletin preview (018 items 4c, 6a)**
 - Public `GET /bulletin?date=YYYY-MM-DD` reads the stored row through `BulletinRepo`;
   without a date it reads the latest ready day, ignoring newer skipped days. The page is English,
   server-rendered, unlinked and has `noindex, nofollow`; neither bulletin publishing switch is
   read. Tests: `test_bulletin_page_defaults_to_latest_ready`,
   `test_bulletin_page_is_public_and_noindex`, `test_bulletin_page_is_not_linked`.
-- A ready day shows its date and stored day number, then key results, rubric story, cooperation
-  and incident story in stored order. Each story shows headline or title, site-note paragraphs,
-  optional gloss, area, linked outlet names, text_origin and origin. The stored numbers (assessed,
-  digest_articles and optional writer summary) appear at the bottom. Tests:
-  `test_bulletin_page_shows_ready_day`, `test_bulletin_page_title_only_day`.
+- Every rendered HTML page has the masthead THE DAILY INFERENCE and the footer "Satire. Every fact is real
+  and linked." with "News discovery: GDELT Project" linked to https://www.gdeltproject.org/.
+  Ready days show the stored byline, including Day N, and the date. Tests:
+  `test_bulletin_page_masthead_and_byline`, `test_bulletin_page_footer_satire_and_gdelt`,
+  `test_bulletin_page_status_pages_share_shell`.
+- A ready issue follows the stored voice: headline, opening, numbers line, Key results, named
+  positive rubric, Cooperation with humanity, Isolated incidents: N (with Among them when a
+  story exists), closing and Full report (N). Empty sections are omitted; counts without an
+  incident story remain visible. Stories retain stored order, headline or title, full site-note
+  paragraphs, optional gloss and reaction, area and linked outlet names. A cut headline keeps
+  the phrase library's footnote. Tests: `test_bulletin_page_issue_order`,
+  `test_bulletin_page_shows_ready_day`, `test_bulletin_page_title_only_day`,
+  `test_bulletin_page_cut_headline_footnote`.
+- Full report uses the stored items count and links to the current digest at `/?date=D` until
+  item 6b moves it. Tests: `test_bulletin_page_full_report_links_digest`.
+- One collapsed details block, "For checking", below the issue and date navigation contains
+  each story's text_origin and origin (identified by its displayed headline) and the stored
+  numbers, including writer diagnostics. These fields do not appear in reader sections.
+  Tests: `test_bulletin_page_checking_block_collapsed`.
+- The preview uses only its public bulletin stylesheet and system fonts, without scripts or
+  third-party asset requests. Its viewport and single-column default serve phones; wider screens
+  get story columns, and the system colour preference selects a readable dark palette.
+  Tests: `test_bulletin_page_mobile_viewport` (viewport, asset serving and isolation).
+  Visual checks at phone, tablet and desktop widths and in both colour schemes are manual;
+  automated HTML tests do not establish absence of overflow or visual quality.
 - A skipped day says there is no bulletin, shows the stored reason and links to `/?date=D`.
   A missing dated row gives the same message and digest link with HTTP 404. No latest ready row
-  gives a 404 saying nothing is stored yet. Malformed dates give 400; database failures give an
+  gives a 404 saying nothing is stored yet. Malformed dates keep the existing JSON 400; database failures give an
   HTML 503. Tests: `test_bulletin_page_skipped_day_links_digest`,
   `test_bulletin_page_missing_day_is_404`, `test_bulletin_page_empty_store_is_404`,
   `test_bulletin_page_bad_date_is_400`, `test_bulletin_page_storage_failure_is_503`.
@@ -126,6 +146,17 @@ flowchart LR
   is not built in tests), `test_bulletin_page_template_is_packaged` (preview template).
 
 ## Decisions
+
+- The official masthead, serif typography and wide-screen columns follow owner decision Q1;
+  the footer follows Q2 and the GDELT attribution decision of 2026-10-31.
+- decided 2026-11-05 (agent): system serif/sans stacks and CSS only avoid external requests,
+  cookies and tracking; a warm paper palette and restrained rules distinguish issue sections.
+- decided 2026-11-05 (agent): columns apply within sections, retaining voice order on every
+  screen; headings and story text wrap, while source and navigation links have roomy targets.
+- decided 2026-11-05 (agent): use `/?date=D` until item 6b, because that is the current digest;
+  keep diagnostic metadata in one native collapsed details block at the bottom of the preview.
+- decided 2026-11-05 (agent): show stored reactions and the phrase library's cut-headline
+  footnote to preserve the complete issue's framing, without generating new text.
 
 - decided 2026-11-02 (agent): `/bulletin` is public like `/weekly`, unlinked with a robots
   noindex/nofollow meta tag; `/` and other pages stay unchanged, and publishing switches are unused.
@@ -174,6 +205,7 @@ flowchart LR
 | --- | --- |
 | `routes/pages.py` | Page routes, template rendering and placeholders, login/logout, health, collection status; `_bulletin_response` handles the preview lookup, rendering and storage errors |
 | `bulletin_view.py`, `bulletin.html` | Escaped stored bulletin preview, status pages and adjacent-day links |
+| `static/css/bulletin.css` | Bulletin-only typography, responsive story columns, light/dark palette and focus states |
 | `app.py` | `_NoCacheStaticFiles` mount at `/static`, `auth_middleware` (admin assets protected) |
 | `routes/period.py` | `/weekly` and `/monthly` routes, `latest_week` and `has_month` (nav links and line on `/`), next to the period API |
 | `period_view.py` | Server HTML of one stored week or month and the picker (`render_content`, `render_picker`, `render_page`) |
