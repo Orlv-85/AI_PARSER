@@ -272,7 +272,7 @@ the Troubleshooting section of `README.md`.
       "area": "production settings (.env vs docker-compose.prod.yml)",
       "symptom": "A setting added to /opt/ai-news/.env (e.g. AINEWS_WORLD_STREAM_IN_BULLETIN=true) has no effect in the app or its one-off docker compose run jobs; inside ai-news-app the variable is absent from env.",
       "cause": "The app container has no /app/.env; it gets only the variables listed under services.app.environment of docker-compose.prod.yml. The server .env feeds compose interpolation and the host job scripts, not the container.",
-      "fix": "Add NAME: ${NAME:-<default>} to services.app.environment with a test in tests/unit/test_semantic_admission_compose.py, release a tag, then set the value in /opt/ai-news/.env. Host-script switches (AINEWS_*_JOB_ENABLED) are read from .env by the script and need no compose line.",
+      "fix": "Add NAME: ${NAME:-<default>} to services.app.environment with a test in tests/unit/test_semantic_admission_compose.py, release a tag, then set the value in /opt/ai-news/.env. Host-script switches (AINEWS_*_JOB_ENABLED, AINEWS_WORLD_COLLECT_ENABLED) are read from .env by the script and need no compose line.",
       "verification": "2026-11-06: docker exec ai-news-app env showed no AINEWS_WORLD_* variable and ls /app/.env failed while .env had the line; test_production_compose_forwards_world_stream_switch_default_off failed with KeyError before the compose line."
     }
   ]
