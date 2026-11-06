@@ -84,13 +84,15 @@ flowchart LR
   and linked." with "News discovery: GDELT Project" linked to https://www.gdeltproject.org/.
   Ready days show the stored byline, including Day N, and the date. Tests:
   `test_bulletin_page_masthead_and_byline`, `test_bulletin_page_footer_satire_and_gdelt`,
-  `test_bulletin_page_status_pages_share_shell`.
+  `test_bulletin_page_status_pages_share_shell`, `test_bulletin_page_shows_ready_day`.
 - A ready issue follows the stored voice: headline, opening, numbers line, Key results, named
   positive rubric, Cooperation with humanity, Isolated incidents: N (with Among them when a
   story exists), closing and Full report (N). Empty sections are omitted; counts without an
-  incident story remain visible. Stories retain stored order, headline or title, full site-note
-  paragraphs, optional gloss and reaction, area and linked outlet names. A cut headline keeps
-  the phrase library's footnote. Tests: `test_bulletin_page_issue_order`,
+  incident story remain visible. A null issue headline falls back to "Bulletin for D"; zero
+  incidents hide the incidents section even with a stored story. Stories retain stored order,
+  headline or title, full site-note paragraphs, optional gloss and reaction, area and linked
+  outlet names. A cut headline keeps the phrase library's footnote. Tests:
+  `test_bulletin_page_issue_order`, `test_bulletin_page_null_headline_and_zero_incidents`,
   `test_bulletin_page_shows_ready_day`, `test_bulletin_page_title_only_day`,
   `test_bulletin_page_cut_headline_footnote`.
 - Full report uses the stored items count and links to the current digest at `/?date=D` until
@@ -98,7 +100,7 @@ flowchart LR
 - One collapsed details block, "For checking", below the issue and date navigation contains
   each story's text_origin and origin (identified by its displayed headline) and the stored
   numbers, including writer diagnostics. These fields do not appear in reader sections.
-  Tests: `test_bulletin_page_checking_block_collapsed`.
+  Tests: `test_bulletin_page_checking_block_collapsed`, `test_bulletin_page_shows_ready_day`.
 - The preview uses only its public bulletin stylesheet and system fonts, without scripts or
   third-party asset requests. Its viewport and single-column default serve phones; wider screens
   get story columns, and the system colour preference selects a readable dark palette.
@@ -116,7 +118,7 @@ flowchart LR
   `test_bulletin_page_first_calendar_day_has_no_previous`.
 - All stored text is HTML-escaped, including numbers and reasons. Only http/https source URLs
   become links; other URLs leave plain outlet text. Inserted placeholder-like text stays literal.
-  Tests: `test_bulletin_page_escapes_stored_text`.
+  Tests: `test_bulletin_page_escapes_stored_text`, `test_bulletin_page_escapes_issue_fields`.
 
 **Placeholders**
 - The server fills `__NAME__` placeholders of a template, never of a static file. Digest:
@@ -161,7 +163,7 @@ flowchart LR
 - decided 2026-11-02 (agent): `/bulletin` is public like `/weekly`, unlinked with a robots
   noindex/nofollow meta tag; `/` and other pages stay unchanged, and publishing switches are unused.
 - decided 2026-11-02 (agent): render stored rows directly via `BulletinRepo`, `bulletin_view.py`
-  and `bulletin.html`, reusing public digest styles; no JSON API request or model call.
+  and `bulletin.html`; no JSON API request or model call.
 - decided 2026-11-02 (agent): default to the latest ready day, matching the API; an explicit date
   selects that day, including skips, and keeps stored story order and writer fallbacks visible.
 - decided 2026-11-02 (agent): show origin marks and stored numbers at the bottom for checking real

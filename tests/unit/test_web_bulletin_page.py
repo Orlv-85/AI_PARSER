@@ -280,6 +280,15 @@ def test_bulletin_page_issue_order(maker, client, sections):
     assert bool(page.xpath('//*[@class="among"]')) is full
 
 
+def test_bulletin_page_null_headline_and_zero_incidents(maker, client):
+    store(maker, headline=None, incidents=0, incident_story=story("Stray incident"))
+    page = html.fromstring(client.get(f"/bulletin?date={DAY}").text)
+    assert page.xpath("//h1/text()") == [f"Bulletin for {DAY}"]
+    assert page.xpath("//section/h2/text()") == ["Key results"]
+    assert all("Stray incident" not in section.text_content()
+               for section in page.xpath("//section"))
+
+
 def test_bulletin_page_masthead_and_byline(maker, client):
     byline = "Bulletin of the AI World Administration / Day 1430 / Oct 30"
     store(maker, byline=byline)
