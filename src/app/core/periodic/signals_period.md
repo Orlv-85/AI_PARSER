@@ -285,7 +285,8 @@ flowchart LR
   "not available" line, never 500; the week picker (previous, next, list) is plain links built from
   the index. A `week` that is not a Monday redirects (303) to its Monday. Tests: `test_no_rows_is_unavailable_200`,
   `test_corrupt_row_is_200`, `test_week_param`, `test_default_skips_a_newer_partial_week`.
-- Stored text is escaped; only `http(s)` links are rendered; days link to `/?date=YYYY-MM-DD`.
+- Stored text is escaped; only `http(s)` links are rendered; days and the "Daily Digest" link go to the digest
+  at `/daily?date=YYYY-MM-DD` (spec 018 item 6b; `test_period_links_point_to_daily`).
   The brief shows its sentences with numbered source links and the same AI note as the daily brief
   (`AI_NOTE`). Tests: `test_text_is_escaped_and_only_http_links`, `test_week_label_across_months`,
   `test_page_and_api_with_a_brief_on_top`, `test_brief_text_is_escaped_and_only_http_links_are_rendered`.

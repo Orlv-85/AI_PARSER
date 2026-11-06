@@ -3,7 +3,6 @@ module: src/app/web/routes/pages.py
 covers:
   - src/app/web/routes/pages.py
   - src/app/web/bulletin_view.py
-  - src/app/web/period_view.py
   - src/app/storage/page_views.py
   - src/app/storage/migrations/versions/*page_views*.py
   - src/app/web/*.html
