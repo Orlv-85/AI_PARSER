@@ -66,3 +66,10 @@ def test_production_compose_forwards_world_stream_switch_default_off():
     assert environment["AINEWS_WORLD_STREAM_IN_BULLETIN"] == (
         "${AINEWS_WORLD_STREAM_IN_BULLETIN:-false}")
     assert Settings.model_fields["world_stream_in_bulletin"].default is False  # pylint: disable=unsubscriptable-object
+
+
+def test_production_compose_forwards_home_page_switch_default_off():
+    compose = yaml.safe_load(Path("docker-compose.prod.yml").read_text(encoding="utf-8"))
+    assert compose["services"]["app"]["environment"]["AINEWS_BULLETIN_HOME_PAGE"] == (
+        "${AINEWS_BULLETIN_HOME_PAGE:-false}")
+    assert Settings.model_fields["bulletin_home_page"].default is False  # pylint: disable=unsubscriptable-object

@@ -62,6 +62,7 @@ from app.storage.article_repo import ArticleRepo
 from app.storage.bulletin_store import BulletinRepo
 from app.storage.daily_signals import DailySignalRepo, OverrideConflict
 from app.storage.models_sql import AIEntityOverride
+from app.storage.page_views import PAGE_VIEWS_DEFAULT_DAYS, PageViewRepo
 from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
 
 app = typer.Typer(help="AI News Collector CLI")
@@ -84,6 +85,15 @@ def sources() -> None:
         typer.echo(
             f"{source.id}\t{source.type}\t{status}\t{source.url}"
         )
+
+
+@app.command("page-views")
+def page_views(days: int = typer.Option(PAGE_VIEWS_DEFAULT_DAYS, "--days", min=1)) -> None:
+    """Read anonymous UTC day/route totals (src/app/web/pages.md)."""
+    today = datetime.now(UTC).date()
+    with SessionLocal() as session:
+        totals = PageViewRepo(session).totals(today - timedelta(days=days - 1), today)
+    typer.echo(json.dumps(totals, sort_keys=True))
 
 
 @app.command("daily-publish")

@@ -10,13 +10,16 @@ from html import escape
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from pydantic import TypeAdapter, ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.storage.admission import read_collection_status
 from app.storage.bulletin_store import BulletinRepo
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import NewsDigestReport
+from app.storage.page_views import PageViewRepo
 from app.web.auth import verify_password
 from app.web.bulletin_view import render_bulletin_page
 from app.web.models import NewsCollectionStatusResponse
@@ -105,19 +108,63 @@ def _render_news_stats(*, date_from: date, date_to: date) -> str:
     )
 
 
-def _bulletin_response(deps: WebDeps, target_date: str | None) -> HTMLResponse:
+def _bulletin_response(deps: WebDeps, target_date: str | None, *,
+                       preview: bool = True) -> HTMLResponse | None:
     day = parse_day(target_date)
     try:
         deps.create_all()
         with deps.SessionLocal() as session:
             repo = BulletinRepo(session)
             row = repo.get(day) if day is not None else repo.latest_ready()
+            if not preview and day is None and row is None:
+                return None
             selected_day = row.day if row is not None else day
-            return HTMLResponse(render_bulletin_page(row, selected_day),
+            return HTMLResponse(render_bulletin_page(row, selected_day, preview=preview),
                                 status_code=404 if row is None else 200)
     except SQLAlchemyError:
         return HTMLResponse(render_bulletin_page(None, day,
-                            message="News storage is unavailable."), status_code=503)
+                            message="News storage is unavailable.", preview=preview),
+                            status_code=503)
+
+
+def _digest_response(deps: WebDeps, selected_date: date | None) -> str:
+    report_date = selected_date or (datetime.now(UTC).date() - timedelta(days=1))
+    try:
+        deps.create_all()
+        with deps.SessionLocal() as session:
+            digest = NewsDigestRepo(session).get_digest(report_date=report_date)
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+    # Separate read: a signals failure never takes the digest page down.
+    try:
+        signals_html = render_signals(
+            _read_daily_signals(report_date, session_local=deps.SessionLocal))
+    except Exception as exc:  # any signals failure (F5): the digest page stays up
+        _LOGGER.error("daily_signals_read_failed report_date=%s error=%s",
+                      report_date.isoformat(), type(exc).__name__)
+        signals_html = render_signals(None, read_error=True)
+    return _render_digest(report_date=report_date, digest=digest, signals_html=signals_html,
+                          week=latest_week(deps), monthly=has_month(deps))
+
+
+def _digest_date(value: str | None) -> date | None:
+    """Keep FastAPI's digest date validation when home switches between two date contracts."""
+    try:
+        result: date | None = TypeAdapter(date | None).validate_python(value)
+        return result
+    except ValidationError as exc:
+        errors = [{**error, "loc": ("query", "date", *error["loc"])}
+                  for error in exc.errors(include_url=False)]
+        raise RequestValidationError(errors) from exc
+
+
+def _count_page(deps: WebDeps, route: str) -> None:
+    try:
+        with deps.SessionLocal() as session:
+            PageViewRepo(session).increment(datetime.now(UTC).date(), route)
+            session.commit()
+    except Exception as exc:  # Measurement must never take down a public page.
+        _LOGGER.error("page_views_increment_failed route=%s error=%s", route, type(exc).__name__)
 
 
 def build_pages_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-many-statements
@@ -126,28 +173,30 @@ def build_pages_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-many-
     signer = deps.signer
     router = APIRouter()
 
-    @router.get("/", response_class=HTMLResponse)
-    def index(selected_date: date | None = _OPTIONAL_NEWS_DIGEST_DATE_QUERY) -> str:
-        report_date = selected_date or (datetime.now(UTC).date() - timedelta(days=1))
-        try:
-            deps.create_all()
-            with deps.SessionLocal() as session:
-                digest = NewsDigestRepo(session).get_digest(report_date=report_date)
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
-        # Separate read: a signals failure never takes the digest page down.
-        try:
-            signals_html = render_signals(
-                _read_daily_signals(report_date, session_local=deps.SessionLocal))
-        except Exception as exc:  # any signals failure (F5): the digest page stays up
-            _LOGGER.error("daily_signals_read_failed report_date=%s error=%s",
-                          report_date.isoformat(), type(exc).__name__)
-            signals_html = render_signals(None, read_error=True)
-        return _render_digest(report_date=report_date, digest=digest, signals_html=signals_html,
-                              week=latest_week(deps), monthly=has_month(deps))
+    @router.get("/", response_class=HTMLResponse, response_model=str)
+    def index(target_date: str | None = _OPTIONAL_NEWS_DIGEST_DATE_QUERY) -> str | HTMLResponse:
+        response = None
+        if settings.bulletin_home_page:
+            response = _bulletin_response(deps, target_date, preview=False)
+        if response is None:
+            content = _digest_response(deps, _digest_date(target_date))
+            _count_page(deps, "/")
+            return content
+        if response.status_code == 200:
+            _count_page(deps, "/")
+        return response
 
-    @router.get("/bulletin", response_class=HTMLResponse, include_in_schema=False)
-    def bulletin_page(target_date: str | None = _OPTIONAL_NEWS_DIGEST_DATE_QUERY) -> HTMLResponse:
+    @router.get("/daily", response_class=HTMLResponse)
+    def daily(selected_date: date | None = _OPTIONAL_NEWS_DIGEST_DATE_QUERY) -> str:
+        content = _digest_response(deps, selected_date)
+        _count_page(deps, "/daily")
+        return content
+
+    @router.get("/bulletin", response_class=HTMLResponse, response_model=None,
+                include_in_schema=False)
+    def bulletin_page(
+        target_date: str | None = _OPTIONAL_NEWS_DIGEST_DATE_QUERY,
+    ) -> Response | None:
         return _bulletin_response(deps, target_date)
 
     # Legacy weekly pages retired (017 R5): permanent redirect, query string dropped.

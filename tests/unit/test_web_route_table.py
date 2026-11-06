@@ -20,6 +20,7 @@ _PUBLISH_TOKEN = "publish-token-0123456789abcdef0123"
 #  response_model_exclude_unset) in registration order.
 _ROUTE_TABLE = [
     ('GET', '/', 'index', 'str', 'HTMLResponse', None, False),
+    ('GET', '/daily', 'daily', 'str', 'HTMLResponse', None, False),
     ('GET', '/bulletin', 'bulletin_page', None, 'HTMLResponse', None, False),
     ('GET', '/weekly-ai-analytics', 'legacy_weekly_redirect', None, 'JSONResponse', None, False),
     ('GET', '/weekly-ai-analytics/reports', 'legacy_weekly_redirect', None, 'JSONResponse', None,
@@ -107,6 +108,7 @@ _ROUTE_TABLE = [
 # Routes the auth middleware lets through without a session (auth on).
 _OPEN_ROUTES = {
     ("GET", "/"),
+    ("GET", "/daily"),
     ("GET", "/bulletin"),
     ("GET", "/weekly-ai-analytics"),
     ("GET", "/weekly-ai-analytics/reports"),
