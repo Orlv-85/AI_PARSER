@@ -767,6 +767,7 @@ def test_world_candidate_shown_yesterday_is_left_out(maker, section, origin):
 @pytest.mark.parametrize(("title", "stored_title"), [
     ("Court rules on AI evidence", "COURT: rules on AI evidence!"),
     ("A" * 60 + " first outlet", "A" * 60 + " second outlet"),
+    ("Court rules on AI evidence (5 minute read)", "Court rules on AI evidence"),
 ])
 def test_world_candidate_syndicated_copy_shown_yesterday_is_left_out(
         maker, section, origin, title, stored_title):
