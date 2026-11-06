@@ -34,6 +34,7 @@ from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import (
     Article,
     Base,
+    BulletinRow,
     DailySignalReport,
     Source,
     WorldCandidate,
@@ -587,13 +588,14 @@ def _add_report(session, day, payload):
 
 
 def add_world(maker, state="assessed", url="https://news.example/ai-court",
-              answered=True, domain="www.news.example"):
+              answered=True, domain="www.news.example", *, title="Court rules on AI evidence",
+              gdelt_file="20261030120000"):
     with maker() as session:
         digest = canonical_url_hash(url)
         session.add(WorldCandidate(
-            url_canonical_hash=digest, url=url, title="Court rules on AI evidence",
+            url_canonical_hash=digest, url=url, title=title,
             source_domain=domain, language="eng", first_seen_at=datetime.now(UTC),
-            gdelt_file="20261030120000", match_kind="strong", cluster_key="court rules",
+            gdelt_file=gdelt_file, match_kind="strong", cluster_key="court rules",
             state=state))
         session.flush()
         if answered:
@@ -729,6 +731,121 @@ def test_world_candidates_without_answer_are_left_out(maker):
     assert world == [
         ("https://news.example/z", "other.example", "title:court rules on ai evidence"),
         ("https://www.host.example/y", "host.example", "title:court rules on ai evidence")]
+
+
+def stored_story_payload(section, *, title, url, origin="world"):
+    payload = build([cand(98, world_change="none")]).as_dict()
+    story = build([cand(99, title=title, url=url, origin=origin)]).as_dict()["key_results"][0]
+    story["links"].insert(0, {"url": "https://unrelated.example/first", "outlet": "First"})
+    payload[section] = [story] if section in {"key_results", "cooperation"} else story
+    return payload
+
+
+def store_bulletin_payload(maker, payload, *, day=DAY - timedelta(days=1), status="ready"):
+    with maker() as session:
+        session.add(BulletinRow(day=day, status=status, payload=payload, numbers={}, versions={}))
+        session.commit()
+
+
+@pytest.mark.parametrize("section", [
+    "key_results", "rubric_story", "cooperation", "incident_story"])
+@pytest.mark.parametrize("origin", ["world", "digest"])
+def test_world_candidate_shown_yesterday_is_left_out(maker, section, origin):
+    seed_day(maker)
+    add_world(maker, gdelt_file="20261029120000")
+    store_bulletin_payload(maker, stored_story_payload(
+        section, title="A different representative title", url="https://news.example/ai-court",
+        origin=origin))
+    with maker() as session:
+        loaded = load_day_input(session, DAY, include_world=True)
+    assert [c.url for c in loaded.candidates] == [f"https://t.com/{i}" for i in range(3)]
+
+
+@pytest.mark.parametrize("section", [
+    "key_results", "rubric_story", "cooperation", "incident_story"])
+@pytest.mark.parametrize("origin", ["world", "digest"])
+@pytest.mark.parametrize(("title", "stored_title"), [
+    ("Court rules on AI evidence", "COURT: rules on AI evidence!"),
+    ("A" * 60 + " first outlet", "A" * 60 + " second outlet"),
+])
+def test_world_candidate_syndicated_copy_shown_yesterday_is_left_out(
+        maker, section, origin, title, stored_title):
+    seed_day(maker)
+    add_world(maker, title=title)
+    store_bulletin_payload(maker, stored_story_payload(
+        section, title=stored_title, url="https://syndicated.example/other", origin=origin))
+    with maker() as session:
+        loaded = load_day_input(session, DAY, include_world=True)
+    assert [c.url for c in loaded.candidates] == [f"https://t.com/{i}" for i in range(3)]
+
+
+@pytest.mark.parametrize("status", [None, "skipped"])
+def test_world_candidate_kept_when_yesterday_skipped_or_missing(maker, status):
+    seed_day(maker)
+    add_world(maker)
+    if status is not None:
+        store_bulletin_payload(maker, stored_story_payload(
+            "key_results", title="Court rules on AI evidence", url="https://news.example/ai-court"),
+            status=status)
+    with maker() as session:
+        loaded = load_day_input(session, DAY, include_world=True)
+    assert [c.url for c in loaded.candidates if c.origin == "world"] == [
+        "https://news.example/ai-court"]
+
+
+@pytest.mark.parametrize("payload", [
+    None, "not an object", {}, {"key_results": 7},
+    {"key_results": [{"title": "Court rules on AI evidence", "links": [None]}],
+     "cooperation": [], "rubric_story": None, "incident_story": None},
+    {"key_results": [{"links": [{"url": "https://news.example/ai-court"}]}],
+     "cooperation": [], "rubric_story": None, "incident_story": None},
+])
+def test_world_candidate_kept_when_yesterday_payload_is_unreadable(maker, payload):
+    seed_day(maker)
+    add_world(maker)
+    store_bulletin_payload(maker, payload)
+    with maker() as session:
+        loaded = load_day_input(session, DAY, include_world=True)
+    assert [c.url for c in loaded.candidates if c.origin == "world"] == [
+        "https://news.example/ai-court"]
+
+
+@pytest.mark.parametrize("yesterday_status", [None, "skipped", "ready"])
+def test_world_candidates_not_compared_beyond_yesterday(maker, yesterday_status):
+    seed_day(maker)
+    add_world(maker)
+    store_bulletin_payload(maker, stored_story_payload(
+        "key_results", title="Court rules on AI evidence", url="https://news.example/ai-court"),
+        day=DAY - timedelta(days=2))
+    if yesterday_status is not None:
+        store_bulletin_payload(maker, build([cand(98, world_change="none")]).as_dict(),
+                               status=yesterday_status)
+    with maker() as session:
+        loaded = load_day_input(session, DAY, include_world=True)
+    assert [c.url for c in loaded.candidates if c.origin == "world"] == [
+        "https://news.example/ai-court"]
+
+
+@pytest.mark.parametrize("include_world", [False, True])
+def test_digest_candidates_ignore_yesterday(maker, include_world):
+    seed_day(maker)
+    store_bulletin_payload(maker, stored_story_payload(
+        "key_results", title="Title 1", url="https://t.com/0"))
+    with maker() as session:
+        loaded = load_day_input(session, DAY, include_world=include_world)
+    assert [c.url for c in loaded.candidates] == [f"https://t.com/{i}" for i in range(3)]
+
+
+@pytest.mark.parametrize("title", ["Different news story", "Court rules on AI evidence today"])
+def test_world_candidate_not_shown_yesterday_is_kept(maker, title):
+    seed_day(maker)
+    add_world(maker)
+    store_bulletin_payload(maker, stored_story_payload(
+        "key_results", title=title, url="https://other.example/different"))
+    with maker() as session:
+        loaded = load_day_input(session, DAY, include_world=True)
+    assert [c.url for c in loaded.candidates if c.origin == "world"] == [
+        "https://news.example/ai-court"]
 
 
 def test_digest_candidates_keep_article_order_and_skip_unanswered(maker):

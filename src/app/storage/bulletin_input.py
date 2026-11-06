@@ -23,6 +23,7 @@ from app.core.bulletin.builder import (
 from app.core.bulletin.world_change import WORLD_CHANGE_VERSION
 from app.core.canonicalize import canonical_url_hash
 from app.core.daily.enrichment import digest_title
+from app.storage.bulletin_store import BulletinRepo
 from app.storage.models_sql import (
     Article,
     DailySignalReport,
@@ -110,9 +111,31 @@ def _digest_candidates(session: Session, articles: list[Article],
     return found
 
 
+def _bulletin_story_keys(payload: dict[str, Any]) -> tuple[set[str], set[str]]:
+    stories = [*payload["key_results"], *payload["cooperation"],
+               payload["rubric_story"], payload["incident_story"]]
+    stories = [story for story in stories if story is not None]
+    urls = {link["url"] for story in stories for link in story["links"]}
+    titles = {cluster_key(story["title"]) for story in stories}
+    return urls, titles
+
+
+def _yesterday_story_keys(session: Session, day: date) -> tuple[set[str], set[str]]:
+    row = BulletinRepo(session).get(day - timedelta(days=1))
+    if row is None or row.status != "ready":
+        return set(), set()
+    try:
+        return _bulletin_story_keys(row.payload)
+    except (AttributeError, KeyError, TypeError):
+        return set(), set()
+
+
 def _world_candidates(session: Session, day: date) -> list[Candidate]:
+    yesterday_urls, yesterday_titles = _yesterday_story_keys(session, day)
     found = []
     for item in WorldRepo(session).candidates_in_window([STATE_ASSESSED], day):
+        if item.url in yesterday_urls or cluster_key(digest_title(item.title)) in yesterday_titles:
+            continue
         answer = WorldChangeRepo(session).get(item.url_canonical_hash, WORLD_CHANGE_VERSION)
         if answer is None:
             continue
