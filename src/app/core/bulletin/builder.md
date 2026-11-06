@@ -67,6 +67,16 @@ flowchart LR
   default off; FR-016/FR-018). Tests: `test_world_candidates_only_with_the_switch`,
   `test_world_stream_setting_defaults_off`, `test_world_candidates_without_answer_are_left_out`,
   `test_digest_candidates_keep_article_order_and_skip_unanswered`.
+- A world candidate of D is left out when the ready stored bulletin of D-1 has any story
+  with the same link URL or the same `cluster_key` of its title. Compare all Key results,
+  rubric, Cooperation and incident stories, whatever their origin. Missing or skipped D-1,
+  or an unreadable payload, leaves all candidates eligible; D-2 and older are not checked.
+  Digest candidates are unchanged. Tests: `test_world_candidate_shown_yesterday_is_left_out`,
+  `test_world_candidate_syndicated_copy_shown_yesterday_is_left_out`,
+  `test_world_candidate_kept_when_yesterday_skipped_or_missing`,
+  `test_world_candidate_kept_when_yesterday_payload_is_unreadable`,
+  `test_world_candidates_not_compared_beyond_yesterday`, `test_digest_candidates_ignore_yesterday`,
+  `test_world_candidate_not_shown_yesterday_is_kept`.
 - One story per event: candidates with the same event key (a top story of the daily signals, else
   the title key of `cluster_key`) make one story; the best-confidence member leads (members that answered `none` only when no member has another
   answer), all outlets are linked. Digest articles are matched to a top story by URL, then by
@@ -161,6 +171,8 @@ flowchart LR
   in `--json` (`assessed`, `digest_articles`); unassessed articles are not in the bulletin
   (decided 2026-11-01 (agent)).
 - The story key from signals' top stories merges outlets that the title key would not.
+- decided 2026-11-05 (agent): the world window spans two GDELT days, so a story would otherwise
+  run on two consecutive days; only D-1 is checked.
 
 ## Invariants
 
@@ -178,7 +190,7 @@ flowchart LR
 | `src/app/core/bulletin/phrases.json` | the phrase library (data) |
 | `src/app/core/bulletin/phrases.py` | `load_phrases`, validation and the never-list |
 | `src/app/core/bulletin/render.py` | `render_text` |
-| `src/app/storage/bulletin_input.py` | `load_day_input`: digest article ids, answers, signals, world |
+| `src/app/storage/bulletin_input.py` | `load_day_input`: digest article ids, answers, signals, world; `_yesterday_story_keys`, `_bulletin_story_keys`: D-1 story URLs and title keys |
 | `src/app/config/settings.py` | `world_stream_in_bulletin` |
 | `src/app/cli/main.py` | `bulletin build` |
 | `src/app/storage/bulletin_store.md` | `bulletin build` storage contract |
