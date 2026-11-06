@@ -217,3 +217,148 @@ the next release tag containing the reviewed/merged item 6b; do not turn this on
 No prompts for another session were generated. Preserve the repository handoff rule: save any
 future prompt before handing it over, under this feature's `records/`, without overwriting an
 earlier prompt; keep reviews and reports there too.
+
+## Review fixes
+
+The PR #217 follow-up prompt was applied in the same worktree, after the coordinator committed
+the initial implementation and corrected the doc coverage. No commit, push, gh command,
+network request, paid call or sub-agent was used in this follow-up. `period_view.py` was not
+added back to `pages.md` coverage.
+
+### Changes and test-first evidence
+
+Behavior and Decisions in `src/app/web/pages.md` were updated first. Before implementation,
+the new regression tests produced **11 failures and 2 passes**:
+
+- `test_page_views_runs_after_response` (eight combinations): the counter appeared before
+  response start/body in the recorded ASGI event order. Covers digest home, empty-store fallback,
+  ready bulletin home, `/daily`, and both successful and failing counters. After the fix, the
+  response's final body is sent before the counter runs, and counter failures still only log.
+- `test_page_views_transaction_timeouts[postgresql]`: no timeout statements preceded the upsert.
+  `PageViewRepo.increment` now issues `SET LOCAL lock_timeout = '1s'` and
+  `SET LOCAL statement_timeout = '2s'` in the same session transaction before its PostgreSQL
+  upsert. The SQLite case was already green and verifies those statements are skipped.
+- `test_home_date_openapi_matches_daily`: `/` lacked `format: date`. The home parameter now
+  uses Pydantic `WithJsonSchema` to restore exactly the same optional date parameter schema as
+  `/daily`, without changing its string input or switched-on 400 validation. The pinned
+  expected schema matches origin/master's date parameter (name `date`, optional, title `Date`,
+  string date or null, with no explicit schema default). Existing malformed-date tests stay green.
+- `test_page_router_handlers_only_delegate`: failed on the branching `index` body. It checks
+  the explicitly requested handler structure with AST; behavior-only tests cannot distinguish
+  this refactor. Branching home, stats, login page, collection status, login and logout bodies
+  now live in module-level helpers; every nested route handler delegates. Existing route-table,
+  authentication and HTML tests preserve route names, order, response models and responses.
+
+The already-green `test_page_views_create_all_before_background` verifies the coordinator's
+unchanged decision: page reads retain `deps.create_all()`, and a missing `page_views` table is
+created before the deferred count. It or the idempotent migration can create the table first.
+
+Files changed: `src/app/web/routes/pages.py`, `src/app/storage/page_views.py`,
+`src/app/web/pages.md`, `tests/unit/test_web_home_page.py`, `tests/unit/test_page_views.py`,
+and this appended report section. No existing test assertion was relaxed or removed.
+
+Scoped feature validation after implementation: **191 passed**, six existing deprecation
+warnings; scoped Ruff passed. Final ordered check results and CRAP/mutation scores follow below.
+
+### Ordered final checks
+
+Logs for this follow-up are in ignored `target/item6b-review-checks/`. Every pytest invocation
+used `PYTHONPATH=src` and the installed main-checkout venv, with no network or package installs.
+
+1. Full suite, once: **2,431 passed, 3 skipped**, six deprecation warnings, **143.41 seconds**
+   (`full-suite.log`). The PostgreSQL integration tests remain skipped without
+   `AINEWS_TEST_POSTGRES_URL`; no live PostgreSQL claim is made.
+2. `make lint`: Ruff passed and mypy found no issues in **279 files**. Pylint identified two
+   test-only issues: eight positional fixture parameters and an unused setup-only `client`
+   fixture argument. Made the four parameterized case arguments keyword-only and declared
+   the setup fixture with `pytest.mark.usefixtures`. Reran only the failed pylint target:
+   **passed, 10.00/10** (`lint.log`, `lint-pylint-recheck.log`). No production code changed after
+   the full suite; the later coverage/mutation baselines also run those adjusted tests.
+3. `python scripts/check_code_docs.py --diff origin/master --strict`: **15 checked, ok**
+   (`code-docs.log`). The coordinator's `period_view.py` coverage correction is preserved.
+4. Crapper on `pages.py` and `page_views.py`, once, with threshold **9.99**: **passed**.
+   Used an explicit coverage command for the eight feature/auth/static test files, **191 passed**,
+   writing `target/coverage/python/lcov.info`, to avoid rerunning the whole suite. Maximum CRAP
+   in both source modules is **8.0**. Scores of the factory and every newly extracted helper:
+
+   | Function | CC | Coverage | CRAP |
+   | --- | ---: | ---: | ---: |
+   | `build_pages_router` | 1 | 100% | **1.0** |
+   | `_digest_page` | 1 | 100% | 1.0 |
+   | `_home_response` | 4 | 100% | 4.0 |
+   | `_news_stats_response` | 4 | 50% | 6.0 |
+   | `_login_page_response` | 5 | 100% | 5.0 |
+   | `_health_response` | 1 | 100% | 1.0 |
+   | `_collection_status_response` | 2 | 75% | 2.1 |
+   | `_login_response` | 7 | 100% | 7.0 |
+   | `_logout_response` | 4 | 100% | 4.0 |
+
+   The updated counter `increment` scores **3.0**, at 100% coverage; existing counter `totals`
+   scores 2.0. Existing `_bulletin_response` and `_render_digest` set the module maximum of 8.0.
+   The factory's previous aggregate **32.9** is resolved (`crapper.log`, `.metrics/crap.edn`).
+5. Dryer on those two modules at threshold 0.8, once: **No duplicate candidates found**
+   (`dryer.log`).
+6. Mutation checks on each complete source file use the fresh LCOV coverage, the same eight
+   feature test files, `--mutate-all` (no inherited killed-site shortcuts), and four workers.
+   Results and targeted follow-ups are recorded below.
+
+### Mutation results and follow-ups
+
+The first complete-file runs reported:
+
+| Source | Killed | Survived | LCOV-uncovered sites |
+| --- | ---: | ---: | ---: |
+| `src/app/web/routes/pages.py` | 28 | 9 | 6 |
+| `src/app/storage/page_views.py` | 3 | 0 | 4 |
+
+Added four regression tests for preserved behavior, updating Behavior references before the
+tests. All four passed on the production code, then killed the corresponding mutants:
+
+- `test_extracted_login_preserves_credentials_and_json`: rejects an incorrect username even
+  with the correct password; checks successful login/logout JSON and the HttpOnly cookie.
+  Kills the username `and` to `or` survivor at line 228 and success JSON boolean survivor at 237.
+- `test_extracted_stats_preserves_dates`: freezes UTC today, checks yesterday as the default
+  end, the default range, equal bounds and reversed bounds. Kills the two default-date survivors
+  at 191 and `>` to `>=` survivor at 193.
+- `test_digest_renderer_preserves_escaping_and_defaults`: checks quoted URL escaping and
+  unchanged text escaping, default headline/monthly navigation, and combined weekly/monthly
+  links. Kills the quote-escaping survivor at 69 and exercises multiline/default sites.
+- `test_legacy_weekly_redirects_stay_hidden_from_openapi`: kills the two `include_in_schema`
+  survivors at 284 and 285, preserving the existing hidden legacy route metadata.
+
+Scoped run: **4 passed**, one existing deprecation warning; scoped Ruff passed. No production
+code was changed for these test gaps. The initial regressions for this review still failed
+before implementation as listed above; these four are additional mutation-driven tests.
+
+Following troubleshooting case `mutator-lcov-multiline-sites-uncovered`, reran only uncovered
+and non-equivalent survivor lines with `--no-coverage --mutate-all --lines ...`:
+
+- Pages: `52,56,69,91,113,191,193,228,237,241,277,284,285`.
+- Counter: `29,33` (both mutations at each SQL line).
+
+The same feature files, including the four new tests, were used; every baseline passed.
+Cumulative unique results, including retained killed results from the first runs:
+
+| Source | Killed | Survived | Uncovered |
+| --- | ---: | ---: | ---: |
+| `src/app/web/routes/pages.py` | **42** | **1** | **0** |
+| `src/app/storage/page_views.py` | **7** | **0** | **0** |
+| **Total** | **49** | **1** | **0** |
+
+Sole survivor: `pages.py:251`, `_logout_response`, `and` to `or`. Equivalent for every app built
+by `create_app`: `deps.auth_enabled` is true exactly when `deps.signer` is present; both versions
+enter the revoke branch for enabled auth and skip it for disabled auth. The existing enabled,
+disabled and no-cookie logout tests remain green. No test using an impossible dependency
+combination was added merely to kill this mutant. The page mutation command therefore exits
+3 for that documented equivalent survivor; the counter command exits 0.
+
+Logs: `mutator-pages.log`, `mutator-counter.log`, `mutator-recheck-pages.log`,
+`mutator-recheck-counter.log`, and `mutation-test-additions.log` under
+`target/item6b-review-checks/`. Metrics are in `.metrics/mutate/`. Final strict code-doc
+recheck after the extra test references: **15 checked, ok** (`code-docs-final.log`).
+
+Not rerun: full suite, complete lint, CRAP and dryer after mutation-only test strengthening,
+following the speed rule. Production code is identical to the version checked by all those
+gates; CRAP scores above are the recorded pre-strengthening measurements. Not run: live
+PostgreSQL, release/deploy, network/paid calls or a separate reviewer/sub-agent. The feature
+remains off by default, and the coordinator retains responsibility for release and review.

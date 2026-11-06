@@ -6,6 +6,7 @@ from datetime import UTC, date, datetime, timedelta
 from importlib import import_module
 from unittest.mock import Mock
 
+import pytest
 import test_web_bulletin_page as bulletin_helpers
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
@@ -78,6 +79,19 @@ def test_page_views_increment_compiles_for_postgres():
     assert compiled.params["day"] == day
     assert compiled.params["route"] == "/daily"
     assert compiled.params["count"] == 1
+
+
+@pytest.mark.parametrize("dialect", ["postgresql", "sqlite"])
+def test_page_views_transaction_timeouts(dialect):
+    repo = import_module("app.storage.page_views").PageViewRepo
+    session = Mock(spec=Session)
+    session.get_bind.return_value.dialect.name = dialect
+    repo(session).increment(date(2026, 11, 6), "/")
+    statements = [call.args[0] for call in session.execute.call_args_list]
+    expected = (["SET LOCAL lock_timeout = '1s'", "SET LOCAL statement_timeout = '2s'"]
+                if dialect == "postgresql" else [])
+    assert [str(statement) for statement in statements[:-1]] == expected
+    assert str(statements[-1]).startswith("INSERT INTO page_views")
 
 
 def test_page_views_migration(tmp_path):

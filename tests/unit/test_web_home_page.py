@@ -1,10 +1,14 @@
 """Home/digest contract; behavior in src/app/web/pages.md."""
 # pylint: disable=redefined-outer-name,import-error,unused-import
+import ast
+import inspect as python_inspect
 from datetime import UTC, datetime, timedelta
+from html import escape
 from importlib import import_module
 
 import pytest
 import test_web_bulletin_page as bulletin_helpers
+from fastapi.testclient import TestClient
 from lxml import html
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -34,6 +38,137 @@ def test_daily_serves_the_digest(client, maker, switched, query):
 def test_daily_is_public(client):
     assert client.get("/admin", follow_redirects=False).status_code == 303
     assert client.get("/daily").status_code == 200
+
+
+def test_home_date_openapi_matches_daily(client):
+    paths = client.get("/openapi.json").json()["paths"]
+    home_date = paths["/"]["get"]["parameters"]
+    daily_date = paths["/daily"]["get"]["parameters"]
+    assert home_date == daily_date
+    assert home_date == [{"name": "date", "in": "query", "required": False,
+                          "schema": {"anyOf": [{"type": "string", "format": "date"},
+                                               {"type": "null"}], "title": "Date"}}]
+
+
+def test_extracted_login_preserves_credentials_and_json(client):
+    settings = import_module("app.web.app").get_settings()
+    settings.auth_password_hash = import_module("app.web.auth").hash_password("test-password")
+    wrong = client.post("/api/auth/login", json={"username": "wrong-user",
+                                                "password": "test-password"})
+    assert wrong.status_code == 401
+    assert wrong.json() == {"detail": "Invalid username or password"}
+    login = client.post("/api/auth/login", json={"username": "operator",
+                                                "password": "test-password"})
+    assert login.status_code == 200 and login.json() == {"ok": True}
+    assert "HttpOnly" in login.headers["set-cookie"]
+    logout = client.post("/api/auth/logout")
+    assert logout.status_code == 200 and logout.json() == {"ok": True}
+
+
+def test_extracted_stats_preserves_dates(client, monkeypatch):
+    class FixedUTC(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 11, 6, tzinfo=tz)
+    monkeypatch.setattr("app.web.routes.pages.datetime", FixedUTC)
+    end = datetime(2026, 11, 5).date()
+    page = html.fromstring(client.get("/news-stats").text)
+    assert page.xpath('//input[@id="date-to"]/@value') == [str(end)]
+    assert page.xpath('//input[@id="date-from"]/@value') == [str(end - timedelta(days=59))]
+    same_day = client.get("/news-stats", params={"date_from": str(DAY), "date_to": str(DAY)})
+    assert same_day.status_code == 200
+    page = html.fromstring(same_day.text)
+    assert page.xpath('//input[@type="date"]/@value') == [str(DAY), str(DAY)]
+    reversed_dates = client.get("/news-stats", params={
+        "date_from": str(DAY + timedelta(days=1)), "date_to": str(DAY)})
+    assert reversed_dates.status_code == 422
+    assert reversed_dates.json() == {"detail": "date_from must be <= date_to"}
+
+
+def test_digest_renderer_preserves_escaping_and_defaults():
+    models = import_module("app.storage.models_sql")
+    pages = import_module("app.web.routes.pages")
+    day = datetime.now(UTC).date() - timedelta(days=1)
+    url = 'https://example.com/?q=" onclick="alert(1)'
+    unsafe = "<script>__WEEKLY_NAV__</script> &"
+    digest = models.NewsDigestReport(report_date=day, groups=[models.NewsDigestGroup(
+        title=unsafe, items=[models.NewsDigestItem(url=url, title=unsafe, summary=unsafe)])])
+    rendered = pages._render_digest(report_date=day, digest=digest)  # pylint: disable=protected-access
+    page = html.fromstring(rendered)
+    assert page.xpath("//h1/text()") == ["Yesterday's Digest"]
+    assert page.xpath('//li[@class="digest-item"]/a/@href') == [url]
+    assert not page.xpath('//a/@onclick|//li[@class="digest-item"]//script|//a[@href="/monthly"]')
+    assert rendered.count(escape(unsafe)) == 3
+    with_periods = pages._render_digest(  # pylint: disable=protected-access
+        report_date=day, digest=digest, week=(DAY, DAY + timedelta(days=6)), monthly=True)
+    page = html.fromstring(with_periods)
+    assert page.xpath('//a[@class="hero-link"]/@href') == ["/weekly", "/monthly", "/news-stats"]
+
+
+def test_legacy_weekly_redirects_stay_hidden_from_openapi(client):
+    paths = client.get("/openapi.json").json()["paths"]
+    assert "/weekly-ai-analytics" not in paths
+    assert "/weekly-ai-analytics/reports" not in paths
+
+
+def test_page_router_handlers_only_delegate():
+    pages = import_module("app.web.routes.pages")
+    tree = ast.parse(python_inspect.getsource(pages.build_pages_router))
+    handlers = [node for node in tree.body[0].body
+                if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)]
+    assert handlers
+    for handler in handlers:
+        assert len(handler.body) == 1, handler.name
+        statement = handler.body[0]
+        assert isinstance(statement, ast.Return), handler.name
+        assert isinstance(statement.value, ast.Call | ast.Await), handler.name
+
+
+@pytest.mark.parametrize("switched,ready,path", [
+    (False, False, "/"), (True, False, "/"), (True, True, "/"), (True, True, "/daily")])
+@pytest.mark.parametrize("failed", [False, True])
+def test_page_views_runs_after_response(client, maker, monkeypatch, caplog, *,
+                                       switched, ready, path, failed):
+    events = []
+    import_module("app.web.app").get_settings().bulletin_home_page = switched
+    if ready:
+        store(maker)
+
+    def count(*_args):
+        events.append("counter")
+        if failed:
+            raise SQLAlchemyError("counter unavailable")
+
+    monkeypatch.setattr("app.web.routes.pages.PageViewRepo.increment", count)
+
+    async def observe_response(scope, receive, send):
+        async def observe_send(message):
+            await send(message)
+            if message["type"] == "http.response.start":
+                events.append("response_start")
+            if message["type"] == "http.response.body" and not message.get("more_body", False):
+                events.append("response_body")
+        await client.app(scope, receive, observe_send)
+
+    response = TestClient(observe_response).get(path)
+    assert response.status_code == 200
+    assert events == ["response_start", "response_body", "counter"]
+    assert ("page_views_increment_failed" in caplog.text) is failed
+
+
+@pytest.mark.usefixtures("client")
+def test_page_views_create_all_before_background(maker, monkeypatch):
+    web = import_module("app.web.app")
+    base = import_module("app.storage.models_sql").Base
+    engine = maker.kw["bind"]
+    with maker() as session:
+        session.execute(text("DROP TABLE page_views"))
+        session.commit()
+    monkeypatch.setattr(web, "create_all", lambda: base.metadata.create_all(engine))
+    response = TestClient(web.create_app()).get("/daily")
+    assert response.status_code == 200
+    with maker() as session:
+        assert session.execute(text("SELECT route, count FROM page_views")).one() == ("/daily", 1)
 
 
 def test_home_is_digest_when_switch_off(client, maker):

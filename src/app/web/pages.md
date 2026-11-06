@@ -25,7 +25,8 @@ flowchart LR
   route --> bulletin["BulletinRepo: requested day or latest ready"]
   bulletin --> preview["Escaped preview or status page; no model call"]
   fill --> html["HTML with link/script tags"]
-  html --> count["200 GET / or /daily: atomic UTC page_views increment; failure only logs"]
+  html --> sent["Response sent"]
+  sent --> count["Background task: bounded atomic UTC page_views increment; failure only logs"]
   html --> assets["GET /static/... (no-cache, ETag)"]
   assets --> auth{"/static/admin/ ?"}
   auth -- "yes, no session" --> login["303 to /login"]
@@ -39,6 +40,9 @@ flowchart LR
   `test_admin_route_is_protected_and_public_root_stays_open`, `test_login_page_redirects_when_session_valid`,
   `test_login_page_renders_login_form_when_not_authenticated`, `test_route_table_order_names_and_models_are_pinned`
   (`/weekly` and `/monthly` are in the open routes).
+- Authenticated login requires both the configured username and password, returns `{"ok": true}`
+  and an HttpOnly cookie; logout keeps that success JSON contract. Tests:
+  `test_extracted_login_preserves_credentials_and_json`, `test_logout_invalidates_session`.
 - `/daily` always shows the digest of the requested day (default: yesterday, UTC) and the Daily Signals block
   (`render_signals`); a signals read failure keeps the page. Tests:
   `test_public_digest_page_renders_digest_shell_with_yesterday_selected`,
@@ -53,13 +57,25 @@ flowchart LR
   `test_home_old_date_link_shows_that_bulletin`, `test_home_without_ready_bulletin_shows_digest`,
   `test_home_missing_day_is_404_with_daily_link`, `test_home_has_no_checking_block_and_is_indexable`,
   `test_home_date_form`, `test_home_errors`, `test_digest_errors_match`.
+- The optional `date` query parameter of `/` keeps the same OpenAPI schema as `/daily`
+  (date format and default), even though the enabled home validates malformed dates as 400.
+  Tests: `test_home_date_openapi_matches_daily`.
+- Nested page handlers only delegate to module-level helpers; route registration, names,
+  response models and OpenAPI stay unchanged. Tests: `test_page_router_handlers_only_delegate`,
+  `test_route_table_order_names_and_models_are_pinned`, `test_auth_middleware_coverage_is_pinned`.
 - Digest links from bulletin and period pages use `/daily`; Full report uses the stored
   `full_report_url` and item count. The digest date picker keeps the current path when setting
   or clearing the date. Tests: `test_full_report_links_daily`, `test_period_links_point_to_daily`,
   `test_digest_date_picker_keeps_current_path`, `test_news_stats_links_daily`.
 - Only successful (200) GETs of `/` and `/daily` increment `page_views`, keyed by UTC day and
-  route. One dialect upsert adds one atomically on SQLite and PostgreSQL; counting failures
-  log and keep the response. Only day, route and count are stored. Read-only
+  route. FastAPI `BackgroundTasks` runs the counter after the response has been sent. One
+  dialect upsert adds one atomically on SQLite and PostgreSQL; counting failures only log.
+  Before the PostgreSQL upsert, the same transaction executes `PAGE_VIEWS_LOCK_TIMEOUT_SQL`
+  and `PAGE_VIEWS_STATEMENT_TIMEOUT_SQL` to bound lock and statement waits; SQLite skips them.
+  Tests: `test_page_views_runs_after_response`, `test_page_views_transaction_timeouts`.
+  Page reads retain `deps.create_all()`; it or the idempotent migration creates `page_views`,
+  whichever runs first after deployment. Tests: `test_page_views_create_all_before_background`,
+  `test_page_views_migration`. Only day, route and count are stored. Read-only
   `ai-news page-views --days N` prints one JSON object for the last N UTC days including today,
   using `PAGE_VIEWS_DEFAULT_DAYS` by default. Tests: `test_page_views_counts_home_and_daily`,
   `test_page_views_failure_keeps_page`, `test_page_views_stores_no_visitor_data`,
@@ -101,8 +117,9 @@ flowchart LR
   `test_auth_middleware_coverage_is_pinned`, `test_weekly_ai_analytics_api_returns_report_sections_for_last_7_days`
   (legacy API still answers with stored data).
 - `/news-stats` has one header link, "Weekly" (`/weekly`), in place of the two legacy weekly links. No test.
-- `/news-stats` defaults to the 60 days ending yesterday; `date_from` after `date_to` is a 422 (no
-  test for the 422). Tests: `test_news_stats_page_renders_public_shell`.
+- `/news-stats` defaults to the 60 days ending yesterday; `date_from` after `date_to` is a 422,
+  and equal bounds are accepted. Tests: `test_news_stats_page_renders_public_shell`,
+  `test_extracted_stats_preserves_dates`.
 
 **Hidden bulletin preview (018 items 4c, 6a)**
 - Public `GET /bulletin?date=YYYY-MM-DD` reads the stored row through `BulletinRepo`;
@@ -154,6 +171,10 @@ flowchart LR
   Tests: `test_bulletin_page_escapes_stored_text`, `test_bulletin_page_escapes_issue_fields`.
 
 **Placeholders**
+- Digest fields, including quoted article URLs, are HTML-escaped. The renderer's default hides
+  monthly navigation until requested. Tests: `test_digest_renderer_preserves_escaping_and_defaults`.
+- Legacy weekly redirects stay absent from OpenAPI. Tests:
+  `test_legacy_weekly_redirects_stay_hidden_from_openapi`.
 - The server fills `__NAME__` placeholders of a template, never of a static file. Digest:
   `_render_digest` replaces all of them in one pass with `_PLACEHOLDER`, so placeholder names
   inside digest or signals text stay literal. News stats: `_render_news_stats`. Admin and login
@@ -200,8 +221,16 @@ flowchart LR
 - decided 2026-11-06 (agent): add a native GET date form on home alongside previous/next links
   so earlier days are selectable without JavaScript.
 - decided 2026-11-06 (agent): count only 200 GET home/digest requests by UTC day and route;
-  atomic dialect upsert and isolated transaction keep concurrency safe and failures harmless.
+  defer counting with `BackgroundTasks` until after sending the response. Atomic dialect upsert,
+  isolated transaction and PostgreSQL local lock/statement timeouts keep failures harmless
+  without holding up the page; SQLite skips PostgreSQL-only statements.
   The read-only JSON CLI defaults to `PAGE_VIEWS_DEFAULT_DAYS`; no visitor data is collected.
+- decided 2026-11-06 (agent): retain `deps.create_all()` like other pages; it or the idempotent
+  Alembic migration creates `page_views`, whichever runs first after deployment (coordinator).
+- decided 2026-11-06 (agent): override only the home date's schema annotation to preserve the
+  original optional date OpenAPI contract while retaining the switched-on strict 400 parser.
+- decided 2026-11-06 (agent): keep route handlers as thin calls to module-level helpers so the
+  router factory stays below CRAP 10 without changing route names, responses or access rules.
 - Source: `docs/troubleshooting.md`, case `prod-env-var-not-forwarded-by-compose`: forward
   `AINEWS_BULLETIN_HOME_PAGE` explicitly, default false. Channel posting remains phase B.
 - decided 2026-11-05 (agent): show stored reactions and the phrase library's cut-headline
@@ -240,7 +269,8 @@ flowchart LR
 
 - No template, view module or static asset outside the preview itself links to `/bulletin`.
 - Switch off means `/` is byte-identical to `/daily`; bulletin reads make no model or API call.
-- Counter rows contain no visitor data, only day, route and count; failures never change responses.
+- Counter rows contain no visitor data, only day, route and count; work starts after sending the
+  response and failures never change it. PostgreSQL timeouts are local to its counter transaction.
 - What a visitor or an admin sees and does does not depend on whether the code is inline or in a
   file: the asset files hold the former blocks byte for byte, in the original order.
 - Concatenating the admin scripts in tag order gives the former admin script block.
@@ -253,7 +283,7 @@ flowchart LR
 
 | File | Holds |
 | --- | --- |
-| `routes/pages.py` | Page routes, template rendering and placeholders, login/logout, health, collection status; `_bulletin_response` handles the preview lookup, rendering and storage errors |
+| `routes/pages.py` | Thin page routes, module-level response/auth helpers, template rendering and placeholders; `_count_page` is scheduled after successful home/digest responses; `_bulletin_response` handles preview lookup, rendering and storage errors |
 | `bulletin_view.py`, `bulletin.html` | Escaped stored bulletin preview, status pages and adjacent-day links |
 | `../storage/page_views.py` | `PageViewRepo`: atomic increment and read-only day/route totals; table `page_views` in `models_sql.py` |
 | `../storage/migrations/versions/a6b0180c0001_add_page_views.py` | Creates/drops `page_views`, composite day/route primary key |
