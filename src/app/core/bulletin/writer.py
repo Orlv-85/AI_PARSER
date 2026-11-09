@@ -34,7 +34,7 @@ TELEGRAM_SENTENCES_MAX = 2
 STORY_HEADLINE_MAX_WORDS = 14
 STORY_HEADLINE_MIN_WORDS = 2
 GLOSS_MAX_WORDS = 14
-GLOSS_TITLE_RUN_WORDS = 3
+TITLE_RUN_WORDS = 3  # words in a row of a non-English title that mark an echo
 SENTENCE_END = re.compile(r'''[.!?]["')\u2019\u201c\u201d]*\s+(?=[A-Z0-9"'\u2018\u201c\u201e])''')
 ABBREVIATION_END = re.compile(
     r"\b(?:[A-Z]|(?i:Mr|Mrs|Ms|Dr|Prof|Inc|Ltd|Co|Corp|vs|etc|e\.g|i\.e|St|Jr|Sr|No))\.$")
@@ -332,19 +332,25 @@ def _title_is_day_headline(story: Story, bulletin: Bulletin) -> bool:
         and re.fullmatch(re.escape(made[0]) + r"\W+", bulletin.headline))
 
 
-def _clear_non_english_headline(bulletin: Bulletin, stories: list[Story]) -> None:
+def _clear_non_english_headline(bulletin: Bulletin, stories: list[Story],
+                                dropped: list[str]) -> None:
     if bulletin.headline_origin == "title" and any(
             _title_is_day_headline(story, bulletin) for story in stories):
         bulletin.headline, bulletin.headline_cut = None, False
+    elif bulletin.headline_origin == "model" and bulletin.headline and any(
+            _title_run(bulletin.headline, s.title) for s in stories):
+        bulletin.headline, bulletin.headline_cut = None, False
+        bulletin.headline_origin = "title"
+        dropped.append("headline:non_english_title")
 
 
-def _gloss_title_run(gloss: str, title: str) -> bool:
+def _title_run(text: str, title: str) -> bool:
     title_words = TOKEN.findall(fold(title).casefold())
-    gloss_words = TOKEN.findall(fold(gloss).casefold())
-    runs = {tuple(title_words[i:i + GLOSS_TITLE_RUN_WORDS])
-            for i in range(len(title_words) - GLOSS_TITLE_RUN_WORDS + 1)}
-    return any(tuple(gloss_words[i:i + GLOSS_TITLE_RUN_WORDS]) in runs
-               for i in range(len(gloss_words) - GLOSS_TITLE_RUN_WORDS + 1))
+    text_words = TOKEN.findall(fold(text).casefold())
+    runs = {tuple(title_words[i:i + TITLE_RUN_WORDS])
+            for i in range(len(title_words) - TITLE_RUN_WORDS + 1)}
+    return any(tuple(text_words[i:i + TITLE_RUN_WORDS]) in runs
+               for i in range(len(text_words) - TITLE_RUN_WORDS + 1))
 
 
 def _check_non_english_text(bulletin: Bulletin, dropped: list[str]) -> None:
@@ -353,10 +359,13 @@ def _check_non_english_text(bulletin: Bulletin, dropped: list[str]) -> None:
         if not _known_non_english(story):
             continue
         foreign.append(story)
-        if story.gloss and _gloss_title_run(story.gloss, story.title):
+        if story.gloss and _title_run(story.gloss, story.title):
             story.gloss = None
             dropped.append(f"s{number}:gloss:non_english_title")
-    _clear_non_english_headline(bulletin, foreign)
+        if story.headline and _title_run(story.headline, story.title):
+            story.headline = None
+            dropped.append(f"s{number}:headline:non_english_title")
+    _clear_non_english_headline(bulletin, foreign, dropped)
 
 
 def _remove_non_english_stories(bulletin: Bulletin, dropped: list[str]) -> None:

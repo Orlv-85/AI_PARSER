@@ -227,8 +227,36 @@ def test_gloss_echoing_non_english_title_is_dropped(title, gloss):
     ("world", "", "Crosby bietet auf"),
     ("digest", "deu", "Crosby bietet auf")])
 def test_gloss_of_non_english_story_without_title_run_stays(origin, language, gloss):
-    assert writer_module.GLOSS_TITLE_RUN_WORDS == 3
+    assert writer_module.TITLE_RUN_WORDS == 3
     base = language_bulletin(origin=origin, language=language)
     result, _ = run(base=base, mutate=lambda c: c["stories"][0].update(gloss=gloss))
     assert story(result, 0).gloss == gloss
     assert result.summary["dropped"] == []
+
+
+def echo_bulletin():
+    base = language_bulletin()
+    source_map = sources()
+    url = base.key_results[0].links[0]["url"]
+    source_map[url] = replace(source_map[url], title=base.key_results[0].title)
+    return base, source_map
+
+
+def test_story_headline_echoing_non_english_title_is_removed():
+    base, source_map = echo_bulletin()
+    result, _ = run(base=base, source_map=source_map, mutate=lambda c: c["stories"][0].update(
+        headline="Crosby bietet auf Weil Gotshal"))
+    assert all(s.title != "Crosby bietet auf Weil Gotshal"
+               for s in writer_module.all_stories(result.bulletin))
+    assert "s1:headline:non_english_title" in result.summary["dropped"]
+    assert "s1:story:non_english_title" in result.summary["dropped"]
+
+
+def test_model_day_headline_echoing_non_english_title_is_cleared():
+    base, source_map = echo_bulletin()
+    result, _ = run(base=base, source_map=source_map,
+                    mutate=lambda c: c.update(headline="Crosby bietet auf Weil Gotshal heute"))
+    assert result.bulletin.headline is None
+    assert result.bulletin.headline_cut is False
+    assert "headline:non_english_title" in result.summary["dropped"]
+    assert story(result, 0).headline == RESPONSE["stories"][0]["headline"]

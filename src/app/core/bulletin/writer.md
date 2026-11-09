@@ -139,15 +139,19 @@ the safe direction: the story falls back to its title.
 - If the builder's day headline came from any known non-English world title, whether its story
   stays or is removed, it becomes absent (`None`, no cut
   marker), as when no builder title qualifies. A missing headline stays missing; a passing model
-  day headline stays. A removed title that is only a prefix of another story's cut
+  day headline stays unless it repeats a run of `TITLE_RUN_WORDS` words of such a title, then it
+  becomes absent too (`headline:non_english_title`). A removed title that is only a prefix of another story's cut
   headline does not clear that headline. Tests: `test_day_headline_not_from_removed_story`,
   `test_removed_title_prefix_does_not_clear_another_cut_headline`,
-  `test_day_headline_from_kept_non_english_story_is_cleared`.
+  `test_day_headline_from_kept_non_english_story_is_cleared`,
+  `test_model_day_headline_echoing_non_english_title_is_cleared`.
 - After grounding, a known non-English world story's gloss is dropped when it repeats a run of
-  `GLOSS_TITLE_RUN_WORDS` consecutive words from the original story title. Words use the existing
+  `TITLE_RUN_WORDS` consecutive words from the original story title. Words use the existing
   `fold`, case folding and the grounding tokenizer; punctuation separates words. The summary
   records `<sid>:gloss:non_english_title`. This drops only the gloss; a checked headline and
-  Telegram note still keep the story. Shorter or non-consecutive runs stay, and digest stories
+  Telegram note still keep the story. A story headline that repeats such a run is dropped the same
+  way (`<sid>:headline:non_english_title`), so the story is then removed for lack of a headline
+  (`test_story_headline_echoing_non_english_title_is_removed`). Shorter or non-consecutive runs stay, and digest stories
   and world stories of unknown or English language are unchanged. Tests:
   `test_gloss_echoing_non_english_title_is_dropped`,
   `test_gloss_of_non_english_story_without_title_run_stays`.
