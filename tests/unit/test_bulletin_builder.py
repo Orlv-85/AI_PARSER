@@ -21,6 +21,7 @@ from app.core.bulletin.builder import (
     HEADLINE_MAX_WORDS,
     Candidate,
     DayInput,
+    Story,
     build_bulletin,
     day_number,
     make_headline,
@@ -589,12 +590,12 @@ def _add_report(session, day, payload):
 
 def add_world(maker, state="assessed", url="https://news.example/ai-court",
               answered=True, domain="www.news.example", *, title="Court rules on AI evidence",
-              gdelt_file="20261030120000"):
+              gdelt_file="20261030120000", language="eng"):
     with maker() as session:
         digest = canonical_url_hash(url)
         session.add(WorldCandidate(
             url_canonical_hash=digest, url=url, title=title,
-            source_domain=domain, language="eng", first_seen_at=datetime.now(UTC),
+            source_domain=domain, language=language, first_seen_at=datetime.now(UTC),
             gdelt_file=gdelt_file, match_kind="strong", cluster_key="court rules",
             state=state))
         session.flush()
@@ -603,6 +604,33 @@ def add_world(maker, state="assessed", url="https://news.example/ai-court",
                 SimpleNamespace(url_canonical_hash=digest, id=None), answer("limit", 0.95, "Law"),
                 version=WORLD_CHANGE_VERSION, model="m")
         session.commit()
+
+
+@pytest.mark.parametrize("language", ["deu", "zho", "vie", "unknown", "eng", ""])
+def test_world_story_language_reaches_story(maker, language):
+    seed_day(maker)
+    add_world(maker, language=language)
+    with maker() as session:
+        loaded = load_day_input(session, DAY, include_world=True)
+    world = next(c for c in loaded.candidates if c.origin == "world")
+    assert world.language == language
+    built = build_bulletin(loaded, LIB).bulletin
+    assert built.cooperation[0].language == language
+    assert built.as_dict()["cooperation"][0]["language"] == language
+    assert all(s.language == "unknown" for s in built.key_results)
+
+
+def test_story_language_is_the_representatives():
+    built = build([cand(1, origin="world", language="deu", confidence=0.99),
+                   cand(2, origin="world", language="eng", event_key="e1", confidence=0.8)])
+    assert built.key_results[0].language == "deu"
+
+
+def test_old_payload_without_language_reads_unknown():
+    payload = build([cand(1)]).as_dict()["key_results"][0]
+    payload.pop("language", None)
+    old_story = Story(**payload)
+    assert old_story.language == "unknown"
 
 
 @pytest.mark.parametrize(("source_name", "expected_outlet"), [
