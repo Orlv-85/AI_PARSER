@@ -47,6 +47,12 @@ flowchart LR
   `test_median_counts_only_ready_days_before_the_day`, `test_loader_reads_missing_counts_as_zero`.
 
 **Stories**
+- World candidates pass their stored GDELT `language` to `Candidate.language`; `Story.language`
+  is the representative title's language, including in `as_dict`. Digest candidates and old story
+  payloads without the key default to `unknown`. English GDELT rows have no translation field
+  and use `LANGUAGE_UNKNOWN`; translated rows carry codes such as `deu`.
+  Tests: `test_world_story_language_reaches_story`,
+  `test_story_language_is_the_representatives`, `test_old_payload_without_language_reads_unknown`.
 - Digest candidates carry their `article_id`; world candidates keep None. Each story carries
   `article_ids` from all event members in member order, leaving out None values.
   Tests: `test_story_carries_article_ids`, `test_loader_builds_the_day_input`,
@@ -189,6 +195,7 @@ flowchart LR
 | --- | --- |
 | `src/app/core/bulletin/builder.py` | constants, `Candidate`, `DayInput`, `Story`, `Bulletin`, `build_bulletin` |
 | `Candidate.article_id`, `Story.article_ids` | digest article identity through event grouping |
+| `Candidate.language`, `Story.language` | representative title language through world input and payload |
 | `src/app/core/bulletin/phrases.json` | the phrase library (data) |
 | `src/app/core/bulletin/phrases.py` | `load_phrases`, validation and the never-list |
 | `src/app/core/bulletin/render.py` | `render_text` |

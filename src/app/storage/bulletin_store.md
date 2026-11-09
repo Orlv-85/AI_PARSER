@@ -20,9 +20,11 @@ flowchart LR
 
 - One row per day stores status, reason, payload, numbers, versions, UTC generation time and
   nullable Telegram message id. Ready payload is exactly `Bulletin.as_dict()`; skipped payload is
-  empty with its reason. Story payloads include the event's ordered digest `article_ids`.
+  empty with its reason. Story payloads include the event's ordered digest `article_ids` and
+  representative title `language`. Old payloads without `language` read as `unknown` when
+  constructing a `Story`; existing JSON rows are not rewritten.
   Tests: `test_save_and_get_ready_day`, `test_api_bulletin_by_date`,
-  `test_skipped_day_is_stored_with_reason`.
+  `test_skipped_day_is_stored_with_reason`, `test_old_payload_without_language_reads_unknown`.
 - Saving replaces an unposted day. A non-null Telegram message id refuses replacement and logs
   `bulletin_stored` with date, status and refused; refusal is not a CLI error.
   Tests: `test_save_replaces_the_day`, `test_posted_day_is_never_replaced`,

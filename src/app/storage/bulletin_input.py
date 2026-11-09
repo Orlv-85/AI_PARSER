@@ -144,7 +144,7 @@ def _world_candidates(session: Session, day: date) -> list[Candidate]:
             outlet=_outlet(item.source_domain, item.url),
             world_change=answer.world_change, confidence=answer.world_change_confidence,
             area=answer.area, actor=answer.actor, harm=answer.harm_to_people,
-            event_key=f"title:{cluster_key(item.title)}", origin="world"))
+            event_key=f"title:{cluster_key(item.title)}", origin="world", language=item.language))
     return found
 
 

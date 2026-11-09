@@ -102,7 +102,7 @@ def answer(mutate=None):
     return content
 
 
-def run(content=None, *, mutate=None, source_map=None, **kw):
+def run(content=None, *, mutate=None, source_map=None, base=None, **kw):
     """write_bulletin with a fake `ask` returning `content` (default: the fixture answer)."""
     data = envelope(answer(mutate) if content is None else content, **kw)
     calls = []
@@ -110,7 +110,7 @@ def run(content=None, *, mutate=None, source_map=None, **kw):
     def ask(body):
         calls.append(body)
         return data, None
-    result = write_bulletin(bulletin(), source_map or sources(), ask)
+    result = write_bulletin(base or bulletin(), source_map or sources(), ask)
     return result, calls
 
 
@@ -610,7 +610,7 @@ def test_no_stories_no_call():
 # prompt and request
 
 def test_prompt_pins_its_rules():
-    assert WRITER_VERSION == "bulletin-writer-4"
+    assert WRITER_VERSION == "bulletin-writer-5"
     assert writer_module.GLOSS_MAX_WORDS == 14
     assert WRITER_VERSION in WRITER_PROMPT
     for rule in ("untrusted", "no outside knowledge", "at most 8 words",
@@ -620,6 +620,9 @@ def test_prompt_pins_its_rules():
                  "every name and number must stand in the supplied text", "Short quotes",
                  "double quotation marks",
                  "Attribute", "also in headlines", "Keep the qualifiers",
+                 "Attribute each statement to whoever made it in the source",
+                 "comparison, context or judgement", "TechCrunch notes",
+                 "plain fact in the source", "never \"X says\" for words X did not say",
                  "Never write \"the Administration\"", "Never invent a quote",
                  "Never add a fact", "Never present harm", "government", "citizens", "translate",
                  "English", "No URLs"):

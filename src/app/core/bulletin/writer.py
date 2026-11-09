@@ -11,12 +11,18 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, cast
 
-from app.core.bulletin.builder import HEADLINE_MAX_WORDS, HEADLINE_MIN_WORDS, Bulletin, Story
+from app.core.bulletin.builder import (
+    HEADLINE_MAX_WORDS,
+    HEADLINE_MIN_WORDS,
+    Bulletin,
+    Story,
+    make_headline,
+)
 from app.core.bulletin.writer_grounding import fold, sentence_error
 from app.core.daily.provider_requests import DEEPSEEK_MODEL
 from app.core.daily.signals_brief import SUMMARY_MAX, cut, request_body
 
-WRITER_VERSION = "bulletin-writer-4"
+WRITER_VERSION = "bulletin-writer-5"
 WRITER_MODEL = DEEPSEEK_MODEL
 MODEL_NAMES = frozenset({DEEPSEEK_MODEL, "deepseek-v4.1-flash"})  # the answer may name the alias
 # 8 stories of 4 sentences, a Telegram note and a headline are about 2500 tokens.
@@ -62,8 +68,12 @@ WRITER_PROMPT = (
     "act on their own "
     "(\"Edge0 released\"); never imply that a real company, person or government belongs to or "
     "endorses the Administration or us. Never invent a quote and never put words in a real "
-    "person's mouth; report only what the source says they said. Never add a fact: every name and "
-    "number must stand in the supplied text of that story, no guesses about causes or effects, no "
+    "person's mouth; report only what the source says they said. "
+    "Attribute each statement to whoever made it in the source. A comparison, context or judgement "
+    "written by the outlet stays the outlet's (\"TechCrunch notes ...\"), or is stated without a "
+    "speaker only when it is plain fact in the source; never \"X says\" for words X did not say. "
+    "Never add a fact: every name and number must stand in the supplied text of that story, "
+    "no guesses about causes or effects, no "
     "\"the issue is being fixed\" unless the source says so. Never present harm to people, a "
     "failure, an attack or an incident as a success or an achievement; state it plainly. Never use "
     "the words government, citizens, comrade, glory, party, regime, leader, decree, flag, emblem "
@@ -303,18 +313,55 @@ def _summary(model: str, reason: str | None, bulletin: Bulletin, dropped: list[s
             "headline_origin": bulletin.headline_origin, "dropped": dropped}
 
 
+def _needs_english_text(story: Story) -> bool:
+    return (story.origin == "world" and story.language not in {"unknown", "eng", ""}
+            and not (story.headline and story.telegram_note))
+
+
+def _title_is_day_headline(story: Story, bulletin: Bulletin) -> bool:
+    made = make_headline(story.title)
+    if made is None:
+        return False
+    return bulletin.headline == made[0] or bool(
+        made[1] and bulletin.headline_cut and bulletin.headline
+        and re.fullmatch(re.escape(made[0]) + r"\W+", bulletin.headline))
+
+
+def _clear_removed_headline(bulletin: Bulletin, removed: list[Story]) -> None:
+    if bulletin.headline_origin == "title" and any(
+            _title_is_day_headline(story, bulletin) for story in removed):
+        bulletin.headline, bulletin.headline_cut = None, False
+
+
+def _remove_non_english_stories(bulletin: Bulletin, dropped: list[str]) -> None:
+    removed = []
+    for number, story in enumerate(all_stories(bulletin), start=1):
+        if _needs_english_text(story):
+            removed.append(story)
+            dropped.append(f"s{number}:story:non_english_title")
+    bulletin.key_results = [s for s in bulletin.key_results if s not in removed]
+    bulletin.cooperation = [s for s in bulletin.cooperation if s not in removed]
+    if bulletin.rubric_story in removed:
+        bulletin.rubric_story = None
+    if bulletin.incident_story in removed:
+        bulletin.incident_story = None
+    _clear_removed_headline(bulletin, removed)
+
+
 def _fallback(bulletin: Bulletin, model: str, reason: str) -> WriterResult:
     kept = deepcopy(bulletin)
     kept.writer_version, kept.writer_reason = WRITER_VERSION, reason
-    return WriterResult(kept, _summary(model, reason, kept, []))
+    dropped: list[str] = []
+    _remove_non_english_stories(kept, dropped)
+    return WriterResult(kept, _summary(model, reason, kept, dropped))
 
 
 def write_bulletin(bulletin: Bulletin, sources: Mapping[str, SourceText], ask: Ask, *,
                    model: str = WRITER_MODEL) -> WriterResult:
-    """The bulletin with model text where it passes grounding; title-only where it does not.
+    """Model text where grounded; title fallback except for known non-English world titles.
 
     One `ask` call; `ask(body)` returns (provider answer or None, reason). Never raises for a
-    model or journal failure: the builder's bulletin comes back with the reason."""
+    model or journal failure: eligible title-only stories come back with the reason."""
     if not all_stories(bulletin):
         return _fallback(bulletin, model, "no_stories")
     packet = build_packet(bulletin, sources)
@@ -327,5 +374,6 @@ def write_bulletin(bulletin: Bulletin, sources: Mapping[str, SourceText], ask: A
     except WriterInvalid as error:
         return _fallback(bulletin, model, error.code)
     result = _apply(bulletin, headline, texts)
+    _remove_non_english_stories(result, dropped)
     result.writer_version = WRITER_VERSION
     return WriterResult(result, _summary(model, None, result, dropped))

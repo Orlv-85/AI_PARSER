@@ -9,7 +9,8 @@ covers:
 One model call per day retells the stories that the builder selected (`src/app/core/bulletin/builder.md`) in the voice of
 `specs/018-daily-inference/voice.md`: a headline of the day and, per story, a headline, a site note,
 a Telegram note and a gloss. Every sentence is checked against the original texts before it is kept;
-whatever fails falls back to the builder's title-only text. Spec: FR-005, FR-012, User Story 1
+whatever fails falls back to the builder's title-only text, except known non-English world titles,
+whose stories are removed unless checked English text is available. Spec: FR-005, FR-012, User Story 1
 scenario 4, ER-1/2/3/6/8/9/11/12 in `specs/018-daily-inference/spec.md`. Storage is described in
 `src/app/storage/bulletin_store.md`; the daily job is in `daily.md`, no page yet.
 Entry: `ai-news bulletin build --date D
@@ -23,13 +24,16 @@ flowchart LR
   sources --> packet["Packet: stories s1..sN, texts cut to STORY_TEXT_MAX"]
   packet --> call["One DeepSeek call through the writer journal"]
   call --> ok{"Answer usable?"}
-  ok -- no --> fallback["Whole bulletin stays title-only, reason in the summary"]
+  ok -- no --> fallback["Title-only fallback, reason in the summary"]
+  fallback --> language["Remove world stories with known non-English titles lacking checked headline or Telegram note"]
   ok -- yes --> split["Split site and Telegram list items into sentences"]
   split --> check["Per sentence: markup, never-list, quotes, copying, numbers, names"]
   check --> drop["Failing sentence dropped"]
   drop --> story{"Story has sentences left?"}
   story -- no --> title["Story: title with outlet, origin title"]
   story -- yes --> model["Story: model text, origin model"]
+  title --> language
+  model --> language
   check --> headline{"Headline of the day passes?"}
   headline -- no --> builder["Builder's title headline"]
 ```
@@ -52,8 +56,10 @@ flowchart LR
   one sentence per string, and a gloss of at most 12 words. Validation keeps `GLOSS_MAX_WORDS`
   as a margin above the prompt. It asks to attribute a company's claimed result in headlines
   too, and to keep the qualifiers that limit a claim (who or what it applies to, the rollout or
-  trial stage, what a number counts). Changing the text changes the version
-  (`bulletin-writer-4`).
+  trial stage, what a number counts). Attribute each statement to whoever made it in the source;
+  an outlet's comparison, context or judgement stays the outlet's ("TechCrunch notes ..."), or
+  has no speaker only when it is plain fact in the source. Never "X says" for words X did not say.
+  Changing the text changes the version (`bulletin-writer-5`).
   Tests: `test_prompt_pins_its_rules`.
 - The call goes through the provider journal (`PilotJournal`, provider `deepseek`) of the real UTC
   day: one file `data/bulletin/writer/<UTC day>/journal-<WRITER_JOURNAL_VERSION>.sqlite3`, fixed cap
@@ -73,7 +79,7 @@ flowchart LR
 **Failure** (the call never raises into callers)
 - No answer (cap reached, run limit, outage, HTTP error, an unreviewed earlier call), a wrong model,
   a truncated answer (`finish_reason` not `stop`), invalid JSON or a wrong shape: the whole bulletin
-  stays as the builder made it (story `text_origin` `title`), `writer_reason` of the bulletin and
+  stays title-only except for the non-English world-story removal below; `writer_reason` of the bulletin and
   `reason` of the summary say why. Tests: `test_unavailable_model_falls_back_to_titles`,
   `test_invalid_answers_fall_back`, `test_transport_outage_falls_back`.
 
@@ -120,6 +126,21 @@ drops the sentence. A first word that is a name and also a starter is not checke
 the safe direction: the story falls back to its title.
 
 **Result**
+- A world story carries its representative title's `language`. When it is not `unknown`, `eng`
+  or empty, the whole story is removed after the checks unless both a model headline and at
+  least one Telegram sentence passed. This applies to Key results, rubric, Cooperation and
+  the incident story, including a wholly title-only fallback after a failed call. Digest stories
+  are unchanged. The summary's `dropped` includes `<sid>:story:non_english_title` in original
+  story order; `incidents` is unchanged. Tests: `test_non_english_story_without_headline_is_removed`,
+  `test_non_english_story_without_telegram_is_removed`,
+  `test_non_english_story_with_model_text_stays`,
+  `test_unknown_or_english_language_story_falls_back_to_title`,
+  `test_title_only_bulletin_removes_non_english_stories`, `test_removed_story_is_in_dropped`.
+- If the builder's day headline came from a removed title, it becomes absent (`None`, no cut
+  marker), as when no builder title qualifies. A missing headline stays missing; a passing model
+  day headline stays. A removed title that is only a prefix of another story's cut
+  headline does not clear that headline. Tests: `test_day_headline_not_from_removed_story`,
+  `test_removed_title_prefix_does_not_clear_another_cut_headline`.
 - Each string in a `site` or `telegram` list is split before word-count and grounding checks.
   A boundary is `.`, `!` or `?`, optionally followed by closing quotes or parentheses, then
   whitespace and an uppercase letter, digit or opening quote. Numbers, single capital initials
@@ -142,11 +163,13 @@ the safe direction: the story falls back to its title.
   `over_limit`. There is no minimum. A story keeps model text when at least one
   site or Telegram sentence passed (`text_origin` `model`); the Telegram note falls back to the
   title when only the site note passed, and the other way round for the site. A failing story
-  headline or gloss is dropped alone. Tests: `test_story_without_sentences_falls_back_to_title`,
+  headline or gloss is dropped alone, subject to the world-title rule above.
+  Tests: `test_story_without_sentences_falls_back_to_title`,
   `test_sentence_caps`, `test_cap_applies_after_split`,
   `test_bad_story_headline_and_gloss_are_dropped_alone`.
 - The headline of the day: at most `HEADLINE_MAX_WORDS` words (at least `HEADLINE_MIN_WORDS`),
-  capitals, no cut marker; a failing one keeps the builder's headline (`headline_origin` `title`).
+  capitals, no cut marker; a failing one keeps the builder's headline (`headline_origin` `title`),
+  unless its source story is removed.
   Tests: `test_bad_headline_of_the_day_falls_back`.
 - Fixed text is untouched: opening, numbers line, rubric name, reactions, closing. `render_text`
   shows the Telegram note instead of the title where a story has one (the reaction follows the note);
@@ -168,6 +191,12 @@ the safe direction: the story falls back to its title.
 
 ## Decisions
 
+- decided 2026-11-09 (agent): drop rather than translate a non-English title: a translation would
+  be unchecked model text.
+- GDELT English rows have no language: `parse_gkg_line` uses `LANGUAGE_UNKNOWN` when the English
+  feed has no translation field; translated rows retain their language code.
+- decided 2026-11-09 (owner yes): preserve the actual speaker of each source statement (F1);
+  attribution of an outlet's comparison to a company remains a prompt rule, not a semantic check.
 - decided 2026-11-03 (agent): split list items in code so a paragraph-shaped answer keeps its
   grounded sentences; apply the existing caps and numbered drops after splitting, in order.
 - decided 2026-11-03 (agent): use a small pure punctuation splitter with initials and common
@@ -220,14 +249,15 @@ the safe direction: the story falls back to its title.
 - One request per bulletin build; none for a skipped day, an empty bulletin or without `--write`.
 - Never more than `WRITER_MAX_USD_PER_DAY` committed per real UTC day.
 - No model sentence in a bulletin that did not pass every check of Grounding.
-- A failure of the model or the journal returns a complete title-only bulletin, never an exception.
-- The builder's fixed phrases, links, sections and counts are unchanged by the writer.
+- A failure of the model or the journal returns title-only eligible stories, never an exception.
+- Fixed phrases and counts are unchanged; retained stories keep their links and section order.
 
 ## Code map
 
 | Where | What |
 | --- | --- |
 | `src/app/core/bulletin/writer.py` | constants, `WRITER_PROMPT`, `SourceText`, packet, `split_sentences`, `parse_writer`, `write_bulletin` |
+| `_remove_non_english_stories`, `_clear_removed_headline` | post-check story removal and title day-headline cleanup, including fallback |
 | `src/app/core/bulletin/writer_grounding.py` | folding, `sentence_error`: the checks of Grounding |
 | `src/app/core/bulletin/writer_run.py` | `open_writer`: writer journal, client, `ask` |
 | `src/app/storage/bulletin_texts.py` | `load_sources`: archive text, summary and title per link |
@@ -242,3 +272,5 @@ Versions: `WRITER_VERSION` (prompt and checks), `WRITER_JOURNAL_VERSION` (journa
 
 `tests/unit/test_bulletin_writer.py` on the fixtures in `tests/fixtures/bulletin_writer/` (a
 hand-written day: source texts and one model answer, marked as fixture, not a recording).
+`tests/unit/test_bulletin_writer_language.py`: known non-English title eligibility and fallbacks,
+using the same fake source texts and answer.
