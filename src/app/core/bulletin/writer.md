@@ -136,11 +136,21 @@ the safe direction: the story falls back to its title.
   `test_non_english_story_with_model_text_stays`,
   `test_unknown_or_english_language_story_falls_back_to_title`,
   `test_title_only_bulletin_removes_non_english_stories`, `test_removed_story_is_in_dropped`.
-- If the builder's day headline came from a removed title, it becomes absent (`None`, no cut
+- If the builder's day headline came from any known non-English world title, whether its story
+  stays or is removed, it becomes absent (`None`, no cut
   marker), as when no builder title qualifies. A missing headline stays missing; a passing model
   day headline stays. A removed title that is only a prefix of another story's cut
   headline does not clear that headline. Tests: `test_day_headline_not_from_removed_story`,
-  `test_removed_title_prefix_does_not_clear_another_cut_headline`.
+  `test_removed_title_prefix_does_not_clear_another_cut_headline`,
+  `test_day_headline_from_kept_non_english_story_is_cleared`.
+- After grounding, a known non-English world story's gloss is dropped when it repeats a run of
+  `GLOSS_TITLE_RUN_WORDS` consecutive words from the original story title. Words use the existing
+  `fold`, case folding and the grounding tokenizer; punctuation separates words. The summary
+  records `<sid>:gloss:non_english_title`. This drops only the gloss; a checked headline and
+  Telegram note still keep the story. Shorter or non-consecutive runs stay, and digest stories
+  and world stories of unknown or English language are unchanged. Tests:
+  `test_gloss_echoing_non_english_title_is_dropped`,
+  `test_gloss_of_non_english_story_without_title_run_stays`.
 - Each string in a `site` or `telegram` list is split before word-count and grounding checks.
   A boundary is `.`, `!` or `?`, optionally followed by closing quotes or parentheses, then
   whitespace and an uppercase letter, digit or opening quote. Numbers, single capital initials
@@ -169,7 +179,7 @@ the safe direction: the story falls back to its title.
   `test_bad_story_headline_and_gloss_are_dropped_alone`.
 - The headline of the day: at most `HEADLINE_MAX_WORDS` words (at least `HEADLINE_MIN_WORDS`),
   capitals, no cut marker; a failing one keeps the builder's headline (`headline_origin` `title`),
-  unless its source story is removed.
+  unless it comes from a known non-English world title.
   Tests: `test_bad_headline_of_the_day_falls_back`.
 - Fixed text is untouched: opening, numbers line, rubric name, reactions, closing. `render_text`
   shows the Telegram note instead of the title where a story has one (the reaction follows the note);
@@ -257,7 +267,7 @@ the safe direction: the story falls back to its title.
 | Where | What |
 | --- | --- |
 | `src/app/core/bulletin/writer.py` | constants, `WRITER_PROMPT`, `SourceText`, packet, `split_sentences`, `parse_writer`, `write_bulletin` |
-| `_remove_non_english_stories`, `_clear_removed_headline` | post-check story removal and title day-headline cleanup, including fallback |
+| `_remove_non_english_stories`, `_check_non_english_text`, `_clear_non_english_headline` | post-check foreign-title story eligibility, gloss and day-headline cleanup, including fallback |
 | `src/app/core/bulletin/writer_grounding.py` | folding, `sentence_error`: the checks of Grounding |
 | `src/app/core/bulletin/writer_run.py` | `open_writer`: writer journal, client, `ask` |
 | `src/app/storage/bulletin_texts.py` | `load_sources`: archive text, summary and title per link |

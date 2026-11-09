@@ -18,7 +18,7 @@ from app.core.bulletin.builder import (
     Story,
     make_headline,
 )
-from app.core.bulletin.writer_grounding import fold, sentence_error
+from app.core.bulletin.writer_grounding import TOKEN, fold, sentence_error
 from app.core.daily.provider_requests import DEEPSEEK_MODEL
 from app.core.daily.signals_brief import SUMMARY_MAX, cut, request_body
 
@@ -34,6 +34,7 @@ TELEGRAM_SENTENCES_MAX = 2
 STORY_HEADLINE_MAX_WORDS = 14
 STORY_HEADLINE_MIN_WORDS = 2
 GLOSS_MAX_WORDS = 14
+GLOSS_TITLE_RUN_WORDS = 3
 SENTENCE_END = re.compile(r'''[.!?]["')\u2019\u201c\u201d]*\s+(?=[A-Z0-9"'\u2018\u201c\u201e])''')
 ABBREVIATION_END = re.compile(
     r"\b(?:[A-Z]|(?i:Mr|Mrs|Ms|Dr|Prof|Inc|Ltd|Co|Corp|vs|etc|e\.g|i\.e|St|Jr|Sr|No))\.$")
@@ -313,8 +314,12 @@ def _summary(model: str, reason: str | None, bulletin: Bulletin, dropped: list[s
             "headline_origin": bulletin.headline_origin, "dropped": dropped}
 
 
+def _known_non_english(story: Story) -> bool:
+    return story.origin == "world" and story.language not in {"unknown", "eng", ""}
+
+
 def _needs_english_text(story: Story) -> bool:
-    return (story.origin == "world" and story.language not in {"unknown", "eng", ""}
+    return (_known_non_english(story)
             and not (story.headline and story.telegram_note))
 
 
@@ -327,13 +332,35 @@ def _title_is_day_headline(story: Story, bulletin: Bulletin) -> bool:
         and re.fullmatch(re.escape(made[0]) + r"\W+", bulletin.headline))
 
 
-def _clear_removed_headline(bulletin: Bulletin, removed: list[Story]) -> None:
+def _clear_non_english_headline(bulletin: Bulletin, stories: list[Story]) -> None:
     if bulletin.headline_origin == "title" and any(
-            _title_is_day_headline(story, bulletin) for story in removed):
+            _title_is_day_headline(story, bulletin) for story in stories):
         bulletin.headline, bulletin.headline_cut = None, False
 
 
+def _gloss_title_run(gloss: str, title: str) -> bool:
+    title_words = TOKEN.findall(fold(title).casefold())
+    gloss_words = TOKEN.findall(fold(gloss).casefold())
+    runs = {tuple(title_words[i:i + GLOSS_TITLE_RUN_WORDS])
+            for i in range(len(title_words) - GLOSS_TITLE_RUN_WORDS + 1)}
+    return any(tuple(gloss_words[i:i + GLOSS_TITLE_RUN_WORDS]) in runs
+               for i in range(len(gloss_words) - GLOSS_TITLE_RUN_WORDS + 1))
+
+
+def _check_non_english_text(bulletin: Bulletin, dropped: list[str]) -> None:
+    foreign = []
+    for number, story in enumerate(all_stories(bulletin), start=1):
+        if not _known_non_english(story):
+            continue
+        foreign.append(story)
+        if story.gloss and _gloss_title_run(story.gloss, story.title):
+            story.gloss = None
+            dropped.append(f"s{number}:gloss:non_english_title")
+    _clear_non_english_headline(bulletin, foreign)
+
+
 def _remove_non_english_stories(bulletin: Bulletin, dropped: list[str]) -> None:
+    _check_non_english_text(bulletin, dropped)
     removed = []
     for number, story in enumerate(all_stories(bulletin), start=1):
         if _needs_english_text(story):
@@ -345,7 +372,6 @@ def _remove_non_english_stories(bulletin: Bulletin, dropped: list[str]) -> None:
         bulletin.rubric_story = None
     if bulletin.incident_story in removed:
         bulletin.incident_story = None
-    _clear_removed_headline(bulletin, removed)
 
 
 def _fallback(bulletin: Bulletin, model: str, reason: str) -> WriterResult:

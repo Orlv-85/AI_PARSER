@@ -202,3 +202,112 @@ the failed feature test and affected mutation sites were rerun instead. The
 correction does not change the helper's control flow or complexity; its final
 behavior is covered by the scoped tests and all ten killed helper mutations.
 The CRAP and duplication snapshots therefore precede that final expression edit.
+
+## Review fixes
+
+Follow-up task: `prompt-writer-f9-f1-fixes-codex-2026-11-09.md`, after the
+coordinator committed the original work for PR #219. No commit, push, gh command,
+network, paid call or sub-agent was used in this follow-up.
+
+### Fixes and test-first evidence
+
+`writer.md` was updated first, then the three requested test functions were added
+and run before source changes: **17 failed, 34 deselected, 1 warning**.
+
+- **Day headline from a kept foreign story:**
+  `test_day_headline_from_kept_non_english_story_is_cleared` (two cases) first
+  failed because the German title remained in the day headline, both whole and
+  clause-cut, even though the model day headline failed. Cleanup now considers
+  every known non-English world story before any story removal. It clears only
+  title-origin day headlines, setting `headline=None` and `headline_cut=False`.
+  A passing model story headline and Telegram note still keep the story.
+- **Foreign title echoed in a gloss:**
+  `test_gloss_echoing_non_english_title_is_dropped` (six cases) first failed
+  because each three-word copy stayed as the gloss. After the existing grounding
+  checks, `GLOSS_TITLE_RUN_WORDS` sets the consecutive-word threshold. A match
+  against the original story title drops only the gloss and appends
+  `<sid>:gloss:non_english_title`; it does not remove an otherwise eligible story.
+  Cases cover a title's beginning, middle and end, case/punctuation, accent
+  folding and a copied run inside a longer gloss.
+- **Positive boundaries and compatibility:**
+  `test_gloss_of_non_english_story_without_title_run_stays` (nine cases) first
+  failed on the missing `GLOSS_TITLE_RUN_WORDS` constant; the previous code already
+  kept these glosses. The test pins the required threshold of 3 and verifies
+  two-word runs, non-consecutive words, whole-word boundaries, unrelated English
+  glosses, an absent gloss, and the unknown/English/digest exemptions.
+
+Decision settled from the existing grounding code: use its `TOKEN` word regex,
+`fold` normalization and case folding for title/gloss comparisons. No translation,
+new provider call or prompt change is involved; `WRITER_VERSION` stays
+`bulletin-writer-5` for these review corrections.
+
+Files changed in the follow-up: `src/app/core/bulletin/writer.md`,
+`src/app/core/bulletin/writer.py`, `tests/unit/test_bulletin_writer_language.py`,
+and this report.
+
+Scoped validation before the final checks: **169 passed, 1 warning** across the
+writer and writer-language tests; Ruff on the changed source/test files passed.
+
+### Review-fix validation
+
+Logs use the `review-` prefix under `target/writer-f9-f1/`; pytest always has
+`PYTHONPATH=src`, with the main repository venv on PATH, `PIP_NO_INDEX=1` and
+`PYTHONDONTWRITEBYTECODE=1`.
+
+1. Full suite, `/Users/vyacheslavorlovskiy/GitHub/AI_PARSER/.venv/bin/pytest -q -o addopts=`:
+   **2494 passed, 3 skipped, 6 warnings**, 149.17 seconds, exit 0. PostgreSQL
+   integration tests are skipped because `AINEWS_TEST_POSTGRES_URL` is unset.
+   Warnings are the existing Starlette httpx and SQLite date-adapter deprecations.
+
+2. `make lint PYTHON=/Users/vyacheslavorlovskiy/GitHub/AI_PARSER/.venv/bin/python`:
+   exit 0. Ruff passed; mypy reported no issues in **280 source files**; Pylint
+   rated **10.00/10**. No lint correction or rerun was needed.
+3. `python scripts/check_code_docs.py` (without `--diff`): **15 checked, ok**,
+   exit 0.
+
+4. Crapper on `writer.py`: exit 0, **maximum CRAP 7.0**; all writer functions
+   have 100% measured coverage. Review helpers: `_known_non_english` 2.0,
+   `_needs_english_text` 3.0, `_clear_non_english_headline` 3.0,
+   `_gloss_title_run` 1.0 and `_check_non_english_text` 5.0. Story removal
+   remains 7.0. To avoid another full-suite run, `--coverage-command` collected
+   LCOV from the two writer feature files: **169 passed, 3 warnings**, 3.61
+   seconds. Report: `target/coverage/python/lcov.info`; metrics: `.metrics/crap.edn`.
+5. Dryer `--threshold 0.8` on `writer.py`: exit 0, **no duplicate candidates**.
+   Metrics: `.metrics/dry.edn`.
+
+6. Mutator on `writer.py`, using the two writer feature files, fresh LCOV,
+   `--mutate-all --use-existing-coverage --max-workers 4`: initial complete run
+   **76 killed, 2 survived, 5 uncovered, 83 sites**, exit 3. `--mutate-all`
+   prevents earlier task snapshots from replacing this review's complete sweep.
+
+   Three new sites on the multiline title-window bound (`writer.py:345`) were
+   excluded by the known LCOV statement-anchor issue. Per the existing
+   `mutator-lcov-multiline-sites-uncovered` troubleshooting case, only that line
+   was rerun with `--no-coverage --lines 345`, using the same feature tests:
+   **2 killed, 1 equivalent survivor**. No test or source correction was needed.
+
+   Combined evidence for all 83 sites: **78 killed, 3 equivalent survivors,
+   2 unchanged sites not executed** (96.3% of executed mutations killed).
+   The scoped rerun's printed table says 0 uncovered because coverage filtering
+   was disabled, but the two unselected old sites were not executed; they remain
+   excluded from the combined killed/survived counts here.
+
+   | Survivor | Reason equivalent |
+   | --- | --- |
+   | `writer.py:151`, `strict=True` becomes `False` in `zip` | `found` is built from the same `links`, so both sequences always have equal length. This survivor predates the review fixes. |
+   | `writer.py:345`, title-window bound `len(title_words) - GLOSS_TITLE_RUN_WORDS + 1` changes its subtraction to addition | Extra title windows have fewer than three words, while every gloss window has exactly three. The added partial or empty tuples cannot match. |
+   | `writer.py:347`, gloss-window bound `len(gloss_words) - GLOSS_TITLE_RUN_WORDS + 1` changes its subtraction to addition | Extra gloss windows have fewer than three words, while every title window has exactly three. The added partial or empty tuples cannot match. |
+
+   The remaining two unchanged, unexecuted sites are `writer.py:200` (the
+   multiline signature's `copy=False` default) and `writer.py:260` (a multiline
+   `copy=True` argument). Both were already coverage-filtered before this review.
+   All new mutation sites were executed. The gloss matcher has **6 killed,
+   2 equivalent survivors**; shared language, eligibility, text-check and
+   headline-cleanup helpers have no survivors. No non-equivalent survivor
+   remains in those helpers. The tool exits 3 because it counts equivalent
+   survivors too; this is not an all-green mutation result.
+
+Final `git diff --check` passed. No broad check was repeated; the only follow-up
+was the mutation tool on the three new coverage-filtered sites. All source and
+test changes were present for the successful full suite and lint run. No live
+model evaluation or PostgreSQL integration run was performed.

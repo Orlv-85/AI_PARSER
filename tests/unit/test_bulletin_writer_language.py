@@ -1,5 +1,6 @@
 """Known non-English world-title fallbacks (spec 018, F9); all model calls are fake."""
 from copy import deepcopy
+from dataclasses import replace
 
 import pytest
 from test_bulletin_writer import (  # pylint: disable=import-error
@@ -9,6 +10,7 @@ from test_bulletin_writer import (  # pylint: disable=import-error
     bulletin,
     flat,
     run,
+    sources,
     story,
 )
 
@@ -172,3 +174,61 @@ def test_removed_title_prefix_does_not_clear_another_cut_headline(removed_title,
     assert result.bulletin.headline == base.headline
     assert result.bulletin.headline_cut is True
     assert len(result.bulletin.key_results) == 2
+
+
+@pytest.mark.parametrize("title", [
+    "Crosby bietet auf Weil Gotshal",
+    "Crosby bietet auf Weil Gotshal: die Kanzlei will weiter wachsen"])
+def test_day_headline_from_kept_non_english_story_is_cleared(title):
+    base = language_bulletin()
+    base.key_results[0].title = title
+    headline, cut = make_headline(title)
+    base.headline, base.headline_cut = headline + (LIB["cut"]["marker"] if cut else ""), cut
+    result, _ = run(base=base, mutate=lambda c: c.update(headline="Anthropic invented everything"))
+    assert result.bulletin.headline is None
+    assert result.bulletin.headline_cut is False
+    assert result.bulletin.headline_origin == "title"
+    assert story(result, 0).headline == RESPONSE["stories"][0]["headline"]
+    assert story(result, 0).telegram_note == RESPONSE["stories"][0]["telegram"]
+    assert result.summary["dropped"] == ["headline:unsupported_name"]
+    assert base.headline == headline + (LIB["cut"]["marker"] if cut else "")
+
+
+@pytest.mark.parametrize(("title", "gloss"), [
+    ("Crosby bietet auf Weil Gotshal", "Crosby bietet auf"),
+    ("Crosby bietet auf Weil Gotshal", "bietet auf Weil"),
+    ("Crosby bietet auf Weil Gotshal", "auf Weil Gotshal"),
+    ("Crosby bietet auf Weil Gotshal", "CROSBY, BIETET AUF"),
+    ("Crosby bietet auf die Z\u00fcrcher Kanzlei", "auf die zurcher"),
+    ("Crosby bietet auf Weil Gotshal", "The report nennt bietet auf Weil")])
+def test_gloss_echoing_non_english_title_is_dropped(title, gloss):
+    base = language_bulletin()
+    base.key_results[0].title = title
+    source_map = sources()
+    url = base.key_results[0].links[0]["url"]
+    source_map[url] = replace(source_map[url], title=title)
+    result, _ = run(base=base, source_map=source_map,
+                    mutate=lambda c: c["stories"][0].update(gloss=gloss))
+    assert story(result, 0).gloss is None
+    assert story(result, 0).headline == RESPONSE["stories"][0]["headline"]
+    assert story(result, 0).telegram_note == RESPONSE["stories"][0]["telegram"]
+    assert story(result, 0).text_origin == "model"
+    assert result.summary["dropped"] == ["s1:gloss:non_english_title"]
+
+
+@pytest.mark.parametrize(("origin", "language", "gloss"), [
+    ("world", "deu", "bietet auf"),
+    ("world", "deu", "bietet neue auf"),
+    ("world", "deu", "bietet auftrag weil"),
+    ("world", "deu", "Weil Gotshal, a famed Wall Street firm"),
+    ("world", "deu", None),
+    ("world", "unknown", "Crosby bietet auf"),
+    ("world", "eng", "Crosby bietet auf"),
+    ("world", "", "Crosby bietet auf"),
+    ("digest", "deu", "Crosby bietet auf")])
+def test_gloss_of_non_english_story_without_title_run_stays(origin, language, gloss):
+    assert writer_module.GLOSS_TITLE_RUN_WORDS == 3
+    base = language_bulletin(origin=origin, language=language)
+    result, _ = run(base=base, mutate=lambda c: c["stories"][0].update(gloss=gloss))
+    assert story(result, 0).gloss == gloss
+    assert result.summary["dropped"] == []
