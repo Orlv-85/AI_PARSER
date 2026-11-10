@@ -137,9 +137,12 @@ The numbers live in the code: fields of `PeriodThresholds` (by kind) in `period_
   `test_upgrade_after_create_all_keeps_existing_tables`, `test_single_head_and_chain`.
 - A period is stored only when its `payload_hash` differs from the stored one; the second run
   writes nothing. Tests: `test_second_run_writes_nothing`, `test_changed_input_rewrites_only_that_period`.
+- The run reconciles with the stored entity overrides, so an override added after a run changes
+  the next run's reports. Tests: `test_period_run_applies_entity_overrides`.
 - The input of a period is its days plus the days before it (a week: 7, the helper path needs 14
   days; a month: the whole previous month for the month risers), the
-  stored daily snapshots, per-day coverage, the evidence (reconciled in memory, nothing persisted)
+  stored daily snapshots, per-day coverage, the evidence (reconciled in memory by the run, once per
+  run, nothing persisted; the repository only reads and takes the reconciliation as an argument)
   and the stored previous period (status, publishers, event stories). An unreadable previous row
   counts as no previous period; an unreadable daily snapshot counts as no snapshot. Tests:
   `test_run_round_trip_stores_oldest_first_and_links_the_previous_week`,

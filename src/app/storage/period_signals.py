@@ -14,7 +14,7 @@ from sqlalchemy import Row, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.daily.signals_entities import Reconciliation, reconcile
+from app.core.daily.signals_entities import Reconciliation
 from app.core.daily.signals_extract import EXTRACTION_VERSION
 from app.core.daily.signals_model import DayCoverage
 from app.core.periodic.period_model import (
@@ -62,13 +62,12 @@ class PeriodSignalRepo:
                                      publisher_overrides=publisher_overrides)
 
     # Input --------------------------------------------------------------------------------------
-    def context(self) -> PeriodContext:
-        """Reconcile the stored evidence in memory (nothing is persisted) and read coverage."""
-        evidence, rows = self.daily.load_evidence()
-        result = reconcile(evidence, self.daily.overrides())
+    def context(self, result: Reconciliation,
+                evidence: Mapping[int, SignalMention]) -> PeriodContext:
+        """Run-wide reads around a reconciliation the caller made: coverage and entity ids."""
         ids: dict[str, int] = dict(self.session.execute(  # type: ignore[arg-type]
             select(AIEntity.entity_key, AIEntity.id)).all())
-        return PeriodContext(result=result, evidence=rows, coverage=self.daily.coverage(),
+        return PeriodContext(result=result, evidence=evidence, coverage=self.daily.coverage(),
                              entity_ids=ids)
 
     def snapshots(self, days: list[date]) -> dict[date, dict[str, Any]]:
@@ -111,11 +110,10 @@ class PeriodSignalRepo:
             return days
         return [first_day - timedelta(days=i) for i in range(LOOKBACK_DAYS, 0, -1)]
 
-    def load_input(self, kind: str, start: date, *, ctx: PeriodContext | None = None,
+    def load_input(self, kind: str, start: date, *, ctx: PeriodContext,
                    generated_at: datetime | None = None) -> PeriodInput:
         """Input of one period: its days plus the 7 days before (helper path), the stored
         snapshots, coverage, evidence and the stored previous period."""
-        ctx = ctx or self.context()
         probe = PeriodInput(kind=kind, start=start, snapshots={}, coverage={}, observations={},
                             entities={}, entity_ids={}, extraction_version=EXTRACTION_VERSION,
                             generated_at=generated_at or _now(),

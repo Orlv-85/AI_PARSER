@@ -30,6 +30,10 @@ Imports go one way: `cli/`, `web/` -> `usecases/` -> `storage/` -> `core/` (spec
   import `cli/` or `web/`. Tests: `test_use_cases_import_no_entry_point`.
 - `storage/` may import `core/` types and constants it stores; it does not import `usecases/`,
   `cli/` or `web/`. Tests: `test_storage_imports_no_upper_layer`.
+- `storage/` does not import the calculating functions of `core/` named in
+  `tests/unit/test_layer_imports.py`; the use case calls them. Two files are listed there as
+  exceptions and that list only shrinks (spec 019, T010, T012). Tests:
+  `test_storage_imports_calculations_only_in_listed_files`.
 - The import scan sees imports inside functions and modules loaded by a literal name; relative
   imports are not used. Tests: `test_imports_package_sees_every_import_form`,
   `test_app_has_no_relative_imports`.
