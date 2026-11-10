@@ -41,9 +41,6 @@ class _ArticleRepo:
         _ = older_than_days
         return 7
 
-    def prune_older_than(self, *, older_than_days: int) -> tuple[int, int]:
-        _ = older_than_days
-        return (7, 2)
 
 
 def test_main_callback_noop() -> None:
@@ -163,12 +160,14 @@ def test_prune_command_dry_run_and_apply(monkeypatch) -> None:
     monkeypatch.setattr(cli_main, "create_all", lambda: None)
     monkeypatch.setattr(cli_main, "SessionLocal", _SessionCM)
     monkeypatch.setattr(cli_main, "ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr(cli_main, "prune_articles", lambda _session, *, older_than_days: (7, 2))
 
     cli_main.prune(older_than_days=100, dry_run=True)
     cli_main.prune(older_than_days=100, dry_run=False)
 
     assert "prune dry-run:" in emitted[0]
     assert "prune complete:" in emitted[1]
+    assert "deleted_articles=7 deleted_aliases=2" in emitted[1]
     assert len(commits) == 1
 
 

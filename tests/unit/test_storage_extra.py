@@ -2,13 +2,14 @@
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
-from sqlalchemy import create_engine
+import pytest
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 
 from app.config.sources import SourceConfig
 from app.storage import db
 from app.storage.article_repo import ArticleRepo
-from app.storage.models_sql import ArticleAlias, Base, Source
+from app.storage.models_sql import Article, ArticleAlias, Base, Source
 from app.storage.source_repo import SourceRepo
 
 
@@ -474,6 +475,29 @@ def test_article_repo_batch_fallback_and_empty_hashes() -> None:
     assert insert_calls[1]["ai_relevance_score"] == 0.9
 
 
+def test_prune_older_than_calls_archive_before_delete() -> None:
+    session = _session()
+    repo = ArticleRepo(session)
+    now = datetime.now(UTC)
+    for name, age in (("old", 200), ("recent", 5)):
+        repo.insert_article(
+            source_id=None, title=name, url=f"https://example.com/{name}",
+            url_canonical=f"https://example.com/{name}", url_canonical_hash=name,
+            published_at=now - timedelta(days=age))
+    session.commit()
+    seen: list[tuple[list[str], int]] = []
+
+    def archive(rows) -> None:
+        # Both articles are still stored when the archive function runs.
+        stored = session.scalar(select(func.count()).select_from(Article))
+        seen.append(([row.title for row in rows], stored))
+
+    assert repo.prune_older_than(older_than_days=100, archive=archive) == (1, 0)
+    assert seen == [(["old"], 2)]
+    with pytest.raises(TypeError):
+        repo.prune_older_than(older_than_days=100)  # pylint: disable=missing-kwoa
+
+
 def test_prune_older_than_and_count() -> None:
     session = _session()
     source_repo = SourceRepo(session)
@@ -514,7 +538,8 @@ def test_prune_older_than_and_count() -> None:
     session.commit()
 
     assert article_repo.count_older_than(older_than_days=100) == 1
-    deleted_articles, deleted_aliases = article_repo.prune_older_than(older_than_days=100)
+    deleted_articles, deleted_aliases = article_repo.prune_older_than(
+        older_than_days=100, archive=lambda rows: None)
     session.commit()
 
     assert deleted_articles == 1

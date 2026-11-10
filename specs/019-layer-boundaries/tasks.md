@@ -38,8 +38,10 @@ or the feature doc first, then the failing test, then the code; full gate before
 
 ## Phase 4: Calculations out of repositories (US2) - one PR per task
 
-- [ ] T009 `ArticleRepo.prune_older_than`: archive step moves to a use case; same transaction, same
-  order; local import removed.
+- [x] T009 `ArticleRepo.prune_older_than` takes a required `archive` function and calls it before
+  the deletes; the use case `prune_articles` (`usecases/archive/capture.py`) passes
+  `archive_articles`. Same transaction, same order; local import removed; `storage/` imports no
+  `usecases/`.
 - [ ] T010 `storage/daily_signals.py`: `reconcile`, `digest_title`, `digest_summary` calls move to
   the use case.
 - [ ] T011 `storage/period_signals.py`: `reconcile` call moves to the use case.

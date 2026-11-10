@@ -26,6 +26,7 @@ from app.storage.article_evidence_cache import (
     make_http_client,
     url_key,
 )
+from app.storage.article_repo import ArticleRepo
 from app.storage.models_sql import ArchiveDocument, Article, Source
 
 ARCHIVE_MIN_TEXT_CHARS = 300
@@ -84,6 +85,15 @@ def archive_articles(session: Session, articles: Iterable[Article],
                 extraction_version=ARTICLE_CONTENT_VERSION):
             added += 1
     return len(rows), added
+
+
+def prune_articles(session: Session, *, older_than_days: int) -> tuple[int, int]:
+    """Archive, then delete, the articles past the cutoff; no commit (the caller owns it).
+
+    Returns (deleted articles, deleted aliases)."""
+    deleted: tuple[int, int] = ArticleRepo(session).prune_older_than(
+        older_than_days=older_than_days, archive=lambda rows: archive_articles(session, rows))
+    return deleted
 
 
 def _coverage(states: list[tuple[datetime, str]]) -> tuple[int, int, float | None]:

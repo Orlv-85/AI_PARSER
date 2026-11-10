@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from app.core.canonicalize import canonical_url_hash
 from app.core.daily.signals_extract import ExtractedEntity, Extraction
 from app.storage import daily_signals as module
-from app.storage.article_repo import ArticleRepo
 from app.storage.daily_signals import DailySignalRepo, OverrideConflict
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import (
@@ -23,6 +22,7 @@ from app.storage.models_sql import (
     NewsDigestItem,
     SignalMention,
 )
+from app.usecases.archive.capture import prune_articles
 
 COMPARABLE_FROM = date(2026, 10, 10)
 D = date(2026, 10, 16)
@@ -309,7 +309,7 @@ def test_prune_keeps_evidence_and_first_seen_then_purge(session, repo):
     repo.save_extraction(new, extraction(model("Atlas", new=True)), content_hash="h")
     repo.recompute_reports(D, now=NOW)
     old_id = old.id
-    deleted, _ = ArticleRepo(session).prune_older_than(older_than_days=365)
+    deleted, _ = prune_articles(session, older_than_days=365)
     session.flush()
     session.expire_all()
     assert deleted == 1
@@ -458,7 +458,7 @@ def test_day_that_lost_articles_keeps_its_snapshot(session, repo, all_days):
         repo.save_extraction(article, extraction(model("Atlas")), content_hash="h")
     repo.recompute_reports(D, now=NOW)
     before = repo.get_report(D).payload_hash
-    ArticleRepo(session).prune_older_than(older_than_days=365)
+    prune_articles(session, older_than_days=365)
     session.flush()
     session.expire_all()
     result = repo.recompute_reports(D, now=NOW, all_days=all_days)

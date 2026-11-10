@@ -22,6 +22,7 @@ from app.usecases.archive.capture import (
     ARTICLE_CONTENT_VERSION,
     archive_articles,
     capture,
+    prune_articles,
     status,
 )
 
@@ -119,7 +120,7 @@ def test_prune_archives_rows_before_delete() -> None:
     _article(session, "r", days_old=5)
     session.commit()
 
-    assert ArticleRepo(session).prune_older_than(older_than_days=800) == (2, 0)
+    assert prune_articles(session, older_than_days=800) == (2, 0)
     session.commit()
 
     assert session.scalar(select(func.count()).select_from(Article)) == 1
@@ -133,7 +134,7 @@ def test_prune_archive_rolls_back_with_delete() -> None:
     session = _session()
     _article(session, "o", days_old=900)
     session.commit()
-    ArticleRepo(session).prune_older_than(older_than_days=800)
+    prune_articles(session, older_than_days=800)
     session.rollback()
     assert session.scalar(select(func.count()).select_from(Article)) == 1
     assert _counts(session) == (0, 0)
@@ -156,10 +157,10 @@ def test_prune_and_evidence_purge_keep_archive_rows() -> None:
     session.commit()
     assert _counts(session) == (2, 2)
 
-    ArticleRepo(session).prune_older_than(older_than_days=800)
+    prune_articles(session, older_than_days=800)
     session.commit()
     DailySignalRepo(session, comparable_from=date(2026, 1, 1)).purge_evidence(old_id)
-    ArticleRepo(session).prune_older_than(older_than_days=1)
+    prune_articles(session, older_than_days=1)
     session.commit()
 
     assert session.scalar(select(func.count()).select_from(Article)) == 0

@@ -6,9 +6,7 @@ import pytest
 
 APP = Path(__file__).resolve().parents[2] / "src" / "app"
 
-# Known exceptions; both lists only shrink.
-# storage files that still import a use case (spec 019, T009).
-STORAGE_USING_USE_CASES = frozenset({"article_repo.py"})
+# Known exceptions; the list only shrinks.
 # core files that load the provider journal from storage by name (spec 019, T014).
 CORE_USING_STORAGE = frozenset({"jev.py", "bulletin/world_change.py"})
 DYNAMIC_IMPORTERS = frozenset({"import_module", "__import__"})
@@ -83,13 +81,9 @@ def test_core_imports_storage_only_in_listed_files():
     assert importers("core", "storage") == CORE_USING_STORAGE
 
 
-@pytest.mark.parametrize("upper", ["web", "cli"])
-def test_storage_imports_no_entry_point(upper):
+@pytest.mark.parametrize("upper", ["usecases", "web", "cli"])
+def test_storage_imports_no_upper_layer(upper):
     assert importers("storage", upper) == set()
-
-
-def test_storage_imports_use_cases_only_in_listed_files():
-    assert importers("storage", "usecases") == STORAGE_USING_USE_CASES
 
 
 @pytest.mark.parametrize("upper", ["web", "cli"])
