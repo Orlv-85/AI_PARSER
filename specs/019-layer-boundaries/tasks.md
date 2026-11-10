@@ -28,7 +28,9 @@ or the feature doc first, then the failing test, then the code; full gate before
 - [x] T006 Move to `src/app/usecases/`: the 13 use-case modules, the whole `ingestion/pipeline/`
   package (its `fetch.py` and `models.py` are used only by the pipeline) and the six feature docs
   whose main module moved. Imports, monkeypatch targets, doc headers and registries updated.
-- [x] T007 `tests/unit/test_layer_imports.py`: `core/` imports no other layer, no exceptions.
+- [x] T007 `tests/unit/test_layer_imports.py`: `core/` imports no `usecases/`, `cli/`, `web/`; it
+  imports `storage/` only in the two files of T014. The scan also reads `import_module("...")`
+  and `__import__("...")` with a literal name; relative imports are banned by a test.
 
 ## Phase 3: Storage does not import use cases (US3)
 
@@ -47,3 +49,13 @@ or the feature doc first, then the failing test, then the code; full gate before
 
 - [ ] T013 Test: `storage/` imports from `core/` only names on an allowed list of types and
   constants; lasting intent stays in `src/app/README.md`; spec status set to shipped.
+
+## Phase 6: Found by the review of PR 221 (records/review-step2-2026-11-10.md)
+
+- [ ] T014 `core/jev.py` and `core/bulletin/world_change.py` load `app.storage.provider_journal` by
+  name (`import_module`) to build the payment journal and to name its errors. The use case builds
+  the journal and passes it in; the errors the rule code must catch move to `core/`. Money path:
+  tests pin the journal calls first; reviewed as a money change.
+- [ ] T015 `ingest/` and `config/` have no place in the rule. `core/` imports `app.ingest` (3 files)
+  and `app.config` (2 files), `ingest/` imports `core/` back (3 files), and `config/sources.py`
+  loads `app.storage.models_sql` by name. Decide the place of each package, then extend the test.

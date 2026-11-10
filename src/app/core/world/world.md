@@ -682,7 +682,7 @@ flowchart LR
   (`core/bulletin/world_change.py`). `WorldRepo.candidates_in_window` and `set_priority` serve it.
 - `usecases/world_text.py`: `run_texts`, `archive_text_source`; ranks with `rank_clusters`, makes
   documents with `archive_articles` and downloads with `download_documents`
-  (`usecases/archive/capture.py`, see `capture.md`).
+  (`usecases/archive/capture.py`, see `usecases/archive/capture.md`).
 - `storage/world.py`: `transition` keeps the reason for `no_text`.
 - `usecases/world_report.py`: `build_report`, `read_journal_cost`; read-only, imports storage.
 - `scripts/run_daily_world_job.sh`: env_value (switch and key from the environment or `.env`),

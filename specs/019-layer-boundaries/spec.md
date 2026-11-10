@@ -2,7 +2,8 @@
 
 **Feature Branch**: `019-layer-boundaries`
 **Created**: 2026-11-10
-**Status**: Steps 1 and 2 done (2026-11-10); step 3 (calculations out of repositories) open
+**Status**: Steps 1 and 2 done (2026-11-10); open: calculations out of repositories, the provider
+journal loaded by name in two `core/` files, `ingest/` and `config/` (tasks T009-T015)
 **Input**: Owner request of 2026-11-10: `core` and `storage` import each other; fix it by the book.
 
 ## The problem (measured 2026-11-10, master `a90a51e`)
@@ -35,7 +36,8 @@ stored in journals and manifests stay byte-identical.
 
 A developer changes a rule in `core/` and runs its tests; nothing from `storage/` is imported.
 
-**Independent Test**: `tests/unit/test_layer_imports.py` passes with an empty `USE_CASES_IN_CORE`.
+**Independent Test**: `tests/unit/test_layer_imports.py` passes with an empty list of `core/`
+files that import `storage/`.
 
 ### User Story 2 - A repository only reads and writes (Priority: P2)
 
@@ -50,7 +52,7 @@ are allowed.
 A new import against the direction fails pytest.
 
 **Independent Test**: adding `from app.storage...` to a `core/` module fails
-`test_core_imports_storage_only_in_listed_use_cases`.
+`test_core_imports_storage_only_in_listed_files`.
 
 ### Edge Cases
 
@@ -75,7 +77,7 @@ A new import against the direction fails pytest.
 
 ## Success Criteria
 
-- **SC-001** `USE_CASES_IN_CORE` is empty and the storage-side check has no exceptions.
+- **SC-001** The exception lists of `tests/unit/test_layer_imports.py` are empty.
 - **SC-002** No `import-outside-toplevel` left that exists to dodge a `core`/`storage` cycle.
 - **SC-003** Full gate green on every PR; production output of a nightly run is unchanged after the
   release that carries step 2.

@@ -10,7 +10,7 @@ Production jobs: `scripts/run_daily_fetch_job.sh`, `scripts/run_daily_digest_job
 | `cli/` | Typer commands: sources, fetch, serve, top, search, prune, daily-publish, daily-signals (+ entities), period-signals, source candidates |
 | `config/` | `settings.py` (env `AINEWS_*`), `sources.py` (`sources.yaml` loader) |
 | `ingest/` | RSS/HTML fetching, page filtering, date evidence |
-| `core/` | Rules and calculations, no database. Shared: `models.py`, `categories.py`, `canonicalize.py`, `jev.py`, `provider_costs.py` (paid provider prices, dollar caps), `canonical_json.py` (canonical JSON and its fingerprint). Packages: `ingestion/` (admission, scoring, dedup, `reject_policy.py` (conservative reject verdict)), `daily/` (rubric, provider requests, digest titles, daily signals calculations), `periodic/` (weekly and monthly signals calculations), `bulletin/` (builder, writer, world change), `world/` (world stream filter and reader), `sources/` (candidate fields and review rules) |
+| `core/` | Rules and calculations. Shared: `models.py`, `categories.py`, `canonicalize.py`, `jev.py`, `provider_costs.py` (paid provider prices, dollar caps), `canonical_json.py` (canonical JSON and its fingerprint). Packages: `ingestion/` (admission, scoring, dedup, `reject_policy.py` (conservative reject verdict)), `daily/` (rubric, provider requests, digest titles, daily signals calculations), `periodic/` (weekly and monthly signals calculations), `bulletin/` (builder, writer, world change), `world/` (world stream filter and reader), `sources/` (candidate fields and review rules) |
 | `usecases/` | Runs that open sessions and call repositories and providers: `ingestion/pipeline/` (fetch cycle), `daily/` (digest enrichment, daily signals run), `periodic/` (period runs), `bulletin/` (daily bulletin, writer run), `archive/` (article archive capture), `sources/` (onboarding, validation), world stream jobs (collect, screen, text, report) |
 | `storage/` | SQLAlchemy models (`models_sql.py`), repositories, Alembic migrations, ledgers and journals; `journal_files.py` (private atomic file writes) |
 | `web/` | FastAPI app (`web/app.py`: auth middleware, router order), routers by area (`web/routes/`), API models (`web/models.py`), HTML templates |
@@ -21,16 +21,21 @@ Production jobs: `scripts/run_daily_fetch_job.sh`, `scripts/run_daily_digest_job
 Imports go one way: `cli/`, `web/` -> `usecases/` -> `storage/` -> `core/` (spec
 `specs/019-layer-boundaries/`).
 
-- `core/` holds rules and calculations and imports no other layer. Tests:
-  `test_core_imports_no_upper_layer`.
+- `core/` holds rules and calculations; it does not import `usecases/`, `cli/` or `web/`, and
+  does not import `storage/` except in two files that load the provider journal by name (`core/jev.py`,
+  `core/bulletin/world_change.py`; listed in `tests/unit/test_layer_imports.py`, the list only
+  shrinks). Tests: `test_core_imports_no_upper_layer`,
+  `test_core_imports_storage_only_in_listed_files`.
 - `usecases/` holds code that opens sessions and calls repositories and providers; it does not
   import `cli/` or `web/`. Tests: `test_use_cases_import_no_entry_point`.
 - `storage/` may import `core/` types and constants it stores; it does not import `cli/`, `web/`
   or `usecases/`. One exception is listed in `tests/unit/test_layer_imports.py` and that list only
   shrinks. Tests: `test_storage_imports_no_entry_point`,
   `test_storage_imports_use_cases_only_in_listed_files`.
-- The import scan sees imports inside functions. Tests:
-  `test_imports_package_sees_every_import_form`.
+- The import scan sees imports inside functions and modules loaded by a literal name; relative
+  imports are not used. Tests: `test_imports_package_sees_every_import_form`,
+  `test_app_has_no_relative_imports`.
+- `ingest/`, `config/` and `observability/` are not in the rule yet (spec 019, T015).
 
 ## Code docs
 

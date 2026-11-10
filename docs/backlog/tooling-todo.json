@@ -31,7 +31,7 @@
       "facts_2026_11_01": {
         "tools": "unclebob crapper, dryer, mutator installed manually in ~/tools/unclebob on the owner's Mac (not in CI); Python supported.",
         "crapper_no_coverage_on_src": "about 100 functions with cyclomatic complexity >= 10 (coverage not measured, so real CRAP scores unknown)",
-        "dryer_on_src": "9 duplicate pairs with score >= 0.9, e.g. src/app/storage/source_repo.py:164-176 vs src/app/storage/source_candidate_repo.py:111-123; src/app/core/sources/onboarding.py:288-295 vs src/app/storage/source_repo.py:232-239; src/app/core/jev.py:35-43 vs src/app/core/sources/review.py:138-142"
+        "dryer_on_src": "9 duplicate pairs with score >= 0.9, e.g. src/app/storage/source_repo.py:164-176 vs src/app/storage/source_candidate_repo.py:111-123; src/app/usecases/sources/onboarding.py:288-295 vs src/app/storage/source_repo.py:232-239; src/app/core/jev.py:35-43 vs src/app/core/sources/review.py:138-142"
       },
       "steps": [
         "Run crapper with coverage (`crapper --use-existing-coverage` after a pytest coverage run) to get real CRAP scores; list functions with CRAP >= 10.",

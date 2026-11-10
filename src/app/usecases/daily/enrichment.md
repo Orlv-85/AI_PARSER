@@ -132,7 +132,9 @@ flowchart LR
     `_check_summary_length` before review; `parse_review` checks flags with `_review_flags_valid`.
   - `enrich` uses `_daily_assessment`, `_daily_topic` and `_apply_enrichment` for validation,
     topic selection and stored fields/provenance.
-- `provider_requests.py`: request bodies, keys, reservations and parsing; `parse_jev` uses
+- `core/daily/titles.py`: `digest_title`, the article title without aggregator decorations.
+  Tests: `test_digest_title_strips_only_aggregator_decorations`.
+- `core/daily/provider_requests.py`: request bodies, keys, reservations and parsing; `parse_jev` uses
   `_jev_topic` for the topic threshold. Tests: `test_jev_parse_topic_and_comparison_thresholds`,
   `test_jev_topic_boundary_and_unresolved_comparison`,
   `test_jev_choice_validation_precedes_probability_and_cleanup`,

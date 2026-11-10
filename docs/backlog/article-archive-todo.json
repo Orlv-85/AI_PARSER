@@ -59,7 +59,7 @@
       ],
       "deliverable": "Spec in specs/ with data model, migration, retention and purge rules.",
       "status": "done",
-      "status_note": "Spec 016: tables archive_documents and archive_texts, archive before prune; code doc src/app/core/archive/capture.md."
+      "status_note": "Spec 016: tables archive_documents and archive_texts, archive before prune; code doc src/app/usecases/archive/capture.md."
     },
     {
       "id": "A2",

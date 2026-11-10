@@ -123,7 +123,7 @@ the Troubleshooting section of `README.md`.
       "symptom": "mypy reports `Returning Any from function declared to return \"str\"` [no-any-return] (or int, tuple[int, int]) on a line that returns the result of a typed project function or a Settings field, e.g. `return jev_state(article)` in src/app/core/ingestion/admission.py.",
       "evidence": ["mypy names project modules `src.app.usecases.ingestion.pipeline` in its messages, so `from app... import ...` does not resolve and falls under ignore_missing_imports", "pyproject.toml [tool.mypy]: files = [src, tests], explicit_package_bases, ignore_missing_imports and warn_return_any are on"],
       "cause": "Under this config every name imported from `app.*` is Any, and warn_return_any flags returning it from a function with a typed return.",
-      "fix": "Follow the existing idiom: `cast(str, ...)` (see `_html_placeholder_key` in src/app/core/ingestion/pipeline.py) or assign to a typed local (`counts: tuple[int, int] = ...; return counts`). Do not add `# type: ignore`.",
+      "fix": "Follow the existing idiom: `cast(str, ...)` (see `_html_placeholder_key` in src/app/usecases/ingestion/pipeline/screening.py) or assign to a typed local (`counts: tuple[int, int] = ...; return counts`). Do not add `# type: ignore`.",
       "verification": "make lint passes after the cast or typed local (branch refactor/pipeline-cleanup-20261020)."
     },
     {

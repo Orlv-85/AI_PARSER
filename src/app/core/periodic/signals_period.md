@@ -183,7 +183,7 @@ The numbers live in the code: fields of `PeriodThresholds` (by kind) in `period_
   `--max-usd` exits 2. Tests: `test_command_options_pass_to_the_run`,
   `test_command_rejects_a_bad_max_usd_and_flag_off_stays_disabled`.
 
-**Brief** (paid; `core/periodic/period_brief.py`, `period_brief_run.py`)
+**Brief** (paid; `core/periodic/period_brief.py`, `usecases/periodic/period_brief_run.py`)
 
 ```mermaid
 flowchart LR
@@ -331,7 +331,7 @@ flowchart LR
 | The first computable week is the first full week inside the comparable range, not the week that contains the comparable-from date (decided 2026-10-28, agent) | the plan says weeks before 2026-10-12 are never computed; a partial first week would be `partial` anyway |
 | The default API read prefers the newest `ready` or `building_history` period over a newer `partial` one (decided 2026-10-28, agent) | a reader should see numbers that can be trusted; a partial week is still served by `start` or when nothing else exists |
 | The run reconciles evidence in memory and reads entity ids from `ai_entities`; it does not persist reconciliation (decided 2026-10-28, agent) | the period run writes only its own tables; an entity not yet stored has id 0 until the daily run stores it |
-| A period run is a function in `period_run.py`, the command only parses options (decided 2026-10-28, agent) | testable without the CLI, same split as the daily run |
+| A period run is a function in `usecases/periodic/period_run.py`, the command only parses options (decided 2026-10-28, agent) | testable without the CLI, same split as the daily run |
 | `?week=` that is not a Monday redirects (303) to its Monday; text that is not a date gives the unavailable page (decided 2026-10-28 (agent)) | a shared link with any day of the week still lands on the week; garbage never gives a 422 or 500 page |
 | The nav link and the line on `/` follow the default week of the page (newest `ready` or `building_history`, else newest stored) (decided 2026-10-28 (agent)) | the link text and the page it opens always agree |
 | The page uses `digest.css` plus a small `period.css` and no script (decided 2026-10-28 (agent)) | no client re-render is needed (plan "Web"); the daily classes are reused |
@@ -364,7 +364,7 @@ flowchart LR
   `test_coverage_missing_day_is_listed_not_zero`.
 - A period run writes only `period_signal_*` tables; digest, articles, signals and legacy weekly tables stay
   untouched. Tests: `test_a_period_run_writes_only_period_signal_tables`.
-- Only `period_brief_run.py` can reach a provider (through the signals ledger) and only in the brief
+- Only `usecases/periodic/period_brief_run.py` can reach a provider (through the signals ledger) and only in the brief
   step; the request path (routes, storage, views) imports no provider code. Tests:
   `test_request_path_does_not_import_provider_code`, `test_flag_off_creates_no_provider_and_no_brief`.
 - The same input hash is never paid twice; a brief step never exceeds `PERIOD_BRIEF_MAX_USD` per
@@ -380,9 +380,9 @@ flowchart LR
 | `signals_period.py` | Public entry: re-exports `compute_period`, `PeriodInput`, `PeriodThresholds`, `payload_hash` | yes |
 | `period_model.py` | Bounds (`period_bounds`, `period_days`, `previous_start`, `next_start`), `PeriodThresholds`, `PeriodInput`, `PreviousPeriod`, `period_status` | yes |
 | `period_compute.py` | `compute_period` and one function per section; `PERIOD_METHODOLOGY_VERSION` | yes |
-| `period_run.py` | `run_periods`, `target_periods` (`target_weeks`, `target_months`), `brief_targets`, `first_period`, `latest_completed` (week and month wrappers): pick periods, compute, store, then call the brief step | no |
+| `usecases/periodic/period_run.py` | `run_periods`, `target_periods` (`target_weeks`, `target_months`), `brief_targets`, `first_period`, `latest_completed` (week and month wrappers): pick periods, compute, store, then call the brief step | no |
 | `period_brief.py` | `PERIOD_BRIEF_VERSION`, values by kind, `period_packet`, `period_body`, `period_input_hash`, `parse_period_brief` | yes |
-| `period_brief_run.py` | `run_briefs`: targets, cache by hash, ledger per brief, attempts, store | no |
+| `usecases/periodic/period_brief_run.py` | `run_briefs`: targets, cache by hash, ledger per brief, attempts, store | no |
 | `storage/period_signals.py` | `PeriodSignalRepo`: `context`, `load_input`, `previous`, `save_report`, `get_report`, `latest`, `index`, `digest_items`, `get_brief`, `save_brief` | no |
 | `core/daily/signals_brief.py` | Shared brief code: `ArticleRefs`, `fit_packet`, `parse_brief(counts=, keep_valid=False)` (the period keeps the strict rule: any failing sentence fails the answer), `request_body(prompt=, max_output=)`, `input_hash(version)`; daily behavior unchanged | yes |
 | `storage/migrations/versions/f4a9c1d27b83_add_period_signals.py` | the two tables, skip-if-exists, `down_revision` `e7b4c2a9d150` | no |
