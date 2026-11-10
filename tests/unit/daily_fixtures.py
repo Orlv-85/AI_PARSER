@@ -9,9 +9,10 @@ from pydantic import SecretStr
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
+from app.core.canonical_json import encoded, fingerprint
 from app.core.daily import enrichment as daily
 from app.core.daily.rubric import QUESTIONS
-from app.storage.journal_files import encoded, fingerprint, private_write
+from app.storage.journal_files import private_write
 from app.storage.models_sql import Article, Base
 
 TARGET = date(2026, 10, 10)

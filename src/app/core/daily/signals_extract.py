@@ -11,6 +11,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import date
 from typing import Any
 
+from app.core.canonical_json import encoded, fingerprint
 from app.core.daily.enrichment import digest_title
 from app.core.daily.provider_requests import DEEPSEEK_MODEL
 from app.core.daily.signals_entities import (
@@ -23,7 +24,6 @@ from app.core.daily.signals_entities import (
     type_group,
     vendor_tokens,
 )
-from app.storage.journal_files import encoded, fingerprint
 
 EXTRACTION_VERSION = "daily-signals-extract-5"
 # Oldest first; the evidence set prefers the newest version with an `ok` extraction (Decision 4).

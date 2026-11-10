@@ -17,9 +17,9 @@ from typing import Any, cast
 
 import httpx
 
+from app.core.canonical_json import encoded
 from app.core.daily.provider_requests import ENDPOINTS
 from app.core.provider_costs import PRICES, is_overload
-from app.storage.journal_files import encoded
 
 CONNECT_TIMEOUT = httpx.Timeout(connect=10, read=20, write=10, pool=5)
 BODY_DEADLINE_SECONDS = 60

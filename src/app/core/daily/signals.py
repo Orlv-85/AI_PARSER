@@ -17,6 +17,7 @@ from typing import Any
 import httpx
 from sqlalchemy.orm import Session
 
+from app.core.canonical_json import fingerprint
 from app.core.daily.signals_brief import (
     BRIEF_MAX_USD_PER_DAY,
     BRIEF_PRICES,
@@ -47,7 +48,7 @@ from app.core.daily.signals_extract import (
 from app.core.provider_costs import microdollars
 from app.storage.daily_signals import DailySignalRepo
 from app.storage.daily_signals_ledger import LedgerStop, SignalsLedger
-from app.storage.journal_files import fingerprint, private_write
+from app.storage.journal_files import private_write
 from app.storage.models_sql import AIEntity, AIEntityOverride, Article
 
 LOGGER = logging.getLogger(__name__)

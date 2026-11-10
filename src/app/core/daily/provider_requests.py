@@ -5,10 +5,10 @@ from logging import getLogger
 from math import ceil
 from typing import Any
 
+from app.core.canonical_json import encoded, fingerprint
 from app.core.ingestion.reject_policy import CLEANUP_POLICY, cleanup_verdict
 from app.core.jev import JevAssessment, JevInputTooLarge, JevRelevanceScorer, _probability
 from app.core.provider_costs import PRICES
-from app.storage.journal_files import encoded, fingerprint
 
 TAXONOMY_VERSION = "article-topics-2"
 PILOT_VERSION = "reenrich-pilot-1"

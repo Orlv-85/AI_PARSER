@@ -19,8 +19,8 @@ from daily_fixtures import (  # pylint: disable=import-error,unused-import
 )
 from pydantic import SecretStr
 
+from app.core.canonical_json import encoded
 from app.storage.digest_repo import NewsDigestRepo
-from app.storage.journal_files import encoded
 from app.storage.provider_journal import PilotJournal
 
 

@@ -5,13 +5,13 @@ import sqlite3
 import httpx
 import pytest
 
+from app.core.canonical_json import encoded, fingerprint
 from app.core.daily.provider_requests import (
     SUMMARY_RECOVERY_VERSION,
     request_key,
     summary_request,
 )
 from app.storage import provider_journal as pj
-from app.storage.journal_files import encoded, fingerprint
 
 CAPS = {"total": "2", "jev": "1", "deepseek": "1"}
 BODY = {"state": "synthetic"}

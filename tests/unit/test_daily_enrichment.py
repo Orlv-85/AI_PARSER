@@ -21,13 +21,13 @@ from daily_fixtures import (  # pylint: disable=import-error,unused-import
 )
 
 from app.config.sources import SourceConfig
+from app.core.canonical_json import encoded, fingerprint
 from app.core.daily import enrichment as daily
 from app.core.ingestion.pipeline.rows import _build_article_row
 from app.core.jev import JevRelevanceScorer
 from app.core.models import Article as CoreArticle
 from app.storage.admission import set_collection_paused
 from app.storage.digest_repo import NewsDigestRepo
-from app.storage.journal_files import encoded, fingerprint
 from app.storage.provider_journal import PilotJournal
 
 

@@ -3,8 +3,8 @@ import json
 
 import pytest
 
+from app.core.canonical_json import fingerprint
 from app.core.daily.provider_requests import parse_jev, parse_summary
-from app.storage.journal_files import fingerprint
 
 ROW = {"url": "https://example.com/article/ai", "title": "Synthetic AI release",
        "content": "The AI system handles document extraction for hospitals.",

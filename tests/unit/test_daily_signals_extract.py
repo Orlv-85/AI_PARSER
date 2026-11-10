@@ -3,6 +3,7 @@ from datetime import date
 
 import pytest
 
+from app.core.canonical_json import encoded
 from app.core.daily.provider_requests import DEEPSEEK_MODEL
 from app.core.daily.signals_extract import (
     EXTRACTION_VERSION,
@@ -18,7 +19,6 @@ from app.core.daily.signals_extract import (
     signals_request_key,
     source_text,
 )
-from app.storage.journal_files import encoded
 
 PUBLISHED = date(2026, 10, 14)
 
