@@ -3,11 +3,11 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 from app.config.sources import SourceConfig
-from app.core.ingestion.pipeline.models import FetchResult
 from app.ingest.page_filter import (
     MANAGED_LINK_SELECTORS,
 )
 from app.storage.source_repo import SourceRepo
+from app.usecases.ingestion.pipeline.models import FetchResult
 
 
 def _managed_source_to_config(source: object) -> SourceConfig:

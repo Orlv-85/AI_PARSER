@@ -2,6 +2,7 @@
 module: src/app/core/bulletin/writer.py
 covers:
   - src/app/core/bulletin/writer*.py
+  - src/app/usecases/bulletin/writer_run.py
   - src/app/storage/bulletin_texts.py
 -->
 # Bulletin writer (bulletin, item 3)
@@ -12,7 +13,8 @@ a Telegram note and a gloss. Every sentence is checked against the original text
 whatever fails falls back to the builder's title-only text, except known non-English world titles,
 whose stories are removed unless checked English text is available. Spec: FR-005, FR-012, User Story 1
 scenario 4, ER-1/2/3/6/8/9/11/12 in `specs/018-daily-inference/spec.md`. Storage is described in
-`src/app/storage/bulletin_store.md`; the daily job is in `daily.md`, no page yet.
+`src/app/storage/bulletin_store.md`; the daily job is in
+`usecases/bulletin/daily.md`, no page yet.
 Entry: `ai-news bulletin build --date D
 [--dry-run] --write`.
 
@@ -231,7 +233,7 @@ the safe direction: the story falls back to its title.
   fixes F1 and F2): a headline stated an AWS case-study metric as fact, and headlines dropped
   the scope of a rule. Prompt only; no new check (meaning is not machine-checked, FR-022).
 - The core takes an `ask` function and plain data and imports no I/O module; the journal and the
-  HTTP client are `writer_run.py`. A test pins the import list.
+  HTTP client are `usecases/bulletin/writer_run.py`. A test pins the import list.
 - Grounding reuses `grounding_error`, cut out of `parse_brief`'s `_sentence` so the two checks cannot
   drift; the daily brief's behavior is unchanged (its tests pass as they were).
 - Evidence for a story is exactly what the model was sent (cut texts, titles, summaries, outlet
@@ -273,7 +275,7 @@ the safe direction: the story falls back to its title.
 | `src/app/core/bulletin/writer.py` | constants, `WRITER_PROMPT`, `SourceText`, packet, `split_sentences`, `parse_writer`, `write_bulletin` |
 | `_remove_non_english_stories`, `_check_non_english_text`, `_clear_non_english_headline` | post-check foreign-title story eligibility, gloss and day-headline cleanup, including fallback |
 | `src/app/core/bulletin/writer_grounding.py` | folding, `sentence_error`: the checks of Grounding |
-| `src/app/core/bulletin/writer_run.py` | `open_writer`: writer journal, client, `ask` |
+| `src/app/usecases/bulletin/writer_run.py` | `open_writer`: writer journal, client, `ask` |
 | `src/app/storage/bulletin_texts.py` | `load_sources`: archive text, summary and title per link |
 | `src/app/core/daily/signals_brief.py` | `grounding_error` (shared), `request_body`, `request_key`, `BRIEF_PRICES` |
 | `src/app/core/bulletin/builder.py` | `Story` and `Bulletin` fields of the writer |

@@ -82,7 +82,7 @@
       "title": "Alert when a paid cap stops work",
       "why": "Owner 2026-10-30: wants to know when something was not processed because a limit ran out.",
       "notes": [
-        "Today the signal is passive: daily signals stop with report state `cap_reached` and list `incomplete_days` in the job log (`AINEWS_DAILY_SIGNALS_MAX_USD`); the day shows as `partial`; the digest (`CAPS` in core/daily/enrichment.py) keeps the previous digest and records the reason. Nobody is notified.",
+        "Today the signal is passive: daily signals stop with report state `cap_reached` and list `incomplete_days` in the job log (`AINEWS_DAILY_SIGNALS_MAX_USD`); the day shows as `partial`; the digest (`CAPS` in usecases/daily/enrichment.py) keeps the previous digest and records the reason. Nobody is notified.",
         "Unprocessed articles of day D are not retried by later runs (`backfill_days` = 1), only by a manual backfill.",
         "Options: a line on the admin page with the last run state per job; a push via the Telegram channel (B5) or e-mail. The channel is a product question for the owner."
       ],

@@ -22,13 +22,13 @@ from daily_fixtures import (  # pylint: disable=import-error,unused-import
 
 from app.config.sources import SourceConfig
 from app.core.canonical_json import encoded, fingerprint
-from app.core.daily import enrichment as daily
-from app.core.ingestion.pipeline.rows import _build_article_row
 from app.core.jev import JevRelevanceScorer
 from app.core.models import Article as CoreArticle
 from app.storage.admission import set_collection_paused
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.provider_journal import PilotJournal
+from app.usecases.daily import enrichment as daily
+from app.usecases.ingestion.pipeline.rows import _build_article_row
 
 
 def test_complete_day_more_than_200_and_preserves_history(session, tmp_path, monkeypatch):
@@ -423,18 +423,6 @@ def test_low_confidence_jev_topic_uses_fallback(session, tmp_path, monkeypatch):
     result = daily.publish_day(session, settings(), TARGET, tmp_path / "cache")
     assert result["state"] == "published"
     assert row.category == "Models & Research"
-
-
-@pytest.mark.parametrize(("raw", "clean"), [
-    ("pplx-decider-v1.1-27b (Hugging Face Repo)", "pplx-decider-v1.1-27b"),
-    ("Introducing Clef-omni for audio (7 minute read)", "Introducing Clef-omni for audio"),
-    ("agent-kit (GitHub Repo) (3 min read)", "agent-kit"),
-    ("Best QA Tools Compared (2026)", "Best QA Tools Compared (2026)"),
-    ("Cheap GPUs for everyone (Sponsor)", "Cheap GPUs for everyone (Sponsor)"),
-    ("(5 minute read)", "(5 minute read)"),
-])
-def test_digest_title_strips_only_aggregator_decorations(raw, clean):
-    assert daily.digest_title(raw) == clean
 
 
 def test_digest_uses_clean_title_without_changing_stored_title(session):

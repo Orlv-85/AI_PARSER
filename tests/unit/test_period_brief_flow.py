@@ -21,9 +21,9 @@ from typer.testing import CliRunner
 
 from app.cli import main as cli_main
 from app.config.settings import Settings, get_settings
-from app.core.periodic import period_run
-from app.core.periodic.period_run import PeriodRunOptions, brief_targets, run_periods
 from app.storage.models_sql import Base, PeriodSignalBrief, PeriodSignalReport
+from app.usecases.periodic import period_run
+from app.usecases.periodic.period_run import PeriodRunOptions, brief_targets, run_periods
 from app.web.app import create_app
 
 W1 = date(2026, 10, 12)
@@ -75,7 +75,7 @@ def test_targets_nightly_default_and_with_brief():
 
 def test_flag_off_creates_no_provider_and_no_brief(maker, tmp_path, monkeypatch):
     seed_weeks(maker, WEEK_START)
-    monkeypatch.setattr("app.core.periodic.period_brief_run.SignalsLedger",
+    monkeypatch.setattr("app.usecases.periodic.period_brief_run.SignalsLedger",
                         lambda *a, **k: pytest.fail("provider object created"))
     provider = Provider()
     report = run(maker, tmp_path, provider, brief=False)

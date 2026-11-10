@@ -5,7 +5,6 @@ from threading import BoundedSemaphore
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
-from app.core.ingestion.pipeline.models import EnabledSource, FetchResult
 from app.ingest.fetcher import Fetcher
 from app.ingest.html import (
     HtmlListPageResult,
@@ -13,6 +12,7 @@ from app.ingest.html import (
     fetch_html_links_with_metadata,
 )
 from app.ingest.rss import fetch_rss
+from app.usecases.ingestion.pipeline.models import EnabledSource, FetchResult
 
 
 def _stored_validators(fetch_state: dict[str, object | None]) -> tuple[str | None, str | None]:

@@ -1,7 +1,7 @@
 <!-- code-doc
-module: src/app/core/bulletin/daily.py
+module: src/app/usecases/bulletin/daily.py
 covers:
-  - src/app/core/bulletin/daily.py
+  - src/app/usecases/bulletin/daily.py
   - scripts/run_daily_bulletin_job.sh
   - scripts/install_daily_timers.sh
   - deploy/sudoers.d/ai-news-deploy

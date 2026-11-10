@@ -1,7 +1,7 @@
 <!-- code-doc
-module: src/app/core/ingestion/pipeline/cycle.py
+module: src/app/usecases/ingestion/pipeline/cycle.py
 covers:
-  - src/app/core/ingestion/pipeline/*.py
+  - src/app/usecases/ingestion/pipeline/*.py
   - src/app/core/ingestion/admission.py
   - src/app/core/ingestion/scoring.py
   - src/app/core/canonicalize.py
@@ -417,7 +417,7 @@ function. Each rule lists the tests that check it.
 ai-news fetch --once                         cli/main.py: fetch
   scripts/run_daily_fetch_job.sh (01:00 UTC timer), scripts/auto_update_once.sh (cron helper)
 web update (thread or process)               web/service.py: UpdateRunService
-  -> run_fetch_cycle                         core/ingestion/pipeline/cycle.py
+  -> run_fetch_cycle                         usecases/ingestion/pipeline/cycle.py
        load_sources + upsert_source          sources.yaml -> sources; + list_enabled_sources (DB only)
        jev_relevance_scorer                  core/jev.py; None + admission -> pause, return
        admission off: _collect_fetched_items thread pool over all sources (_fetch_source_items)
@@ -439,17 +439,17 @@ web update (thread or process)               web/service.py: UpdateRunService
 
 | File | Role | Pure |
 | --- | --- | --- |
-| `core/ingestion/pipeline/__init__.py` | Re-exports `run_fetch_cycle` only; everything else is imported from its module | no |
-| `core/ingestion/pipeline/cycle.py` | `run_fetch_cycle` (setup, pause check, summary) over `_run_sources` (per-source loop), `_process_source_with_admission`, `_process_prefetched_source`, `_record_persist_failure`, `_finish_source`; savepoint per source, `FetchSummary` | no |
-| `core/ingestion/pipeline/models.py` | `FetchSummary`, `SourceMetrics`, `AdmissionState`, `EnabledSource`, `FetchResult`, replay and comparison constants | yes |
-| `core/ingestion/pipeline/sources.py` | `_managed_source_to_config`, fetch-state persist and validator clear | no |
-| `core/ingestion/pipeline/fetch.py` | Network fetch of enabled sources: validators, execution groups, thread pool | no |
-| `core/ingestion/pipeline/source_result.py` | `_process_source_result` (HTML or items path), `_log_source_metrics` | no |
-| `core/ingestion/pipeline/html_links.py` | `_process_html_links_two_stage`: list page links to stored articles | no |
-| `core/ingestion/pipeline/rss.py` | `_process_fetched_source_items`: feed items to stored articles | no |
-| `core/ingestion/pipeline/screening.py` | `_screen_candidate` (cache lookup `_resolve_cached`, then `_score_and_record`, `_pause`), cached-assessment checks (`_assessment_from_cached`, `_cached_score`, `_cached_category`), admission counters snapshot and restore | no |
-| `core/ingestion/pipeline/replay.py` | Pending admission candidates replayed before a source's fresh fetch | no |
-| `core/ingestion/pipeline/rows.py` | Candidate payloads, `_build_article_row`, exclusion reason, batch upsert | no |
+| `usecases/ingestion/pipeline/__init__.py` | Re-exports `run_fetch_cycle` only; everything else is imported from its module | no |
+| `usecases/ingestion/pipeline/cycle.py` | `run_fetch_cycle` (setup, pause check, summary) over `_run_sources` (per-source loop), `_process_source_with_admission`, `_process_prefetched_source`, `_record_persist_failure`, `_finish_source`; savepoint per source, `FetchSummary` | no |
+| `usecases/ingestion/pipeline/models.py` | `FetchSummary`, `SourceMetrics`, `AdmissionState`, `EnabledSource`, `FetchResult`, replay and comparison constants | yes |
+| `usecases/ingestion/pipeline/sources.py` | `_managed_source_to_config`, fetch-state persist and validator clear | no |
+| `usecases/ingestion/pipeline/fetch.py` | Network fetch of enabled sources: validators, execution groups, thread pool | no |
+| `usecases/ingestion/pipeline/source_result.py` | `_process_source_result` (HTML or items path), `_log_source_metrics` | no |
+| `usecases/ingestion/pipeline/html_links.py` | `_process_html_links_two_stage`: list page links to stored articles | no |
+| `usecases/ingestion/pipeline/rss.py` | `_process_fetched_source_items`: feed items to stored articles | no |
+| `usecases/ingestion/pipeline/screening.py` | `_screen_candidate` (cache lookup `_resolve_cached`, then `_score_and_record`, `_pause`), cached-assessment checks (`_assessment_from_cached`, `_cached_score`, `_cached_category`), admission counters snapshot and restore | no |
+| `usecases/ingestion/pipeline/replay.py` | Pending admission candidates replayed before a source's fresh fetch | no |
+| `usecases/ingestion/pipeline/rows.py` | Candidate payloads, `_build_article_row`, exclusion reason, batch upsert | no |
 | `core/ingestion/admission.py` | Admission choice mapping, `bounded_evidence`, `evidence_hash`, `admission_cache_key` | yes |
 | `core/ingestion/scoring.py` | `ai_relevance_score`, `freshness_score`, `rank_score` | yes |
 | `core/canonicalize.py` | `canonicalize_url`, `canonical_url_hash` (also used by signals, weekly, cleanup) | yes |

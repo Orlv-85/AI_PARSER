@@ -12,18 +12,6 @@ from sqlalchemy.orm import Session
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig, load_sources
-from app.core.ingestion.pipeline.fetch import _collect_fetched_items
-from app.core.ingestion.pipeline.models import (
-    AdmissionState,
-    EnabledSource,
-    FetchResult,
-    FetchSummary,
-    SourceMetrics,
-)
-from app.core.ingestion.pipeline.replay import _replay_pending_for_source
-from app.core.ingestion.pipeline.screening import _admission_snapshot, _restore_admission
-from app.core.ingestion.pipeline.source_result import _log_source_metrics, _process_source_result
-from app.core.ingestion.pipeline.sources import _clear_source_validators, _managed_source_to_config
 from app.core.jev import JevRelevanceScorer, jev_relevance_scorer
 from app.storage import SessionLocal, create_all
 from app.storage.admission import (
@@ -32,6 +20,24 @@ from app.storage.admission import (
 )
 from app.storage.article_repo import ArticleRepo
 from app.storage.source_repo import SourceRepo
+from app.usecases.ingestion.pipeline.fetch import _collect_fetched_items
+from app.usecases.ingestion.pipeline.models import (
+    AdmissionState,
+    EnabledSource,
+    FetchResult,
+    FetchSummary,
+    SourceMetrics,
+)
+from app.usecases.ingestion.pipeline.replay import _replay_pending_for_source
+from app.usecases.ingestion.pipeline.screening import _admission_snapshot, _restore_admission
+from app.usecases.ingestion.pipeline.source_result import (
+    _log_source_metrics,
+    _process_source_result,
+)
+from app.usecases.ingestion.pipeline.sources import (
+    _clear_source_validators,
+    _managed_source_to_config,
+)
 
 _Snapshot = tuple[int, int, int, int, bool]
 

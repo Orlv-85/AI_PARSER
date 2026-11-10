@@ -9,14 +9,6 @@ from app.core.ingestion.admission import (
     bounded_evidence,
     evidence_hash,
 )
-from app.core.ingestion.pipeline.models import AdmissionState, SourceMetrics
-from app.core.ingestion.pipeline.rows import (
-    _build_article_row,
-    _candidate_payload,
-    _item_exclusion_reason,
-    _upsert_article_rows,
-)
-from app.core.ingestion.pipeline.screening import _screen_candidate
 from app.core.jev import JevAssessment, JevRelevanceScorer
 from app.ingest.page_filter import (
     log_exclusion,
@@ -25,6 +17,14 @@ from app.storage.admission import (
     upsert_pending,
 )
 from app.storage.article_repo import ArticleRepo
+from app.usecases.ingestion.pipeline.models import AdmissionState, SourceMetrics
+from app.usecases.ingestion.pipeline.rows import (
+    _build_article_row,
+    _candidate_payload,
+    _item_exclusion_reason,
+    _upsert_article_rows,
+)
+from app.usecases.ingestion.pipeline.screening import _screen_candidate
 
 
 def _accepted_items(items: list) -> list:

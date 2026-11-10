@@ -9,7 +9,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import Settings
-from app.core.ingestion.pipeline import run_fetch_cycle
 from app.storage.admission import (
     PAUSED_MESSAGE,
     clear_collection_paused,
@@ -18,6 +17,7 @@ from app.storage.admission import (
     set_collection_paused,
 )
 from app.storage.models_sql import Base, CollectionStatus
+from app.usecases.ingestion.pipeline import run_fetch_cycle
 from app.web import service as service_module
 from app.web.auth import hash_password
 from app.web.models import UpdateStatus, WebUpdateSettings
@@ -31,9 +31,9 @@ def test_missing_provider_pauses_with_exact_notice(tmp_path, monkeypatch, jev_en
     engine = create_engine("sqlite:///" + str(tmp_path / "notice.db"))
     Base.metadata.create_all(engine)
     sessions = sessionmaker(bind=engine, autoflush=False)
-    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.create_all", lambda: None)
-    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.SessionLocal", sessions)
-    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.load_sources", lambda _path: [])
+    monkeypatch.setattr("app.usecases.ingestion.pipeline.cycle.create_all", lambda: None)
+    monkeypatch.setattr("app.usecases.ingestion.pipeline.cycle.SessionLocal", sessions)
+    monkeypatch.setattr("app.usecases.ingestion.pipeline.cycle.load_sources", lambda _path: [])
     settings = Settings(
         _env_file=None,
         semantic_admission_enabled=True,

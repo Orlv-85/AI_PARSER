@@ -12,20 +12,6 @@ from app.core.ingestion.admission import (
     bounded_evidence,
     evidence_hash,
 )
-from app.core.ingestion.pipeline.html_links import _process_html_links_two_stage
-from app.core.ingestion.pipeline.models import (
-    PENDING_REPLAY_LIMIT,
-    PENDING_REPLAY_MAX_AGE_DAYS,
-    AdmissionState,
-    SourceMetrics,
-)
-from app.core.ingestion.pipeline.rows import (
-    _article_from_candidate,
-    _item_exclusion_reason,
-    _parse_dt,
-)
-from app.core.ingestion.pipeline.rss import _process_fetched_source_items
-from app.core.ingestion.pipeline.screening import _html_placeholder_key
 from app.core.jev import JevRelevanceScorer
 from app.core.models import Article as CoreArticle
 from app.storage.admission import (
@@ -34,6 +20,20 @@ from app.storage.admission import (
     settle_pending,
 )
 from app.storage.article_repo import ArticleRepo
+from app.usecases.ingestion.pipeline.html_links import _process_html_links_two_stage
+from app.usecases.ingestion.pipeline.models import (
+    PENDING_REPLAY_LIMIT,
+    PENDING_REPLAY_MAX_AGE_DAYS,
+    AdmissionState,
+    SourceMetrics,
+)
+from app.usecases.ingestion.pipeline.rows import (
+    _article_from_candidate,
+    _item_exclusion_reason,
+    _parse_dt,
+)
+from app.usecases.ingestion.pipeline.rss import _process_fetched_source_items
+from app.usecases.ingestion.pipeline.screening import _html_placeholder_key
 
 
 def _is_stale_pending(candidate: dict[str, object], cutoff: datetime) -> bool:

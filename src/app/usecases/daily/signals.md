@@ -1,6 +1,7 @@
 <!-- code-doc
-module: src/app/core/daily/signals.py
+module: src/app/usecases/daily/signals.py
 covers:
+  - src/app/usecases/daily/signals.py
   - src/app/core/daily/signals*.py
   - src/app/storage/daily_signals*.py
   - src/app/storage/migrations/versions/*daily_signal*.py
@@ -188,7 +189,7 @@ that check it.
 ```text
 scripts/run_daily_digest_job.sh (02:00 UTC, after the digest)
   -> ai-news daily-signals                       src/app/cli/main.py: daily_signals
-  -> run_signals                                 core/daily/signals.py
+  -> run_signals                                 usecases/daily/signals.py
        _gate                    flag AINEWS_DAILY_SIGNALS_ENABLED + DS key; else state disabled/missing_provider_key
        repo.replace_membership  digest items of D -> articles (exact URL, then canonical hash)
        _extract_days            one DeepSeek call per in-scope article, via SignalsLedger
@@ -206,7 +207,7 @@ GET /?date=D                                     web/signals_view.py: render_sig
 
 | File | Role | Pure |
 | --- | --- | --- |
-| `core/daily/signals.py` | Run orchestration, brief step, operator entity commands (`merge_entities`, `alias_entity`) | no |
+| `usecases/daily/signals.py` | Run orchestration, brief step, operator entity commands (`merge_entities`, `alias_entity`) | no |
 | `core/daily/signals_extract.py` | Extraction prompt, request body, answer validation (`EXTRACTION_VERSION`) | yes |
 | `core/daily/signals_entities.py` | Deterministic entity identity: keys, vendor classes, reconciliation, overrides | yes |
 | `core/daily/signals_compute.py` | Snapshot of one day (`compute_snapshot`, `_Snapshot`, `METHODOLOGY_VERSION`, `payload_hash`, folding, quiet flag); re-exports the input records for the repo | yes |

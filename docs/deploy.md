@@ -316,7 +316,7 @@ Nightly maintenance workflow:
 
 ### Article archive
 
-Behavior: `src/app/core/archive/capture.md`. Run every command below from the deploy dir after
+Behavior: `src/app/usecases/archive/capture.md`. Run every command below from the deploy dir after
 pinning the deployed image first: without `APP_IMAGE`, compose falls back to the local `:latest`
 image, which deploys do not pull, and that image may not have the `archive` commands.
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # Nightly archive capture (spec 016): own timer, shared host lock, always exit 0 so a failure
-# never changes another job. Behavior: src/app/core/archive/capture.md.
+# never changes another job. Behavior: src/app/usecases/archive/capture.md.
 set -u
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 ROOT_DIR="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"

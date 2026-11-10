@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Daily bulletin (018 item 4b). Behavior: src/app/core/bulletin/daily.md.
+# Daily bulletin (018 item 4b). Behavior: src/app/usecases/bulletin/daily.md.
 # Off unless explicitly enabled: this command can call Jev and DeepSeek.
 set -u
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"

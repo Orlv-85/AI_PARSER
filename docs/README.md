@@ -10,18 +10,18 @@ Specs in `specs/` are the history of how a feature got there.
 | --- | --- | --- |
 | System overview | [src/app/README.md](../src/app/README.md) | - |
 | Provider payment journal | [src/app/storage/provider_journal.md](../src/app/storage/provider_journal.md) | `src/app/storage/provider_journal.py` |
-| Daily digest enrichment | [src/app/core/daily/enrichment.md](../src/app/core/daily/enrichment.md) | `src/app/core/daily/enrichment.py` |
-| Daily AI Signals (006, 007) | [src/app/core/daily/signals.md](../src/app/core/daily/signals.md) | `src/app/core/daily/signals.py` |
+| Daily digest enrichment | [src/app/usecases/daily/enrichment.md](../src/app/usecases/daily/enrichment.md) | `src/app/usecases/daily/enrichment.py` |
+| Daily AI Signals (006, 007) | [src/app/usecases/daily/signals.md](../src/app/usecases/daily/signals.md) | `src/app/usecases/daily/signals.py` |
 | World change questions (018 item 1) | [src/app/core/bulletin/world_change.md](../src/app/core/bulletin/world_change.md) | `src/app/core/bulletin/world_change.py` |
 | Bulletin builder (018 item 2) | [src/app/core/bulletin/builder.md](../src/app/core/bulletin/builder.md) | `src/app/core/bulletin/builder.py` |
 | Bulletin writer (018 item 3) | [src/app/core/bulletin/writer.md](../src/app/core/bulletin/writer.md) | `src/app/core/bulletin/writer.py` |
 | Bulletin storage (018 item 4a) | [src/app/storage/bulletin_store.md](../src/app/storage/bulletin_store.md) | `src/app/storage/bulletin_store.py` |
-| Daily bulletin (018 item 4b) | [src/app/core/bulletin/daily.md](../src/app/core/bulletin/daily.md) | `src/app/core/bulletin/daily.py` |
+| Daily bulletin (018 item 4b) | [src/app/usecases/bulletin/daily.md](../src/app/usecases/bulletin/daily.md) | `src/app/usecases/bulletin/daily.py` |
 | Period AI Signals (017) | [src/app/core/periodic/signals_period.md](../src/app/core/periodic/signals_period.md) | `src/app/core/periodic/signals_period.py` |
-| Fetch pipeline (001, 002, admission) | [src/app/core/ingestion/pipeline.md](../src/app/core/ingestion/pipeline.md) | `src/app/core/ingestion/pipeline.py` |
-| Source onboarding (003, 011) | [src/app/core/sources/onboarding.md](../src/app/core/sources/onboarding.md) | `src/app/core/sources/onboarding.py` |
+| Fetch pipeline (001, 002, admission) | [src/app/usecases/ingestion/pipeline.md](../src/app/usecases/ingestion/pipeline.md) | `src/app/usecases/ingestion/pipeline/cycle.py` |
+| Source onboarding (003, 011) | [src/app/usecases/sources/onboarding.md](../src/app/usecases/sources/onboarding.md) | `src/app/usecases/sources/onboarding.py` |
 | World news stream (018 item 5) | [src/app/core/world/world.md](../src/app/core/world/world.md) | `src/app/core/world/__init__.py` |
-| Article archive (016) | [src/app/core/archive/capture.md](../src/app/core/archive/capture.md) | `src/app/core/archive/capture.py` |
+| Article archive (016) | [src/app/usecases/archive/capture.md](../src/app/usecases/archive/capture.md) | `src/app/usecases/archive/capture.py` |
 | Web pages and static assets | [src/app/web/pages.md](../src/app/web/pages.md) | `src/app/web/routes/pages.py` |
 
 ## General

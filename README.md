@@ -42,18 +42,18 @@ Index of all docs: [docs/README.md](docs/README.md). Code docs live next to the 
 
 - [System overview](src/app/README.md) - packages, entry points, list of code docs.
 - [Provider payment journal](src/app/storage/provider_journal.md) - reservations, caps, replay and failure reviews.
-- [Daily digest enrichment](src/app/core/daily/enrichment.md) - publication, collection holds and catch-up.
-- [Daily AI Signals](src/app/core/daily/signals.md) - behavior, decisions, invariants, code map.
+- [Daily digest enrichment](src/app/usecases/daily/enrichment.md) - publication, collection holds and catch-up.
+- [Daily AI Signals](src/app/usecases/daily/signals.md) - behavior, decisions, invariants, code map.
 - [World change questions](src/app/core/bulletin/world_change.md) - Jev questions for the bulletin: what AI changed, per article (018 item 1).
 - [Bulletin builder](src/app/core/bulletin/builder.md) - the Daily Inference bulletin from a day's data and the phrase library, dry run (018 item 2).
 - [Bulletin writer](src/app/core/bulletin/writer.md) - model text for the bulletin stories with a grounding check, one call per day (018 item 3).
 - [Bulletin storage](src/app/storage/bulletin_store.md) - saved daily bulletins and public API (018 item 4a).
-- [Daily bulletin](src/app/core/bulletin/daily.md) - daily job, CLI orchestration and switches (018 item 4b).
+- [Daily bulletin](src/app/usecases/bulletin/daily.md) - daily job, CLI orchestration and switches (018 item 4b).
 - [Period AI Signals](src/app/core/periodic/signals_period.md) - weekly and monthly sums and comparisons: periods, status, coverage, decisions.
-- [Fetch pipeline](src/app/core/ingestion/pipeline.md) - ingestion: sources, page filter, admission, scoring.
-- [Source onboarding](src/app/core/sources/onboarding.md) - candidate import, check, review, approval into collection.
+- [Fetch pipeline](src/app/usecases/ingestion/pipeline.md) - ingestion: sources, page filter, admission, scoring.
+- [Source onboarding](src/app/usecases/sources/onboarding.md) - candidate import, check, review, approval into collection.
 - [World news stream](src/app/core/world/world.md) - keyword filter and reader for world news candidates (018 item 5).
-- [Article archive](src/app/core/archive/capture.md) - private archive of article text; prune archives before delete.
+- [Article archive](src/app/usecases/archive/capture.md) - private archive of article text; prune archives before delete.
 - [Web pages](src/app/web/pages.md) - pages, access, placeholders, static CSS/JS assets.
 
 General:

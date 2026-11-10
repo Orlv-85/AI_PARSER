@@ -17,7 +17,6 @@ from typer.testing import CliRunner
 
 from app.cli import main as cli_main
 from app.core.bulletin.world_change import WORLD_CHANGE_VERSION
-from app.core.world_report import build_report
 from app.storage.models_sql import Base, WorldCandidate, WorldChangeAssessment
 from app.storage.provider_journal import PilotJournal
 from app.storage.world import (
@@ -29,6 +28,7 @@ from app.storage.world import (
     STATE_SCREENED_OUT,
     STATE_TEXT_READY,
 )
+from app.usecases.world_report import build_report
 
 DAY = date(2026, 10, 30)
 

@@ -25,7 +25,6 @@ from sqlalchemy.orm import sessionmaker
 from app.core.canonical_json import encoded
 from app.core.daily.signals_brief import BRIEF_PRICES, BRIEF_PROMPT, BriefInvalid, PacketTooLarge
 from app.core.periodic import period_brief as pb
-from app.core.periodic import period_brief_run as run
 from app.core.periodic.period_brief import (
     PERIOD_BRIEF_MAX_USD,
     PERIOD_BRIEF_VERSION,
@@ -40,6 +39,7 @@ from app.core.periodic.period_brief import (
 from app.storage.daily_signals_ledger import SignalsLedger
 from app.storage.models_sql import Base, PeriodSignalBrief
 from app.storage.period_signals import PeriodSignalRepo
+from app.usecases.periodic import period_brief_run as run
 
 NEXT = date(2026, 10, 26)
 MONTH = date(2026, 11, 1)
@@ -304,7 +304,7 @@ def test_unpriced_model_flag_off_and_no_key_make_no_call(maker, tmp_path, monkey
     provider = Provider()
     unpriced = go(maker, tmp_path, provider, model="deepseek-v9")
     assert unpriced["periods"] == {"week:2026-10-19": "skipped:brief_model_unpriced"}
-    monkeypatch.setattr("app.core.periodic.period_brief_run.SignalsLedger",
+    monkeypatch.setattr("app.usecases.periodic.period_brief_run.SignalsLedger",
                         lambda *a, **k: pytest.fail("provider object created"))
     assert go(maker, tmp_path, provider, enabled=False)["state"] == "disabled"
     for key in (None, " "):

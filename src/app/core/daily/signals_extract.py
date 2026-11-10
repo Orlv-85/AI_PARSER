@@ -12,7 +12,6 @@ from datetime import date
 from typing import Any
 
 from app.core.canonical_json import encoded, fingerprint
-from app.core.daily.enrichment import digest_title
 from app.core.daily.provider_requests import DEEPSEEK_MODEL
 from app.core.daily.signals_entities import (
     QUOTES,
@@ -24,6 +23,7 @@ from app.core.daily.signals_entities import (
     type_group,
     vendor_tokens,
 )
+from app.core.daily.titles import digest_title
 
 EXTRACTION_VERSION = "daily-signals-extract-5"
 # Oldest first; the evidence set prefers the newest version with an `ok` extraction (Decision 4).

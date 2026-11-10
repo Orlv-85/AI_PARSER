@@ -15,16 +15,9 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.archive.capture import (
-    ARCHIVE_CACHE_ROOT,
-    DAILY_CACHE_ROOT,
-    archive_articles,
-    download_documents,
-)
 from app.core.canonicalize import canonicalize_url
 from app.core.jev import CONTENT_LIMIT
 from app.core.world.screen import WORLD_TOP_N
-from app.core.world_screen import TextSource, rank_clusters
 from app.storage.archive import (
     STATE_ARCHIVED,
     STATE_FAILED,
@@ -40,6 +33,13 @@ from app.storage.world import (
     STATE_TEXT_READY,
     WorldRepo,
 )
+from app.usecases.archive.capture import (
+    ARCHIVE_CACHE_ROOT,
+    DAILY_CACHE_ROOT,
+    archive_articles,
+    download_documents,
+)
+from app.usecases.world_screen import TextSource, rank_clusters
 
 TEXT_PREFIX = "text"
 UNKNOWN_ISSUE = "unknown"

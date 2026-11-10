@@ -1,6 +1,6 @@
 """Read one field of a source candidate given as a dict or as an object.
 
-Shared by core/sources and the storage repos; see onboarding.md.
+Shared by the source use cases and the storage repos; see usecases/sources/onboarding.md.
 """
 
 from __future__ import annotations

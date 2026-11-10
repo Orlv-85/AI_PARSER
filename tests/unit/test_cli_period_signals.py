@@ -9,8 +9,8 @@ from typer.testing import CliRunner
 
 from app.cli import main as cli_main
 from app.config.settings import Settings
-from app.core.periodic.period_run import first_week, latest_completed_week
 from app.storage.models_sql import Base, PeriodSignalReport
+from app.usecases.periodic.period_run import first_week, latest_completed_week
 
 TODAY = datetime.now(UTC).date()
 LATEST = latest_completed_week(TODAY)

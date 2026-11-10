@@ -5,13 +5,6 @@ from typing import Any
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
 from app.core.canonicalize import canonical_url_hash, canonicalize_url
-from app.core.ingestion.pipeline.models import AdmissionState
-from app.core.ingestion.pipeline.rows import (
-    _build_article_row,
-    _item_exclusion_reason,
-    _upsert_article_rows,
-)
-from app.core.ingestion.pipeline.screening import _html_placeholder_key, _screen_candidate
 from app.core.jev import JevRelevanceScorer
 from app.ingest.fetcher import Fetcher
 from app.ingest.html import (
@@ -26,6 +19,13 @@ from app.storage.admission import (
     upsert_pending,
 )
 from app.storage.article_repo import ArticleRepo
+from app.usecases.ingestion.pipeline.models import AdmissionState
+from app.usecases.ingestion.pipeline.rows import (
+    _build_article_row,
+    _item_exclusion_reason,
+    _upsert_article_rows,
+)
+from app.usecases.ingestion.pipeline.screening import _html_placeholder_key, _screen_candidate
 
 
 @dataclass

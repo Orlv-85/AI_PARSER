@@ -1,6 +1,7 @@
 <!-- code-doc
-module: src/app/core/sources/onboarding.py
+module: src/app/usecases/sources/onboarding.py
 covers:
+  - src/app/usecases/sources/*.py
   - src/app/core/sources/*.py
   - src/app/web/source_onboarding.py
   - src/app/storage/source_candidate_repo.py
@@ -295,7 +296,7 @@ check it.
 **Into collection**
 - An approved candidate is an enabled `sources` row without a YAML entry, so `run_fetch_cycle`
   fetches it from the next run on; an HTML one uses the code selector. That rule and its tests:
-  `src/app/core/ingestion/pipeline.md`, Behavior, "Sources and the run". Approval never writes
+  `src/app/usecases/ingestion/pipeline.md`, Behavior, "Sources and the run". Approval never writes
   `sources.yaml`. Tests: `test_source_onboarding_approve_action_creates_enabled_managed_source`,
   `test_source_onboarding_approve_action_returns_persisted_review_payload`.
 - When the approved or disabled source is a row that `sources.yaml` also defines (same key), the
@@ -380,7 +381,7 @@ admin page (web/index.html)                          ai-news import-candidates /
        approve -> SourceRepo.create_from_candidate   storage/source_repo.py
   POST /api/source-onboarding/validate               run_source_validation_batch
   GET .../candidates, .../summary, .../overlaps, .../latest, .../check-status
-next run_fetch_cycle                                 enabled DB sources (core/ingestion/pipeline.md)
+next run_fetch_cycle                                 enabled DB sources (usecases/ingestion/pipeline.md)
 scripts/sources_onboarding_helper.py db-bootstrap | db-review | db-validate | db-export
 ```
 
@@ -390,8 +391,8 @@ scripts/sources_onboarding_helper.py db-bootstrap | db-review | db-validate | db
 | --- | --- |
 | `core/sources/candidates.py` | Pure URL extraction, normalization, parsing and overlap grouping; owns `NormalizedSourceCandidate` and `CandidateOverlapGroup` |
 | `core/sources/candidate_fields.py` | `read_str`, `read_optional_str`, `read_optional_int`: the one reader of a candidate field (dict or object), used by `core/sources/*` and by `storage/source_repo.py`, `storage/source_candidate_repo.py`; a missing or `None` required field raises `candidate field is required: <name>`. Tests: `test_read_str_returns_text_of_present_field`, `test_read_str_default_covers_absent_field_only_else_raises`, `test_read_optional_str_and_int`, `test_read_optional_int_casts_text_and_rejects_garbage` |
-| `core/sources/validation.py` | `ValidationResult`, deterministic RSS/HTML validation, ingestion fetch adapters and validation persistence |
-| `core/sources/onboarding.py` | `SourceImportResult`, database import, overlap review, candidate review actions and YAML export |
+| `usecases/sources/validation.py` | `ValidationResult`, deterministic RSS/HTML validation, ingestion fetch adapters and validation persistence |
+| `usecases/sources/onboarding.py` | `SourceImportResult`, database import, overlap review, candidate review actions and YAML export |
 | `core/sources/review.py` | Check probe (`probe_source`), evidence brief, `SourceReviewer` (Jev, DeepSeek), `evidence_fingerprint` |
 | `web/source_intake.py` | `SourceIntakeService`: check job, registry and same-host checks, cache, `approve_ready` |
 | `web/source_onboarding.py` | `SourceOnboardingService`: candidate lists, summaries and review actions returning web models |

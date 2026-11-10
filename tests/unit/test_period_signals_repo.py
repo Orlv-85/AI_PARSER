@@ -12,7 +12,10 @@ from sqlalchemy import create_engine, event, func, select
 from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import Settings
-from app.core.periodic.period_run import (
+from app.storage.daily_signals import DailySignalRepo
+from app.storage.models_sql import Base, PeriodSignalReport
+from app.storage.period_signals import PeriodSignalRepo
+from app.usecases.periodic.period_run import (
     PeriodRunError,
     PeriodRunOptions,
     first_week,
@@ -20,9 +23,6 @@ from app.core.periodic.period_run import (
     run_periods,
     target_weeks,
 )
-from app.storage.daily_signals import DailySignalRepo
-from app.storage.models_sql import Base, PeriodSignalReport
-from app.storage.period_signals import PeriodSignalRepo
 
 W1, W2 = date(2026, 10, 12), date(2026, 10, 19)
 

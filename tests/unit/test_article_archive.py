@@ -12,18 +12,18 @@ from sqlalchemy.orm import sessionmaker
 from typer.testing import CliRunner
 
 from app.cli import main as cli_main
-from app.core.archive import capture as capture_module
-from app.core.archive.capture import (
+from app.storage.archive import ArchiveRepo
+from app.storage.article_repo import ArticleRepo
+from app.storage.daily_signals import DailySignalRepo
+from app.storage.models_sql import ArchiveDocument, ArchiveText, Article, Base, Source
+from app.usecases.archive import capture as capture_module
+from app.usecases.archive.capture import (
     ARCHIVE_MIN_TEXT_CHARS,
     ARTICLE_CONTENT_VERSION,
     archive_articles,
     capture,
     status,
 )
-from app.storage.archive import ArchiveRepo
-from app.storage.article_repo import ArticleRepo
-from app.storage.daily_signals import DailySignalRepo
-from app.storage.models_sql import ArchiveDocument, ArchiveText, Article, Base, Source
 
 LONG = "Archived article body. " * 20
 NOW = datetime.now(UTC)
@@ -186,7 +186,7 @@ def test_archive_repo_purge_status_and_size() -> None:
 
 def test_archive_not_imported_by_web_or_mcp() -> None:
     web = Path(__file__).resolve().parents[2] / "src" / "app" / "web"
-    banned = ("app.core.archive", "app.storage.archive")
+    banned = ("app.usecases.archive", "app.storage.archive")
     offenders = []
     for path in web.rglob("*.py"):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):

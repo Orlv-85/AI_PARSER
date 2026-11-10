@@ -17,7 +17,7 @@
       "status": "todo (owner decided, ready to implement)",
       "kind": "correctness, ethics/legal risk, dead config",
       "problem": [
-        "sources.yaml sets 'respect_robots: true' in defaults and per source (parser_options too); config/sources.py parses it; Settings has respect_robots_txt=True. The fetch pipeline (src/app/ingest/*, src/app/core/ingestion/pipeline/*) never reads robots.txt: grep for 'robots' finds it only in the archive capture (src/app/core/archive/capture.py) and the article evidence cache (src/app/storage/article_evidence_cache.py, _robots_allowed, urllib.robotparser, cached per origin, crawl-delay).",
+        "sources.yaml sets 'respect_robots: true' in defaults and per source (parser_options too); config/sources.py parses it; Settings has respect_robots_txt=True. The fetch pipeline (src/app/ingest/*, src/app/usecases/ingestion/pipeline/*) never reads robots.txt: grep for 'robots' finds it only in the archive capture (src/app/usecases/archive/capture.py) and the article evidence cache (src/app/storage/article_evidence_cache.py, _robots_allowed, urllib.robotparser, cached per origin, crawl-delay).",
         "So the bot, which declares itself as DEFAULT_USER_AGENT with BOT_TOKEN 'ai-news-collector', fetches RSS feeds, HTML list pages and HTML article pages that robots.txt forbids for it, while the archive of the same articles refuses them. A reader of the config believes the opposite.",
         "fetch_interval_minutes is set per source in sources.yaml and validated in config/sources.py, but pipeline.md says 'Every enabled source is fetched on every run; fetch_interval_minutes does not skip a source' (test_run_fetch_cycle_fetches_every_enabled_source_regardless_of_interval). The field is dead config that looks live."
       ],
@@ -35,7 +35,7 @@
         "not_measured": "DB-managed sources (added through onboarding, only in the production DB) and article-level URLs of HTML sources (only list URLs were checked). Re-measure on production before deciding."
       },
       "questions_to_answer": [
-        "Is the finding real? Confirm that no fetch code path checks robots.txt (RSS, HTML list, HTML article stage, source onboarding checks in core/sources/validation.py).",
+        "Is the finding real? Confirm that no fetch code path checks robots.txt (RSS, HTML list, HTML article stage, source onboarding checks in usecases/sources/validation.py).",
         "Which status codes mean what: RFC 9309 says 4xx = no restrictions, 5xx/unreachable = assume full disallow (temporary). The evidence cache treats every non-200/404/410 as disallow-all; is that the rule we want for the fetch too?",
         "Cost of honoring robots in the fetch: reuse of the evidence cache's parser/cache vs a small shared helper for the sync httpx Fetcher; per-origin cache lifetime; crawl-delay vs per_source_min_interval_seconds; what a blocked source looks like in FetchSummary, logs and the admin sources page.",
         "Cheaper alternative: disable the three disallowing sources in sources.yaml and add a source-onboarding check that refuses a candidate whose robots.txt forbids the bot. Compare with full enforcement.",
@@ -47,7 +47,7 @@
         "Disallowed sources are not deleted from sources.yaml by this task; the fetch skips them and says why (log, FetchSummary, admin sources page). Disabling them in sources.yaml as well is fine if it keeps the config honest; say which was done.",
         "Code-behavior PRs need the owner's go before merge; tags (deploy) only on the owner's request."
       ],
-      "prompt": "Read docs/backlog/project-review-todo.json item R1 (the owner already said yes to honoring robots.txt), AGENTS.md and src/app/core/ingestion/pipeline.md. Verify the finding in the code and re-measure robots.txt for all enabled sources (sources.yaml and, read-only, the production DB sources). Then implement in a separate worktree and branch: edit pipeline.md first (rules with tests), then honor robots.txt for RSS feeds, HTML list pages and HTML article pages with the declared BOT_TOKEN, reusing or sharing the robots logic of src/app/storage/article_evidence_cache.py where it fits (per-origin cache, status-code rules, crawl-delay); decide and document the 5xx/unreachable rule; make a blocked source visible in logs and FetchSummary. Settle fetch_interval_minutes and per-source respect_robots (implement, remove with backward-compatible loading, or mark ignored) and record the reason in the doc's Decisions. Run the scoped tests, then make lint and the full pytest; open a PR and stop for the owner's go. Write docs/work/report-R1-<date>.md with what was measured, done and left.",
+      "prompt": "Read docs/backlog/project-review-todo.json item R1 (the owner already said yes to honoring robots.txt), AGENTS.md and src/app/usecases/ingestion/pipeline.md. Verify the finding in the code and re-measure robots.txt for all enabled sources (sources.yaml and, read-only, the production DB sources). Then implement in a separate worktree and branch: edit pipeline.md first (rules with tests), then honor robots.txt for RSS feeds, HTML list pages and HTML article pages with the declared BOT_TOKEN, reusing or sharing the robots logic of src/app/storage/article_evidence_cache.py where it fits (per-origin cache, status-code rules, crawl-delay); decide and document the 5xx/unreachable rule; make a blocked source visible in logs and FetchSummary. Settle fetch_interval_minutes and per-source respect_robots (implement, remove with backward-compatible loading, or mark ignored) and record the reason in the doc's Decisions. Run the scoped tests, then make lint and the full pytest; open a PR and stop for the owner's go. Write docs/work/report-R1-<date>.md with what was measured, done and left.",
       "decided": "Owner 2026-10-31: yes, the fetch honors robots.txt, accepting the loss of The Register AI, odintext and paulhcleverley and of sources whose robots.txt is unavailable at fetch time. No further owner question is needed for the robots part."
     },
     {
@@ -60,7 +60,7 @@
       ],
       "already_known_against_the_finding": [
         "Production runs with AINEWS_JEV_ENABLED=true, AINEWS_SEMANTIC_ADMISSION_ENABLED=true and AINEWS_DAILY_ENRICHMENT_ENABLED=true (docker-compose.prod.yml, deploy/.env.prod.example). The Settings defaults are false, which is what the review saw.",
-        "src/app/core/ingestion/pipeline/rows.py:110 uses the Jev assessment relevance and falls back to ai_relevance_score only when there is no assessment; core/daily/enrichment.py:352 overwrites it with the Jev score. So in production the keyword score is a fallback, not the filter."
+        "src/app/usecases/ingestion/pipeline/rows.py:110 uses the Jev assessment relevance and falls back to ai_relevance_score only when there is no assessment; usecases/daily/enrichment.py:352 overwrites it with the Jev score. So in production the keyword score is a fallback, not the filter."
       ],
       "questions_to_answer": [
         "Where does the keyword score still decide something in production: articles without a Jev assessment (Jev outage, input too large, pending), the 'top' CLI, sorting, digest selection, the web news list? Count such articles in the production DB for the last 30 days (read-only).",
@@ -71,7 +71,7 @@
         "Jev and DeepSeek calls are paid; do not run paid calls for this check.",
         "No ingestion behavior change without editing pipeline.md first."
       ],
-      "prompt": "Read docs/backlog/project-review-todo.json item R2 and src/app/core/ingestion/pipeline.md. Check where ai_relevance_score still affects stored or shown data in production (code paths plus read-only counts on the production DB), and write docs/work/report-R2-<date>.md: verdict, numbers, and either 'close: no action' or a small proposal with cost. Expect the likely answer to be 'close'; do not invent work."
+      "prompt": "Read docs/backlog/project-review-todo.json item R2 and src/app/usecases/ingestion/pipeline.md. Check where ai_relevance_score still affects stored or shown data in production (code paths plus read-only counts on the production DB), and write docs/work/report-R2-<date>.md: verdict, numbers, and either 'close: no action' or a small proposal with cost. Expect the likely answer to be 'close'; do not invent work."
     },
     {
       "id": "R3",
@@ -99,7 +99,7 @@
         "Any paid labeling needs a budget stated in the report before spending (money question for the owner if above a few dollars).",
         "signals.md is the current behavior; a rule removal edits it first."
       ],
-      "prompt": "Read docs/backlog/project-review-todo.json item R3 and src/app/core/daily/signals.md. Without paid calls first: count rule hits and suppressions over production snapshots (read-only), pick held-out days after the last rule change, and estimate precision of New and Spikes by reading the items. Write docs/work/report-R3-<date>.md: verdict, numbers, dead or conflicting rules, and a recommendation (leave / evaluation set / remove rules) with cost. Ask the owner only if paid labeling above a few dollars is proposed."
+      "prompt": "Read docs/backlog/project-review-todo.json item R3 and src/app/usecases/daily/signals.md. Without paid calls first: count rule hits and suppressions over production snapshots (read-only), pick held-out days after the last rule change, and estimate precision of New and Spikes by reading the items. Write docs/work/report-R3-<date>.md: verdict, numbers, dead or conflicting rules, and a recommendation (leave / evaluation set / remove rules) with cost. Ask the owner only if paid labeling above a few dollars is proposed."
     },
     {
       "id": "R4",

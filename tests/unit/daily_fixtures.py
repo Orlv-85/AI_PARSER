@@ -10,10 +10,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.core.canonical_json import encoded, fingerprint
-from app.core.daily import enrichment as daily
 from app.core.daily.rubric import QUESTIONS
 from app.storage.journal_files import private_write
 from app.storage.models_sql import Article, Base
+from app.usecases.daily import enrichment as daily
 
 TARGET = date(2026, 10, 10)
 SOURCE = "The company says its AI system handles document extraction for hospitals. " * 8

@@ -13,7 +13,7 @@ Builds the Daily Inference bulletin of one day from the day's digest articles an
 Story text is the article title with outlet and link; model text is added by the writer (item 3,
 `writer.md`) and only with `--write`. `ai-news bulletin build --date D [--dry-run]` builds the
 bulletin; storage is described in `src/app/storage/bulletin_store.md`. The daily job is described in
-`daily.md`; the build command makes no model call without `--write`. No page yet.
+`usecases/bulletin/daily.md`; the build command makes no model call without `--write`. No page yet.
 Rules of voice and structure: `specs/018-daily-inference/voice.md`;
 editorial rules ER-* and
 FR-003/FR-004/FR-006 in `specs/018-daily-inference/spec.md`.

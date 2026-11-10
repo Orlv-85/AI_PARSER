@@ -1,4 +1,4 @@
-"""Storage for the private article archive (spec 016); behavior in core/archive/capture.md."""
+"""Storage for the private article archive (spec 016); behavior in usecases/archive/capture.md."""
 import hashlib
 import json
 from collections.abc import Collection, Sequence

@@ -341,7 +341,7 @@ class ArticleRepo:
     def prune_older_than(self, *, older_than_days: int) -> tuple[int, int]:
         """Delete rows past the cutoff; archives them first in the same transaction (016)."""
         # Local import: app.storage/__init__ imports this module, and capture imports app.storage.
-        from app.core.archive.capture import archive_articles  # pylint: disable=import-outside-toplevel
+        from app.usecases.archive.capture import archive_articles  # pylint: disable=import-outside-toplevel
         cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
         old_article_ids = select(Article.id).where(_publication_before(cutoff))
 

@@ -93,7 +93,7 @@ Persistent=false
 WantedBy=timers.target
 EOF
 # Bulletin (018 item 4b): off unless the host script switch is enabled.
-# Timeout covers lock wait, daily step, kill grace and cleanup; see core/bulletin/daily.md.
+# Timeout covers lock wait, daily step, kill grace and cleanup; see usecases/bulletin/daily.md.
 cat > "$UNIT_DIR/ai-news-daily-bulletin.service" <<EOF
 [Unit]
 Description=AI News daily bulletin assessment, build and writer

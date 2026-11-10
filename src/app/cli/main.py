@@ -10,50 +10,18 @@ from sqlalchemy import select
 
 from app.config.settings import get_settings
 from app.config.sources import load_sources
-from app.core.archive.capture import (
-    ARCHIVE_CACHE_ROOT,
-    DAILY_CACHE_ROOT,
-    dedupe_page_cache,
-)
-from app.core.archive.capture import capture as archive_capture
-from app.core.archive.capture import import_db as archive_import_db
-from app.core.archive.capture import status as archive_status
 from app.core.bulletin.builder import Bulletin
-from app.core.bulletin.daily import (
-    assess_day,
-    has_provider_key,
-    prepare_bulletin,
-    run_daily,
-    write_prepared,
-)
 from app.core.bulletin.render import render_text
 from app.core.bulletin.world_change import (
     ASSESS_DEFAULT_MAX_USD,
     WORLD_CHANGE_MAX_USD_PER_DAY,
     open_assessor,
 )
-from app.core.bulletin.writer_run import WRITER_MAX_USD_PER_DAY, open_writer
-from app.core.daily.enrichment import publish_catch_up, publish_day
-from app.core.daily.signals import (
-    EntityCommandError,
-    RunOptions,
-    alias_entity,
-    merge_entities,
-    run_signals,
-)
-from app.core.ingestion.pipeline import run_fetch_cycle
 from app.core.periodic.period_model import KINDS, MONTH, WEEK
-from app.core.periodic.period_run import PeriodRunError, PeriodRunOptions, run_periods
 from app.core.provider_costs import microdollars
-from app.core.sources.onboarding import import_source_candidates
-from app.core.sources.validation import run_source_validation_batch
 from app.core.world.filter import load_own_domains
 from app.core.world.gdelt import DayStats, make_client, scan_day
 from app.core.world.screen import WORLD_JEV_MAX_USD_PER_DAY
-from app.core.world_collect import collect_day, yesterday_utc
-from app.core.world_report import build_report
-from app.core.world_screen import open_world_assessor, run_screen, utc_today
-from app.core.world_text import archive_text_source, run_texts
 from app.observability import setup_json_logging
 from app.observability.logging import log_event
 from app.storage import SessionLocal, create_all
@@ -64,6 +32,38 @@ from app.storage.daily_signals import DailySignalRepo, OverrideConflict
 from app.storage.models_sql import AIEntityOverride
 from app.storage.page_views import PAGE_VIEWS_DEFAULT_DAYS, PageViewRepo
 from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
+from app.usecases.archive.capture import (
+    ARCHIVE_CACHE_ROOT,
+    DAILY_CACHE_ROOT,
+    dedupe_page_cache,
+)
+from app.usecases.archive.capture import capture as archive_capture
+from app.usecases.archive.capture import import_db as archive_import_db
+from app.usecases.archive.capture import status as archive_status
+from app.usecases.bulletin.daily import (
+    assess_day,
+    has_provider_key,
+    prepare_bulletin,
+    run_daily,
+    write_prepared,
+)
+from app.usecases.bulletin.writer_run import WRITER_MAX_USD_PER_DAY, open_writer
+from app.usecases.daily.enrichment import publish_catch_up, publish_day
+from app.usecases.daily.signals import (
+    EntityCommandError,
+    RunOptions,
+    alias_entity,
+    merge_entities,
+    run_signals,
+)
+from app.usecases.ingestion.pipeline import run_fetch_cycle
+from app.usecases.periodic.period_run import PeriodRunError, PeriodRunOptions, run_periods
+from app.usecases.sources.onboarding import import_source_candidates
+from app.usecases.sources.validation import run_source_validation_batch
+from app.usecases.world_collect import collect_day, yesterday_utc
+from app.usecases.world_report import build_report
+from app.usecases.world_screen import open_world_assessor, run_screen, utc_today
+from app.usecases.world_text import archive_text_source, run_texts
 
 app = typer.Typer(help="AI News Collector CLI")
 _WEEKLY_DATE_OPTION = typer.Option(None, "--report-date")

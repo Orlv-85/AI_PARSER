@@ -20,7 +20,6 @@ from sqlalchemy.orm import sessionmaker
 from app.config.settings import Settings
 from app.core.daily.signals_entities import Entity
 from app.core.daily.signals_model import ArticleObs, DayCoverage, EntityMention
-from app.core.periodic import period_run
 from app.core.periodic.period_compute import compute_period, payload_hash
 from app.core.periodic.period_model import (
     MONTH,
@@ -30,7 +29,11 @@ from app.core.periodic.period_model import (
     next_start,
     period_days,
 )
-from app.core.periodic.period_run import (
+from app.storage.daily_signals import DailySignalRepo
+from app.storage.models_sql import Base, PeriodSignalBrief, PeriodSignalReport
+from app.storage.period_signals import PeriodSignalRepo
+from app.usecases.periodic import period_run
+from app.usecases.periodic.period_run import (
     PeriodRunError,
     PeriodRunOptions,
     brief_targets,
@@ -39,9 +42,6 @@ from app.core.periodic.period_run import (
     run_periods,
     target_months,
 )
-from app.storage.daily_signals import DailySignalRepo
-from app.storage.models_sql import Base, PeriodSignalBrief, PeriodSignalReport
-from app.storage.period_signals import PeriodSignalRepo
 
 NOV, DEC, OCT = date(2026, 11, 1), date(2026, 12, 1), date(2026, 10, 1)
 FIRST_NIGHT = datetime(2026, 12, 1, 2, 30)
