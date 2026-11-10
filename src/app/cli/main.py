@@ -36,6 +36,7 @@ from app.usecases.archive.capture import (
     ARCHIVE_CACHE_ROOT,
     DAILY_CACHE_ROOT,
     dedupe_page_cache,
+    prune_articles,
 )
 from app.usecases.archive.capture import capture as archive_capture
 from app.usecases.archive.capture import import_db as archive_import_db
@@ -386,7 +387,8 @@ def prune(
             )
             return
 
-        deleted_articles, deleted_aliases = repo.prune_older_than(older_than_days=older_than_days)
+        deleted_articles, deleted_aliases = prune_articles(
+            session, older_than_days=older_than_days)
         session.commit()
         typer.echo(
             f"prune complete: older_than_days={older_than_days} "

@@ -28,10 +28,8 @@ Imports go one way: `cli/`, `web/` -> `usecases/` -> `storage/` -> `core/` (spec
   `test_core_imports_storage_only_in_listed_files`.
 - `usecases/` holds code that opens sessions and calls repositories and providers; it does not
   import `cli/` or `web/`. Tests: `test_use_cases_import_no_entry_point`.
-- `storage/` may import `core/` types and constants it stores; it does not import `cli/`, `web/`
-  or `usecases/`. One exception is listed in `tests/unit/test_layer_imports.py` and that list only
-  shrinks. Tests: `test_storage_imports_no_entry_point`,
-  `test_storage_imports_use_cases_only_in_listed_files`.
+- `storage/` may import `core/` types and constants it stores; it does not import `usecases/`,
+  `cli/` or `web/`. Tests: `test_storage_imports_no_upper_layer`.
 - The import scan sees imports inside functions and modules loaded by a literal name; relative
   imports are not used. Tests: `test_imports_package_sees_every_import_form`,
   `test_app_has_no_relative_imports`.

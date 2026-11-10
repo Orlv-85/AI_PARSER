@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any, cast
@@ -338,10 +339,9 @@ class ArticleRepo:
         stmt = select(Article.id).where(_publication_before(cutoff))
         return len(self.session.scalars(stmt).all())
 
-    def prune_older_than(self, *, older_than_days: int) -> tuple[int, int]:
-        """Delete rows past the cutoff; archives them first in the same transaction (016)."""
-        # Local import: app.storage/__init__ imports this module, and capture imports app.storage.
-        from app.usecases.archive.capture import archive_articles  # pylint: disable=import-outside-toplevel
+    def prune_older_than(self, *, older_than_days: int,
+                         archive: Callable[[list[Article]], object]) -> tuple[int, int]:
+        """Delete rows past the cutoff; `archive` gets them first, in the same transaction (016)."""
         cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
         old_article_ids = select(Article.id).where(_publication_before(cutoff))
 
@@ -352,7 +352,7 @@ class ArticleRepo:
         old_articles = list(
             self.session.scalars(select(Article).where(_publication_before(cutoff))))
         deleted_articles = len(old_articles)
-        archive_articles(self.session, old_articles)
+        archive(old_articles)
 
         self.session.execute(delete(ArticleAlias).where(ArticleAlias.article_id.in_(old_article_ids)))
         # The archived rows are loaded; "fetch" avoids evaluating the cutoff on naive SQLite values.

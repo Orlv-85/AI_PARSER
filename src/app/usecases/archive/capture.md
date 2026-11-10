@@ -48,10 +48,12 @@ flowchart LR
   versions stay. Tests: `test_sync_versions_only_on_text_change`.
 - A hash that was pruned and collected again reuses its document: metadata and `article_id` are
   updated, `first_seen_at` is kept. Tests: `test_recollected_article_reuses_document`.
-- `ArticleRepo.prune_older_than` archives every row it is about to delete, in the same transaction,
-  before the delete; a rollback undoes both. `count_older_than` and `prune --dry-run` write
-  nothing. Tests: `test_prune_archives_rows_before_delete`, `test_prune_archive_rolls_back_with_delete`,
-  `test_prune_dry_run_does_not_archive`.
+- `prune_articles` archives every row it is about to delete, in the same transaction, before the
+  delete; a rollback undoes both. `ArticleRepo.prune_older_than` cannot delete without an `archive`
+  function: it is a required argument, called with the rows before the deletes. `count_older_than`
+  and `prune --dry-run` write nothing. Tests: `test_prune_archives_rows_before_delete`,
+  `test_prune_archive_rolls_back_with_delete`, `test_prune_dry_run_does_not_archive`,
+  `test_prune_older_than_calls_archive_before_delete`.
 - `ai-news archive capture` syncs articles discovered within `ARCHIVE_LOOKBACK_DAYS` (all
   articles with `--all`) through `archive_articles`, in batches of `CAPTURE_BATCH_SIZE` with a
   commit per batch. With `--no-download` it stops there and makes no network request. Tests:
@@ -226,7 +228,8 @@ flowchart LR
   `archive_texts`).
 - `storage/migrations/versions/e7b4c2a9d150_add_article_archive.py`: additive migration after
   `c3a8e5d27f14`.
-- `storage/article_repo.py`: `prune_older_than` calls `archive_articles` before its deletes.
+- `storage/article_repo.py`: `prune_older_than` calls the `archive` function it is given before
+  its deletes; `prune_articles` in `capture.py` passes `archive_articles`.
 
 ## Tests
 
