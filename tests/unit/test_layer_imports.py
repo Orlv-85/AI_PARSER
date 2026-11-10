@@ -10,6 +10,13 @@ APP = Path(__file__).resolve().parents[2] / "src" / "app"
 # core files that load the provider journal from storage by name (spec 019, T014).
 CORE_USING_STORAGE = frozenset({"jev.py", "bulletin/world_change.py"})
 DYNAMIC_IMPORTERS = frozenset({"import_module", "__import__"})
+# core functions that calculate; a repository returns rows and the use case calls these.
+CALCULATIONS = frozenset({"reconcile", "digest_title", "digest_summary"})
+# storage files that still call them (spec 019, T010 and T012).
+STORAGE_CALCULATING = {
+    "daily_signals.py": {"reconcile", "digest_title", "digest_summary"},
+    "bulletin_input.py": {"digest_title"},
+}
 
 
 def _loaded_by_name(node: ast.Call) -> str:
@@ -89,3 +96,16 @@ def test_storage_imports_no_upper_layer(upper):
 @pytest.mark.parametrize("upper", ["web", "cli"])
 def test_use_cases_import_no_entry_point(upper):
     assert importers("usecases", upper) == set()
+
+
+def calculations_imported(source: str) -> set[str]:
+    return {alias.name for node in ast.walk(ast.parse(source))
+            if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("app.core")
+            for alias in node.names if alias.name in CALCULATIONS}
+
+
+def test_storage_imports_calculations_only_in_listed_files():
+    root = APP / "storage"
+    found = {path.relative_to(root).as_posix(): calculations_imported(path.read_text())
+             for path in root.rglob("*.py")}
+    assert {name: names for name, names in found.items() if names} == STORAGE_CALCULATING

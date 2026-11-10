@@ -117,6 +117,16 @@ def test_changed_input_rewrites_only_that_period(maker):
     assert again["written"] == ["2026-10-19"]
 
 
+def test_period_run_applies_entity_overrides(maker):
+    seed_weeks(maker, W1, W2)
+    run(maker, backfill=2)
+    with maker() as session:
+        DailySignalRepo(session, comparable_from=COMPARABLE_FROM).add_override(
+            kind="alias", type_group_="artifact", match_key="bravo", target_base_key="alpha")
+        session.commit()
+    assert run(maker, backfill=2)["written"] == ["2026-10-12", "2026-10-19"]
+
+
 def test_month_before_the_first_month_and_flag_off_do_nothing(maker):
     seed_weeks(maker, W1, W2)
     before = run(maker, kind="month")  # NOW is in October: the first month is November

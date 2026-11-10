@@ -44,7 +44,10 @@ or the feature doc first, then the failing test, then the code; full gate before
   `usecases/`.
 - [ ] T010 `storage/daily_signals.py`: `reconcile`, `digest_title`, `digest_summary` calls move to
   the use case.
-- [ ] T011 `storage/period_signals.py`: `reconcile` call moves to the use case.
+- [x] T011 `storage/period_signals.py`: `reconcile` call moves to `usecases/periodic/period_run.py`
+  (`context` takes the reconciliation, `load_input` needs a context). The storage-side check of
+  calculating functions starts here with two listed files (T010, T012); a new test pins that the
+  period run applies overrides (nothing did before).
 - [ ] T012 `storage/bulletin_input.py`: `digest_title`, `cluster_key` calls move to the use case.
 
 ## Phase 5: Close (US3)

@@ -13,6 +13,7 @@ from typing import Any
 import httpx
 from sqlalchemy.orm import Session
 
+from app.core.daily.signals_entities import reconcile
 from app.core.periodic.period_compute import (
     PERIOD_METHODOLOGY_VERSION,
     compute_period,
@@ -25,7 +26,7 @@ from app.core.periodic.period_model import (
     period_bounds,
     previous_start,
 )
-from app.storage.period_signals import PeriodSignalRepo
+from app.storage.period_signals import PeriodContext, PeriodSignalRepo
 from app.usecases.periodic.period_brief_run import run_briefs
 
 LOGGER = logging.getLogger(__name__)
@@ -127,6 +128,12 @@ def brief_targets(options: PeriodRunOptions, periods: list[date], *, today: date
     return [latest] if latest in periods else []
 
 
+def _context(repo: PeriodSignalRepo) -> PeriodContext:
+    """Reconcile the stored evidence in memory, once per run; nothing is persisted."""
+    mentions, rows = repo.daily.load_evidence()
+    return repo.context(reconcile(mentions, repo.daily.overrides()), rows)
+
+
 def run_periods(session: Session, settings: Any, options: PeriodRunOptions, *,
                 now: datetime | None = None, transport: httpx.BaseTransport | None = None
                 ) -> dict[str, Any]:
@@ -145,7 +152,7 @@ def run_periods(session: Session, settings: Any, options: PeriodRunOptions, *,
     report["skipped_before_first"] = [w.isoformat() for w in early]
     repo = PeriodSignalRepo(session, comparable_from=settings.daily_signals_comparable_from,
                             publisher_overrides=settings.weekly_publisher_overrides)
-    ctx = repo.context() if weeks else None
+    ctx = _context(repo) if weeks else None
     for start in weeks:
         # Oldest first: the next period reads this one as its previous period.
         payload = compute_period(repo.load_input(options.kind, start, ctx=ctx,
