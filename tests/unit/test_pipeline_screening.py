@@ -14,15 +14,15 @@ from app.core.ingestion.admission import (
     bounded_evidence,
     evidence_hash,
 )
-from app.core.ingestion.pipeline.models import AdmissionState
-from app.core.ingestion.pipeline.screening import (
-    _assessment_from_cached,
-    _screen_candidate,
-)
 from app.core.jev import JevAssessment
 from app.storage.admission import get_cached_decision
 from app.storage.models_sql import AdmissionDecision as Row
 from app.storage.models_sql import Base
+from app.usecases.ingestion.pipeline.models import AdmissionState
+from app.usecases.ingestion.pipeline.screening import (
+    _assessment_from_cached,
+    _screen_candidate,
+)
 
 ACCEPTED = "accepted_ai_editorial"
 CATEGORY = sorted(READABLE_CATEGORIES)[0]

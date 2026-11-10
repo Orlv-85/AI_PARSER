@@ -9,11 +9,6 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
-from app.core.ingestion.pipeline import run_fetch_cycle
-from app.core.ingestion.pipeline.html_links import _process_html_links_two_stage
-from app.core.ingestion.pipeline.models import AdmissionState
-from app.core.ingestion.pipeline.rss import _process_fetched_source_items
-from app.core.ingestion.pipeline.sources import _managed_source_to_config
 from app.core.models import Article
 from app.ingest.html import (
     _build_html_article,
@@ -26,6 +21,11 @@ from app.storage.article_repo import ArticleRepo
 from app.storage.models_sql import Article as StoredArticle
 from app.storage.models_sql import Base
 from app.storage.source_repo import SourceRepo
+from app.usecases.ingestion.pipeline import run_fetch_cycle
+from app.usecases.ingestion.pipeline.html_links import _process_html_links_two_stage
+from app.usecases.ingestion.pipeline.models import AdmissionState
+from app.usecases.ingestion.pipeline.rss import _process_fetched_source_items
+from app.usecases.ingestion.pipeline.sources import _managed_source_to_config
 
 BAD_URLS = [
     "https://kobiton.com/about-kobiton",
@@ -138,7 +138,7 @@ def test_two_stage_filters_before_limit_and_model_call(monkeypatch) -> None:
     def fetch(**kwargs):
         downloaded.append(kwargs["url"])
         return Article(source_key="example", title="AI launch", url=kwargs["url"])
-    monkeypatch.setattr("app.core.ingestion.pipeline.html_links.fetch_html_article", fetch)
+    monkeypatch.setattr("app.usecases.ingestion.pipeline.html_links.fetch_html_article", fetch)
     with Session(engine) as session:
         source = _source()
         db_source = SourceRepo(session).upsert_source(source)
@@ -196,9 +196,11 @@ def test_html_fetch_cycle_filters_before_download(monkeypatch, tmp_path) -> None
     engine = create_engine(f"sqlite:///{tmp_path}/filter.db")
     Base.metadata.create_all(engine)
     sessions = sessionmaker(bind=engine, autoflush=False)
-    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.load_sources", lambda _path: [_source()])
-    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.create_all", lambda: None)
-    monkeypatch.setattr("app.core.ingestion.pipeline.cycle.SessionLocal", sessions)
+    monkeypatch.setattr(
+        "app.usecases.ingestion.pipeline.cycle.load_sources", lambda _path: [_source()],
+    )
+    monkeypatch.setattr("app.usecases.ingestion.pipeline.cycle.create_all", lambda: None)
+    monkeypatch.setattr("app.usecases.ingestion.pipeline.cycle.SessionLocal", sessions)
     summary = run_fetch_cycle(settings=Settings(_env_file=None),
                               logger=getLogger("non-news"))
     assert (summary.errors, summary.new) == (0, 1)
@@ -225,7 +227,7 @@ def test_rss_linked_landing_is_removed_before_text_extraction(monkeypatch) -> No
 def test_rss_item_without_row_is_skipped_without_counting(monkeypatch) -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
-    monkeypatch.setattr("app.core.ingestion.pipeline.rss._build_article_row",
+    monkeypatch.setattr("app.usecases.ingestion.pipeline.rss._build_article_row",
                         lambda **_kwargs: None)
     with Session(engine) as session:
         source = _source("rss")
@@ -249,7 +251,7 @@ def _rss_row(rank, category=None):
 def test_rss_disabled_admission_state_uses_scorer_not_screening(monkeypatch) -> None:
     def forbidden(**_kwargs):
         pytest.fail("_screen_candidate called with admission disabled")
-    monkeypatch.setattr("app.core.ingestion.pipeline.rss._screen_candidate", forbidden)
+    monkeypatch.setattr("app.usecases.ingestion.pipeline.rss._screen_candidate", forbidden)
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
     with Session(engine) as session:
@@ -273,14 +275,14 @@ def test_rss_disabled_admission_state_uses_scorer_not_screening(monkeypatch) -> 
 def test_rss_batch_duplicate_hash_merges_scores_and_category(
         monkeypatch, second_category, expected_category) -> None:
     rows = iter([_rss_row(1, "old"), _rss_row(10, second_category)])
-    monkeypatch.setattr("app.core.ingestion.pipeline.rss._build_article_row",
+    monkeypatch.setattr("app.usecases.ingestion.pipeline.rss._build_article_row",
                         lambda **_kwargs: next(rows))
     captured = []
 
     def upsert(*, rows, **_kwargs):
         captured.extend(rows)
         return len(rows), 0
-    monkeypatch.setattr("app.core.ingestion.pipeline.rss._upsert_article_rows", upsert)
+    monkeypatch.setattr("app.usecases.ingestion.pipeline.rss._upsert_article_rows", upsert)
     items = [Article(source_key="example", title="AI release",
                      url="https://example.com/news/ai") for _ in range(2)]
     result = _process_fetched_source_items(

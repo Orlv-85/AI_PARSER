@@ -18,9 +18,9 @@ from app.core.world.gdelt import (
     Candidate,
     day_file_names,
 )
-from app.core.world_collect import collect_day, yesterday_utc
 from app.storage.models_sql import Base, WorldCandidate, WorldFile
 from app.storage.world import FILE_DONE, FILE_MISSING, WORLD_RETENTION_DAYS, WorldRepo
+from app.usecases.world_collect import collect_day, yesterday_utc
 
 DAY = date(2026, 10, 30)
 NAMES = day_file_names(DAY)
@@ -228,7 +228,7 @@ def cli_collect(engine, monkeypatch, files, calls=None, args=()):
     monkeypatch.setattr(cli_main, "SessionLocal", sessionmaker(engine))
     monkeypatch.setattr(cli_main, "create_all", lambda: None)
     monkeypatch.setattr(cli_main, "yesterday_utc", lambda: DAY)
-    monkeypatch.setattr("app.core.world_collect.PAUSE_SECONDS", 0)
+    monkeypatch.setattr("app.usecases.world_collect.PAUSE_SECONDS", 0)
     result = CliRunner().invoke(cli_main.app, ["world", "collect", "--max-files", "1", *args])
     assert result.exit_code == 0, result.output
     return [json.loads(line) for line in result.output.splitlines()

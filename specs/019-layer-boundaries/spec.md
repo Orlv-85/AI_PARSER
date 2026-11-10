@@ -2,7 +2,7 @@
 
 **Feature Branch**: `019-layer-boundaries`
 **Created**: 2026-11-10
-**Status**: Step 1 in progress (owner: "начинай", 2026-11-10)
+**Status**: Steps 1 and 2 done (2026-11-10); step 3 (calculations out of repositories) open
 **Input**: Owner request of 2026-11-10: `core` and `storage` import each other; fix it by the book.
 
 ## The problem (measured 2026-11-10, master `a90a51e`)

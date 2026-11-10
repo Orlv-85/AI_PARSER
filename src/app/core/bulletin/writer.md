@@ -2,6 +2,7 @@
 module: src/app/core/bulletin/writer.py
 covers:
   - src/app/core/bulletin/writer*.py
+  - src/app/usecases/bulletin/writer_run.py
   - src/app/storage/bulletin_texts.py
 -->
 # Bulletin writer (bulletin, item 3)
@@ -273,7 +274,7 @@ the safe direction: the story falls back to its title.
 | `src/app/core/bulletin/writer.py` | constants, `WRITER_PROMPT`, `SourceText`, packet, `split_sentences`, `parse_writer`, `write_bulletin` |
 | `_remove_non_english_stories`, `_check_non_english_text`, `_clear_non_english_headline` | post-check foreign-title story eligibility, gloss and day-headline cleanup, including fallback |
 | `src/app/core/bulletin/writer_grounding.py` | folding, `sentence_error`: the checks of Grounding |
-| `src/app/core/bulletin/writer_run.py` | `open_writer`: writer journal, client, `ask` |
+| `src/app/usecases/bulletin/writer_run.py` | `open_writer`: writer journal, client, `ask` |
 | `src/app/storage/bulletin_texts.py` | `load_sources`: archive text, summary and title per link |
 | `src/app/core/daily/signals_brief.py` | `grounding_error` (shared), `request_body`, `request_key`, `BRIEF_PRICES` |
 | `src/app/core/bulletin/builder.py` | `Story` and `Bulletin` fields of the writer |

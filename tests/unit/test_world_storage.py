@@ -280,10 +280,10 @@ def test_world_tables_not_read_by_digest():
     allowed = {SRC / "storage" / "world.py", SRC / "storage" / "models_sql.py"}
     allowed |= set((SRC / "core" / "world").glob("*.py"))
     allowed.add(SRC / "cli" / "main.py")
-    allowed.add(SRC / "core" / "world_collect.py")
-    allowed.add(SRC / "core" / "world_screen.py")
-    allowed.add(SRC / "core" / "world_text.py")
-    allowed.add(SRC / "core" / "world_report.py")
+    allowed.add(SRC / "usecases" / "world_collect.py")
+    allowed.add(SRC / "usecases" / "world_screen.py")
+    allowed.add(SRC / "usecases" / "world_text.py")
+    allowed.add(SRC / "usecases" / "world_report.py")
     allowed.add(SRC / "storage" / "bulletin_input.py")  # the bulletin is the one reader (FR-016)
     found = []
     for path in SRC.rglob("*.py"):
@@ -295,8 +295,8 @@ def test_world_tables_not_read_by_digest():
             found.append(path.name)
     assert not found
     for path in (SRC / "web").rglob("*.py"):
-        assert not any(name.startswith(("app.storage.world.", "app.core.world"))
-                       for name in _imports(path)), path
+        banned = ("app.storage.world.", "app.core.world", "app.usecases.world")
+        assert not any(name.startswith(banned) for name in _imports(path)), path
 
 
 def test_import_scan_resolves_relative_imports(tmp_path):

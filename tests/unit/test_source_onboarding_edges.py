@@ -7,10 +7,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.sources import candidates as source_candidates
-from app.core.sources import onboarding as source_onboarding
-from app.core.sources import validation as source_validation
 from app.core.sources.candidate_fields import read_optional_int, read_str
 from app.storage.models_sql import Base, Source
+from app.usecases.sources import onboarding as source_onboarding
+from app.usecases.sources import validation as source_validation
 
 
 def _session():

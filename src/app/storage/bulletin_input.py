@@ -22,7 +22,7 @@ from app.core.bulletin.builder import (
 )
 from app.core.bulletin.world_change import WORLD_CHANGE_VERSION
 from app.core.canonicalize import canonical_url_hash
-from app.core.daily.enrichment import digest_title
+from app.core.daily.titles import digest_title
 from app.storage.bulletin_store import BulletinRepo
 from app.storage.models_sql import (
     Article,

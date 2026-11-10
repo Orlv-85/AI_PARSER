@@ -113,7 +113,7 @@ the Troubleshooting section of `README.md`.
         "logs/daily-digest.log report for 2026-10-19"
       ],
       "cause": "An httpx transport error (connection dropped while reading the answer) leaves a call whose billing is unknown. The daily journal had no transport_review_reason, so the call was never retried and every later dispatch was blocked.",
-      "fix": "src/app/core/daily/enrichment.py passes TRANSPORT_REVIEW_REASON and TRANSPORT_RETRY_DELAYS=(60, 300) to PilotJournal: the reservation is kept and the request is retried after 1 and 5 minutes in the same run. After the third failure the day fails with `Reviewed transport attempts exhausted`. Journals from before the fix resume through the same path (the failed row is reviewed automatically).",
+      "fix": "src/app/usecases/daily/enrichment.py passes TRANSPORT_REVIEW_REASON and TRANSPORT_RETRY_DELAYS=(60, 300) to PilotJournal: the reservation is kept and the request is retried after 1 and 5 minutes in the same run. After the third failure the day fails with `Reviewed transport attempts exhausted`. Journals from before the fix resume through the same path (the failed row is reviewed automatically).",
       "verification": "tests/unit/test_daily_enrichment.py::test_dropped_connection_is_retried_after_one_then_five_minutes and ::test_transport_retries_exhausted_fails_day_without_more_dispatch; 2026-10-19 was published on 2026-10-20 by reviewing the row and running publish_day with the same reason."
     },
     {
@@ -121,7 +121,7 @@ the Troubleshooting section of `README.md`.
       "date": "2026-10-20",
       "area": "make lint (mypy)",
       "symptom": "mypy reports `Returning Any from function declared to return \"str\"` [no-any-return] (or int, tuple[int, int]) on a line that returns the result of a typed project function or a Settings field, e.g. `return jev_state(article)` in src/app/core/ingestion/admission.py.",
-      "evidence": ["mypy names project modules `src.app.core.ingestion.pipeline` in its messages, so `from app... import ...` does not resolve and falls under ignore_missing_imports", "pyproject.toml [tool.mypy]: files = [src, tests], explicit_package_bases, ignore_missing_imports and warn_return_any are on"],
+      "evidence": ["mypy names project modules `src.app.usecases.ingestion.pipeline` in its messages, so `from app... import ...` does not resolve and falls under ignore_missing_imports", "pyproject.toml [tool.mypy]: files = [src, tests], explicit_package_bases, ignore_missing_imports and warn_return_any are on"],
       "cause": "Under this config every name imported from `app.*` is Any, and warn_return_any flags returning it from a function with a typed return.",
       "fix": "Follow the existing idiom: `cast(str, ...)` (see `_html_placeholder_key` in src/app/core/ingestion/pipeline.py) or assign to a typed local (`counts: tuple[int, int] = ...; return counts`). Do not add `# type: ignore`.",
       "verification": "make lint passes after the cast or typed local (branch refactor/pipeline-cleanup-20261020)."
@@ -223,7 +223,7 @@ the Troubleshooting section of `README.md`.
         "T2 PR3 (#172): `reveal_type(read_str)` in src/app/storage/source_repo.py showed Any locally; with MYPYPATH=src it showed the real signature"
       ],
       "cause": "The main folder venv (.venv, formerly venv1) has an editable install of ai-news-collector (`__editable__.ai_news_collector-0.1.0.pth`) pointing at the main folder, which is on an older master. mypy resolves `app.*` through it; a module missing there is silently Any because `ignore_missing_imports = true`.",
-      "fix": "CI reports the same `no-any-return` (names imported from `app.*` are Any there too, see the case citing `src.app.core.ingestion.pipeline`): use that case's idiom, `cast(T, ...)` or a typed local, never `# type: ignore`. Locally, a branch-only module may also be Any through the stale editable install; CI decides. Corrected 2026-11-01 after T2 PRs #183 and #184 failed CI lint.",
+      "fix": "CI reports the same `no-any-return` (names imported from `app.*` are Any there too, see the case citing `src.app.usecases.ingestion.pipeline`): use that case's idiom, `cast(T, ...)` or a typed local, never `# type: ignore`. Locally, a branch-only module may also be Any through the stale editable install; CI decides. Corrected 2026-11-01 after T2 PRs #183 and #184 failed CI lint.",
       "verification": "Reproduced by the PR #172 reviewer locally; CI lint of #183 (rows.py:102) and #184 (rss.py:98) failed with the same error, so the typed local is required, not a workaround.",
       "if_it_recurs": "If CI itself reports Any for a new module, check pyproject mypy settings (files, explicit_package_bases, mypy_path) rather than the venv."
     },

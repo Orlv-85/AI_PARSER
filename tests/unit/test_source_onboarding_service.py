@@ -4,10 +4,10 @@ import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
-from app.core.sources.onboarding import review_source_candidate
 from app.storage.models_sql import Base, Source
 from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
 from app.storage.source_repo import SourceRepo
+from app.usecases.sources.onboarding import review_source_candidate
 from app.web.source_onboarding import SourceOnboardingService
 
 

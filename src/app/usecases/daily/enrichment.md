@@ -1,8 +1,9 @@
 <!-- code-doc
-module: src/app/core/daily/enrichment.py
+module: src/app/usecases/daily/enrichment.py
 covers:
-  - src/app/core/daily/enrichment.py
+  - src/app/usecases/daily/enrichment.py
   - src/app/core/daily/provider_requests.py
+  - src/app/core/daily/titles.py
   - scripts/run_daily_digest_job.sh
   - scripts/run_daily_fetch_job.sh
 -->

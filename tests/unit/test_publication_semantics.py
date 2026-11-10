@@ -3,11 +3,11 @@ from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 
 from app.config.sources import SourceConfig
-from app.core.ingestion.pipeline.models import COMPARISON_MIN_CONFIDENCE
-from app.core.ingestion.pipeline.rows import _build_article_row, _candidate_payload
 from app.core.jev import JevAssessment
 from app.ingest.html import fetch_html_article
 from app.ingest.rss import parse_rss
+from app.usecases.ingestion.pipeline.models import COMPARISON_MIN_CONFIDENCE
+from app.usecases.ingestion.pipeline.rows import _build_article_row, _candidate_payload
 
 
 def test_atom_updated_only_does_not_become_publication():

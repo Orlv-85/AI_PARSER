@@ -3,8 +3,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.config import sources as sources_config
-from app.core.sources import onboarding as source_onboarding
 from app.storage.models_sql import Base, Source
+from app.usecases.sources import onboarding as source_onboarding
 
 
 def _session():

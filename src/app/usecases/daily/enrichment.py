@@ -4,7 +4,6 @@ enrichment.md."""
 import asyncio
 import hashlib
 import json
-import re
 from collections import Counter
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
@@ -29,6 +28,7 @@ from app.core.daily.provider_requests import (
     topic_request,
 )
 from app.core.daily.rubric import QUESTIONS, RUBRIC_VERSION
+from app.core.daily.titles import digest_title
 from app.core.jev import JevInputTooLarge, _probability
 from app.storage.admission import read_collection_status
 from app.storage.article_evidence_cache import PageCache, SourcePageDownloader, make_http_client
@@ -45,10 +45,6 @@ TRANSPORT_REVIEW_REASON = "daily-publication: transport failure, conservative re
 TRANSPORT_RETRY_DELAYS = (60, 300)
 DAILY_CATCH_UP_DAYS = 3
 SOURCE_MIN_CHARS = 300
-# Aggregator decorations only; meaningful parentheticals such as "(Sponsor)" stay.
-TITLE_JUNK = re.compile(
-    r"\s*\((?:\d+ min(?:ute)? read|GitHub Repo|"
-    r"Hugging Face (?:Repo|Model|Space|Dataset|Paper))\)\s*$", re.IGNORECASE)
 
 
 class SummaryHeld(ValueError):
@@ -419,13 +415,6 @@ def _apply_enrichment(article, row, body, verdict, summary, *, review,
         "topic_source": "jev" if fallback is None else "deepseek_fallback",
         **({} if fallback is None else {"topic_fallback": fallback}),
     })
-
-
-def digest_title(title):
-    cleaned = title
-    while (stripped := TITLE_JUNK.sub("", cleaned)) != cleaned:
-        cleaned = stripped
-    return cleaned.strip() or title
 
 
 def digest_groups(articles):

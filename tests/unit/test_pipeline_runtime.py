@@ -11,13 +11,13 @@ import pytest
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
-from app.core.ingestion.pipeline import run_fetch_cycle
-from app.core.ingestion.pipeline.models import FetchSummary
-from app.core.ingestion.pipeline.sources import _managed_source_to_config
 from app.core.models import Article
 from app.ingest import rss as rss_module
 from app.ingest.html import HtmlListPageResult
 from app.ingest.rss import RssFetchResult, _with_rss_metadata
+from app.usecases.ingestion.pipeline import run_fetch_cycle
+from app.usecases.ingestion.pipeline.models import FetchSummary
+from app.usecases.ingestion.pipeline.sources import _managed_source_to_config
 
 OLD_VALIDATORS: dict[str, object | None] = {
     "etag": '"etag-old"', "last_modified": "Sun, 22 Feb 2026 10:00:00 GMT",
@@ -155,26 +155,27 @@ def _run(
     )}
     mp = monkeypatch
     for name in ("fetch_rss", "fetch_html_links", "fetch_html_links_with_metadata"):
-        mp.setattr(f"app.core.ingestion.pipeline.fetch.{name}", fetchers[name])
+        mp.setattr(f"app.usecases.ingestion.pipeline.fetch.{name}", fetchers[name])
     mp.setattr(
-        "app.core.ingestion.pipeline.html_links.fetch_html_article", fetchers["fetch_html_article"],
+        "app.usecases.ingestion.pipeline.html_links.fetch_html_article",
+        fetchers["fetch_html_article"],
     )
-    mp.setattr("app.core.ingestion.pipeline.cycle.load_sources", lambda _path: configs)
-    mp.setattr("app.core.ingestion.pipeline.cycle.create_all", lambda: None)
-    mp.setattr("app.core.ingestion.pipeline.cycle.SessionLocal", lambda: current)
-    mp.setattr("app.core.ingestion.pipeline.cycle.SourceRepo", source_repo)
-    mp.setattr("app.core.ingestion.pipeline.cycle.ArticleRepo", article_repo)
-    mp.setattr("app.core.ingestion.pipeline.html_links.canonicalize_url", lambda u: f"c:{u}")
-    mp.setattr("app.core.ingestion.pipeline.html_links.canonical_url_hash", lambda u: f"h:{u}")
-    mp.setattr("app.core.ingestion.pipeline.rss.canonicalize_url", lambda u: f"c:{u}")
-    mp.setattr("app.core.ingestion.pipeline.rss.canonical_url_hash", lambda u: f"h:{u}")
+    mp.setattr("app.usecases.ingestion.pipeline.cycle.load_sources", lambda _path: configs)
+    mp.setattr("app.usecases.ingestion.pipeline.cycle.create_all", lambda: None)
+    mp.setattr("app.usecases.ingestion.pipeline.cycle.SessionLocal", lambda: current)
+    mp.setattr("app.usecases.ingestion.pipeline.cycle.SourceRepo", source_repo)
+    mp.setattr("app.usecases.ingestion.pipeline.cycle.ArticleRepo", article_repo)
+    mp.setattr("app.usecases.ingestion.pipeline.html_links.canonicalize_url", lambda u: f"c:{u}")
+    mp.setattr("app.usecases.ingestion.pipeline.html_links.canonical_url_hash", lambda u: f"h:{u}")
+    mp.setattr("app.usecases.ingestion.pipeline.rss.canonicalize_url", lambda u: f"c:{u}")
+    mp.setattr("app.usecases.ingestion.pipeline.rss.canonical_url_hash", lambda u: f"h:{u}")
     if "datetime" in patches:  # every module that calls datetime.now()
-        mp.setattr("app.core.ingestion.pipeline.cycle.datetime", patches["datetime"])
-        mp.setattr("app.core.ingestion.pipeline.replay.datetime", patches["datetime"])
-        mp.setattr("app.core.ingestion.pipeline.sources.datetime", patches["datetime"])
-    mp.setattr("app.core.ingestion.pipeline.rows.ai_relevance_score", lambda _item: 0.5)
-    mp.setattr("app.core.ingestion.pipeline.rows.freshness_score", lambda _dt: 0.5)
-    mp.setattr("app.core.ingestion.pipeline.rows.rank_score", lambda **_kwargs: 0.5)
+        mp.setattr("app.usecases.ingestion.pipeline.cycle.datetime", patches["datetime"])
+        mp.setattr("app.usecases.ingestion.pipeline.replay.datetime", patches["datetime"])
+        mp.setattr("app.usecases.ingestion.pipeline.sources.datetime", patches["datetime"])
+    mp.setattr("app.usecases.ingestion.pipeline.rows.ai_relevance_score", lambda _item: 0.5)
+    mp.setattr("app.usecases.ingestion.pipeline.rows.freshness_score", lambda _dt: 0.5)
+    mp.setattr("app.usecases.ingestion.pipeline.rows.rank_score", lambda **_kwargs: 0.5)
     return run_fetch_cycle(settings=settings or _settings(), logger=logger or _Logger())
 
 
@@ -207,9 +208,9 @@ def _inline_fetches(monkeypatch) -> tuple[list[str], list[int]]:
         order.append(config.id)
         return _rss_result([]) if config.type == "rss" else HtmlListPageResult(links=[])
 
-    monkeypatch.setattr("app.core.ingestion.pipeline.fetch._fetch_source_items", fetch)
-    monkeypatch.setattr("app.core.ingestion.pipeline.fetch.ThreadPoolExecutor", _Executor)
-    monkeypatch.setattr("app.core.ingestion.pipeline.fetch.as_completed", list)
+    monkeypatch.setattr("app.usecases.ingestion.pipeline.fetch._fetch_source_items", fetch)
+    monkeypatch.setattr("app.usecases.ingestion.pipeline.fetch.ThreadPoolExecutor", _Executor)
+    monkeypatch.setattr("app.usecases.ingestion.pipeline.fetch.as_completed", list)
     return order, workers
 
 

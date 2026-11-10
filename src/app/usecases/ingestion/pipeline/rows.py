@@ -6,7 +6,6 @@ from typing import Any, cast
 
 from app.config.sources import SourceConfig
 from app.core.daily.rubric import RUBRIC_VERSION
-from app.core.ingestion.pipeline.models import COMPARISON_MIN_CONFIDENCE
 from app.core.ingestion.scoring import ai_relevance_score, freshness_score, rank_score
 from app.core.jev import JevAssessment, jev_state
 from app.core.models import Article as CoreArticle
@@ -15,6 +14,7 @@ from app.ingest.page_filter import (
     url_exclusion_reason,
 )
 from app.storage.article_repo import ArticleRepo
+from app.usecases.ingestion.pipeline.models import COMPARISON_MIN_CONFIDENCE
 
 # A publication time further ahead than this is not a timezone skew; it is replaced.
 FUTURE_DATE_TOLERANCE = timedelta(hours=24)

@@ -4,9 +4,9 @@ from typing import Any, cast
 
 from sqlalchemy.orm import Session
 
-from app.core.sources.onboarding import review_source_candidate
 from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
 from app.storage.source_repo import SourceRepo
+from app.usecases.sources.onboarding import review_source_candidate
 from app.web.models import (
     SourceOnboardingApproveResponse,
     SourceOnboardingBatchSummary,

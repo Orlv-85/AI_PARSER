@@ -13,8 +13,6 @@ from app.core.ingestion.admission import (
     decision_from_assessment,
     evidence_hash,
 )
-from app.core.ingestion.pipeline.models import AdmissionState
-from app.core.ingestion.pipeline.rows import _assessment_payload, _candidate_payload
 from app.core.jev import JevAssessment, JevRelevanceScorer
 from app.storage.admission import (
     get_cached_decision,
@@ -23,6 +21,8 @@ from app.storage.admission import (
 )
 from app.storage.article_repo import ArticleRepo
 from app.storage.models_sql import AdmissionDecision
+from app.usecases.ingestion.pipeline.models import AdmissionState
+from app.usecases.ingestion.pipeline.rows import _assessment_payload, _candidate_payload
 
 
 def _pause(

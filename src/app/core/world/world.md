@@ -3,10 +3,10 @@ module: src/app/core/world/__init__.py
 covers:
   - src/app/core/world/*.py
   - src/app/storage/world.py
-  - src/app/core/world_collect.py
-  - src/app/core/world_screen.py
-  - src/app/core/world_text.py
-  - src/app/core/world_report.py
+  - src/app/usecases/world_collect.py
+  - src/app/usecases/world_screen.py
+  - src/app/usecases/world_text.py
+  - src/app/usecases/world_report.py
   - scripts/run_daily_world_job.sh
 -->
 # World news stream
@@ -562,7 +562,7 @@ flowchart LR
 - Switch off by default and read by the job script, not by the command: the download is about
   820 MB a day; turning it on in production is a separate owner decision (owner, 2026-11-01). A
   manual `world collect` stays possible for smoke runs and catch-up.
-- The collect orchestration is `core/world_collect.py`, outside `core/world/`, because
+- The collect orchestration is `usecases/world_collect.py`, outside `core/world/`, because
   `storage/world.py` imports `core/world/gdelt.py` and core world code must not import storage
   (decided 2026-11-01 (agent)).
 - The job processes only yesterday; a day cut short by the timeout is finished by hand with
@@ -596,7 +596,7 @@ flowchart LR
 - Top N is per window (GDELT days D-1 and D), not exactly per real day across sliding windows; the
   same story can be asked again in the next window. Known for W5, left as is (coordinator,
   2026-11-01).
-- Orchestration is `core/world_screen.py` (it imports storage); the question, state and parser are
+- Orchestration is `usecases/world_screen.py` (it imports storage); the question, state and parser are
   pure and live in `core/world/screen.py` (decided 2026-11-01 (agent)).
 - One lock hold for the whole night (collect to second screen) and one container per step: the text
   download shares the archive cache with the archive job, and a container per step gives each
@@ -652,7 +652,7 @@ flowchart LR
   core world modules). Tests: `test_world_core_never_imports_storage`.
 - World requests never use the journal file of the digest or of `bulletin assess`. Tests:
   `test_world_journal_is_separate_from_digest_cap`.
-- `core/world_text.py` makes no `articles` row and never adds its transient `Article` to a session;
+- `usecases/world_text.py` makes no `articles` row and never adds its transient `Article` to a session;
   it writes archive rows only through `archive_articles` and the archive download step. Tests:
   `test_world_text_creates_no_articles_and_keeps_archive_after_prune`.
 - Step B writes only `world_change_assessments` (by hash) and `world_candidates`; no world candidate
@@ -670,21 +670,21 @@ flowchart LR
 - `storage/models_sql.py`: `WorldCandidate` (`world_candidates`), `WorldFile` (`world_files`);
   migration `c9f3a7e15b28_add_world_candidates_and_files.py`, after `b8e2d4f61a07`.
 - `gdelt.py` also has `scan_file` and `FileResult` (one file; `scan_day` is built on them).
-- `core/world_collect.py`: `collect_day`, `CollectSummary`, `yesterday_utc`; the only caller of
+- `usecases/world_collect.py`: `collect_day`, `CollectSummary`, `yesterday_utc`; the only caller of
   `WorldRepo` besides tests.
 - `scripts/run_daily_world_job.sh`; `scripts/install_daily_timers.sh` writes the unit and timer
   `ai-news-daily-world` (04:00 UTC) and enables the timer on every deploy.
 - `core/world/screen.py`: `WORLD_SCREEN_VERSION`, `SCREEN_QUESTIONS`, `SCREEN_THRESHOLD`,
   `WORLD_TOP_N`, `WORLD_JEV_MAX_USD_PER_DAY`, `MAX_ATTEMPTS`, `screen_state`, `parse_screen`,
   `priority`.
-- `core/world_screen.py`: `run_screen`, `open_world_assessor`, `TextSource`, `no_text`; asks
+- `usecases/world_screen.py`: `run_screen`, `open_world_assessor`, `TextSource`, `no_text`; asks
   through `WorldChangeAssessor.ask` and stores through `WorldChangeRepo`
   (`core/bulletin/world_change.py`). `WorldRepo.candidates_in_window` and `set_priority` serve it.
-- `core/world_text.py`: `run_texts`, `archive_text_source`; ranks with `rank_clusters`, makes
+- `usecases/world_text.py`: `run_texts`, `archive_text_source`; ranks with `rank_clusters`, makes
   documents with `archive_articles` and downloads with `download_documents`
-  (`core/archive/capture.py`, see `capture.md`).
+  (`usecases/archive/capture.py`, see `capture.md`).
 - `storage/world.py`: `transition` keeps the reason for `no_text`.
-- `core/world_report.py`: `build_report`, `read_journal_cost`; read-only, imports storage.
+- `usecases/world_report.py`: `build_report`, `read_journal_cost`; read-only, imports storage.
 - `scripts/run_daily_world_job.sh`: env_value (switch and key from the environment or `.env`),
   run_step, the four *_LIMIT variables; the unit limit is in `install_daily_timers.sh`.
 - `storage/archive.py`: `state_counts` and `hosts_without_text` skip world documents.

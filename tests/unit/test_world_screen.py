@@ -28,7 +28,6 @@ from app.core.world.screen import (
     parse_screen,
     screen_state,
 )
-from app.core.world_screen import open_world_assessor, rank_clusters, run_screen
 from app.storage.models_sql import Base, WorldCandidate, WorldChangeAssessment
 from app.storage.provider_journal import PilotJournal
 from app.storage.world import (
@@ -40,6 +39,7 @@ from app.storage.world import (
     STATE_TEXT_READY,
     WorldRepo,
 )
+from app.usecases.world_screen import open_world_assessor, rank_clusters, run_screen
 
 DAY = date(2026, 10, 30)
 TODAY = date(2026, 11, 1)

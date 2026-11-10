@@ -13,7 +13,6 @@ from typing import Any
 import httpx
 from sqlalchemy.orm import Session
 
-from app.core.periodic.period_brief_run import run_briefs
 from app.core.periodic.period_compute import (
     PERIOD_METHODOLOGY_VERSION,
     compute_period,
@@ -27,6 +26,7 @@ from app.core.periodic.period_model import (
     previous_start,
 )
 from app.storage.period_signals import PeriodSignalRepo
+from app.usecases.periodic.period_brief_run import run_briefs
 
 LOGGER = logging.getLogger(__name__)
 BRIEF_MAX_SECONDS = 300

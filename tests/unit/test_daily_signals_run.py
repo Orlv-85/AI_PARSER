@@ -10,7 +10,6 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from app.core.canonicalize import canonical_url_hash
-from app.core.daily.signals import RunOptions, run_days, run_signals
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import (
     Article,
@@ -22,6 +21,7 @@ from app.storage.models_sql import (
     NewsDigestItem,
     NewsDigestReport,
 )
+from app.usecases.daily.signals import RunOptions, run_days, run_signals
 
 D = date(2026, 10, 16)
 NOW = datetime(2026, 10, 17, 3, tzinfo=UTC)
@@ -461,7 +461,7 @@ def test_ledger_stop_skips_briefs_and_keeps_extraction(session, tmp_path):
 
 def test_brief_failure_never_breaks_the_run(session, tmp_path, monkeypatch):
     seed(session)
-    monkeypatch.setattr("app.core.daily.signals.brief_packet",
+    monkeypatch.setattr("app.usecases.daily.signals.brief_packet",
                         lambda *a: (_ for _ in ()).throw(KeyError("boom")))
     report = paid(session, tmp_path, Both())
     assert report["state"] == "ok" and report["reports_written"] == [D.isoformat()]
@@ -490,7 +490,7 @@ def _extraction_spend(monkeypatch, usd):
         kwargs["report"]["run"] = {"calls": 0, "usd": usd, "states": {}}
         return round(usd * 1_000_000)
 
-    monkeypatch.setattr("app.core.daily.signals._extract_days", fake_extract)
+    monkeypatch.setattr("app.usecases.daily.signals._extract_days", fake_extract)
 
 
 def test_max_usd_is_the_run_total(session, tmp_path, monkeypatch):

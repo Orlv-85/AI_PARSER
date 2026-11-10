@@ -2,6 +2,7 @@
 module: src/app/core/periodic/signals_period.py
 covers:
   - src/app/core/periodic/*.py
+  - src/app/usecases/periodic/*.py
   - src/app/storage/period_signals*.py
   - src/app/storage/migrations/versions/*period_signal*.py
   - src/app/web/routes/period.py
@@ -10,7 +11,7 @@ covers:
 # Period AI Signals
 
 Weekly and monthly view of the AI signals: sums and comparisons of the stored daily data
-(`core/daily/signals.md`) over a completed period, plus one short AI-written brief per period. The
+(`usecases/daily/signals.md`) over a completed period, plus one short AI-written brief per period. The
 numbers are deterministic and cost $0; no provider is involved. The brief is the only paid step,
 off by default behind its own flag. Shipped: the pure rules (bounds, thresholds, status, compute),
 storage, the command `ai-news period-signals`, the nightly step, the read API, the `/weekly` and

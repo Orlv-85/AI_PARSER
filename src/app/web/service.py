@@ -8,10 +8,10 @@ from queue import Empty
 from typing import Any
 
 from app.config.settings import get_settings
-from app.core.ingestion.pipeline import run_fetch_cycle
 from app.observability import setup_json_logging
 from app.storage import SessionLocal
 from app.storage.admission import PAUSED_MESSAGE, read_collection_status
+from app.usecases.ingestion.pipeline import run_fetch_cycle
 from app.web.models import UpdateStatus, WebUpdateSettings
 
 _DEFAULT_PROCESS_RESULT_DIR = Path("tmp/web_update_results")

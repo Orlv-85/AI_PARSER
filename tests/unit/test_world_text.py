@@ -12,12 +12,9 @@ from typer.testing import CliRunner
 
 from app.cli import main as cli_main
 from app.config.settings import Settings
-from app.core.archive import capture as capture_module
 from app.core.bulletin import world_change as wc
 from app.core.jev import CONTENT_LIMIT
 from app.core.world.gdelt import Candidate
-from app.core.world_screen import rank_clusters, run_screen
-from app.core.world_text import archive_text_source, run_texts
 from app.ingest.fetcher import DEFAULT_USER_AGENT
 from app.storage.archive import WORLD_SOURCE_KEY, ArchiveRepo
 from app.storage.models_sql import (
@@ -35,6 +32,9 @@ from app.storage.world import (
     STATE_TEXT_READY,
     WorldRepo,
 )
+from app.usecases.archive import capture as capture_module
+from app.usecases.world_screen import rank_clusters, run_screen
+from app.usecases.world_text import archive_text_source, run_texts
 
 DAY = date(2026, 10, 30)
 BODY = "An editorial article about AI in schools and hospitals. " * 30

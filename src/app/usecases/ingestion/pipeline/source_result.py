@@ -3,16 +3,16 @@ from logging import Logger
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
-from app.core.ingestion.pipeline.html_links import _process_html_links_two_stage
-from app.core.ingestion.pipeline.models import AdmissionState, FetchResult, SourceMetrics
-from app.core.ingestion.pipeline.rss import _process_fetched_source_items
-from app.core.ingestion.pipeline.sources import _persist_fetch_state_if_present
 from app.core.jev import JevRelevanceScorer
 from app.ingest.html import (
     HtmlListPageResult,
 )
 from app.storage.article_repo import ArticleRepo
 from app.storage.source_repo import SourceRepo
+from app.usecases.ingestion.pipeline.html_links import _process_html_links_two_stage
+from app.usecases.ingestion.pipeline.models import AdmissionState, FetchResult, SourceMetrics
+from app.usecases.ingestion.pipeline.rss import _process_fetched_source_items
+from app.usecases.ingestion.pipeline.sources import _persist_fetch_state_if_present
 
 
 def _log_source_metrics(

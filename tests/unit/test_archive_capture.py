@@ -8,17 +8,17 @@ import httpx
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
-from app.core.archive import capture as capture_module
-from app.core.archive.capture import (
+from app.storage.archive import WORLD_SOURCE_KEY, ArchiveRepo
+from app.storage.article_evidence_cache import EXTRACTION_VERSION, PageCache, url_key
+from app.storage.models_sql import ArchiveDocument, ArchiveText, Article, Base
+from app.usecases.archive import capture as capture_module
+from app.usecases.archive.capture import (
     ARCHIVE_MAX_PER_HOST,
     ARCHIVE_RAW_KEEP_DAYS,
     ARCHIVE_RETRY_DELAYS,
     capture,
     dedupe_page_cache,
 )
-from app.storage.archive import WORLD_SOURCE_KEY, ArchiveRepo
-from app.storage.article_evidence_cache import EXTRACTION_VERSION, PageCache, url_key
-from app.storage.models_sql import ArchiveDocument, ArchiveText, Article, Base
 
 NOW = datetime.now(UTC)
 PAGE = ("<html><head><title>Page</title></head><body><article><h1>Archived page</h1>"

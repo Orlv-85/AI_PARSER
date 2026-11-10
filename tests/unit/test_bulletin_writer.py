@@ -22,7 +22,6 @@ from app.cli import main as cli_main
 from app.config.settings import Settings
 from app.core.bulletin import writer as writer_module
 from app.core.bulletin import writer_grounding as grounding_module
-from app.core.bulletin import writer_run
 from app.core.bulletin.builder import Candidate, DayInput, build_bulletin
 from app.core.bulletin.phrases import load_phrases
 from app.core.bulletin.render import render_text
@@ -51,6 +50,7 @@ from app.storage.models_sql import (
     Source,
 )
 from app.storage.world_change import WorldChangeRepo
+from app.usecases.bulletin import writer_run
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "bulletin_writer"
 DAY = date(2026, 10, 30)

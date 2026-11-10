@@ -13,7 +13,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.canonicalize import canonical_url_hash
-from app.core.daily.enrichment import digest_title
 from app.core.daily.signals_brief import digest_summary
 from app.core.daily.signals_compute import (
     METHODOLOGY_VERSION,
@@ -38,6 +37,7 @@ from app.core.daily.signals_entities import (
     type_group,
 )
 from app.core.daily.signals_extract import EXTRACTION_VERSION, EXTRACTION_VERSIONS, Extraction
+from app.core.daily.titles import digest_title
 from app.storage.models_sql import (
     AIEntity,
     AIEntityOverride,

@@ -1,7 +1,7 @@
 <!-- code-doc
-module: src/app/core/archive/capture.py
+module: src/app/usecases/archive/capture.py
 covers:
-  - src/app/core/archive/*.py
+  - src/app/usecases/archive/*.py
   - src/app/storage/article_evidence_cache.py
   - src/app/storage/archive.py
   - src/app/storage/migrations/versions/*article_archive*.py
@@ -149,7 +149,7 @@ flowchart LR
   prints document and version counts, and deletes only with `--apply`. Tests:
   `test_prune_and_evidence_purge_keep_archive_rows`, `test_archive_repo_purge_status_and_size`,
   `test_archive_purge_dry_run_and_apply`.
-- No module under `src/app/web` (pages, API, MCP) imports `app.core.archive` or
+- No module under `src/app/web` (pages, API, MCP) imports `app.usecases.archive` or
   `app.storage.archive`. Tests: `test_archive_not_imported_by_web_or_mcp`.
 - The migration creates both tables only when missing and its downgrade drops them. Tests:
   `test_article_archive_migration_round_trip`.

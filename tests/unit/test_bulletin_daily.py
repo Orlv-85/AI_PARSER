@@ -15,12 +15,12 @@ from app.cli import main as cli_main
 from app.config.settings import Settings
 from app.core.bulletin.world_change import ASSESS_DEFAULT_MAX_USD, WORLD_CHANGE_VERSION, WorldChange
 from app.core.bulletin.writer import WRITER_MODEL, WRITER_VERSION
-from app.core.bulletin.writer_run import WRITER_MAX_USD_PER_DAY
 from app.core.canonicalize import canonical_url_hash
 from app.storage.bulletin_store import BulletinRepo
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import Article, Base, BulletinRow, DailySignalReport
 from app.storage.world_change import WorldChangeRepo
+from app.usecases.bulletin.writer_run import WRITER_MAX_USD_PER_DAY
 
 DAY = date(2026, 10, 30)
 TODAY = date(2026, 11, 2)
