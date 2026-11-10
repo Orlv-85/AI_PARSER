@@ -22,6 +22,7 @@ from pydantic import SecretStr
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
+from app.core.canonical_json import encoded
 from app.core.daily.signals_brief import BRIEF_PRICES, BRIEF_PROMPT, BriefInvalid, PacketTooLarge
 from app.core.periodic import period_brief as pb
 from app.core.periodic import period_brief_run as run
@@ -37,7 +38,6 @@ from app.core.periodic.period_brief import (
     period_packet,
 )
 from app.storage.daily_signals_ledger import SignalsLedger
-from app.storage.journal_files import encoded
 from app.storage.models_sql import Base, PeriodSignalBrief
 from app.storage.period_signals import PeriodSignalRepo
 

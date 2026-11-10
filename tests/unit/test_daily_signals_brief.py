@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from app.core.canonical_json import encoded, fingerprint
 from app.core.daily import signals_brief as brief
 from app.core.daily.signals_brief import (
     BRIEF_PROMPT,
@@ -17,7 +18,6 @@ from app.core.daily.signals_brief import (
     parse_brief,
     request_body,
 )
-from app.storage.journal_files import encoded, fingerprint
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "daily_signals" / "brief"
 PRO = "deepseek-v4-pro"

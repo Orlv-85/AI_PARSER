@@ -10,9 +10,9 @@ from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from app.core.canonical_json import encoded, fingerprint
 from app.core.daily.signals_entities import QUOTES
 from app.core.daily.signals_extract import GROUNDING
-from app.storage.journal_files import encoded, fingerprint
 
 BRIEF_VERSION = "daily-signals-brief-4"
 # 8 one-per-item sentences took 876 tokens (2026-10-29); two attempts stay under $0.05.

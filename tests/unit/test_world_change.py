@@ -28,12 +28,12 @@ from app.core.bulletin.world_change import (
     run_assessment,
     world_change_state,
 )
+from app.core.canonical_json import encoded, fingerprint
 from app.core.canonicalize import canonical_url_hash
 from app.core.daily import provider_requests, rubric
 from app.core.jev import CONTENT_LIMIT, JevInputTooLarge, JevRelevanceScorer
 from app.core.models import Article as CoreArticle
 from app.storage.digest_repo import NewsDigestRepo
-from app.storage.journal_files import encoded, fingerprint
 from app.storage.models_sql import Article, Base, WorldChangeAssessment
 from app.storage.provider_journal import PilotJournal, TransportAttemptsExhausted
 from app.storage.world_change import WorldChangeRepo

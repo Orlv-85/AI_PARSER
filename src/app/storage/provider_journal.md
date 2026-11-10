@@ -123,7 +123,7 @@ flowchart TD
   uses `_reviewable_transport`; reporting uses `_report_tokens`.
 - `src/app/core/daily/provider_requests.py`: default keys, reservations and summary parsing;
   `src/app/core/provider_costs.py`: prices and explicit overload predicate;
-  `src/app/storage/journal_files.py`: canonical serialization and fingerprints.
+  `src/app/core/canonical_json.py`: canonical serialization and fingerprints.
 - Callers: `src/app/core/jev.py`, `src/app/core/daily/enrichment.py`,
   `src/app/core/bulletin/world_change.py`, `src/app/core/bulletin/writer_run.py`.
   They choose journal identity, caps, retry policy and any custom key/reservation functions.

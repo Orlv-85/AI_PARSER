@@ -5,6 +5,7 @@ from logging import getLogger
 import httpx
 import pytest
 
+from app.core.canonical_json import encoded, fingerprint
 from app.core.daily.provider_requests import (
     JEV_REQUEST_BYTE_BOUND,
     SUMMARY_QUOTE_REPAIR_VERSION,
@@ -22,7 +23,6 @@ from app.core.daily.provider_requests import (
     topic_request,
 )
 from app.core.jev import JevInputTooLarge, JevRelevanceScorer
-from app.storage.journal_files import encoded, fingerprint
 from app.storage.provider_journal import PilotJournal, PilotStopped
 
 ROW = {"url": "https://example.com/article/ai", "title": "Synthetic AI release",

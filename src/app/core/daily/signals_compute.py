@@ -9,6 +9,7 @@ from dataclasses import asdict
 from datetime import date, timedelta
 from typing import Any
 
+from app.core.canonical_json import fingerprint
 from app.core.daily.signals_entities import Entity, same_family, token_prefix
 from app.core.daily.signals_history import LexicalHistory
 from app.core.daily.signals_lines import name_key, one_liner
@@ -25,7 +26,6 @@ from app.core.daily.signals_model import (
 from app.core.daily.signals_naming import proper_name, same_vendor, specific_variant, unit_key
 from app.core.daily.signals_stories import Story, _article_order, cluster, linked_articles, links
 from app.core.daily.signals_trend import trend_delta, trend_windows, unit_articles, window_units
-from app.storage.journal_files import fingerprint
 
 __all__ = [
     "METHODOLOGY_VERSION", "ArticleObs", "DayCoverage", "EntityMention", "LexicalHistory",

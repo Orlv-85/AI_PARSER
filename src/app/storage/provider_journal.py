@@ -11,6 +11,7 @@ from collections import Counter
 
 import httpx
 
+from app.core.canonical_json import encoded, fingerprint
 from app.core.daily.provider_requests import (
     DEEPSEEK_MODEL,
     ENDPOINTS,
@@ -19,7 +20,6 @@ from app.core.daily.provider_requests import (
     reservation,
 )
 from app.core.provider_costs import PRICES, is_overload, microdollars
-from app.storage.journal_files import encoded, fingerprint
 
 # Overload/rate-limit answers without usage are not billed; retry them in place.
 TRANSIENT_RETRY_DELAYS = (15, 60, 180)

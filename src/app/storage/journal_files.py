@@ -1,26 +1,9 @@
-"""Canonical JSON, its fingerprint and atomic private file writes for journals and manifests."""
-import hashlib
-import json
+"""Atomic private file writes for journals and manifests."""
 import os
-from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
-
-def serialize(value: Any) -> str:
-    if isinstance(value, datetime):
-        return value.replace(tzinfo=value.tzinfo or UTC).astimezone(UTC).isoformat()
-    if isinstance(value, date):
-        return value.isoformat()
-    raise TypeError(type(value).__name__)
-
-
-def encoded(value: Any) -> str:
-    return json.dumps(value, sort_keys=True, ensure_ascii=True, default=serialize)
-
-
-def fingerprint(value: Any) -> str:
-    return hashlib.sha256(encoded(value).encode()).hexdigest()
+from app.core.canonical_json import encoded
 
 
 def private_bytes(path: Path, value: bytes) -> None:

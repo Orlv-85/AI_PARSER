@@ -13,6 +13,7 @@ from typing import Any
 import httpx
 from sqlalchemy import or_, select
 
+from app.core.canonical_json import encoded, fingerprint
 from app.core.categories import REENRICH_TOPIC_ORDER
 from app.core.daily.provider_requests import (
     DEEPSEEK_MODEL,
@@ -32,7 +33,7 @@ from app.core.jev import JevInputTooLarge, _probability
 from app.storage.admission import read_collection_status
 from app.storage.article_evidence_cache import PageCache, SourcePageDownloader, make_http_client
 from app.storage.digest_repo import NewsDigestRepo
-from app.storage.journal_files import encoded, fingerprint, private_write
+from app.storage.journal_files import private_write
 from app.storage.models_sql import Article
 from app.storage.provider_journal import PilotJournal, PilotStopped
 

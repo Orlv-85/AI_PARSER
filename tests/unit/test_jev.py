@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
+from app.core.canonical_json import fingerprint
 from app.core.categories import CATEGORY_CRITERIA
 from app.core.daily.provider_requests import source_state
 from app.core.ingestion.admission import bounded_evidence, evidence_hash
@@ -20,7 +21,6 @@ from app.core.jev import JevAssessment, JevRelevanceScorer, jev_relevance_scorer
 from app.core.models import Article
 from app.ingest.html import HtmlListPageResult
 from app.ingest.rss import RssFetchResult, _with_rss_metadata
-from app.storage.journal_files import fingerprint
 from app.storage.models_sql import Article as StoredArticle
 from app.storage.models_sql import Base
 

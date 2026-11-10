@@ -10,10 +10,22 @@ Production jobs: `scripts/run_daily_fetch_job.sh`, `scripts/run_daily_digest_job
 | `cli/` | Typer commands: sources, fetch, serve, top, search, prune, daily-publish, daily-signals (+ entities), period-signals, source candidates |
 | `config/` | `settings.py` (env `AINEWS_*`), `sources.py` (`sources.yaml` loader) |
 | `ingest/` | RSS/HTML fetching, page filtering, date evidence |
-| `core/` | Domain logic. Shared: `models.py`, `categories.py`, `canonicalize.py`, `jev.py`, `provider_costs.py` (paid provider prices, dollar caps). Packages: `ingestion/` (pipeline, admission, scoring, dedup, `reject_policy.py` (conservative reject verdict)), `daily/` (digest enrichment, rubric, re-enrichment pilot, daily signals), `periodic/` (weekly and monthly signals), `archive/` (article archive capture), `sources/` (source onboarding and review) |
-| `storage/` | SQLAlchemy models (`models_sql.py`), repositories, Alembic migrations, ledgers and journals; `journal_files.py` (canonical JSON, fingerprint, private atomic writes) |
+| `core/` | Domain logic. Shared: `models.py`, `categories.py`, `canonicalize.py`, `jev.py`, `provider_costs.py` (paid provider prices, dollar caps), `canonical_json.py` (canonical JSON and its fingerprint). Packages: `ingestion/` (pipeline, admission, scoring, dedup, `reject_policy.py` (conservative reject verdict)), `daily/` (digest enrichment, rubric, re-enrichment pilot, daily signals), `periodic/` (weekly and monthly signals), `archive/` (article archive capture), `sources/` (source onboarding and review) |
+| `storage/` | SQLAlchemy models (`models_sql.py`), repositories, Alembic migrations, ledgers and journals; `journal_files.py` (private atomic file writes) |
 | `web/` | FastAPI app (`web/app.py`: auth middleware, router order), routers by area (`web/routes/`), API models (`web/models.py`), HTML templates |
 | `observability/` | Logging setup |
+
+## Layers
+
+Imports go one way: `cli/`, `web/` -> use cases -> `storage/` -> `core/` (spec
+`specs/019-layer-boundaries/`).
+
+- `core/` holds rules and calculations and does not import `storage/`. Use cases (code that opens
+  sessions and calls repositories) still live in `core/`; they are listed in
+  `tests/unit/test_layer_imports.py`, and that list only shrinks.
+- `storage/` may import `core/` types and constants it stores.
+- Tests: `test_core_imports_storage_only_in_listed_use_cases`,
+  `test_imports_storage_sees_every_import_form`.
 
 ## Code docs
 
