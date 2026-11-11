@@ -1,7 +1,5 @@
 """Home/digest contract; behavior in src/app/web/pages.md."""
 # pylint: disable=redefined-outer-name,import-error,unused-import
-import ast
-import inspect as python_inspect
 from datetime import UTC, datetime, timedelta
 from html import escape
 from importlib import import_module
@@ -109,19 +107,6 @@ def test_legacy_weekly_redirects_stay_hidden_from_openapi(client):
     paths = client.get("/openapi.json").json()["paths"]
     assert "/weekly-ai-analytics" not in paths
     assert "/weekly-ai-analytics/reports" not in paths
-
-
-def test_page_router_handlers_only_delegate():
-    pages = import_module("app.web.routes.pages")
-    tree = ast.parse(python_inspect.getsource(pages.build_pages_router))
-    handlers = [node for node in tree.body[0].body
-                if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)]
-    assert handlers
-    for handler in handlers:
-        assert len(handler.body) == 1, handler.name
-        statement = handler.body[0]
-        assert isinstance(statement, ast.Return), handler.name
-        assert isinstance(statement.value, ast.Call | ast.Await), handler.name
 
 
 @pytest.mark.parametrize("switched,ready,path", [

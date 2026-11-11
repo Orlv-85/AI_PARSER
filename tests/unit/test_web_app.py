@@ -899,3 +899,12 @@ def test_signer_signs_with_the_configured_secret() -> None:
     assert other.verify(signer.sign(subject="operator")) is not None
     assert import_module("app.web.app")._signer(
         SimpleNamespace(is_auth_enabled=False)) is None
+
+
+def test_category_metadata_skips_unreadable_category_and_missing_literal() -> None:
+    metadata = import_module("app.web.routes.news")._article_category_metadata
+    assert metadata(SimpleNamespace(category="not-a-category")) == {}
+    no_literal = SimpleNamespace(date_provenance='{"published": {"selected": null}}')
+    assert metadata(no_literal) == {}
+    literal = SimpleNamespace(date_provenance='{"published": {"selected": {"literal": "May 1"}}}')
+    assert metadata(literal) == {"publication_literal": "May 1"}

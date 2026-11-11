@@ -88,6 +88,10 @@ def _news_rows(deps: WebDeps, filters: dict[str, object]) -> list[ArticleRow]:
         return rows
 
 
+def _news_items(rows: list[ArticleRow]) -> list[NewsItem]:
+    return [_news_item(*row) for row in rows]
+
+
 def _news_item(article: Any, source_key: str | None, source_name: str | None) -> NewsItem:
     return NewsItem(
         title=article.title,
@@ -193,11 +197,10 @@ def build_news_router(deps: WebDeps) -> APIRouter:
         date_from: date | None = None,
         date_to: date | None = None,
     ) -> list[NewsItem]:
-        rows = _news_rows(deps, _view_filters(
+        return _news_items(_news_rows(deps, _view_filters(
             hours=hours, date_from=date_from, date_to=date_to, category=category,
             limit=limit, min_ai_relevance=min_ai_relevance, query=query, days=days,
-            sort=sort))
-        return [_news_item(*row) for row in rows]
+            sort=sort)))
 
     @router.get("/api/news/export")
     def export_news(
@@ -213,11 +216,10 @@ def build_news_router(deps: WebDeps) -> APIRouter:
         date_from: date | None = None,
         date_to: date | None = None,
     ) -> JSONResponse:
-        rows = _news_rows(deps, _view_filters(
+        return _export_response(_news_rows(deps, _view_filters(
             hours=hours, date_from=date_from, date_to=date_to, category=category,
             limit=limit, min_ai_relevance=min_ai_relevance, query=query, days=days,
-            sort=sort, include_content=include_content))
-        return _export_response(rows, include_content)
+            sort=sort, include_content=include_content)), include_content)
 
     @router.get(
         "/api/news/links",

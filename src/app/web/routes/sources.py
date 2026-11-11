@@ -69,7 +69,8 @@ def _review[R](deps: WebDeps, action: Callable[[SourceOnboardingService], R], *,
         return result
 
 
-def _import_response(deps: WebDeps, raw_text: str) -> JSONResponse:
+def _import_response(deps: WebDeps, body: bytes) -> JSONResponse:
+    raw_text = _read_body(SourceOnboardingImportRequest, body, "raw_text is required").raw_text
     with _onboarding(deps, 422):
         result = import_batch(deps.onboarding_session_local, raw_text)
     return JSONResponse(
@@ -102,8 +103,15 @@ def _approve_ready_response(deps: WebDeps, batch_id: int) -> dict[str, Any]:
                 "candidate_ids": approved}
 
 
-def _validate_response(deps: WebDeps, body: SourceOnboardingValidateRequest) -> JSONResponse:
-    """Blocking (fetches every candidate): the route runs it in the thread pool."""
+async def _validate_response(deps: WebDeps, body: bytes) -> JSONResponse:
+    """Validation fetches every candidate, so it runs in the thread pool."""
+    request_body = _read_body(
+        SourceOnboardingValidateRequest, body, "batch_id or candidate_ids is required"
+    )
+    return await run_in_threadpool(_validated, deps, request_body)
+
+
+def _validated(deps: WebDeps, body: SourceOnboardingValidateRequest) -> JSONResponse:
     with _onboarding(deps):
         results = validate_batch(
             deps.onboarding_session_local,
@@ -157,10 +165,7 @@ def build_sources_router(deps: WebDeps) -> APIRouter:
 
     @router.post("/api/source-onboarding/import")
     async def import_source_onboarding_batch(request: Request) -> JSONResponse:
-        raw_text = _read_body(
-            SourceOnboardingImportRequest, await request.body(), "raw_text is required"
-        ).raw_text
-        return _import_response(deps, raw_text)
+        return _import_response(deps, await request.body())
 
     @router.get("/api/source-onboarding/latest")
     def latest_source_batch() -> dict[str, Any]:
@@ -180,12 +185,7 @@ def build_sources_router(deps: WebDeps) -> APIRouter:
 
     @router.post("/api/source-onboarding/validate")
     async def validate_source_onboarding_batch(request: Request) -> JSONResponse:
-        body = _read_body(
-            SourceOnboardingValidateRequest,
-            await request.body(),
-            "batch_id or candidate_ids is required",
-        )
-        return await run_in_threadpool(_validate_response, deps, body)
+        return await _validate_response(deps, await request.body())
 
     @router.get("/api/source-onboarding/overlaps")
     def get_source_onboarding_overlaps(

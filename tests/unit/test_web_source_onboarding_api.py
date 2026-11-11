@@ -1,5 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
+from importlib import import_module
 from threading import Event
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
@@ -788,3 +790,20 @@ def test_source_onboarding_http_errors_map_only_named_value_errors() -> None:
     with pytest.raises(HTTPException) as storage, _http_errors():
         raise SQLAlchemyError("down")
     assert (storage.value.status_code, storage.value.detail) == (503, "News storage is unavailable")
+
+
+def test_overlaps_handler_passes_no_filter_for_an_empty_candidate_list(monkeypatch) -> None:
+    sources_routes = import_module("app.web.routes.sources")
+    calls: list[Any] = []
+
+    def overlaps(_factory: object, **kwargs: Any) -> list[Any]:
+        calls.append(kwargs)
+        return []
+
+    monkeypatch.setattr(sources_routes, "candidate_overlaps", overlaps)
+    deps = cast(Any, SimpleNamespace(create_onboarding_tables=lambda: None,
+                                     onboarding_session_local=None))
+    sources_routes._overlaps_response(deps, 3, [])
+    sources_routes._overlaps_response(deps, None, [5, 6])
+    assert calls == [{"batch_id": 3, "candidate_ids": None},
+                     {"batch_id": None, "candidate_ids": [5, 6]}]

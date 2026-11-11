@@ -66,7 +66,7 @@ flowchart LR
   (date format and default), even though the enabled home validates malformed dates as 400.
   Tests: `test_home_date_openapi_matches_daily`.
 - Nested page handlers only delegate to module-level helpers; route registration, names,
-  response models and OpenAPI stay unchanged. Tests: `test_page_router_handlers_only_delegate`,
+  response models and OpenAPI stay unchanged. Tests: `test_router_handlers_only_delegate`,
   `test_route_table_order_names_and_models_are_pinned`, `test_auth_middleware_coverage_is_pinned`.
 - Digest links from bulletin and period pages use `/daily`; Full report uses the stored
   `full_report_url` and item count. The digest date picker keeps the current path when setting
