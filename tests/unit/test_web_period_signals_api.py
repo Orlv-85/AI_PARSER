@@ -135,9 +135,10 @@ def test_empty_index(client):
 
 
 def test_request_path_does_not_import_provider_code():
-    source = Path(import_module("app.web.routes.period").__file__).read_text(encoding="utf-8")
-    storage = Path(import_module("app.storage.period_signals").__file__).read_text(encoding="utf-8")
-    for text in (source, storage):
+    names = ("app.web.routes.period", "app.usecases.periodic.period_reads",
+             "app.storage.period_signals")
+    texts = [Path(import_module(name).__file__).read_text(encoding="utf-8") for name in names]
+    for text in texts:
         for name in ("httpx", "ledger", "signals_brief", "DS_API_KEY", "ds_api_key"):
             assert name not in text, name
 

@@ -9,10 +9,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.config.settings import get_settings
+from app.usecases import news_reads
 from app.web.app import create_app
 from app.web.routes import common as common_routes
-from app.web.routes import news as news_routes
 from app.web.routes import pages as pages_routes
+from app.web.routes.news import _view_filters
 
 
 class _NoSignalsRepo:
@@ -65,7 +66,7 @@ def test_web_app_pages_and_update_flow(monkeypatch, tmp_path) -> None:
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(news_routes, "ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr(news_reads, "ArticleRepo", _ArticleRepo)
     monkeypatch.setattr(pages_routes, "NewsDigestRepo", _NewsDigestRepo)
 
     app = create_app()
@@ -202,7 +203,7 @@ def test_news_view_filters_and_source_fields(monkeypatch, tmp_path) -> None:
 
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
-    monkeypatch.setattr(news_routes, "ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr(news_reads, "ArticleRepo", _ArticleRepo)
 
     app = create_app()
     client = TestClient(app)
@@ -278,7 +279,7 @@ def test_news_article_details_returns_content_and_404_for_missing(
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(news_routes, "ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr(news_reads, "ArticleRepo", _ArticleRepo)
 
     app = create_app()
     client = TestClient(app)
@@ -339,7 +340,7 @@ def test_news_export_returns_json_attachment_and_include_content(
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(news_routes, "ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr(news_reads, "ArticleRepo", _ArticleRepo)
 
     app = create_app()
     client = TestClient(app)
@@ -396,7 +397,7 @@ def test_news_export_forwards_date_range_and_returns_503_on_db_error(
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(news_routes, "ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr(news_reads, "ArticleRepo", _ArticleRepo)
 
     app = create_app()
     client = TestClient(app)
@@ -460,7 +461,7 @@ def test_news_api_forwards_date_range_and_overrides_hours_passthrough(
 
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
-    monkeypatch.setattr(news_routes, "ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr(news_reads, "ArticleRepo", _ArticleRepo)
 
     app = create_app()
     client = TestClient(app)
@@ -870,3 +871,13 @@ def test_admin_page_sort_defaults_to_published() -> None:
 
     assert [value for value, _ in parser.options] == ["rank", "published", "category"]
     assert [value for value, selected in parser.options if selected] == ["published"]
+
+
+def test_news_view_filters_one_sided_date_range_replaces_hours():
+    start = date(2026, 1, 1)
+    assert _view_filters(hours=24, date_from=start, date_to=None, category=None, limit=5) == {
+        "hours": None, "limit": 5, "date_from": start, "date_to": None}
+    assert _view_filters(hours=24, date_from=None, date_to=start, category="tools", limit=5) == {
+        "hours": None, "limit": 5, "date_from": None, "date_to": start, "category": "tools"}
+    assert _view_filters(hours=24, date_from=None, date_to=None, category=None, limit=5) == {
+        "hours": 24, "limit": 5}
