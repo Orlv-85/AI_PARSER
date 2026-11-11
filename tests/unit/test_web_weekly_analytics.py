@@ -16,6 +16,7 @@ from app.usecases import weekly_analytics as weekly_usecases
 from app.usecases.daily import signals_reads
 from app.web.app import create_app
 from app.web.routes import weekly as weekly_routes
+from app.web.routes.weekly import _build_weekly_analytics_response, _item_payloads
 
 
 class _NoSignalsRepo:
@@ -864,7 +865,7 @@ class _NullSession:
 
 
 def test_missing_weekly_report_covers_the_seven_days_up_to_the_date() -> None:
-    response = weekly_routes._build_weekly_analytics_response(
+    response = _build_weekly_analytics_response(
         report_date=date(2026, 3, 8), weekly_report=None)
     assert (response.date_from, response.date_to) == (date(2026, 3, 2), date(2026, 3, 8))
 
@@ -873,6 +874,6 @@ def test_weekly_items_without_title_or_summary_are_dropped() -> None:
     def item(title: str, summary: str) -> SimpleNamespace:
         return SimpleNamespace(title=title, summary=summary, url="https://example.com/a")
 
-    kept = weekly_routes._item_payloads(
+    kept = _item_payloads(
         [item("<b></b>", "text"), item("Title", " "), item("Title", "text")])
     assert [(entry.title, entry.summary) for entry in kept] == [("Title", "text")]

@@ -21,6 +21,7 @@ from app.usecases.sources import onboarding as onboarding_usecases
 from app.usecases.sources import validation as validation_usecases
 from app.web.app import create_app
 from app.web.routes.common import _http_errors
+from app.web.routes.sources import _overlaps_response
 
 
 def _build_client(monkeypatch, tmp_path) -> TestClient:
@@ -803,7 +804,7 @@ def test_overlaps_handler_passes_no_filter_for_an_empty_candidate_list(monkeypat
     monkeypatch.setattr(sources_routes, "candidate_overlaps", overlaps)
     deps = cast(Any, SimpleNamespace(create_onboarding_tables=lambda: None,
                                      onboarding_session_local=None))
-    sources_routes._overlaps_response(deps, 3, [])
-    sources_routes._overlaps_response(deps, None, [5, 6])
+    _overlaps_response(deps, 3, [])
+    _overlaps_response(deps, None, [5, 6])
     assert calls == [{"batch_id": 3, "candidate_ids": None},
                      {"batch_id": None, "candidate_ids": [5, 6]}]

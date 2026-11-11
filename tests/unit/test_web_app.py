@@ -3,6 +3,7 @@ from datetime import UTC, date, datetime
 from html.parser import HTMLParser
 from importlib import import_module
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -12,9 +13,10 @@ from app.config.settings import get_settings
 from app.usecases import digest as digest_usecases
 from app.usecases import news_reads
 from app.usecases.daily import signals_reads
-from app.web.app import create_app
+from app.web.app import _onboarding_engine, _signer, create_app
+from app.web.auth import SessionSigner
 from app.web.routes import pages as pages_routes
-from app.web.routes.news import _view_filters
+from app.web.routes.news import _article_category_metadata, _view_filters
 
 
 class _NoSignalsRepo:
@@ -885,26 +887,24 @@ def test_news_view_filters_one_sided_date_range_replaces_hours():
 
 
 def test_onboarding_engine_creates_missing_sqlite_folders(tmp_path) -> None:
-    engine = import_module("app.web.app")._onboarding_engine(f"sqlite:///{tmp_path}/a/b/web.db")
+    engine = _onboarding_engine(f"sqlite:///{tmp_path}/a/b/web.db")
     engine.dispose()
     assert (tmp_path / "a" / "b").is_dir()
 
 
 def test_signer_signs_with_the_configured_secret() -> None:
-    signer_class = import_module("app.web.auth").SessionSigner
-    settings = SimpleNamespace(is_auth_enabled=True, auth_secret="s" * 32,
-                               auth_session_ttl_seconds=60)
-    signer = import_module("app.web.app")._signer(settings)
-    other = signer_class(secret="s" * 32, ttl_seconds=60)
+    settings = cast(Any, SimpleNamespace(is_auth_enabled=True, auth_secret="s" * 32,
+                                         auth_session_ttl_seconds=60))
+    signer = _signer(settings)
+    assert signer is not None
+    other = SessionSigner(secret="s" * 32, ttl_seconds=60)
     assert other.verify(signer.sign(subject="operator")) is not None
-    assert import_module("app.web.app")._signer(
-        SimpleNamespace(is_auth_enabled=False)) is None
+    assert _signer(cast(Any, SimpleNamespace(is_auth_enabled=False))) is None
 
 
 def test_category_metadata_skips_unreadable_category_and_missing_literal() -> None:
-    metadata = import_module("app.web.routes.news")._article_category_metadata
-    assert metadata(SimpleNamespace(category="not-a-category")) == {}
+    assert _article_category_metadata(SimpleNamespace(category="not-a-category")) == {}
     no_literal = SimpleNamespace(date_provenance='{"published": {"selected": null}}')
-    assert metadata(no_literal) == {}
+    assert _article_category_metadata(no_literal) == {}
     literal = SimpleNamespace(date_provenance='{"published": {"selected": {"literal": "May 1"}}}')
-    assert metadata(literal) == {"publication_literal": "May 1"}
+    assert _article_category_metadata(literal) == {"publication_literal": "May 1"}
