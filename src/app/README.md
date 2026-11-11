@@ -28,6 +28,15 @@ import.
   `test_core_imports_no_lower_or_upper_layer`.
 - `usecases/` holds code that opens sessions and calls repositories and providers; it does not
   import `cli/` or `web/`. Tests: `test_use_cases_import_no_entry_point`.
+- `cli/` and `web/` (entry points) reach storage through `usecases/`: they import from
+  `app.storage` only `models_sql` (row types); `web/app.py` is the composition root and may
+  import `SessionLocal` and `create_all` from `app.storage`. Files still in breach are listed in
+  STORAGE_IN_ENTRY_POINTS and `web/` files that commit in COMMITS_IN_WEB of
+  `tests/unit/test_layer_imports.py`; both lists only shrink (spec
+  `specs/020-web-through-usecases/`). Tests:
+  `test_entry_points_import_storage_only_in_listed_files`,
+  `test_composition_root_imports_only_session_and_create_all`,
+  `test_web_commits_only_in_listed_files`.
 - `storage/` may import `core/` types and constants it stores; it does not import `usecases/`,
   `cli/` or `web/`. Tests: `test_storage_imports_no_upper_layer`.
 - `ingest/` is the network and parsing adapter (fetcher, feed and page parsing, date evidence); it
