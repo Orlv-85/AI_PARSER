@@ -1,7 +1,7 @@
 <!-- code-doc
 module: src/app/usecases/daily/signals.py
 covers:
-  - src/app/usecases/daily/signals.py
+  - src/app/usecases/daily/signals*.py
   - src/app/core/daily/signals*.py
   - src/app/storage/daily_signals*.py
   - src/app/storage/migrations/versions/*daily_signal*.py
@@ -53,6 +53,16 @@ that check it.
 - A stored day whose digest kept its item count but lost matched articles (retention, deletion)
   keeps its snapshot in every mode, `--recompute-all` included. Tests:
   `test_day_that_lost_articles_keeps_its_snapshot`.
+- An article in a snapshot shows its digest title (`digest_title`) and the digest item summary of
+  that day (`digest_summary`, a stored `None` reads as ""). The repository returns the stored text;
+  the recompute and the period run apply both (`digest_text`). Tests:
+  `test_report_uses_the_digest_title_of_an_article`,
+  `test_observations_carry_the_digest_summary_of_that_day`,
+  `test_period_run_computes_from_the_digest_title_and_summary`.
+- An operator override is refused when its selector is owned by another override or a merge
+  targets itself (`add_override`, OverrideConflict). Tests:
+  `test_add_override_refuses_a_bad_kind_and_a_merge_into_itself`,
+  `test_add_override_keeps_a_given_target_entity_key`.
 
 **Extraction and entities**
 - One provider call per in-scope article, cached by content hash and `EXTRACTION_VERSION`.
@@ -193,8 +203,9 @@ scripts/run_daily_digest_job.sh (02:00 UTC, after the digest)
        _gate                    flag AINEWS_DAILY_SIGNALS_ENABLED + DS key; else state disabled/missing_provider_key
        repo.replace_membership  digest items of D -> articles (exact URL, then canonical hash)
        _extract_days            one DeepSeek call per in-scope article, via SignalsLedger
-       repo.recompute_reports   reconcile entities, compute_snapshot per day, store if payload changed;
-                                settled days and days that lost articles keep their snapshot
+       recompute_reports        usecases/daily/signals_recompute.py: reconcile entities, digest text,
+                                compute_snapshot per day, store if payload changed; settled days and
+                                days that lost articles keep their snapshot
        _briefs                  one brief call per target day (paid runs only), via a second ledger run
   -> JSON run report (stdout + data/daily-signals/runs/<run_id>.json)
 
@@ -207,7 +218,8 @@ GET /?date=D                                     web/signals_view.py: render_sig
 
 | File | Role | Pure |
 | --- | --- | --- |
-| `usecases/daily/signals.py` | Run orchestration, brief step, operator entity commands (`merge_entities`, `alias_entity`) | no |
+| `usecases/daily/signals.py` | Run orchestration, brief step, operator entity commands (`merge_entities`, `alias_entity`, `add_override` with the selector conflict check) | no |
+| `usecases/daily/signals_recompute.py` | `recompute_reports`, `RecomputeResult`, `digest_text` (digest title and summary of the stored observations; also used by the period run) | no |
 | `core/daily/signals_extract.py` | Extraction prompt, request body, answer validation (`EXTRACTION_VERSION`) | yes |
 | `core/daily/signals_entities.py` | Deterministic entity identity: keys, vendor classes, reconciliation, overrides | yes |
 | `core/daily/signals_compute.py` | Snapshot of one day (`compute_snapshot`, `_Snapshot`, `METHODOLOGY_VERSION`, `payload_hash`, folding, quiet flag); re-exports the input records for the repo | yes |
@@ -218,7 +230,7 @@ GET /?date=D                                     web/signals_view.py: render_sig
 | `core/daily/signals_naming.py` | `specific_variant`, `same_vendor`, `unit_key`, `proper_name` | yes |
 | `core/daily/signals_history.py` | `LexicalHistory`: earliest lexical mention before D | yes |
 | `core/daily/signals_brief.py` | Brief packet, prompt, request body, validation rules 1-9, O1 review marker; `ArticleRefs`, `fit_packet`, and the optional `counts`, `prompt`, `max_output` and `version` arguments are shared with the period brief (`core/periodic/signals_period.md`) and default to the daily values | yes |
-| `storage/daily_signals.py` | `publisher_group`, `DailySignalRepo`: membership, extractions, evidence, entities, overrides, snapshots, briefs | no |
+| `storage/daily_signals.py` | `publisher_group`, `DailySignalRepo`: membership, extractions, evidence, entities, override rows (`insert_override`), stored observations and digest items with the stored text, snapshots (`stored_days_to_keep`), briefs. It reads and writes rows; reconciliation and text cleaning are the use case's | no |
 | `storage/daily_signals_ledger.py` | `SignalsLedger`: private SQLite of physical POSTs, replay, per-run caps, per-model prices | no |
 | `web/signals_view.py` | Server HTML of the block; `quiet_line`, chips, D3 New list | yes |
 | `web/models.py` | `DailySignalsResponse` and nested API models (only optional fields added after 006) | - |
@@ -255,7 +267,7 @@ twice; a row with the same hash is reused even when `invalid`.
 | Change | Place | Also |
 | --- | --- | --- |
 | New/Top/Spike/Rising thresholds | `Thresholds` in `signals_model.py` | bump `METHODOLOGY_VERSION` |
-| Days a recompute rewrites | `SETTLED_DAYS`, `RECOMPUTE_DAYS` in `storage/daily_signals.py` | - |
+| Days a recompute rewrites | `SETTLED_DAYS`, `RECOMPUTE_DAYS` in `usecases/daily/signals_recompute.py`; `SETTLED_STATUSES` in `storage/daily_signals.py` | - |
 | What counts as a specific `variant of` target | `specific_variant` in `signals_naming.py` | methodology bump |
 | Hard event types (chips, brief order) | `HARD_EVENTS` in `signals_brief.py` | view uses the same tuple |
 | Review marker (O1) | `REVIEW_TITLE`, `REVIEW_SHARE` in `signals_brief.py` | `BRIEF_VERSION` bump |

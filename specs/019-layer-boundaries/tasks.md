@@ -42,8 +42,15 @@ or the feature doc first, then the failing test, then the code; full gate before
   the deletes; the use case `prune_articles` (`usecases/archive/capture.py`) passes
   `archive_articles`. Same transaction, same order; local import removed; `storage/` imports no
   `usecases/`.
-- [ ] T010 `storage/daily_signals.py`: `reconcile`, `digest_title`, `digest_summary` calls move to
-  the use case.
+- [x] T010 `storage/daily_signals.py`: `reconcile`, `digest_title`, `digest_summary` calls move to
+  the use case. Done: `recompute_reports` (with `RecomputeResult`, `RECOMPUTE_DAYS`,
+  `SETTLED_DAYS`) moves unchanged to `usecases/daily/signals_recompute.py`; the selector conflict
+  check of `add_override` moves to `usecases/daily/signals.py` (`add_override`), the repository
+  keeps `insert_override`; `observations` and `digest_items` return the stored text and
+  `digest_text` (use case) applies `digest_title` / `digest_summary` for the daily recompute and
+  the period run. The brief packets already cleaned item summaries (`ArticleRefs.ref`), so
+  `digest_items` needs no cleaning. `_keep` becomes public `stored_days_to_keep`. A new test pins
+  the digest title in the report; the storage-side check has no listed files.
 - [x] T011 `storage/period_signals.py`: `reconcile` call moves to `usecases/periodic/period_run.py`
   (`context` takes the reconciliation, `load_input` needs a context). The storage-side check of
   calculating functions starts here with two listed files (T010, T012); a new test pins that the

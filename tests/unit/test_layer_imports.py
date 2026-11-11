@@ -13,10 +13,6 @@ PACKAGES = ("core", "storage", "ingest", "usecases", "config", "observability", 
 DYNAMIC_IMPORTERS = frozenset({"import_module", "__import__"})
 # core functions that calculate; a repository returns rows and the use case calls these.
 CALCULATIONS = frozenset({"reconcile", "digest_title", "digest_summary"})
-# storage files that still call them (spec 019, T010); the list only shrinks.
-STORAGE_CALCULATING = {
-    "daily_signals.py": {"reconcile", "digest_title", "digest_summary"},
-}
 
 
 def _loaded_by_name(node: ast.Call) -> str:
@@ -111,8 +107,8 @@ def calculations_imported(source: str) -> set[str]:
             for alias in node.names if alias.name in CALCULATIONS}
 
 
-def test_storage_imports_calculations_only_in_listed_files():
+def test_storage_imports_no_calculations():
     root = APP / "storage"
     found = {path.relative_to(root).as_posix(): calculations_imported(path.read_text())
              for path in root.rglob("*.py")}
-    assert {name: names for name, names in found.items() if names} == STORAGE_CALCULATING
+    assert {name: names for name, names in found.items() if names} == {}

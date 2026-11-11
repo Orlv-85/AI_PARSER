@@ -139,6 +139,9 @@ The numbers live in the code: fields of `PeriodThresholds` (by kind) in `period_
   writes nothing. Tests: `test_second_run_writes_nothing`, `test_changed_input_rewrites_only_that_period`.
 - The run reconciles with the stored entity overrides, so an override added after a run changes
   the next run's reports. Tests: `test_period_run_applies_entity_overrides`.
+- The repository returns the stored article titles and digest summaries; the run applies the digest
+  title and summary (`digest_text`, `usecases/daily/signals.md`) before `compute_period`. Tests:
+  `test_period_run_computes_from_the_digest_title_and_summary`.
 - The input of a period is its days plus the days before it (a week: 7, the helper path needs 14
   days; a month: the whole previous month for the month risers), the
   stored daily snapshots, per-day coverage, the evidence (reconciled in memory by the run, once per
@@ -383,7 +386,7 @@ flowchart LR
 | `signals_period.py` | Public entry: re-exports `compute_period`, `PeriodInput`, `PeriodThresholds`, `payload_hash` | yes |
 | `period_model.py` | Bounds (`period_bounds`, `period_days`, `previous_start`, `next_start`), `PeriodThresholds`, `PeriodInput`, `PreviousPeriod`, `period_status` | yes |
 | `period_compute.py` | `compute_period` and one function per section; `PERIOD_METHODOLOGY_VERSION` | yes |
-| `usecases/periodic/period_run.py` | `run_periods`, `target_periods` (`target_weeks`, `target_months`), `brief_targets`, `first_period`, `latest_completed` (week and month wrappers): pick periods, compute, store, then call the brief step | no |
+| `usecases/periodic/period_run.py` | `run_periods`, `target_periods` (`target_weeks`, `target_months`), `brief_targets`, `first_period`, `latest_completed` (week and month wrappers): pick periods, apply the digest text to the stored observations, compute, store, then call the brief step | no |
 | `period_brief.py` | `PERIOD_BRIEF_VERSION`, values by kind, `period_packet`, `period_body`, `period_input_hash`, `parse_period_brief` | yes |
 | `usecases/periodic/period_brief_run.py` | `run_briefs`: targets, cache by hash, ledger per brief, attempts, store | no |
 | `storage/period_signals.py` | `PeriodSignalRepo`: `context`, `load_input`, `previous`, `save_report`, `get_report`, `latest`, `index`, `digest_items`, `get_brief`, `save_brief` | no |
