@@ -63,8 +63,17 @@ or the feature doc first, then the failing test, then the code; full gate before
 
 ## Phase 5: Close (US3)
 
-- [ ] T013 Test: `storage/` imports from `core/` only names on an allowed list of types and
+- [x] T013 Test: `storage/` imports from `core/` only names on an allowed list of types and
   constants; lasting intent stays in `src/app/README.md`; spec status set to shipped.
+  Done, narrowed (decided 2026-11-11 (agent), owner said go): classes and constants are allowed,
+  functions only from the named `HELPERS` list (key and hash, canonical JSON, money units, period
+  dates, field reading, journal keys, the page rule); a module import of `core/` counts as a
+  function. Three repositories still import real calculations and are listed in
+  `CALCULATION_EXCEPTIONS`, which only shrinks: `source_candidate_repo.py`
+  (`group_candidate_overlaps`), `bulletin_texts.py` (`all_stories`), `daily_signals.py` (`join`,
+  `name_tokens`, `type_group`). Moving them is a logic-adjacent split left for when that code next
+  changes for a real task (owner rule of 2026-11-03 for refactors). The test replaces
+  `test_storage_imports_no_calculations`.
 
 ## Phase 6: Found by the review of PR 221 (records/review-step2-2026-11-10.md)
 

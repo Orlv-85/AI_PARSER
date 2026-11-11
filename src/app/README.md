@@ -39,9 +39,15 @@ import.
 - `config/` (settings, `sources.yaml` model) and `observability/` (log setup) import no other
   package of `app`; loading `sources.yaml` into the database is a use case
   (`usecases/sources/bootstrap.py`). Tests: `test_leaf_packages_import_no_app_package`.
-- `storage/` does not import the calculating functions of `core/` named in
-  `tests/unit/test_layer_imports.py`; the use case calls them. Tests:
-  `test_storage_imports_no_calculations`.
+- `storage/` imports from `core/` only types (classes), constants and the helper functions named
+  in the helper list of `tests/unit/test_layer_imports.py` (keys and hashes, serialization, money
+  units, period dates, field reading, journal keys, the page rule); a calculation is called by the
+  use case. Older calculations still imported by a repository are listed per file in the
+  exception list of the same test; the list only shrinks, and so does the helper list (an unused
+  helper fails the test). Tests:
+  `test_names_from_core_sees_functions_and_modules`,
+  `test_storage_imports_from_core_only_types_constants_and_helpers`,
+  `test_helpers_are_all_still_used_by_storage`.
 - The import scan sees imports inside functions and modules loaded by a literal name; relative
   imports are not used. Tests: `test_imports_package_sees_every_import_form`,
   `test_app_has_no_relative_imports`.

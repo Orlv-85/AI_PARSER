@@ -2,8 +2,9 @@
 
 **Feature Branch**: `019-layer-boundaries`
 **Created**: 2026-11-10
-**Status**: Steps 1 and 2 done (2026-11-10); open: calculations out of repositories, the provider
-journal loaded by name in two `core/` files, `ingest/` and `config/` (tasks T009-T015)
+**Status**: Shipped 2026-11-11 (T001-T015; releases up to v0.1.168). Lasting intent: section
+"Layers" of `src/app/README.md`. SC-001 holds except `CALCULATION_EXCEPTIONS` (three repositories,
+five calculating functions; see T013), which only shrinks.
 **Input**: Owner request of 2026-11-10: `core` and `storage` import each other; fix it by the book.
 
 ## The problem (measured 2026-11-10, master `a90a51e`)

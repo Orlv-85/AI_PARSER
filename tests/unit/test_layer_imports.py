@@ -3,6 +3,8 @@
 cli, web -> usecases -> storage -> ingest -> core; config and observability are leaves.
 """
 import ast
+import importlib
+import inspect
 from pathlib import Path
 
 import pytest
@@ -11,8 +13,23 @@ APP = Path(__file__).resolve().parents[2] / "src" / "app"
 PACKAGES = ("core", "storage", "ingest", "usecases", "config", "observability", "web", "cli")
 
 DYNAMIC_IMPORTERS = frozenset({"import_module", "__import__"})
-# core functions that calculate; a repository returns rows and the use case calls these.
-CALCULATIONS = frozenset({"reconcile", "digest_title", "digest_summary"})
+# core functions a repository may call: they key, encode or read, not calculate.
+HELPERS = frozenset({
+    "canonical_url_hash",  # keys and hashes
+    "encoded", "fingerprint",  # canonical JSON
+    "microdollars", "is_overload",  # money units, provider error kind
+    "period_days", "previous_start",  # period dates
+    "read_str", "read_optional_str", "read_optional_int",  # field reading
+    "request_key", "reservation", "parse_summary",  # payment journal keys
+    "url_exclusion_reason",  # page rule of the page cache
+})
+# Calculations a repository still imports (spec 019, T013); the list only shrinks.
+CALCULATION_EXCEPTIONS = {
+    "bulletin_texts.py": {"all_stories"},
+    "daily_signals.py": {"join", "name_tokens", "type_group"},
+    "source_candidate_repo.py": {"group_candidate_overlaps"},
+}
+_MISSING = object()
 
 
 def _loaded_by_name(node: ast.Call) -> str:
@@ -101,14 +118,64 @@ def test_leaf_packages_import_no_app_package(leaf):
             if other != leaf and importers(leaf, other)} == {}
 
 
-def calculations_imported(source: str) -> set[str]:
-    return {alias.name for node in ast.walk(ast.parse(source))
-            if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("app.core")
-            for alias in node.names if alias.name in CALCULATIONS}
+def _in_core(module: str) -> bool:
+    return module == "app.core" or module.startswith("app.core.")
 
 
-def test_storage_imports_no_calculations():
+def _function_or_module(module: str, name: str) -> str:
+    """The name of a function, the path of a module; empty for a type or a constant."""
+    value = getattr(importlib.import_module(module), name, _MISSING)
+    if value is _MISSING or inspect.ismodule(value):
+        return f"{module}.{name}"
+    return name if callable(value) and not inspect.isclass(value) else ""
+
+
+def _core_names(node: ast.AST) -> set[str]:
+    if isinstance(node, ast.Import):
+        return {alias.name for alias in node.names if _in_core(alias.name)}
+    if isinstance(node, ast.Call):
+        module = _loaded_by_name(node)
+        return {module} if _in_core(module) else set()
+    if not isinstance(node, ast.ImportFrom):
+        return set()
+    module = node.module or ""
+    if module == "app":
+        return {"app.core"} if any(alias.name == "core" for alias in node.names) else set()
+    if not _in_core(module):
+        return set()
+    return {_function_or_module(module, alias.name) for alias in node.names} - {""}
+
+
+def names_from_core(source: str) -> set[str]:
+    """Functions and modules of app.core the source imports; types and constants are left out."""
+    return set().union(*(_core_names(node) for node in ast.walk(ast.parse(source))))
+
+
+def storage_core_names() -> dict[str, set[str]]:
     root = APP / "storage"
-    found = {path.relative_to(root).as_posix(): calculations_imported(path.read_text())
-             for path in root.rglob("*.py")}
-    assert {name: names for name, names in found.items() if names} == {}
+    return {path.relative_to(root).as_posix(): names_from_core(path.read_text())
+            for path in root.rglob("*.py")}
+
+
+def test_names_from_core_sees_functions_and_modules():
+    assert names_from_core("from app.core.canonicalize import canonical_url_hash") == {
+        "canonical_url_hash"}
+    assert names_from_core("def f():\n    from app.core.daily.titles import digest_title\n") == {
+        "digest_title"}
+    assert names_from_core("from app.core.bulletin.builder import Bulletin") == set()
+    assert names_from_core("from app.core.provider_costs import PRICES") == set()
+    assert names_from_core("import app.core.canonical_json") == {"app.core.canonical_json"}
+    assert names_from_core("from app.core import canonical_json") == {"app.core.canonical_json"}
+    assert names_from_core("from app import core") == {"app.core"}
+    assert names_from_core('import_module("app.core.provider_costs")') == {
+        "app.core.provider_costs"}
+    assert names_from_core("from app.storage.db import SessionLocal") == set()
+
+
+def test_storage_imports_from_core_only_types_constants_and_helpers():
+    found = {name: names - HELPERS for name, names in storage_core_names().items()}
+    assert {name: names for name, names in found.items() if names} == CALCULATION_EXCEPTIONS
+
+
+def test_helpers_are_all_still_used_by_storage():
+    assert HELPERS - set().union(*storage_core_names().values()) == set()
