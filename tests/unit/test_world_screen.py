@@ -39,6 +39,7 @@ from app.storage.world import (
     STATE_TEXT_READY,
     WorldRepo,
 )
+from app.usecases.bulletin.assessor import open_assessor
 from app.usecases.world_screen import open_world_assessor, rank_clusters, run_screen
 
 DAY = date(2026, 10, 30)
@@ -418,7 +419,7 @@ def test_world_journal_is_separate_from_digest_cap(tmp_path, monkeypatch):
     assert WORLD_JEV_MAX_USD_PER_DAY == "0.10"
     with open_world_assessor(settings, getLogger("t"), TODAY) as world:
         assert world.payment_journal.caps["jev"] == 100000
-    with wc.open_assessor(settings, getLogger("t"), DAY, "0.05") as bulletin:
+    with open_assessor(settings, getLogger("t"), DAY, "0.05") as bulletin:
         assert bulletin.payment_journal.caps["jev"] == 50000
     files = sorted(str(p.relative_to(tmp_path)) for p in (tmp_path / "data").rglob("*.sqlite3"))
     assert files == [

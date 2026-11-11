@@ -5,18 +5,17 @@ Behavior, decisions and tests: src/app/core/bulletin/world_change.md.
 # ruff: noqa: E501
 import sqlite3
 from collections import Counter
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 from importlib import import_module
 from logging import Logger
-from pathlib import Path
 from typing import Any
 
 import httpx
 
 from app.core.jev import CONTENT_LIMIT, _probability, jev_state
+from app.core.provider_errors import PilotStopped, TransportAttemptsExhausted
 
 WORLD_CHANGE_VERSION = "world-change-1"
 ASSESS_DEFAULT_MAX_USD = "0.05"
@@ -171,9 +170,7 @@ class WorldChangeAssessor:
 
         Returns None on a failure; a journal stop also sets `stopped`. `event` prefixes the log lines.
         """
-        journal_module = import_module("app.storage.provider_journal")
-        stop_errors = (journal_module.PilotStopped, journal_module.TransportAttemptsExhausted,
-                       sqlite3.Error)
+        stop_errors = (PilotStopped, TransportAttemptsExhausted, sqlite3.Error)
         try:
             if self.payment_journal is not None:
                 secret = self.secret
@@ -196,36 +193,6 @@ class WorldChangeAssessor:
             self.logger.error(f"{event}_failed", fields)
         return None
 
-
-@contextmanager
-def open_assessor(settings, logger: Logger, target: date, max_usd: str, *,
-                  root: Path | None = None, version: str = WORLD_CHANGE_VERSION,
-                  usage_event: str = "bulletin_assess_usage", file_name: str | None = None) -> Iterator[WorldChangeAssessor]:
-    """Assessor with its own capped journal in data/bulletin/<day>/ (one file per cap).
-
-    The world stream passes its own `root`, journal `version`, `usage_event` and `file_name`.
-    """
-    api_key = getattr(settings, "jev_api_key", None)
-    secret = api_key.get_secret_value().strip() if api_key is not None else ""
-    if not secret:
-        raise ValueError("missing_provider_key")
-    journal_class = import_module("app.storage.provider_journal").PilotJournal
-    cap = import_module("app.core.provider_costs").microdollars(max_usd)
-    root = root or Path("data/bulletin") / target.isoformat()
-    root.mkdir(parents=True, exist_ok=True, mode=0o700)
-    # The journal needs three caps; DeepSeek is never called here, so it gets the smallest.
-    caps = {"total": str((cap + 1) / 1e6), "jev": str(cap / 1e6), "deepseek": "0.000001"}
-    journal = journal_class(root / (file_name or f"journal-{version}-{cap}.sqlite3"),
-                            {"version": version, "day": target.isoformat()}, caps,
-                            transport_review_reason=TRANSPORT_REVIEW_REASON,
-                            transport_retry_delays=TRANSPORT_RETRY_DELAYS)
-    try:
-        with httpx.Client(timeout=ASSESS_TIMEOUT_SECONDS) as client:
-            yield WorldChangeAssessor(client, settings.jev_model, logger,
-                                      payment_journal=journal, secret=secret)
-    finally:
-        logger.info(usage_event, journal.report())
-        journal.close()
 
 
 def _assess_todo(session, repo, assessor: WorldChangeAssessor, todo: list,

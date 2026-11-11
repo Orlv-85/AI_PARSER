@@ -20,21 +20,10 @@ from app.core.daily.provider_requests import (
     reservation,
 )
 from app.core.provider_costs import PRICES, is_overload, microdollars
+from app.core.provider_errors import PilotStopped, TransportAttemptsExhausted
 
 # Overload/rate-limit answers without usage are not billed; retry them in place.
 TRANSIENT_RETRY_DELAYS = (15, 60, 180)
-
-
-class PilotStopped(RuntimeError):
-    """No further paid requests may be dispatched."""
-
-
-class TransportAttemptsExhausted(ValueError):
-    """Every reviewed transport attempt failed; `dispatched` tells if this call sent one."""
-
-    def __init__(self, message, dispatched=False):
-        super().__init__(message)
-        self.dispatched = dispatched
 
 
 def priced_usage(provider, data):

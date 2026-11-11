@@ -14,11 +14,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.core.bulletin.world_change import (
-    WORLD_CHANGE_VERSION,
-    WorldChangeAssessor,
-    open_assessor,
-)
+from app.core.bulletin.world_change import WORLD_CHANGE_VERSION, WorldChangeAssessor
 from app.core.world.screen import (
     MAX_ATTEMPTS,
     SCREEN_QUESTIONS,
@@ -42,6 +38,7 @@ from app.storage.world import (
     WorldRepo,
 )
 from app.storage.world_change import WorldChangeRepo
+from app.usecases.bulletin.assessor import open_assessor
 
 STEP_SCREEN = "screen"
 STEP_ASSESS = "assess"

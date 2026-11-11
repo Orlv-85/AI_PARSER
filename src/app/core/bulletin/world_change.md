@@ -2,6 +2,7 @@
 module: src/app/core/bulletin/world_change.py
 covers:
   - src/app/core/bulletin/world_change*.py
+  - src/app/usecases/bulletin/assessor.py
   - src/app/storage/world_change.py
   - src/app/storage/migrations/versions/*world_change*.py
 -->
@@ -94,7 +95,8 @@ flowchart LR
   Known limit: another cap value opens another journal, so spend of one day can add up to a few
   caps; the ceiling bounds each run, not the day. Tests:
   `test_cli_assess_skips_answered_and_summarizes`,
-  `test_cli_rejects_max_usd_above_ceiling`, `test_open_assessor_caps_the_journal`.
+  `test_cli_rejects_max_usd_above_ceiling`, `test_open_assessor_caps_the_journal`,
+  `test_open_assessor_logs_journal_usage_on_close`.
 - When a rerun stops with `unknown_or_failed_previous_call_requires_review`, an earlier call of
   that journal is unresolved (it may have been billed). The operator checks the log line
   `bulletin_assess_usage` and the journal file `data/bulletin/<D>/journal-*.sqlite3`, then either
@@ -139,7 +141,10 @@ flowchart LR
   failure and stop log context.
 
 - `src/app/core/bulletin/world_change.py`: questions, `WORLD_CHANGE_VERSION`, `WorldChange`,
-  `WorldChangeAssessor`, `world_change_state`, `run_assessment`.
+  `WorldChangeAssessor`, `world_change_state`, `run_assessment`. It gets the journal from the
+  caller and catches the journal's stop errors from `src/app/core/provider_errors.py`.
+- `src/app/usecases/bulletin/assessor.py`: `open_assessor` opens the capped journal and the HTTP
+  client, logs the usage event and closes the journal.
 - `src/app/storage/world_change.py`: `WorldChangeRepo`.
 - `src/app/storage/models_sql.py`: `WorldChangeAssessment`.
 - `src/app/storage/migrations/versions/b8e2d4f61a07_add_world_change_assessments.py`:

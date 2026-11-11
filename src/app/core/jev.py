@@ -1,18 +1,13 @@
-from collections.abc import Iterator
-from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import UTC, datetime
-from importlib import import_module
 from logging import Logger
 from math import isfinite
-from pathlib import Path
 
 import httpx
 
-from app.config.settings import Settings
 from app.core.categories import CATEGORY_CRITERIA
 from app.core.daily.rubric import QUESTIONS
 from app.core.models import Article
+from app.core.provider_errors import TransportAttemptsExhausted
 
 ADMISSION_TRANSPORT_REVIEW_REASON = (
     "daily-admission: transport failure, conservative reservation kept"
@@ -160,8 +155,6 @@ class JevRelevanceScorer:  # pylint: disable=too-many-instance-attributes
             return None
         if state in self.cache:
             return self.cache[state]
-        journal_module = import_module("app.storage.provider_journal")
-        exhausted_error = journal_module.TransportAttemptsExhausted
         try:
             body = {"model": self.model, "state": state, "questions": self.questions()}
             if self.payment_journal is not None:
@@ -181,7 +174,7 @@ class JevRelevanceScorer:  # pylint: disable=too-many-instance-attributes
             self.input_held = True
             self.logger.info("jev_input_held", {"reason": "conservative_input_bound"})
             return None
-        except exhausted_error as exc:
+        except TransportAttemptsExhausted as exc:
             self._hold_transport_failure(exc)
             return None
         except (httpx.HTTPError, ValueError, KeyError, TypeError, RuntimeError) as exc:
@@ -258,41 +251,3 @@ class JevRelevanceScorer:  # pylint: disable=too-many-instance-attributes
             self.logger.error("jev_admission_invalid", {"error_type": type(exc).__name__})
             raise
 
-
-@contextmanager
-def jev_relevance_scorer(
-    settings: Settings, logger: Logger,
-) -> Iterator[JevRelevanceScorer | None]:
-    if not getattr(settings, "jev_enabled", False):
-        yield None
-        return
-    api_key = getattr(settings, "jev_api_key", None)
-    if api_key is None or not api_key.get_secret_value().strip():
-        logger.error("jev_relevance_fallback", {"error_type": "MissingApiKey"})
-        yield None
-        return
-    with httpx.Client(
-        timeout=settings.jev_timeout_seconds,
-        headers={"Authorization": "Bearer " + api_key.get_secret_value().strip()},
-    ) as client:
-        daily = bool(getattr(settings, "daily_enrichment_enabled", False))
-        journal = None
-        if daily:
-            # Initialize the shared pilot journal only after provider modules are loaded.
-            journal_class = import_module("app.storage.provider_journal").PilotJournal
-            root = Path("data/daily-admission") / datetime.now(UTC).date().isoformat()
-            root.mkdir(parents=True, exist_ok=True, mode=0o700)
-            journal = journal_class(root / "journal.sqlite3", {"version": "daily-admission-1"},
-                                   {"total": "2", "jev": "1", "deepseek": "1"},
-                                   transport_review_reason=ADMISSION_TRANSPORT_REVIEW_REASON,
-                                   transport_retry_delays=ADMISSION_TRANSPORT_RETRY_DELAYS)
-        try:
-            yield JevRelevanceScorer(
-                client, settings.jev_model, logger, settings.jev_category_min_confidence,
-                bool(getattr(settings, "semantic_admission_enabled", False)),
-                daily_enrichment_enabled=daily, payment_journal=journal,
-            )
-        finally:
-            if journal is not None:
-                logger.info("daily_admission_usage", journal.report())
-                journal.close()

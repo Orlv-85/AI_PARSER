@@ -2,6 +2,7 @@
 module: src/app/storage/provider_journal.py
 covers:
   - src/app/storage/provider_journal.py
+  - src/app/core/provider_errors.py
 -->
 
 # Provider payment journal
@@ -114,7 +115,9 @@ flowchart TD
 
 ## Code map
 
-- `src/app/storage/provider_journal.py`: `PilotJournal`, pricing and payment stop exceptions.
+- `src/app/storage/provider_journal.py`: `PilotJournal` and pricing. The payment stop exceptions
+  (`PilotStopped`, `TransportAttemptsExhausted`) live in `src/app/core/provider_errors.py`, so
+  provider clients in `core/` catch them without importing storage.
   Tables: identity, calls, reviews, request_attempts. No schema version or migration is stored.
   `call` delegates replay to `_replay_response`, dispatch to `_post_with_transient_retries`,
   receipt persistence to `_record_response` and checks to `_validate_response`. `_attempt`

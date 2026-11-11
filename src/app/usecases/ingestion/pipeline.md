@@ -261,6 +261,12 @@ function. Each rule lists the tests that check it.
   again. Tests: `test_admission_and_cache_all_ingestion_paths`, `test_cache_key_changes_with_prompt_version`,
   `test_ambiguity_cached_category_independent_and_policy_invalidates`,
   `test_corrupt_accept_cache_requires_new_assessment`, `test_canonical_aliases_share_decision`.
+- With `daily_enrichment_enabled`, `jev_relevance_scorer` opens one payment journal per UTC day
+  (`data/daily-admission/<day>/journal.sqlite3`, identity version `daily-admission-1`, fixed caps),
+  passes it to the scorer, logs `daily_admission_usage` with the journal report and closes it.
+  Without it the scorer has no journal and nothing is written. The opener is a use case; `core/jev.py`
+  only gets the journal. Tests: `test_daily_scorer_opens_capped_admission_journal`,
+  `test_scorer_without_daily_enrichment_has_no_journal`.
 - With the daily admission journal (`daily_enrichment_enabled`), a transport failure of a Jev call
   (timeout or dropped connection: the error types accepted by
   `PilotJournal.review_transport_failure`, see `src/app/storage/provider_journal.md`; per-request
@@ -419,7 +425,7 @@ ai-news fetch --once                         cli/main.py: fetch
 web update (thread or process)               web/service.py: UpdateRunService
   -> run_fetch_cycle                         usecases/ingestion/pipeline/cycle.py
        load_sources + upsert_source          sources.yaml -> sources; + list_enabled_sources (DB only)
-       jev_relevance_scorer                  core/jev.py; None + admission -> pause, return
+       jev_relevance_scorer                  pipeline/scorer.py; None + admission -> pause, return
        admission off: _collect_fetched_items thread pool over all sources (_fetch_source_items)
        per source, in a savepoint:
          admission on: _replay_pending_for_source (replay.py), then _collect_fetched_items (fetch.py)
@@ -448,6 +454,7 @@ web update (thread or process)               web/service.py: UpdateRunService
 | `usecases/ingestion/pipeline/html_links.py` | `_process_html_links_two_stage`: list page links to stored articles | no |
 | `usecases/ingestion/pipeline/rss.py` | `_process_fetched_source_items`: feed items to stored articles | no |
 | `usecases/ingestion/pipeline/screening.py` | `_screen_candidate` (cache lookup `_resolve_cached`, then `_score_and_record`, `_pause`), cached-assessment checks (`_assessment_from_cached`, `_cached_score`, `_cached_category`), admission counters snapshot and restore | no |
+| `usecases/ingestion/pipeline/scorer.py` | `jev_relevance_scorer`: opens the Jev client and, with `daily_enrichment_enabled`, the daily admission journal of the UTC day; logs `daily_admission_usage` and closes the journal | no |
 | `usecases/ingestion/pipeline/replay.py` | Pending admission candidates replayed before a source's fresh fetch | no |
 | `usecases/ingestion/pipeline/rows.py` | Candidate payloads, `_build_article_row`, exclusion reason, batch upsert | no |
 | `core/ingestion/admission.py` | Admission choice mapping, `bounded_evidence`, `evidence_hash`, `admission_cache_key` | yes |
