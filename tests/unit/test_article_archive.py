@@ -11,6 +11,7 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 from typer.testing import CliRunner
 
+from app.cli import deps as cli_deps
 from app.cli import main as cli_main
 from app.storage.archive import ArchiveRepo
 from app.storage.article_repo import ArticleRepo
@@ -288,8 +289,8 @@ def test_archive_purge_dry_run_and_apply(tmp_path, monkeypatch) -> None:
         rows[1].url = rows[1].url_canonical = "https://other.org/b"
         archive_articles(session, rows)
         session.commit()
-    monkeypatch.setattr(cli_main, "create_all", lambda: None)
-    monkeypatch.setattr(cli_main, "SessionLocal", factory)
+    monkeypatch.setattr(cli_deps, "create_all", lambda: None)
+    monkeypatch.setattr(cli_deps, "SessionLocal", factory)
     runner = CliRunner()
 
     def run(*args):
@@ -345,8 +346,8 @@ def _import_dbs(tmp_path):
 
 
 def _run_import(monkeypatch, target, *args):
-    monkeypatch.setattr(cli_main, "create_all", lambda: None)
-    monkeypatch.setattr(cli_main, "SessionLocal", target)
+    monkeypatch.setattr(cli_deps, "create_all", lambda: None)
+    monkeypatch.setattr(cli_deps, "SessionLocal", target)
     return CliRunner().invoke(cli_main.app, ["archive", "import-db", *args])
 
 

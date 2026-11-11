@@ -424,7 +424,7 @@ function. Each rule lists the tests that check it.
 ## Flow
 
 ```text
-ai-news fetch --once                         cli/main.py: fetch
+ai-news fetch --once                         cli/articles.py: fetch
   scripts/run_daily_fetch_job.sh (01:00 UTC timer), scripts/auto_update_once.sh (cron helper)
 web update (thread or process)               web/service.py: UpdateRunService
   -> run_fetch_cycle                         usecases/ingestion/pipeline/cycle.py

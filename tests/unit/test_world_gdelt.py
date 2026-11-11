@@ -12,6 +12,7 @@ import httpx
 from typer.testing import CliRunner
 
 from app.cli import main as cli_main
+from app.cli import world as cli_world
 from app.core.world import gdelt as gdelt_module
 from app.core.world.gdelt import (
     DOWNLOAD_TRIES,
@@ -332,7 +333,7 @@ def test_scan_memory_is_bounded(tmp_path: Path) -> None:
 
 def test_cli_world_scan_prints_counts(monkeypatch) -> None:
     files = {FIRST: zipped(gkg_line("AI in class", "https://example.org/a"))}
-    monkeypatch.setattr(cli_main, "make_client", lambda: client_for(files))
+    monkeypatch.setattr(cli_world, "make_client", lambda: client_for(files))
     result = CliRunner().invoke(
         cli_main.app, ["world", "scan", "--date", "2026-10-30", "--max-files", "1"]
     )

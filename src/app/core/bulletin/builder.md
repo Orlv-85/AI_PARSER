@@ -201,7 +201,7 @@ flowchart LR
 | `src/app/core/bulletin/render.py` | `render_text` |
 | `src/app/usecases/bulletin/day_input.py` | `load_day_input`: digest article ids, answers, signals, world; `_yesterday_story_keys`, `_bulletin_story_keys`: D-1 story URLs and title keys |
 | `src/app/config/settings.py` | `world_stream_in_bulletin` |
-| `src/app/cli/main.py` | `bulletin build` |
+| `src/app/cli/bulletin.py` | `bulletin build` |
 | `src/app/storage/bulletin_store.md` | `bulletin build` storage contract |
 
 ## Tests

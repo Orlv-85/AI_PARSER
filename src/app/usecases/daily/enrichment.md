@@ -139,7 +139,7 @@ flowchart LR
   `test_jev_topic_boundary_and_unresolved_comparison`,
   `test_jev_choice_validation_precedes_probability_and_cleanup`,
   `test_summary_length_review_starts_after_eighty_words`.
-- `cli/main.py`: `daily-publish` options and exit codes.
+- `cli/daily.py`: `daily-publish` options and exit codes.
 - `run_daily_fetch_job.sh`: fetch lock and post-fetch catch-up dispatch.
 - `run_daily_digest_job.sh`: publication, held result handling, signals and shared budget.
 - `.github/workflows/nightly-health.yml`: read-only checks for collection, fetch, digest and signals health.

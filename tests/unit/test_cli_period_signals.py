@@ -7,9 +7,11 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 from typer.testing import CliRunner
 
+from app.cli import deps as cli_deps
 from app.cli import main as cli_main
 from app.config.settings import Settings
 from app.storage.models_sql import Base, PeriodSignalReport
+from app.usecases.periodic import period_run
 from app.usecases.periodic.period_run import first_week, latest_completed_week
 
 TODAY = datetime.now(UTC).date()
@@ -23,9 +25,9 @@ def make_factory(tmp_path, monkeypatch, *, enabled):
     engine = create_engine(f"sqlite:///{tmp_path / 'cli.db'}")
     Base.metadata.create_all(engine)
     maker = sessionmaker(bind=engine)
-    monkeypatch.setattr(cli_main, "SessionLocal", maker)
-    monkeypatch.setattr(cli_main, "create_all", lambda: None)
-    monkeypatch.setattr(cli_main, "get_settings", lambda: Settings(
+    monkeypatch.setattr(cli_deps, "SessionLocal", maker)
+    monkeypatch.setattr(cli_deps, "create_all", lambda: None)
+    monkeypatch.setattr(cli_deps, "get_settings", lambda: Settings(
         _env_file=None, daily_signals_comparable_from=FROM, period_signals_enabled=enabled))
     return engine, maker
 
@@ -99,6 +101,25 @@ def test_plain_run_adds_the_month_report_and_a_kind_does_not(tmp_path, monkeypat
     assert plain["month"]["kind"] == "month" and plain["month"]["written"] == []
     assert "month" not in json.loads(invoke("--kind", "week")[1])
     assert "month" not in json.loads(invoke("--backfill", "2")[1])
+    engine.dispose()
+
+
+def test_a_month_failure_keeps_the_week_report(tmp_path, monkeypatch):
+    engine, maker = make_factory(tmp_path, monkeypatch, enabled=True)
+    seed_weeks(maker, PREVIOUS, LATEST, comparable_from=FROM)
+    real = period_run.run_periods
+
+    def month_fails(session, settings, options, **kwargs):
+        if options.kind == "month":
+            raise RuntimeError("month")
+        return real(session, settings, options, **kwargs)
+
+    monkeypatch.setattr(period_run, "run_periods", month_fails)
+    code, output = invoke()
+    report = json.loads(output)
+    assert code == 0 and report["written"] == [LATEST.isoformat()]
+    assert report["month"] == {"state": "error", "error": "RuntimeError"}
+    assert stored(maker) == [LATEST]
     engine.dispose()
 
 

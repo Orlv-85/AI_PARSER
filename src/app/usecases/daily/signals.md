@@ -198,7 +198,7 @@ that check it.
 
 ```text
 scripts/run_daily_digest_job.sh (02:00 UTC, after the digest)
-  -> ai-news daily-signals                       src/app/cli/main.py: daily_signals
+  -> ai-news daily-signals                       src/app/cli/daily.py: daily_signals
   -> run_signals                                 usecases/daily/signals.py
        _gate                    flag AINEWS_DAILY_SIGNALS_ENABLED + DS key; else state disabled/missing_provider_key
        repo.replace_membership  digest items of D -> articles (exact URL, then canonical hash)

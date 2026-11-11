@@ -7,6 +7,8 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from typer.testing import CliRunner
 
+from app.cli import daily as cli_daily
+from app.cli import deps as cli_deps
 from app.cli import main as cli_main
 from app.config.settings import Settings
 from app.core.canonicalize import canonical_url_hash
@@ -24,9 +26,9 @@ def factory_fixture(tmp_path, monkeypatch):
     engine = create_engine(f"sqlite:///{tmp_path / 'cli.db'}")
     Base.metadata.create_all(engine)
     maker = sessionmaker(bind=engine)
-    monkeypatch.setattr(cli_main, "SessionLocal", maker)
-    monkeypatch.setattr(cli_main, "create_all", lambda: None)
-    monkeypatch.setattr(cli_main, "get_settings", lambda: Settings(
+    monkeypatch.setattr(cli_deps, "SessionLocal", maker)
+    monkeypatch.setattr(cli_deps, "create_all", lambda: None)
+    monkeypatch.setattr(cli_deps, "get_settings", lambda: Settings(
         _env_file=None, daily_signals_comparable_from=YESTERDAY - timedelta(days=30)))
     yield maker
     engine.dispose()
@@ -106,7 +108,7 @@ def test_cap_flags_reach_the_run(factory, monkeypatch, tmp_path):
         seen.update(vars(options))
         return {"state": "ok"}
 
-    monkeypatch.setattr(cli_main, "run_signals", fake_run)
+    monkeypatch.setattr(cli_daily, "run_signals", fake_run)
     code, _ = invoke("daily-signals", "--report-date", "2026-10-16", "--backfill-days", "75",
                      "--max-calls", "700", "--max-seconds", "3500", "--max-usd", "1.818",
                      "--cache-dir", str(tmp_path / "c"), "--retry-skipped")
@@ -160,7 +162,7 @@ def test_json_line_includes_the_brief_block(factory, monkeypatch, tmp_path):
     seed(factory, YESTERDAY, "Atlas", new=True)
     code, out = invoke("daily-signals", "--recompute-only")
     assert code == 0 and json.loads(out)["brief"] is None
-    monkeypatch.setattr(cli_main, "get_settings", lambda: Settings(
+    monkeypatch.setattr(cli_deps, "get_settings", lambda: Settings(
         _env_file=None, daily_signals_enabled=True, ds_api_key="secret-key",
         daily_signals_comparable_from=YESTERDAY - timedelta(days=30)))
 
@@ -174,8 +176,8 @@ def test_json_line_includes_the_brief_block(factory, monkeypatch, tmp_path):
             "model": body["model"], "usage": {"prompt_tokens": 10, "completion_tokens": 10},
             "choices": [{"finish_reason": "stop", "message": {"content": json.dumps(content)}}]})
 
-    real = cli_main.run_signals
-    monkeypatch.setattr(cli_main, "run_signals", lambda *a: real(
+    real = cli_daily.run_signals
+    monkeypatch.setattr(cli_daily, "run_signals", lambda *a: real(
         *a, transport=httpx.MockTransport(provider)))
     code, out = invoke("daily-signals", "--cache-dir", str(tmp_path / "c"))
     report = json.loads(out)

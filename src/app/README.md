@@ -1,13 +1,13 @@
 # src/app - overview
 
-Entry points: CLI `ai-news` (`cli/main.py`), web app (`web/app.py`, launched by `scripts/run_web.sh`).
+Entry points: CLI `ai-news` (`cli/main.py`, doc `cli/main.md`), web app (`web/app.py`, launched by `scripts/run_web.sh`).
 Production jobs: `scripts/run_daily_fetch_job.sh`, `scripts/run_daily_digest_job.sh`.
 
 ## Packages
 
 | Package | Role |
 | --- | --- |
-| `cli/` | Typer commands: sources, fetch, serve, top, search, prune, daily-publish, daily-signals (+ entities), period-signals, source candidates |
+| `cli/` | Typer commands, one module per group (`cli/main.md`): `main.py` assembles, `deps.py` is the composition root, `common.py` shared option checks |
 | `config/` | `settings.py` (env `AINEWS_*`), `sources.py` (`sources.yaml` loader) |
 | `ingest/` | RSS/HTML fetching, page parsing, date evidence |
 | `core/` | Rules and calculations. Shared: `models.py`, `categories.py`, `canonicalize.py`, `jev.py`, `provider_costs.py` (paid provider prices, dollar caps), `provider_errors.py` (payment journal stop errors), `bot_identity.py` (declared bot user agent), `canonical_json.py` (canonical JSON and its fingerprint). Packages: `ingestion/` (admission, scoring, dedup, `page_filter.py` (non-news page rules), `reject_policy.py` (conservative reject verdict)), `daily/` (rubric, provider requests, digest titles, daily signals calculations), `periodic/` (weekly and monthly signals calculations), `bulletin/` (builder, writer, world change), `world/` (world stream filter and reader), `sources/` (candidate fields and review rules) |
@@ -30,7 +30,7 @@ import.
   import `cli/` or `web/`. Tests: `test_use_cases_import_no_entry_point`.
 - `cli/` and `web/` (entry points) reach storage through `usecases/`: they import from
   `app.storage` only `models_sql` (row types), call no repository and never commit. The
-  composition roots `web/app.py` and `cli/main.py` may also import `SessionLocal` and
+  composition roots `web/app.py` and `cli/deps.py` may also import `SessionLocal` and
   `create_all` and hand the session factory (or, in the CLI, a session) to use cases (spec
   `specs/020-web-through-usecases/`). Tests: `test_entry_points_import_from_storage_only_row_types`,
   `test_composition_roots_import_only_session_and_create_all`, `test_entry_points_do_not_commit`.
@@ -79,3 +79,4 @@ Feature docs live next to their main module and are checked by `scripts/check_co
 | World news stream (018 item 5) | `core/world/world.md` |
 | Article archive (016) | `usecases/archive/capture.md` |
 | Web pages and static assets | `web/pages.md` |
+| CLI `ai-news` | `cli/main.md` |

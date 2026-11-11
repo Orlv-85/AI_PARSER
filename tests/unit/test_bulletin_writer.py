@@ -18,6 +18,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from typer.testing import CliRunner
 
+from app.cli import bulletin as cli_bulletin
+from app.cli import deps as cli_deps
 from app.cli import main as cli_main
 from app.config.settings import Settings
 from app.core.bulletin import writer as writer_module
@@ -887,11 +889,11 @@ def seed_cli_day(maker):
 def cli(maker, monkeypatch, tmp_path):
     requests = []
     net = transport(requests=requests)
-    monkeypatch.setattr(cli_main, "SessionLocal", maker)
-    monkeypatch.setattr(cli_main, "create_all", lambda: None)
-    monkeypatch.setattr(cli_main, "get_settings", settings)
-    monkeypatch.setattr(cli_main, "utc_today", lambda: TODAY)
-    monkeypatch.setattr(cli_main, "open_writer", functools.partial(
+    monkeypatch.setattr(cli_deps, "SessionLocal", maker)
+    monkeypatch.setattr(cli_deps, "create_all", lambda: None)
+    monkeypatch.setattr(cli_deps, "get_settings", settings)
+    monkeypatch.setattr(cli_bulletin, "utc_today", lambda: TODAY)
+    monkeypatch.setattr(cli_bulletin, "open_writer", functools.partial(
         writer_run.open_writer, transport=net, root=tmp_path))
     seed_cli_day(maker)
 
@@ -904,7 +906,7 @@ def cli(maker, monkeypatch, tmp_path):
 
 
 def test_cli_without_write_makes_no_call(cli, monkeypatch):
-    monkeypatch.setattr(cli_main, "get_settings", lambda: Settings(_env_file=None))
+    monkeypatch.setattr(cli_deps, "get_settings", lambda: Settings(_env_file=None))
     result = cli("--dry-run")
     assert result.exit_code == 0, result.output
     assert not cli.requests and not list(cli.tmp.rglob("*.sqlite3"))
@@ -914,7 +916,7 @@ def test_cli_without_write_makes_no_call(cli, monkeypatch):
 
 
 def test_cli_write_needs_the_key(cli, monkeypatch):
-    monkeypatch.setattr(cli_main, "get_settings", lambda: Settings(_env_file=None))
+    monkeypatch.setattr(cli_deps, "get_settings", lambda: Settings(_env_file=None))
     result = cli("--dry-run", "--write")
     assert result.exit_code == 2 and cli.requests == []
 
@@ -949,7 +951,7 @@ def test_cli_write_json(cli):
 def test_cli_write_outage_falls_back(cli, monkeypatch):
     def down(request):
         raise httpx.ConnectError("down")
-    monkeypatch.setattr(cli_main, "open_writer", functools.partial(
+    monkeypatch.setattr(cli_bulletin, "open_writer", functools.partial(
         writer_run.open_writer, transport=httpx.MockTransport(down), root=cli.tmp))
     result = cli("--dry-run", "--write", "--json")
     assert result.exit_code == 0, result.output

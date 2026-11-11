@@ -11,7 +11,9 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from typer.testing import CliRunner
 
+from app.cli import deps as cli_deps
 from app.cli import main as cli_main
+from app.cli import world as cli_world
 from app.config.settings import Settings
 from app.core.bulletin import world_change as wc
 from app.core.bulletin.world_change import WORLD_CHANGE_VERSION, WorldChangeAssessor
@@ -661,8 +663,8 @@ def maker_fixture(tmp_path, monkeypatch):
     engine = create_engine(f"sqlite:///{tmp_path / 'cli.db'}")
     Base.metadata.create_all(engine)
     maker = sessionmaker(bind=engine)
-    monkeypatch.setattr(cli_main, "SessionLocal", maker)
-    monkeypatch.setattr(cli_main, "create_all", lambda: None)
+    monkeypatch.setattr(cli_deps, "SessionLocal", maker)
+    monkeypatch.setattr(cli_deps, "create_all", lambda: None)
     yield maker
     engine.dispose()
 
@@ -682,9 +684,9 @@ def test_cli_world_screen_summary(maker, monkeypatch, tmp_path):
         seed(session, cand(1, title="Story one"), cand(2, title="Story two"))
         seed(session, cand(3, title="Story three"))
         force(session, "Story three", STATE_SCREENED_IN, 0.9)
-    monkeypatch.setattr(cli_main, "get_settings", lambda: Settings(
+    monkeypatch.setattr(cli_deps, "get_settings", lambda: Settings(
         _env_file=None, jev_api_key=SecretStr("k")))
-    monkeypatch.setattr(cli_main, "utc_today", lambda: TODAY)
+    monkeypatch.setattr(cli_world, "utc_today", lambda: TODAY)
     requests = []
     patch_jev(monkeypatch, jev_handler(requests=requests))
     result = CliRunner().invoke(cli_main.app, ["world", "screen", "--date", DAY.isoformat()])
@@ -715,8 +717,8 @@ def test_cli_world_screen_dry_run_sends_nothing_writes_nothing(maker, monkeypatc
 
     created = []
     monkeypatch.setattr(httpx.Client, "send", boom)
-    monkeypatch.setattr(cli_main, "open_world_assessor", boom)
-    monkeypatch.setattr(cli_main, "create_all", lambda: created.append(1))
+    monkeypatch.setattr(cli_world, "open_world_assessor", boom)
+    monkeypatch.setattr(cli_deps, "create_all", lambda: created.append(1))
     result = CliRunner().invoke(
         cli_main.app, ["world", "screen", "--date", DAY.isoformat(), "--dry-run"])
     assert result.exit_code == 0, result.output
@@ -735,7 +737,7 @@ def test_cli_world_screen_dry_run_sends_nothing_writes_nothing(maker, monkeypatc
 def test_cli_world_screen_needs_a_key(maker, monkeypatch, tmp_path):
     assert maker is not None
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(cli_main, "get_settings", lambda: Settings(_env_file=None))
+    monkeypatch.setattr(cli_deps, "get_settings", lambda: Settings(_env_file=None))
     result = CliRunner().invoke(cli_main.app, ["world", "screen", "--date", DAY.isoformat()])
     assert result.exit_code == 2
 
@@ -743,13 +745,13 @@ def test_cli_world_screen_needs_a_key(maker, monkeypatch, tmp_path):
 def test_cli_world_screen_rejects_max_usd_above_cap(maker, monkeypatch, tmp_path):
     assert maker is not None
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(cli_main, "get_settings", lambda: Settings(
+    monkeypatch.setattr(cli_deps, "get_settings", lambda: Settings(
         _env_file=None, jev_api_key=SecretStr("k")))
 
     def boom(*_args, **_kwargs):
         raise AssertionError("nothing is opened above the cap")
 
-    monkeypatch.setattr(cli_main, "open_world_assessor", boom)
+    monkeypatch.setattr(cli_world, "open_world_assessor", boom)
     monkeypatch.setattr(httpx.Client, "send", boom)
     result = CliRunner().invoke(cli_main.app, [
         "world", "screen", "--date", DAY.isoformat(), "--max-usd", "0.11"])

@@ -16,7 +16,7 @@ PACKAGES = ("core", "storage", "ingest", "usecases", "config", "observability", 
 DYNAMIC_IMPORTERS = frozenset({"import_module", "__import__"})
 ENTRY_POINT_STORAGE_MODULES = frozenset({"app.storage.models_sql", "app.storage:models_sql"})
 # Composition roots build sessions for the use cases (spec 020, FR-002).
-COMPOSITION_ROOTS = frozenset({"web/app.py", "cli/main.py"})
+COMPOSITION_ROOTS = frozenset({"web/app.py", "cli/deps.py"})
 COMPOSITION_ROOT_NAMES = frozenset({"app.storage:SessionLocal", "app.storage:create_all"})
 # core functions a repository may call: they key, encode or read, not calculate.
 HELPERS = frozenset({

@@ -2,8 +2,13 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
+import typer
 
 import app.cli.main as cli_main
+from app.cli import articles as cli_articles
+from app.cli import candidates as cli_candidates
+from app.cli import deps as cli_deps
+from app.cli import site as cli_site
 from app.config.sources import SourceConfig
 from app.usecases import news_reads
 from app.usecases.archive import capture as capture_uc
@@ -55,12 +60,12 @@ def test_sources_command_outputs_rows(monkeypatch) -> None:
     emitted: list[str] = []
     monkeypatch.setattr(cli_main.typer, "echo", emitted.append)
     monkeypatch.setattr(
-        cli_main,
+        cli_deps,
         "get_settings",
         lambda: SimpleNamespace(sources_path="sources.yaml"),
     )
     monkeypatch.setattr(
-        cli_main,
+        cli_articles,
         "load_sources",
         lambda path: [
             SourceConfig(id="aa", name="A", type="rss", url="https://example.com/a", enabled=True),
@@ -75,7 +80,7 @@ def test_sources_command_outputs_rows(monkeypatch) -> None:
         ],
     )
 
-    cli_main.sources()
+    cli_articles.sources()
 
     assert emitted[0].startswith("aa\trss\tenabled")
     assert emitted[1].startswith("bb\thtml\tdisabled")
@@ -90,18 +95,18 @@ def test_fetch_command_handles_success_duplicates_and_errors(monkeypatch) -> Non
         return object()
 
     monkeypatch.setattr(cli_main.typer, "echo", emitted.append)
-    monkeypatch.setattr(cli_main, "get_settings", lambda: settings)
-    monkeypatch.setattr(cli_main, "setup_json_logging", _build_logger)
-    monkeypatch.setattr(cli_main, "run_fetch_cycle", lambda **kwargs: summary)
+    monkeypatch.setattr(cli_deps, "get_settings", lambda: settings)
+    monkeypatch.setattr(cli_articles, "setup_json_logging", _build_logger)
+    monkeypatch.setattr(cli_articles, "run_fetch_cycle", lambda **kwargs: summary)
 
-    cli_main.fetch(once=True)
+    cli_articles.fetch(once=True)
 
     assert any("fetch complete: fetched=2 new=1 duplicates=1 errors=1" in line for line in emitted)
 
 
 def test_fetch_command_rejects_non_once_mode() -> None:
     with pytest.raises(cli_main.typer.BadParameter):
-        cli_main.fetch(once=False)
+        cli_articles.fetch(once=False)
 
 
 def test_top_and_search_commands(monkeypatch) -> None:
@@ -118,12 +123,12 @@ def test_top_and_search_commands(monkeypatch) -> None:
         return _SessionCM()
 
     monkeypatch.setattr(cli_main.typer, "echo", emitted.append)
-    monkeypatch.setattr(cli_main, "create_all", lambda: None)
-    monkeypatch.setattr(cli_main, "SessionLocal", _build_session)
+    monkeypatch.setattr(cli_deps, "create_all", lambda: None)
+    monkeypatch.setattr(cli_deps, "SessionLocal", _build_session)
     monkeypatch.setattr(news_reads, "ArticleRepo", _ArticleRepo)
 
-    cli_main.top(hours=48, limit=5)
-    cli_main.search(query="ai", days=3)
+    cli_articles.top(hours=48, limit=5)
+    cli_articles.search(query="ai", days=3)
 
     assert "Top article" in emitted[0]
     assert "Result for ai" in emitted[1]
@@ -139,9 +144,9 @@ def test_serve_command(monkeypatch) -> None:
             captured["host"] = host
             captured["port"] = port
 
-    monkeypatch.setattr(cli_main, "uvicorn", _Uvicorn)
+    monkeypatch.setattr(cli_site, "uvicorn", _Uvicorn)
 
-    cli_main.serve(host="0.0.0.0", port=9000)
+    cli_site.serve(host="0.0.0.0", port=9000)
 
     assert captured == {"app": "app.web.app:app", "host": "0.0.0.0", "port": 9000}
 
@@ -161,13 +166,13 @@ def test_prune_command_dry_run_and_apply(monkeypatch) -> None:
             commits.append("commit")
 
     monkeypatch.setattr(cli_main.typer, "echo", emitted.append)
-    monkeypatch.setattr(cli_main, "create_all", lambda: None)
-    monkeypatch.setattr(cli_main, "SessionLocal", _SessionCM)
+    monkeypatch.setattr(cli_deps, "create_all", lambda: None)
+    monkeypatch.setattr(cli_deps, "SessionLocal", _SessionCM)
     monkeypatch.setattr(capture_uc, "ArticleRepo", _ArticleRepo)
     monkeypatch.setattr(capture_uc, "prune_articles", lambda _session, *, older_than_days: (7, 2))
 
-    cli_main.prune(older_than_days=100, dry_run=True)
-    cli_main.prune(older_than_days=100, dry_run=False)
+    cli_articles.prune(older_than_days=100, dry_run=True)
+    cli_articles.prune(older_than_days=100, dry_run=False)
 
     assert "prune dry-run:" in emitted[0]
     assert "prune complete:" in emitted[1]
@@ -211,17 +216,17 @@ def test_review_batch_outcomes_command_reports_deterministic_summary(monkeypatch
             }
 
     assert hasattr(
-        cli_main,
+        cli_candidates,
         "review_batch_outcomes",
-    ), "Phase 5 CLI reporting command missing: app.cli.main.review_batch_outcomes"
+    ), "Phase 5 CLI reporting command missing: app.cli.candidates.review_batch_outcomes"
 
     monkeypatch.setattr(cli_main.typer, "echo", emitted.append)
-    monkeypatch.setattr(cli_main, "create_all", lambda: None)
-    monkeypatch.setattr(cli_main, "SessionLocal", _SessionCM)
+    monkeypatch.setattr(cli_deps, "create_all", lambda: None)
+    monkeypatch.setattr(cli_deps, "SessionLocal", _SessionCM)
     monkeypatch.setattr(onboarding_uc, "SourceImportBatchRepo", _BatchRepo)
     monkeypatch.setattr(onboarding_uc, "SourceCandidateRepo", _SourceCandidateRepo)
 
-    cli_main.review_batch_outcomes(batch_id=17)
+    cli_candidates.review_batch_outcomes(batch_id=17)
 
     assert emitted == [
         "batch review outcomes: batch_id=17 total=6 pending_review=3 "
@@ -254,14 +259,14 @@ def test_import_candidates_command_persists_batch_and_reports_counts(monkeypatch
         )
 
     monkeypatch.setattr(cli_main.typer, "echo", emitted.append)
-    monkeypatch.setattr(cli_main, "create_all", lambda: None)
-    monkeypatch.setattr(cli_main, "SessionLocal", _SessionCM)
+    monkeypatch.setattr(cli_deps, "create_all", lambda: None)
+    monkeypatch.setattr(cli_deps, "SessionLocal", _SessionCM)
     monkeypatch.setattr(onboarding_uc, "SourceImportBatchRepo", lambda session: ("batch", session))
     monkeypatch.setattr(onboarding_uc, "SourceCandidateRepo",
                         lambda session: ("candidate", session))
     monkeypatch.setattr(onboarding_uc, "import_source_candidates", _import_source_candidates)
 
-    cli_main.import_candidates("https://example.com/feed.xml")
+    cli_candidates.import_candidates("https://example.com/feed.xml")
 
     assert commits == ["commit"]
     assert emitted == [
@@ -271,7 +276,7 @@ def test_import_candidates_command_persists_batch_and_reports_counts(monkeypatch
 
 def test_validate_candidates_command_rejects_missing_scope() -> None:
     with pytest.raises(cli_main.typer.BadParameter, match="Provide --batch-id"):
-        cli_main.validate_candidates(batch_id=None, candidate_id=[])
+        cli_candidates.validate_candidates(batch_id=None, candidate_id=[])
 
 
 def test_validate_candidates_command_runs_batch_or_candidate_validation(monkeypatch) -> None:
@@ -307,11 +312,11 @@ def test_validate_candidates_command_runs_batch_or_candidate_validation(monkeypa
         ]
 
     monkeypatch.setattr(cli_main.typer, "echo", emitted.append)
-    monkeypatch.setattr(cli_main, "create_all", lambda: None)
-    monkeypatch.setattr(cli_main, "SessionLocal", _SessionCM)
+    monkeypatch.setattr(cli_deps, "create_all", lambda: None)
+    monkeypatch.setattr(cli_deps, "SessionLocal", _SessionCM)
     monkeypatch.setattr(validation_uc, "run_source_validation_batch", _run_source_validation_batch)
 
-    cli_main.validate_candidates(batch_id=None, candidate_id=[5, 9])
+    cli_candidates.validate_candidates(batch_id=None, candidate_id=[5, 9])
 
     assert commits == ["commit"]
     assert emitted == [
@@ -336,9 +341,33 @@ def test_review_batch_outcomes_command_rejects_missing_batch(monkeypatch) -> Non
         def get_batch(self, batch_id: int):  # pylint: disable=unused-argument
             assert batch_id == 999
 
-    monkeypatch.setattr(cli_main, "create_all", lambda: None)
-    monkeypatch.setattr(cli_main, "SessionLocal", _SessionCM)
+    monkeypatch.setattr(cli_deps, "create_all", lambda: None)
+    monkeypatch.setattr(cli_deps, "SessionLocal", _SessionCM)
     monkeypatch.setattr(onboarding_uc, "SourceImportBatchRepo", _BatchRepo)
 
     with pytest.raises(cli_main.typer.BadParameter, match="source import batch not found"):
-        cli_main.review_batch_outcomes(batch_id=999)
+        cli_candidates.review_batch_outcomes(batch_id=999)
+
+
+def test_every_command_is_registered() -> None:
+    root = typer.main.get_command(cli_main.app)
+    ctx = typer.Context(root)
+
+    def names(group, ctx) -> set[str]:
+        found = set()
+        for name in group.list_commands(ctx):
+            command = group.get_command(ctx, name)
+            if hasattr(command, "list_commands"):
+                found |= {f"{name} {sub}" for sub in names(command, typer.Context(command))}
+            else:
+                found.add(name)
+        return found
+
+    assert names(root, ctx) == {
+        "sources", "fetch", "top", "search", "prune", "serve", "page-views", "daily-publish",
+        "daily-signals", "period-signals", "import-candidates", "validate-candidates",
+        "review-batch-outcomes", "daily-signals-entities merge", "daily-signals-entities alias",
+        "daily-signals-entities overrides", "daily-signals-entities purge-evidence",
+        "archive capture", "archive status", "archive purge", "archive dedupe-cache",
+        "archive import-db", "bulletin assess", "bulletin daily", "bulletin build",
+        "world scan", "world collect", "world screen", "world texts", "world report"}

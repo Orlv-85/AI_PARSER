@@ -176,6 +176,20 @@ def run_periods(session: Session, settings: Any, options: PeriodRunOptions, *,
     return report
 
 
+def run_week_and_month(session: Session, settings: Any, options: PeriodRunOptions
+                       ) -> dict[str, Any]:
+    """The plain (nightly) run: the week run of `options`, then the latest completed month as its
+    `month` key. The month does nothing until the first month is complete; its failure keeps the
+    week report."""
+    report = run_periods(session, settings, options)
+    try:
+        report["month"] = run_periods(session, settings, replace(options, kind=MONTH))
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        session.rollback()
+        report["month"] = {"state": "error", "error": type(exc).__name__}
+    return report
+
+
 def _brief_step(session: Session, settings: Any, options: PeriodRunOptions,
                 repo: PeriodSignalRepo, weeks: list[date], *,
                 transport: httpx.BaseTransport | None) -> dict[str, Any]:

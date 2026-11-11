@@ -11,6 +11,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from typer.testing import CliRunner
 
+from app.cli import bulletin as cli_bulletin
+from app.cli import deps as cli_deps
 from app.cli import main as cli_main
 from app.config.settings import Settings
 from app.core.bulletin.world_change import ASSESS_DEFAULT_MAX_USD, WORLD_CHANGE_VERSION, WorldChange
@@ -64,12 +66,12 @@ def daily(monkeypatch):
         calls.writer_days.append(today)
         yield SimpleNamespace(ask=ask, cost_usd=lambda: 0.001)
 
-    monkeypatch.setattr(cli_main, "SessionLocal", maker)
-    monkeypatch.setattr(cli_main, "create_all", lambda: Base.metadata.create_all(engine))
-    monkeypatch.setattr(cli_main, "get_settings", lambda: settings)
-    monkeypatch.setattr(cli_main, "utc_today", lambda: TODAY)
-    monkeypatch.setattr(cli_main, "open_assessor", assessor_factory)
-    monkeypatch.setattr(cli_main, "open_writer", writer_factory)
+    monkeypatch.setattr(cli_deps, "SessionLocal", maker)
+    monkeypatch.setattr(cli_deps, "create_all", lambda: Base.metadata.create_all(engine))
+    monkeypatch.setattr(cli_deps, "get_settings", lambda: settings)
+    monkeypatch.setattr(cli_bulletin, "utc_today", lambda: TODAY)
+    monkeypatch.setattr(cli_bulletin, "open_assessor", assessor_factory)
+    monkeypatch.setattr(cli_bulletin, "open_writer", writer_factory)
     yield SimpleNamespace(maker=maker, settings=settings, calls=calls)
     engine.dispose()
 
@@ -204,7 +206,7 @@ def test_daily_defaults_to_yesterday_utc(daily):
 def test_daily_writer_uses_current_utc_day_after_assessment(daily, monkeypatch):
     seed(daily)
     clock = iter([DAY, TODAY])
-    monkeypatch.setattr(cli_main, "utc_today", lambda: next(clock))
+    monkeypatch.setattr(cli_bulletin, "utc_today", lambda: next(clock))
     _, summary = run_day()
     assert summary["stored"] is True and daily.calls.writer_days == [TODAY]
 
@@ -251,7 +253,7 @@ def test_daily_runtime_failure_exits_zero(daily, monkeypatch, detail):
     def fail():
         raise OSError(detail)
 
-    monkeypatch.setattr(cli_main, "create_all", fail)
+    monkeypatch.setattr(cli_deps, "create_all", fail)
     result, summary = run_day()
     assert summary["reason"] == "daily_failed"
     assert summary["stored"] is False and summary["refused"] is False

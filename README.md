@@ -55,6 +55,7 @@ Index of all docs: [docs/README.md](docs/README.md). Code docs live next to the 
 - [World news stream](src/app/core/world/world.md) - keyword filter and reader for world news candidates (018 item 5).
 - [Article archive](src/app/usecases/archive/capture.md) - private archive of article text; prune archives before delete.
 - [Web pages](src/app/web/pages.md) - pages, access, placeholders, static CSS/JS assets.
+- [CLI](src/app/cli/main.md) - `ai-news` command modules, composition root, shared option checks.
 
 General:
 

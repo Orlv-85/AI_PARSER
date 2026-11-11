@@ -688,7 +688,7 @@ flowchart LR
 - `scripts/run_daily_world_job.sh`: env_value (switch and key from the environment or `.env`),
   run_step, the four *_LIMIT variables; the unit limit is in `install_daily_timers.sh`.
 - `storage/archive.py`: `state_counts` and `hosts_without_text` skip world documents.
-- `cli/main.py`: `world` Typer group with `scan`, `collect`, `screen`, `texts` and `report`.
+- `cli/world.py`: `world` Typer group with `scan`, `collect`, `screen`, `texts` and `report`.
 - Change a keyword or a drop rule in the constant named above and extend the fixture test.
 
 ## Tests
