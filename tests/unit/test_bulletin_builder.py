@@ -30,7 +30,6 @@ from app.core.bulletin.phrases import PhraseError, load_phrases, validate_phrase
 from app.core.bulletin.render import render_text
 from app.core.bulletin.world_change import WORLD_CHANGE_VERSION, WorldChange
 from app.core.canonicalize import canonical_url_hash
-from app.storage.bulletin_input import load_day_input, outlet_name
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import (
     Article,
@@ -42,6 +41,7 @@ from app.storage.models_sql import (
     WorldChangeAssessment,
 )
 from app.storage.world_change import WorldChangeRepo
+from app.usecases.bulletin.day_input import load_day_input, outlet_name
 
 DAY = date(2026, 10, 30)
 LIB = load_phrases()

@@ -48,7 +48,11 @@ or the feature doc first, then the failing test, then the code; full gate before
   (`context` takes the reconciliation, `load_input` needs a context). The storage-side check of
   calculating functions starts here with two listed files (T010, T012); a new test pins that the
   period run applies overrides (nothing did before).
-- [ ] T012 `storage/bulletin_input.py`: `digest_title`, `cluster_key` calls move to the use case.
+- [x] T012 `storage/bulletin_input.py` is a use case as a whole (it opens no session but runs
+  queries over five tables, calls `digest_title` and `cluster_key` and assembles `DayInput`): the
+  module moves to `usecases/bulletin/day_input.py` unchanged. `cluster_key` stays in
+  `storage/world.py`: the rule bans only `core` calculations in storage, and `world.py` calls it
+  itself; decided 2026-11-11 (agent).
 
 ## Phase 5: Close (US3)
 
