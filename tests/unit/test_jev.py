@@ -1,5 +1,6 @@
 import hashlib
 import json
+import sqlite3
 from datetime import UTC, datetime
 from logging import getLogger
 
@@ -15,7 +16,12 @@ from app.core.categories import CATEGORY_CRITERIA
 from app.core.daily.provider_requests import source_state
 from app.core.ingestion.admission import bounded_evidence, evidence_hash
 from app.core.ingestion.scoring import ai_relevance_score
-from app.core.jev import JevAssessment, JevRelevanceScorer, jev_relevance_scorer
+from app.core.jev import (
+    ADMISSION_TRANSPORT_RETRY_DELAYS,
+    ADMISSION_TRANSPORT_REVIEW_REASON,
+    JevAssessment,
+    JevRelevanceScorer,
+)
 from app.core.models import Article
 from app.ingest.html import HtmlListPageResult
 from app.ingest.rss import RssFetchResult, _with_rss_metadata
@@ -23,6 +29,7 @@ from app.storage.models_sql import Article as StoredArticle
 from app.storage.models_sql import Base
 from app.usecases.ingestion.pipeline import run_fetch_cycle
 from app.usecases.ingestion.pipeline.rows import _build_article_row
+from app.usecases.ingestion.pipeline.scorer import jev_relevance_scorer
 
 
 def _article(index: int = 1) -> Article:
@@ -104,7 +111,7 @@ def test_jev_disabled_or_missing_key_never_opens_client(enabled, key, monkeypatc
     monkeypatch.delenv("JEV_API_KEY", raising=False)
     monkeypatch.delenv("AINEWS_JEV_API_KEY", raising=False)
     settings = Settings(jev_enabled=enabled, jev_api_key=key, _env_file=None)
-    monkeypatch.setattr("app.core.jev.httpx.Client", unexpected_client)
+    monkeypatch.setattr("app.usecases.ingestion.pipeline.scorer.httpx.Client", unexpected_client)
     with jev_relevance_scorer(settings, getLogger("jev-test")) as scorer:
         assert scorer is None
 
@@ -200,7 +207,7 @@ def test_ingestion_persists_jev_score_or_heuristic_on_failure(
     def fetch_article(*, url, **_kwargs):
         return next(item for item in articles if str(item.url) == url)
 
-    monkeypatch.setattr("app.core.jev.httpx.Client", create_client)
+    monkeypatch.setattr("app.usecases.ingestion.pipeline.scorer.httpx.Client", create_client)
     monkeypatch.setattr(
         "app.usecases.ingestion.pipeline.cycle.load_sources", lambda _path: [config],
     )
@@ -336,3 +343,49 @@ def test_daily_feed_only_candidate_sends_feed_description() -> None:
         assert "Summary: Feed line" in _sent_state(article, admission=True, daily=True)
     article = _article().model_copy(update={"summary": "Feed line", "content": "Body"})
     assert "Summary:" not in _sent_state(article, admission=True, daily=True)
+
+
+def test_daily_scorer_opens_capped_admission_journal(tmp_path, monkeypatch, caplog) -> None:
+    monkeypatch.chdir(tmp_path)
+    settings = Settings(jev_enabled=True, jev_api_key=" k ", daily_enrichment_enabled=True,
+                        _env_file=None)
+    caps = {"total": 2_000_000, "jev": 1_000_000, "deepseek": 1_000_000}
+    with caplog.at_level("INFO"):
+        with jev_relevance_scorer(settings, getLogger("jev-test")) as scorer:
+            journal = scorer.payment_journal
+            assert journal.caps == caps
+            assert journal.transport_review_reason == ADMISSION_TRANSPORT_REVIEW_REASON
+            assert journal.transport_retry_delays == ADMISSION_TRANSPORT_RETRY_DELAYS
+            assert scorer.client.headers["Authorization"] == "Bearer k"
+            report = journal.report()
+        with pytest.raises(sqlite3.ProgrammingError):
+            journal.db.execute("SELECT 1")
+    path = tmp_path / "data" / "daily-admission" / datetime.now(UTC).date().isoformat()
+    assert sorted(path.iterdir()) == [path / "journal.sqlite3"]
+    with sqlite3.connect(path / "journal.sqlite3") as db:
+        assert db.execute("SELECT value FROM identity").fetchall() == [(fingerprint(
+            {"identity": {"version": "daily-admission-1"}, "caps_micro_usd": caps}),)]
+    usage = [r for r in caplog.records if r.getMessage() == "daily_admission_usage"]
+    assert [r.args for r in usage] == [report]
+
+
+def test_daily_scorer_closes_journal_when_the_run_fails(tmp_path, monkeypatch, caplog) -> None:
+    monkeypatch.chdir(tmp_path)
+    settings = Settings(jev_enabled=True, jev_api_key="k", daily_enrichment_enabled=True,
+                        _env_file=None)
+    with caplog.at_level("INFO"), pytest.raises(RuntimeError, match="^run failed$"):
+        with jev_relevance_scorer(settings, getLogger("jev-test")) as scorer:
+            journal = scorer.payment_journal
+            raise RuntimeError("run failed")
+    with pytest.raises(sqlite3.ProgrammingError):
+        journal.db.execute("SELECT 1")
+    assert [r.getMessage() for r in caplog.records].count("daily_admission_usage") == 1
+
+
+def test_scorer_without_daily_enrichment_has_no_journal(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    settings = Settings(jev_enabled=True, jev_api_key="k", daily_enrichment_enabled=False,
+                        _env_file=None)
+    with jev_relevance_scorer(settings, getLogger("jev-test")) as scorer:
+        assert scorer.payment_journal is None
+    assert not (tmp_path / "data").exists()

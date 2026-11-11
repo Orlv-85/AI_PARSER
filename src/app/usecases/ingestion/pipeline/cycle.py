@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig, load_sources
-from app.core.jev import JevRelevanceScorer, jev_relevance_scorer
+from app.core.jev import JevRelevanceScorer
 from app.storage import SessionLocal, create_all
 from app.storage.admission import (
     clear_collection_paused,
@@ -29,6 +29,7 @@ from app.usecases.ingestion.pipeline.models import (
     SourceMetrics,
 )
 from app.usecases.ingestion.pipeline.replay import _replay_pending_for_source
+from app.usecases.ingestion.pipeline.scorer import jev_relevance_scorer
 from app.usecases.ingestion.pipeline.screening import _admission_snapshot, _restore_admission
 from app.usecases.ingestion.pipeline.source_result import (
     _log_source_metrics,

@@ -2,6 +2,7 @@
 module: src/app/storage/provider_journal.py
 covers:
   - src/app/storage/provider_journal.py
+  - src/app/core/provider_errors.py
 -->
 
 # Provider payment journal
@@ -114,7 +115,9 @@ flowchart TD
 
 ## Code map
 
-- `src/app/storage/provider_journal.py`: `PilotJournal`, pricing and payment stop exceptions.
+- `src/app/storage/provider_journal.py`: `PilotJournal` and pricing. The payment stop exceptions
+  (`PilotStopped`, `TransportAttemptsExhausted`) live in `src/app/core/provider_errors.py`, so
+  provider clients in `core/` catch them without importing storage.
   Tables: identity, calls, reviews, request_attempts. No schema version or migration is stored.
   `call` delegates replay to `_replay_response`, dispatch to `_post_with_transient_retries`,
   receipt persistence to `_record_response` and checks to `_validate_response`. `_attempt`
@@ -124,9 +127,11 @@ flowchart TD
 - `src/app/core/daily/provider_requests.py`: default keys, reservations and summary parsing;
   `src/app/core/provider_costs.py`: prices and explicit overload predicate;
   `src/app/core/canonical_json.py`: canonical serialization and fingerprints.
-- Callers: `src/app/core/jev.py`, `src/app/usecases/daily/enrichment.py`,
-  `src/app/core/bulletin/world_change.py`, `src/app/usecases/bulletin/writer_run.py`.
-  They choose journal identity, caps, retry policy and any custom key/reservation functions.
+- Openers (use cases): `src/app/usecases/ingestion/pipeline/scorer.py`,
+  `src/app/usecases/daily/enrichment.py`, `src/app/usecases/bulletin/assessor.py`,
+  `src/app/usecases/bulletin/writer_run.py`. They choose journal identity, caps, retry policy and
+  any custom key/reservation functions. `src/app/core/jev.py` and
+  `src/app/core/bulletin/world_change.py` only call the journal they are given.
 
 ## Tests
 

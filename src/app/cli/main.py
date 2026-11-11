@@ -12,11 +12,7 @@ from app.config.settings import get_settings
 from app.config.sources import load_sources
 from app.core.bulletin.builder import Bulletin
 from app.core.bulletin.render import render_text
-from app.core.bulletin.world_change import (
-    ASSESS_DEFAULT_MAX_USD,
-    WORLD_CHANGE_MAX_USD_PER_DAY,
-    open_assessor,
-)
+from app.core.bulletin.world_change import ASSESS_DEFAULT_MAX_USD, WORLD_CHANGE_MAX_USD_PER_DAY
 from app.core.periodic.period_model import KINDS, MONTH, WEEK
 from app.core.provider_costs import microdollars
 from app.core.world.filter import load_own_domains
@@ -41,6 +37,7 @@ from app.usecases.archive.capture import (
 from app.usecases.archive.capture import capture as archive_capture
 from app.usecases.archive.capture import import_db as archive_import_db
 from app.usecases.archive.capture import status as archive_status
+from app.usecases.bulletin.assessor import open_assessor
 from app.usecases.bulletin.daily import (
     assess_day,
     has_provider_key,

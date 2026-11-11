@@ -6,13 +6,10 @@ import pytest
 
 APP = Path(__file__).resolve().parents[2] / "src" / "app"
 
-# Known exceptions; the list only shrinks.
-# core files that load the provider journal from storage by name (spec 019, T014).
-CORE_USING_STORAGE = frozenset({"jev.py", "bulletin/world_change.py"})
 DYNAMIC_IMPORTERS = frozenset({"import_module", "__import__"})
 # core functions that calculate; a repository returns rows and the use case calls these.
 CALCULATIONS = frozenset({"reconcile", "digest_title", "digest_summary"})
-# storage files that still call them (spec 019, T010).
+# storage files that still call them (spec 019, T010); the list only shrinks.
 STORAGE_CALCULATING = {
     "daily_signals.py": {"reconcile", "digest_title", "digest_summary"},
 }
@@ -78,13 +75,9 @@ def test_app_has_no_relative_imports():
     assert relative == []
 
 
-@pytest.mark.parametrize("upper", ["usecases", "web", "cli"])
-def test_core_imports_no_upper_layer(upper):
-    assert importers("core", upper) == set()
-
-
-def test_core_imports_storage_only_in_listed_files():
-    assert importers("core", "storage") == CORE_USING_STORAGE
+@pytest.mark.parametrize("other", ["storage", "usecases", "web", "cli"])
+def test_core_imports_no_lower_or_upper_layer(other):
+    assert importers("core", other) == set()
 
 
 @pytest.mark.parametrize("upper", ["usecases", "web", "cli"])
