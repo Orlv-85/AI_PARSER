@@ -76,6 +76,13 @@ check it.
   `test_create_draft_candidate_deduplicates_exact_normalized_canonical_url`,
   `test_create_draft_candidates_returns_only_rows_created_for_current_batch`,
   `test_source_onboarding_import_reports_only_new_candidates_for_current_batch`.
+- The `/api/source-onboarding/*` handlers that need tables call
+  `deps.create_onboarding_tables`: it creates missing onboarding tables until it succeeds once
+  per app instance, then does nothing. A storage error still answers 503 and the next request
+  tries again. It shares the news initializer's per-app lock, with its own success flag.
+  Tests: `test_tables_requests_once`, `test_tables_retry_after_storage_error`,
+  `test_tables_concurrent_calls_once`, `test_tables_new_app_calls_again`,
+  `test_tables_initializers_share_lock`.
 - Entry points: `POST /api/source-onboarding/import` (`raw_text` required: 422; parse error: 422;
   storage error: 503; success: 201), CLI `ai-news import-candidates`, admin page (paste or JSON file;
   the page refuses files over 1 MB before upload). Tests:
@@ -398,6 +405,7 @@ scripts/sources_onboarding_helper.py db-bootstrap | db-review | db-validate | db
 | `web/source_intake.py` | `SourceIntakeService`: check job, registry and same-host checks, cache, `approve_ready` |
 | `web/source_onboarding.py` | `SourceOnboardingService`: candidate lists, summaries and review actions returning web models |
 | `web/routes/sources.py` | 14 `/api/source-onboarding/*` routes |
+| `web/routes/__init__.py` (not covered, shared) | `WebDeps.create_onboarding_tables`: once-per-app table initializer wired by `create_app` |
 | `web/service.py` (not covered, shared) | `UpdateRunService` |
 | `storage/source_candidate_repo.py` | `SourceImportBatchRepo`, `SourceCandidateRepo` (drafts, filters, validation result, review save, summary) |
 | `storage/source_repo.py` (not covered) | `SourceRepo.create_from_candidate`, `disable_source` |

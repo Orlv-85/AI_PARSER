@@ -2,7 +2,9 @@
 
 import logging
 import posixpath
+from collections.abc import Callable
 from pathlib import Path
+from threading import Lock
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -15,6 +17,7 @@ from starlette.types import Scope
 
 from app.config.settings import get_settings
 from app.storage import SessionLocal, create_all
+from app.storage.models_sql import Base
 from app.web.auth import SessionSigner, verify_bearer_token
 from app.web.routes import WebDeps
 from app.web.routes.bulletin import build_bulletin_router
@@ -44,6 +47,23 @@ class _NoCacheStaticFiles(StaticFiles):
         response = await super().get_response(path, scope)
         response.headers["Cache-Control"] = "no-cache"
         return response
+
+
+def _once(create: Callable[[], None], lock: Lock) -> Callable[[], None]:
+    """Initialize until one call succeeds; see `src/app/web/pages.md`."""
+    done = False
+
+    def initialize() -> None:
+        nonlocal done
+        if done:  # after success, never wait on the lock held by the other initializer
+            return
+        with lock:
+            if done:
+                return
+            create()
+            done = True
+
+    return initialize
 
 
 def create_app() -> FastAPI:
@@ -147,6 +167,7 @@ def create_app() -> FastAPI:
             return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
         return RedirectResponse(url="/login", status_code=303)
 
+    table_lock = Lock()
     deps = WebDeps(
         settings=settings,
         settings_store=settings_store,
@@ -157,7 +178,10 @@ def create_app() -> FastAPI:
         auth_enabled=auth_enabled,
         signer=signer,
         SessionLocal=SessionLocal,
-        create_all=create_all,
+        create_all=_once(create_all, table_lock),
+        create_onboarding_tables=_once(
+            lambda: Base.metadata.create_all(bind=onboarding_engine), table_lock
+        ),
     )
     api.mount("/static", _NoCacheStaticFiles(directory=_STATIC_DIR), name="static")
     # Order matters: `/api/news/{article_id}` comes after every fixed `/api/news/<name>` path.

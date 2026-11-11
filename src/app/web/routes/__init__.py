@@ -28,3 +28,4 @@ class WebDeps:  # pylint: disable=too-many-instance-attributes
     # News storage, read from `app.web.app` when the app is built (tests patch them there).
     SessionLocal: Callable[[], Session]  # pylint: disable=invalid-name
     create_all: Callable[[], None]
+    create_onboarding_tables: Callable[[], None]

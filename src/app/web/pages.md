@@ -73,8 +73,15 @@ flowchart LR
   Before the PostgreSQL upsert, the same transaction executes `PAGE_VIEWS_LOCK_TIMEOUT_SQL`
   and `PAGE_VIEWS_STATEMENT_TIMEOUT_SQL` to bound lock and statement waits; SQLite skips them.
   Tests: `test_page_views_runs_after_response`, `test_page_views_transaction_timeouts`.
-  Page reads retain `deps.create_all()`; it or the idempotent migration creates `page_views`,
-  whichever runs first after deployment. Tests: `test_page_views_create_all_before_background`,
+  API handlers and page reads call `deps.create_all()`; it creates missing tables until it
+  succeeds once per app instance, then does nothing. A storage error still answers 503 and
+  the next request tries again. Both table initializers share one per-app lock, with separate
+  success flags. Tests: `test_tables_requests_once`, `test_tables_retry_after_storage_error`,
+  `test_tables_concurrent_calls_once`, `test_tables_new_app_calls_again`,
+  `test_tables_initializers_share_lock`.
+  It or the idempotent migration creates `page_views`, whichever runs first after deployment;
+  production starts the app before `alembic upgrade head`.
+  Tests: `test_page_views_create_all_before_background`,
   `test_page_views_migration`. Only day, route and count are stored. Read-only
   `ai-news page-views --days N` prints one JSON object for the last N UTC days including today,
   using `PAGE_VIEWS_DEFAULT_DAYS` by default. Tests: `test_page_views_counts_home_and_daily`,
@@ -225,8 +232,8 @@ flowchart LR
   isolated transaction and PostgreSQL local lock/statement timeouts keep failures harmless
   without holding up the page; SQLite skips PostgreSQL-only statements.
   The read-only JSON CLI defaults to `PAGE_VIEWS_DEFAULT_DAYS`; no visitor data is collected.
-- decided 2026-11-06 (agent): retain `deps.create_all()` like other pages; it or the idempotent
-  Alembic migration creates `page_views`, whichever runs first after deployment (coordinator).
+- decided 2026-11-11 (agent), spec 020: `deps.create_all()` runs once per app instance;
+  per-request runs added metadata queries to each request.
 - decided 2026-11-06 (agent): override only the home date's schema annotation to preserve the
   original optional date OpenAPI contract while retaining the switched-on strict 400 parser.
 - decided 2026-11-06 (agent): keep route handlers as thin calls to module-level helpers so the

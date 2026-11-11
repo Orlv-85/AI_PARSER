@@ -8,7 +8,6 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.concurrency import run_in_threadpool
 
-from app.storage.models_sql import Base
 from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
 from app.usecases.sources.onboarding import import_source_candidates, review_candidate_overlaps
 from app.usecases.sources.validation import run_source_validation_batch
@@ -71,7 +70,6 @@ def _parse_source_onboarding_candidate_ids(value: object) -> list[int] | None:
 
 
 def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-many-statements
-    onboarding_engine = deps.onboarding_engine
     onboarding_session_local = deps.onboarding_session_local
     source_intake = deps.source_intake
     router = APIRouter()
@@ -86,7 +84,7 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
             raise HTTPException(status_code=422, detail="raw_text is required")
 
         try:
-            Base.metadata.create_all(bind=onboarding_engine)
+            deps.create_onboarding_tables()
             with onboarding_session_local() as session:
                 result = import_source_candidates(
                     raw_text=raw_text,
@@ -118,7 +116,7 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
     @router.get("/api/source-onboarding/latest")
     def latest_source_batch() -> dict[str, Any]:
         try:
-            Base.metadata.create_all(bind=onboarding_engine)
+            deps.create_onboarding_tables()
             return {"batch_id": source_intake.latest_batch(), "job": source_intake.status()}
         except SQLAlchemyError as exc:
             raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
@@ -130,7 +128,7 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
     @router.post("/api/source-onboarding/batches/{batch_id}/check", status_code=202)
     def check_source_batch(batch_id: int = FastAPIPath(..., ge=1)) -> dict[str, Any]:
         try:
-            Base.metadata.create_all(bind=onboarding_engine)
+            deps.create_onboarding_tables()
             return dict(source_intake.start(batch_id))
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -140,7 +138,7 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
     @router.post("/api/source-onboarding/batches/{batch_id}/approve-ready")
     def approve_ready_sources(batch_id: int = FastAPIPath(..., ge=1)) -> dict[str, Any]:
         try:
-            Base.metadata.create_all(bind=onboarding_engine)
+            deps.create_onboarding_tables()
             approved = source_intake.approve_ready(batch_id)
             return {"batch_id": batch_id, "approved_count": len(approved),
                     "candidate_ids": approved}
@@ -164,7 +162,7 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
 
         def _validate_batch() -> JSONResponse:
             try:
-                Base.metadata.create_all(bind=onboarding_engine)
+                deps.create_onboarding_tables()
                 with onboarding_session_local() as session:
                     results = run_source_validation_batch(
                         session=session,
@@ -204,7 +202,7 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
     ) -> JSONResponse:
         candidate_ids = list(candidate_id)
         try:
-            Base.metadata.create_all(bind=onboarding_engine)
+            deps.create_onboarding_tables()
             with onboarding_session_local() as session:
                 groups = review_candidate_overlaps(
                     session=session,
@@ -239,7 +237,7 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
         validation_status: str | None = None,
     ) -> SourceOnboardingCandidateListResponse:
         try:
-            Base.metadata.create_all(bind=onboarding_engine)
+            deps.create_onboarding_tables()
             with onboarding_session_local() as session:
                 service = SourceOnboardingService(session)
                 return service.list_candidates(
@@ -256,7 +254,7 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
     )
     def get_source_onboarding_batch_summary(batch_id: int) -> SourceOnboardingBatchSummary:
         try:
-            Base.metadata.create_all(bind=onboarding_engine)
+            deps.create_onboarding_tables()
             with onboarding_session_local() as session:
                 service = SourceOnboardingService(session)
                 return service.get_batch_summary(batch_id)
@@ -273,7 +271,7 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
         candidate_id: int = FastAPIPath(..., ge=1),
     ) -> SourceOnboardingApproveResponse:
         try:
-            Base.metadata.create_all(bind=onboarding_engine)
+            deps.create_onboarding_tables()
             with onboarding_session_local() as session:
                 service = SourceOnboardingService(session)
                 response = service.approve_candidate(candidate_id)
@@ -293,7 +291,7 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
         candidate_id: int = FastAPIPath(..., ge=1),
     ) -> SourceOnboardingDisableResponse:
         try:
-            Base.metadata.create_all(bind=onboarding_engine)
+            deps.create_onboarding_tables()
             with onboarding_session_local() as session:
                 service = SourceOnboardingService(session)
                 response = service.disable_candidate(candidate_id)
@@ -314,7 +312,7 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
         candidate_id: int = FastAPIPath(..., ge=1),
     ) -> SourceOnboardingRejectResponse:
         try:
-            Base.metadata.create_all(bind=onboarding_engine)
+            deps.create_onboarding_tables()
             with onboarding_session_local() as session:
                 service = SourceOnboardingService(session)
                 response = service.reject_candidate(candidate_id, reason=payload.reason)
@@ -335,7 +333,7 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
         candidate_id: int = FastAPIPath(..., ge=1),
     ) -> SourceOnboardingDuplicateResponse:
         try:
-            Base.metadata.create_all(bind=onboarding_engine)
+            deps.create_onboarding_tables()
             with onboarding_session_local() as session:
                 service = SourceOnboardingService(session)
                 response = service.mark_duplicate(
@@ -360,7 +358,7 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
         candidate_id: int = FastAPIPath(..., ge=1),
     ) -> SourceOnboardingEditResponse:
         try:
-            Base.metadata.create_all(bind=onboarding_engine)
+            deps.create_onboarding_tables()
             with onboarding_session_local() as session:
                 service = SourceOnboardingService(session)
                 response = service.edit_candidate(
