@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.categories import READABLE_CATEGORIES
-from app.storage.article_repo import ArticleRepo
+from app.usecases.news_reads import agent_article, agent_rows, news_rows
 from app.web.models import DigestLinkFeedItem, NewsArticleDetail, NewsItem
 from app.web.routes import WebDeps
 
@@ -47,6 +47,40 @@ def _article_category_metadata(article: object) -> dict[str, Any]:
     return result
 
 
+def _view_filters(*, hours: int, date_from: date | None, date_to: date | None,
+                  category: str | None, **filters: object) -> dict[str, object]:
+    """`list_for_view` arguments: a date range replaces the `hours` window."""
+    has_date_range = date_from is not None or date_to is not None
+    found: dict[str, object] = {"hours": None if has_date_range else hours, **filters}
+    if has_date_range:
+        found.update(date_from=date_from, date_to=date_to)
+    if category is not None:
+        found["category"] = category
+    return found
+
+
+def _link_item(article: Any, source_key: str | None, source_name: str | None,
+               include_content: bool) -> DigestLinkFeedItem:
+    rank = ({"rank_score": article.rank_score}
+            if include_content and hasattr(article, "rank_score") else {})
+    content = ({"summary": article.summary,
+                "content": article.content[:12000] if article.content else None}
+               if include_content else {})
+    return DigestLinkFeedItem(
+        article_id=article.id,
+        title=article.title,
+        published_at=article.published_at,
+        url=article.url,
+        url_canonical=article.url_canonical,
+        source_id=article.source_id,
+        source_key=source_key,
+        source_name=source_name,
+        **_article_category_metadata(article),
+        **rank,
+        **content,
+    )
+
+
 def build_news_router(deps: WebDeps) -> APIRouter:
     router = APIRouter()
 
@@ -65,26 +99,12 @@ def build_news_router(deps: WebDeps) -> APIRouter:
         date_from: date | None = None,
         date_to: date | None = None,
     ) -> list[NewsItem]:
-        has_date_range = date_from is not None or date_to is not None
-        hours_filter = None if has_date_range else hours
         try:
             deps.create_all()
-            with deps.SessionLocal() as session:
-                repo = ArticleRepo(session)
-                list_kwargs: dict[str, object] = {
-                    "hours": hours_filter,
-                    "limit": limit,
-                    "min_ai_relevance": min_ai_relevance,
-                    "query": query,
-                    "days": days,
-                    "sort": sort,
-                }
-                if has_date_range:
-                    list_kwargs["date_from"] = date_from
-                    list_kwargs["date_to"] = date_to
-                if category is not None:
-                    list_kwargs["category"] = category
-                rows = repo.list_for_view(**list_kwargs)
+            rows = news_rows(deps.SessionLocal, **_view_filters(
+                hours=hours, date_from=date_from, date_to=date_to, category=category,
+                limit=limit, min_ai_relevance=min_ai_relevance, query=query, days=days,
+                sort=sort))
         except SQLAlchemyError as exc:
             raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
 
@@ -116,27 +136,12 @@ def build_news_router(deps: WebDeps) -> APIRouter:
         date_from: date | None = None,
         date_to: date | None = None,
     ) -> JSONResponse:
-        has_date_range = date_from is not None or date_to is not None
-        hours_filter = None if has_date_range else hours
         try:
             deps.create_all()
-            with deps.SessionLocal() as session:
-                repo = ArticleRepo(session)
-                list_kwargs: dict[str, object] = {
-                    "hours": hours_filter,
-                    "limit": limit,
-                    "min_ai_relevance": min_ai_relevance,
-                    "query": query,
-                    "days": days,
-                    "sort": sort,
-                    "include_content": include_content,
-                }
-                if has_date_range:
-                    list_kwargs["date_from"] = date_from
-                    list_kwargs["date_to"] = date_to
-                if category is not None:
-                    list_kwargs["category"] = category
-                rows = repo.list_for_view(**list_kwargs)
+            rows = news_rows(deps.SessionLocal, **_view_filters(
+                hours=hours, date_from=date_from, date_to=date_to, category=category,
+                limit=limit, min_ai_relevance=min_ai_relevance, query=query, days=days,
+                sort=sort, include_content=include_content))
         except SQLAlchemyError as exc:
             raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
 
@@ -184,49 +189,23 @@ def build_news_router(deps: WebDeps) -> APIRouter:
         include_content = include_content and getattr(request.state, "full_text_allowed", False)
         try:
             deps.create_all()
-            with deps.SessionLocal() as session:
-                repo = ArticleRepo(session)
-                rows = repo.list_for_agent(
-                    hours=None,
-                    limit=limit,
-                    offset=offset,
-                    query=None,
-                    days=1,
-                    sort="published",
-                    min_ai_relevance=min_ai_relevance,
-                    date_from=target_date,
-                    date_to=target_date,
-                )
+            rows = agent_rows(
+                deps.SessionLocal,
+                hours=None,
+                limit=limit,
+                offset=offset,
+                query=None,
+                days=1,
+                sort="published",
+                min_ai_relevance=min_ai_relevance,
+                date_from=target_date,
+                date_to=target_date,
+            )
         except SQLAlchemyError as exc:
             raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
 
-        return [
-            DigestLinkFeedItem(
-                article_id=article.id,
-                title=article.title,
-                published_at=article.published_at,
-                url=article.url,
-                url_canonical=article.url_canonical,
-                source_id=article.source_id,
-                source_key=source_key,
-                source_name=source_name,
-                **_article_category_metadata(article),
-                **(
-                    {"rank_score": article.rank_score}
-                    if include_content and hasattr(article, "rank_score")
-                    else {}
-                ),
-                **(
-                    {
-                        "summary": article.summary,
-                        "content": article.content[:12000] if article.content else None,
-                    }
-                    if include_content
-                    else {}
-                ),
-            )
-            for article, source_key, source_name in rows
-        ]
+        return [_link_item(article, source_key, source_name, include_content)
+                for article, source_key, source_name in rows]
 
     return router
 
@@ -238,9 +217,7 @@ def build_news_article_router(deps: WebDeps) -> APIRouter:
     def get_news_article(article_id: int) -> NewsArticleDetail:
         try:
             deps.create_all()
-            with deps.SessionLocal() as session:
-                repo = ArticleRepo(session)
-                row = repo.get_article_for_agent(article_id=article_id)
+            row = agent_article(deps.SessionLocal, article_id)
         except SQLAlchemyError as exc:
             raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
 

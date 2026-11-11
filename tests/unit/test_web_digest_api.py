@@ -10,8 +10,8 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import get_settings
 from app.storage.models_sql import Article, Base, FetchRun, Source
+from app.usecases import news_reads
 from app.web.app import create_app
-from app.web.routes import news as news_routes
 from app.web.routes import pages as pages_routes
 
 
@@ -55,7 +55,7 @@ def test_news_links_filters_to_requested_date_and_returns_article_metadata(
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(news_routes, "ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr(news_reads, "ArticleRepo", _ArticleRepo)
 
     client = TestClient(create_app())
 

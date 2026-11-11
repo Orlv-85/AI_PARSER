@@ -20,11 +20,8 @@ COMPOSITION_ROOT_NAMES = frozenset({"app.storage:SessionLocal", "app.storage:cre
 # Entry-point storage imports and web commits still in breach (spec 020); lists only shrink.
 STORAGE_IN_ENTRY_POINTS = {
     "cli/main.py",
-    "web/routes/bulletin.py",
     "web/routes/common.py",
-    "web/routes/news.py",
     "web/routes/pages.py",
-    "web/routes/period.py",
     "web/routes/signals.py",
     "web/routes/weekly.py",
     "web/service.py",

@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.storage.bulletin_store import BulletinRepo
+from app.usecases.bulletin.stored import stored_bulletin
 from app.web.routes import WebDeps
 
 _DATE_QUERY = Query(None, alias="date")
@@ -31,15 +31,13 @@ def build_bulletin_router(deps: WebDeps) -> APIRouter:
         day = parse_day(target_date)
         try:
             deps.create_all()
-            with deps.SessionLocal() as session:
-                repo = BulletinRepo(session)
-                row = repo.get(day) if day is not None else repo.latest_ready()
-                if row is None:
-                    raise HTTPException(status_code=404, detail="Bulletin not found")
-                return {"day": row.day, "status": row.status, "reason": row.reason,
-                        "payload": row.payload, "numbers": row.numbers, "versions": row.versions,
-                        "generated_at": row.generated_at}
+            row = stored_bulletin(deps.SessionLocal, day)
         except SQLAlchemyError as exc:
             raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+        if row is None:
+            raise HTTPException(status_code=404, detail="Bulletin not found")
+        return {"day": row.day, "status": row.status, "reason": row.reason,
+                "payload": row.payload, "numbers": row.numbers, "versions": row.versions,
+                "generated_at": row.generated_at}
 
     return router

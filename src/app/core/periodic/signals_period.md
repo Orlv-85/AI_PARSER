@@ -394,6 +394,7 @@ flowchart LR
 | `storage/migrations/versions/f4a9c1d27b83_add_period_signals.py` | the two tables, skip-if-exists, `down_revision` `e7b4c2a9d150` | no |
 | `storage/migrations/versions/a7d3e5b18c94_drop_weekly_v2_tables.py` | drops the 8 weekly v2 tables; tests `tests/unit/test_drop_weekly_v2_migration.py` | no |
 | `web/period_view.py`, `web/period.html`, `web/static/css/period.css` | the `/weekly` HTML, template and styles; `latest_week` and `has_month` (in the route file) feed the nav links and the line on `/`; one template serves `/weekly` and `/monthly` | no |
+| `usecases/periodic/period_reads.py` | `period_index`, `stored_period`, `period_page`: stored rows in one session each; `SHOWN_STATUSES` (the default read shows the newest period with comparable numbers, else any stored one) | no |
 | `web/routes/period.py` | the two read routes and the `/weekly` and `/monthly` page routes; response models `PeriodSignalsResponse`, `PeriodSignalsIndexResponse` in `web/models.py` | no |
 | `cli/main.py` `period-signals` | options and flag check; flags `period_signals_enabled`, `period_signals_brief_enabled` and `period_signals_max_usd` in `config/settings.py` | no |
 | `core/daily/signals_trend.py` | Shared Rising/Cooling rule: `trend_windows`, `trend_delta`, `TrendRow` | yes |

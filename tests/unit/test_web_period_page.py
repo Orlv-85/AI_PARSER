@@ -158,7 +158,7 @@ def test_nav_link_and_home_line_follow_stored_weeks(client):
 
 def test_home_page_survives_a_period_read_failure(client, monkeypatch):
     http, _, _ = client
-    monkeypatch.setattr("app.web.routes.period.PeriodSignalRepo.index",
+    monkeypatch.setattr("app.usecases.periodic.period_reads.PeriodSignalRepo.index",
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
     response = http.get("/?date=2026-10-16")
     assert response.status_code == 200 and 'href="/weekly"' not in response.text
@@ -262,7 +262,7 @@ def test_monthly_nav_link_needs_a_month_row(client):
 def test_monthly_nav_link_is_hidden_when_the_read_fails(client, monkeypatch):
     http, maker, engine = client
     store_month(maker, engine, NOV, computed_month())
-    monkeypatch.setattr("app.web.routes.period.PeriodSignalRepo.index",
+    monkeypatch.setattr("app.usecases.periodic.period_reads.PeriodSignalRepo.index",
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
     response = http.get("/?date=2026-10-16")
     assert response.status_code == 200 and 'href="/monthly"' not in response.text
