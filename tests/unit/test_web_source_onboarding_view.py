@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.config.settings import get_settings
 from app.storage.models_sql import Base
 from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
-from app.web import models as web_models
+from app.usecases.sources import candidate_review
 from app.web.app import create_app
 
 
@@ -84,7 +84,7 @@ def test_source_onboarding_view_models_exist_for_candidate_list_and_batch_summar
             "SourceOnboardingCandidateListResponse",
             "SourceOnboardingBatchSummary",
         )
-        if not hasattr(web_models, model_name)
+        if not hasattr(candidate_review, model_name)
     ]
 
     assert not missing_models, f"Phase 3 onboarding view models missing: {missing_models}"

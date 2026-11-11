@@ -1,23 +1,98 @@
-"""Web service for source onboarding candidate lists and review actions."""
+"""Source onboarding review: candidate lists, summaries, review actions and their response models.
 
+Behavior, decisions, invariants and code map: onboarding.md next to this file.
+"""
+
+from collections.abc import Callable
+from datetime import datetime
 from typing import Any, cast
 
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
 from app.storage.source_repo import SourceRepo
 from app.usecases.sources.onboarding import review_source_candidate
-from app.web.models import (
-    SourceOnboardingApproveResponse,
-    SourceOnboardingBatchSummary,
-    SourceOnboardingCandidateFilters,
-    SourceOnboardingCandidateListResponse,
-    SourceOnboardingCandidateView,
-    SourceOnboardingDisableResponse,
-    SourceOnboardingDuplicateResponse,
-    SourceOnboardingEditResponse,
-    SourceOnboardingRejectResponse,
-)
+
+
+class SourceOnboardingCandidateView(BaseModel):
+    candidate_id: int
+    batch_id: int | None = None
+    status: str
+    validation_status: str
+    candidate_type: str
+    normalized_url: str
+    raw_input: str | None = None
+    review_note: str | None = None
+    duplicate_of_candidate_id: int | None = None
+    approved_source_id: int | None = None
+    validation_detected_type: str | None = None
+    validation_error: str | None = None
+    validation_details: str | None = None
+    validated_at: datetime | None = None
+
+
+class SourceOnboardingCandidateFilters(BaseModel):
+    batch_id: int | None = None
+    status: str | None = None
+    validation_status: str | None = None
+
+
+class SourceOnboardingBatchSummary(BaseModel):
+    batch_id: int | None = None
+    parsed_count: int | None = None
+    accepted_count: int | None = None
+    rejected_count: int | None = None
+    pending_review_count: int = 0
+    validated_count: int = 0
+    approved_count: int = 0
+    rejected_review_count: int = 0
+    duplicate_count: int = 0
+    total_candidates: int | None = None
+    draft_count: int | None = None
+
+
+class SourceOnboardingCandidateListResponse(BaseModel):
+    items: list[SourceOnboardingCandidateView]
+    summary: SourceOnboardingBatchSummary
+    filters: SourceOnboardingCandidateFilters
+
+
+class SourceOnboardingApproveResponse(BaseModel):
+    candidate_id: int
+    status: str
+    validation_status: str
+    managed_source_created: bool
+    approved_source_id: int | None = None
+    review_note: str | None = None
+
+
+class SourceOnboardingRejectResponse(BaseModel):
+    candidate_id: int
+    status: str
+    review_note: str | None = None
+
+
+class SourceOnboardingDisableResponse(BaseModel):
+    candidate_id: int
+    status: str
+    approved_source_id: int
+
+
+class SourceOnboardingDuplicateResponse(BaseModel):
+    candidate_id: int
+    status: str
+    duplicate_of_candidate_id: int
+    review_note: str | None = None
+
+
+class SourceOnboardingEditResponse(BaseModel):
+    candidate_id: int
+    status: str
+    normalized_url: str
+    candidate_type: str
+    raw_input: str
+    review_note: str | None = None
 
 
 class SourceOnboardingService:
@@ -210,3 +285,17 @@ class SourceOnboardingService:
             return None
         first_candidate: Any = candidates[0]
         return cast(int | None, first_candidate.batch_id)
+
+
+def review_in_session[R](
+    session_factory: Callable[[], Session],
+    action: Callable[[SourceOnboardingService], R],
+    *,
+    commit: bool,
+) -> R:
+    """Runs one service action in its own session; a write action commits before returning."""
+    with session_factory() as session:
+        result = action(SourceOnboardingService(session))
+        if commit:
+            session.commit()
+        return result

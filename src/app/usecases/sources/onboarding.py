@@ -4,6 +4,7 @@
 Behavior, decisions, invariants and code map: onboarding.md next to this file.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -67,6 +68,33 @@ def import_source_candidates(
         rejected_count=total_rejected,
     )
 
+@dataclass(frozen=True, slots=True)
+class SourceImportSummary:
+    batch_id: int
+    parsed_count: int
+    accepted_count: int
+    rejected_count: int
+    candidate_ids: list[int]
+
+
+def import_batch(session_factory: Callable[[], Session], raw_text: str) -> SourceImportSummary:
+    """Imports one batch in its own session and commits it."""
+    with session_factory() as session:
+        result = import_source_candidates(
+            raw_text=raw_text,
+            batch_repo=SourceImportBatchRepo(session),
+            candidate_repo=SourceCandidateRepo(session),
+        )
+        session.commit()
+        return SourceImportSummary(
+            batch_id=result.batch.id,
+            parsed_count=result.parsed_count,
+            accepted_count=result.accepted_count,
+            rejected_count=result.rejected_count,
+            candidate_ids=[candidate.id for candidate in result.candidates],
+        )
+
+
 def review_candidate_overlaps(
     *,
     session: Session,
@@ -76,6 +104,19 @@ def review_candidate_overlaps(
     repo = SourceCandidateRepo(session)
     groups = repo.find_overlap_groups(batch_id=batch_id, candidate_ids=candidate_ids)
     return [group for group in groups if isinstance(group, CandidateOverlapGroup)]
+
+def candidate_overlaps(
+    session_factory: Callable[[], Session],
+    *,
+    batch_id: int | None,
+    candidate_ids: list[int] | None,
+) -> list[CandidateOverlapGroup]:
+    """Overlap groups read in their own session; nothing is written."""
+    with session_factory() as session:
+        return review_candidate_overlaps(
+            session=session, batch_id=batch_id, candidate_ids=candidate_ids
+        )
+
 
 def review_source_candidate(
     *,

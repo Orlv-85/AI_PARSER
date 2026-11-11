@@ -7,10 +7,10 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from app.config.settings import Settings
+from app.usecases.sources.intake import SourceIntakeService
 from app.web.auth import SessionSigner
 from app.web.service import UpdateRunService
 from app.web.settings_store import UpdateSettingsStore
-from app.web.source_intake import SourceIntakeService
 
 
 @dataclass(frozen=True)

@@ -3,10 +3,8 @@ module: src/app/usecases/sources/onboarding.py
 covers:
   - src/app/usecases/sources/*.py
   - src/app/core/sources/*.py
-  - src/app/web/source_onboarding.py
   - src/app/storage/source_candidate_repo.py
   - src/app/web/routes/sources.py
-  - src/app/web/source_intake.py
   - scripts/sources_onboarding_helper.py
 -->
 # Source onboarding
@@ -336,6 +334,12 @@ check it.
 - The import and validate bodies are read into Pydantic models inside the handler (not as typed
   body parameters), so `detail` stays one string for the admin page and OpenAPI shows no request
   body for them. Tests: `test_source_onboarding_body_routes_have_no_openapi_body`.
+- Handlers open no session and commit nothing: each route calls a use case that opens its own
+  session from the onboarding session factory and commits its writes (`import_batch`,
+  `validate_batch`, `candidate_overlaps`, `review_in_session`, `SourceIntakeService`); handlers map
+  `ValueError` and `SQLAlchemyError` to HTTP answers. Tests:
+  `test_entry_points_import_storage_only_in_listed_files`, `test_web_commits_only_in_listed_files`,
+  `test_source_onboarding_http_errors_map_only_named_value_errors`.
 - Every `/api/source-onboarding/*` route and the admin page need an admin session when auth is on.
   Tests: `test_auth_middleware_coverage_is_pinned`, `test_route_table_order_names_and_models_are_pinned`.
 
@@ -367,6 +371,8 @@ check it.
 | Individual approve accepts any `validated` candidate, bulk only `ready` | the operator overrides model decisions; bulk rechecks readiness (011) |
 | New source: interval 30 minutes, weight 1.0 | no source states it; decided 2026-10-21 (agent): keep the `SourceConfig` field defaults, so a new source ranks like a YAML source without a weight (1.0 is the top of the clamp in `rank_score`); the interval skips no fetch (`pipeline.md`) |
 | Approved HTML sources carry no selectors; `MANAGED_LINK_SELECTORS` in code | DB rows store no CSS options (non-news record, see `pipeline.md` decisions) |
+| Review response models live in `usecases/sources/candidate_review.py`, not `web/models.py` | use cases may not import `web/` (spec 020); the routes use them as response models unchanged |
+| Two engines to one database: `SessionLocal` (module-wide, `storage/db.py`) and the onboarding engine of `create_app` | decided 2026-11-11 (agent): the onboarding engine follows the `Settings` of `create_app`, `SessionLocal` the settings at import; tests build apps with their own database on that; merging them changes which database onboarding writes, a behavior change outside spec 020 |
 | InfoQ named as broad media | the provided 50-source batch (003 plan, domain finding 3; fixture `qa_ai_sources.txt`) |
 
 ## Invariants
@@ -397,14 +403,16 @@ check it.
 
 ```text
 admin page (web/index.html)                          ai-news import-candidates / validate-candidates
-  POST /api/source-onboarding/import                 web/routes/sources.py -> import_source_candidates
-  POST .../batches/{id}/check -> SourceIntakeService web/source_intake.py: _run, _check_candidate
+  POST /api/source-onboarding/import                 web/routes/sources.py -> import_batch
+       -> import_source_candidates
+  POST .../batches/{id}/check -> SourceIntakeService usecases/sources/intake.py: _run, _check_candidate
        probe_source, SourceReviewer, evidence_fingerprint   core/sources/review.py
   POST .../batches/{id}/approve-ready -> approve_ready
   POST .../candidates/{id}/approve|reject|disable|mark-duplicate, PATCH .../candidates/{id}
-       SourceOnboardingService (web/source_onboarding.py) -> review_source_candidate
+       review_in_session -> SourceOnboardingService (usecases/sources/candidate_review.py)
+       -> review_source_candidate
        approve -> SourceRepo.create_from_candidate   storage/source_repo.py
-  POST /api/source-onboarding/validate               run_source_validation_batch
+  POST /api/source-onboarding/validate               validate_batch -> run_source_validation_batch
   GET .../candidates, .../summary, .../overlaps, .../latest, .../check-status
 next run_fetch_cycle                                 enabled DB sources (usecases/ingestion/pipeline.md)
 scripts/sources_onboarding_helper.py db-bootstrap | db-review | db-validate | db-export
@@ -416,13 +424,13 @@ scripts/sources_onboarding_helper.py db-bootstrap | db-review | db-validate | db
 | --- | --- |
 | `core/sources/candidates.py` | Pure URL extraction, normalization, parsing and overlap grouping; owns `NormalizedSourceCandidate` and `CandidateOverlapGroup` |
 | `core/sources/candidate_fields.py` | `read_str`, `read_optional_str`, `read_optional_int`: the one reader of a candidate field (dict or object), used by `core/sources/*` and by `storage/source_repo.py`, `storage/source_candidate_repo.py`; a missing or `None` required field raises `candidate field is required: <name>`. Tests: `test_read_str_returns_text_of_present_field`, `test_read_str_default_covers_absent_field_only_else_raises`, `test_read_optional_str_and_int`, `test_read_optional_int_casts_text_and_rejects_garbage` |
-| `usecases/sources/validation.py` | `ValidationResult`, deterministic RSS/HTML validation, ingestion fetch adapters and validation persistence |
-| `usecases/sources/onboarding.py` | `SourceImportResult`, database import, overlap review, candidate review actions and YAML export |
+| `usecases/sources/validation.py` | `ValidationResult`, deterministic RSS/HTML validation, ingestion fetch adapters and validation persistence (`validate_batch` owns the session) |
+| `usecases/sources/onboarding.py` | `SourceImportResult`, database import (`import_batch` owns the session), overlap review (`candidate_overlaps`), candidate review actions and YAML export |
 | `usecases/sources/bootstrap.py` | `bootstrap_sources_into_db`: `sources.yaml` into the sources table (`db-bootstrap`); skips a repeated URL and keeps the row that already owns a URL |
 | `core/sources/review.py` | Check probe (`probe_source`), evidence brief, `SourceReviewer` (Jev, DeepSeek), `evidence_fingerprint` |
-| `web/source_intake.py` | `SourceIntakeService`: check job, registry and same-host checks, cache, `approve_ready` |
-| `web/source_onboarding.py` | `SourceOnboardingService`: candidate lists, summaries and review actions returning web models |
-| `web/routes/sources.py` | 14 `/api/source-onboarding/*` routes |
+| `usecases/sources/intake.py` | `SourceIntakeService`: check job, registry and same-host checks, cache, `approve_ready` |
+| `usecases/sources/candidate_review.py` | `SourceOnboardingService`: candidate lists, summaries and review actions returning the review response models; `review_in_session` |
+| `web/routes/sources.py` | 14 `/api/source-onboarding/*` routes; HTTP errors only (`_http_errors`) |
 | `web/routes/__init__.py` (not covered, shared) | `WebDeps.create_onboarding_tables`: once-per-app table initializer wired by `create_app` |
 | `web/service.py` (not covered, shared) | `UpdateRunService` |
 | `storage/source_candidate_repo.py` | `SourceImportBatchRepo`, `SourceCandidateRepo` (drafts, filters, validation result, review save, summary) |
@@ -440,7 +448,7 @@ scripts/sources_onboarding_helper.py db-bootstrap | db-review | db-validate | db
 
 | Change | Place | Also |
 | --- | --- | --- |
-| URL normalization, tracking parameters | `normalize_candidate_url` | `candidate_url_key` (used by `_url_key` in `web/source_intake.py` and by the probe self-link check) applies `canonicalize_url` on top of it (one key with the pipeline); the stored `normalized_url` stays `normalize_candidate_url` output |
+| URL normalization, tracking parameters | `normalize_candidate_url` | `candidate_url_key` (used by `_url_key` in `usecases/sources/intake.py` and by the probe self-link check) applies `canonicalize_url` on top of it (one key with the pipeline); the stored `normalized_url` stays `normalize_candidate_url` output |
 | Overlap rules | `_overlap_reason`, `_TOPIC_SEGMENTS`, `_ROOT_SEGMENTS`, `_REVIEW_REASON_PRIORITIES` | tests in `test_source_onboarding_dedupe.py` |
 | JSON limits | `_json_source_records` | the size hint in `web/index.html`, the check in `web/static/admin/sources.js` |
 | Probe bounds, evidence brief | `_read_source`, `_MAX_RESPONSE_BYTES`, `SourceProbe.brief` | bump `_PROMPT_VERSION` when the brief changes |

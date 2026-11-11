@@ -26,18 +26,13 @@ STORAGE_IN_ENTRY_POINTS = {
     "web/routes/pages.py",
     "web/routes/period.py",
     "web/routes/signals.py",
-    "web/routes/sources.py",
     "web/routes/weekly.py",
     "web/service.py",
-    "web/source_intake.py",
-    "web/source_onboarding.py",
 }
 COMMITS_IN_WEB = {
     "web/routes/pages.py",
     "web/routes/signals.py",
-    "web/routes/sources.py",
     "web/routes/weekly.py",
-    "web/source_intake.py",
 }
 # core functions a repository may call: they key, encode or read, not calculate.
 HELPERS = frozenset({
