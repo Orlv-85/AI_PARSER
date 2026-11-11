@@ -1,12 +1,15 @@
-"""Helpers shared by several web routers: stored daily signals and the weekly default date."""
+"""Helpers shared by several web routers: HTTP errors, stored daily signals and the weekly default
+date."""
 
 import json
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import date
 from typing import Any
 
-from fastapi import Query
+from fastapi import HTTPException, Query
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.usecases.daily.signals_reads import stored_signals
@@ -14,6 +17,19 @@ from app.web.models import DailySignalBrief, DailySignalsResponse
 
 _LOGGER = logging.getLogger(__name__)
 _OPTIONAL_WEEKLY_ANALYTICS_DATE_QUERY = Query(default=None, alias="date")
+
+
+@contextmanager
+def _http_errors(value_error_status: int | None = None) -> Iterator[None]:
+    """A use case's ValueError as `value_error_status` (if given), a storage error as 503."""
+    try:
+        yield
+    except ValueError as exc:
+        if value_error_status is None:
+            raise
+        raise HTTPException(status_code=value_error_status, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
 
 
 def _daily_signals_response(*, report_date: date, payload: str | None) -> DailySignalsResponse:

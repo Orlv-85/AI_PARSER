@@ -211,3 +211,23 @@ def test_auth_middleware_coverage_is_pinned(monkeypatch, tmp_path) -> None:
             publish_routes.add((method, path))
     assert open_routes == _OPEN_ROUTES
     assert publish_routes == _PUBLISH_ROUTES
+
+
+def test_auth_rule_covers_paths_outside_the_route_table() -> None:
+    requires_auth = import_module("app.web.app")._requires_auth
+    assert not requires_auth("HEAD", "/api/news/links")
+    assert requires_auth("POST", "/api/news/links")
+    assert requires_auth("GET", "/api/unknown")
+    assert not requires_auth("POST", "/api/auth/logout")
+    assert not requires_auth("GET", "/unknown-page")
+    assert requires_auth("GET", "/static//Admin/../admin/app.js")
+    assert not requires_auth("GET", "/static/app.css")
+
+
+def test_publish_token_opens_only_post_to_publish_paths() -> None:
+    is_allowed = import_module("app.web.app")._is_allowed
+    assert is_allowed("POST", "/api/news/digests", has_token=True)
+    assert not is_allowed("POST", "/api/news/digests", has_token=False)
+    assert not is_allowed("PUT", "/api/news/weekly-analytics", has_token=True)
+    assert not is_allowed("POST", "/api/update/run", has_token=True)
+    assert is_allowed("GET", "/api/news/digests", has_token=False)

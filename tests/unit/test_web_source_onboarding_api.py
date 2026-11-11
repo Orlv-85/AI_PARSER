@@ -18,7 +18,7 @@ from app.usecases.sources import candidate_review as review_usecases
 from app.usecases.sources import onboarding as onboarding_usecases
 from app.usecases.sources import validation as validation_usecases
 from app.web.app import create_app
-from app.web.routes.sources import _http_errors
+from app.web.routes.common import _http_errors
 
 
 def _build_client(monkeypatch, tmp_path) -> TestClient:

@@ -430,7 +430,7 @@ scripts/sources_onboarding_helper.py db-bootstrap | db-review | db-validate | db
 | `core/sources/review.py` | Check probe (`probe_source`), evidence brief, `SourceReviewer` (Jev, DeepSeek), `evidence_fingerprint` |
 | `usecases/sources/intake.py` | `SourceIntakeService`: check job, registry and same-host checks, cache, `approve_ready` |
 | `usecases/sources/candidate_review.py` | `SourceOnboardingService`: candidate lists, summaries and review actions returning the review response models; `review_in_session` |
-| `web/routes/sources.py` | 14 `/api/source-onboarding/*` routes; HTTP errors only (`_http_errors`) |
+| `web/routes/sources.py` | 14 `/api/source-onboarding/*` routes calling module-level handlers; HTTP errors only (`_http_errors` of `web/routes/common.py`) |
 | `web/routes/__init__.py` (not covered, shared) | `WebDeps.create_onboarding_tables`: once-per-app table initializer wired by `create_app` |
 | `web/service.py` (not covered, shared) | `UpdateRunService` |
 | `storage/source_candidate_repo.py` | `SourceImportBatchRepo`, `SourceCandidateRepo` (drafts, filters, validation result, review save, summary) |

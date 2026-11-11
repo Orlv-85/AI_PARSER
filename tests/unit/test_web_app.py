@@ -882,3 +882,20 @@ def test_news_view_filters_one_sided_date_range_replaces_hours():
         "hours": None, "limit": 5, "date_from": None, "date_to": start, "category": "tools"}
     assert _view_filters(hours=24, date_from=None, date_to=None, category=None, limit=5) == {
         "hours": 24, "limit": 5}
+
+
+def test_onboarding_engine_creates_missing_sqlite_folders(tmp_path) -> None:
+    engine = import_module("app.web.app")._onboarding_engine(f"sqlite:///{tmp_path}/a/b/web.db")
+    engine.dispose()
+    assert (tmp_path / "a" / "b").is_dir()
+
+
+def test_signer_signs_with_the_configured_secret() -> None:
+    signer_class = import_module("app.web.auth").SessionSigner
+    settings = SimpleNamespace(is_auth_enabled=True, auth_secret="s" * 32,
+                               auth_session_ttl_seconds=60)
+    signer = import_module("app.web.app")._signer(settings)
+    other = signer_class(secret="s" * 32, ttl_seconds=60)
+    assert other.verify(signer.sign(subject="operator")) is not None
+    assert import_module("app.web.app")._signer(
+        SimpleNamespace(is_auth_enabled=False)) is None
