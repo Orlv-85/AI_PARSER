@@ -5,8 +5,8 @@ from types import SimpleNamespace
 from typing import Any
 
 from app.core.ingestion.admission import bounded_evidence, decision_from_assessment
+from app.core.ingestion.page_filter import text_exclusion_reason
 from app.core.jev import JevAssessment
-from app.ingest.page_filter import text_exclusion_reason
 
 CLEANUP_POLICY = "legacy-cleanup-1"
 MIN_REJECT_CONFIDENCE = 0.95

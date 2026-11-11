@@ -10,15 +10,15 @@ from typing import Literal
 import feedparser
 import httpx
 
-from app.core.models import Article
-from app.ingest.fetcher import Fetcher
-from app.ingest.html import extract_article_text
-from app.ingest.page_filter import (
+from app.core.ingestion.page_filter import (
     NonNewsPageError,
     html_exclusion_reason,
     log_exclusion,
     text_exclusion_reason,
 )
+from app.core.models import Article
+from app.ingest.fetcher import Fetcher
+from app.ingest.html import extract_article_text
 
 _LOGGER = logging.getLogger(__name__)
 

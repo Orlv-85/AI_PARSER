@@ -6,13 +6,13 @@ from typing import Any, cast
 
 from app.config.sources import SourceConfig
 from app.core.daily.rubric import RUBRIC_VERSION
-from app.core.ingestion.scoring import ai_relevance_score, freshness_score, rank_score
-from app.core.jev import JevAssessment, jev_state
-from app.core.models import Article as CoreArticle
-from app.ingest.page_filter import (
+from app.core.ingestion.page_filter import (
     text_exclusion_reason,
     url_exclusion_reason,
 )
+from app.core.ingestion.scoring import ai_relevance_score, freshness_score, rank_score
+from app.core.jev import JevAssessment, jev_state
+from app.core.models import Article as CoreArticle
 from app.storage.article_repo import ArticleRepo
 from app.usecases.ingestion.pipeline.models import COMPARISON_MIN_CONFIDENCE
 

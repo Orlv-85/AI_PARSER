@@ -3,9 +3,9 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.config import sources as sources_config
 from app.storage.models_sql import Base, Source
 from app.storage.source_repo import SourceRepo
+from app.usecases.sources import bootstrap as sources_bootstrap
 
 
 def _session():
@@ -44,8 +44,8 @@ sources:
     session = _session()
     repo = SourceRepo(session)
 
-    sources_config.bootstrap_sources_into_db(path=path, repo=repo)
-    sources_config.bootstrap_sources_into_db(path=path, repo=repo)
+    sources_bootstrap.bootstrap_sources_into_db(path=path, repo=repo)
+    sources_bootstrap.bootstrap_sources_into_db(path=path, repo=repo)
     session.commit()
 
     rows = session.query(Source).order_by(Source.source_key.asc()).all()
@@ -113,8 +113,8 @@ sources:
     )
     session.commit()
 
-    sources_config.bootstrap_sources_into_db(path=path, repo=repo)
-    sources_config.bootstrap_sources_into_db(path=path, repo=repo)
+    sources_bootstrap.bootstrap_sources_into_db(path=path, repo=repo)
+    sources_bootstrap.bootstrap_sources_into_db(path=path, repo=repo)
     session.commit()
 
     rows = session.query(Source).order_by(Source.source_key.asc()).all()

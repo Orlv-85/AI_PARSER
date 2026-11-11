@@ -16,11 +16,11 @@ import httpx
 from lxml import html as lxml_html
 from lxml.etree import LxmlError  # pylint: disable=no-name-in-module
 
+from app.core.bot_identity import BOT_TOKEN, DEFAULT_USER_AGENT
 from app.core.canonical_json import fingerprint
+from app.core.ingestion.page_filter import url_exclusion_reason
 from app.ingest.date_evidence import extract_date_evidence
-from app.ingest.fetcher import BOT_TOKEN, DEFAULT_USER_AGENT
 from app.ingest.html import extract_article_text
-from app.ingest.page_filter import url_exclusion_reason
 from app.storage.journal_files import private_bytes, private_write
 
 CACHE_VERSION = "article-source-cache-1"

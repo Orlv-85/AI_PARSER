@@ -12,8 +12,8 @@ import httpx
 from lxml import html as lxml_html
 
 from app.config.settings import Settings
+from app.core.bot_identity import DEFAULT_USER_AGENT
 from app.core.sources.candidates import candidate_url_key
-from app.ingest.fetcher import DEFAULT_USER_AGENT
 
 _MAX_RESPONSE_BYTES = 1_000_000
 _PROMPT_VERSION = "source-review-1"

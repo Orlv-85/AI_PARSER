@@ -4,8 +4,9 @@ from typing import Any, cast
 import httpx
 import pytest
 
+from app.core.bot_identity import BOT_TOKEN, DEFAULT_USER_AGENT
 from app.core.sources.review import source_http_client
-from app.ingest.fetcher import BOT_TOKEN, DEFAULT_USER_AGENT, Fetcher
+from app.ingest.fetcher import Fetcher
 from app.storage.article_evidence_cache import make_http_client
 
 

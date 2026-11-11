@@ -5,14 +5,14 @@ from typing import Any
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
 from app.core.canonicalize import canonical_url_hash, canonicalize_url
+from app.core.ingestion.page_filter import (
+    log_exclusion,
+    url_exclusion_reason,
+)
 from app.core.jev import JevRelevanceScorer
 from app.ingest.fetcher import Fetcher
 from app.ingest.html import (
     fetch_html_article,
-)
-from app.ingest.page_filter import (
-    log_exclusion,
-    url_exclusion_reason,
 )
 from app.storage.admission import (
     settle_pending,

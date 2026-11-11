@@ -611,7 +611,7 @@ def cmd_fetch_check(args: argparse.Namespace) -> int:
 def cmd_db_bootstrap(args: argparse.Namespace) -> int:
     ensure_src_path()
 
-    from app.config.sources import bootstrap_sources_into_db
+    from app.usecases.sources.bootstrap import bootstrap_sources_into_db
     from app.storage.models_sql import Base
     from app.storage.source_repo import SourceRepo
 

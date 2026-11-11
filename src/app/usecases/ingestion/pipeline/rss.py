@@ -9,10 +9,10 @@ from app.core.ingestion.admission import (
     bounded_evidence,
     evidence_hash,
 )
-from app.core.jev import JevAssessment, JevRelevanceScorer
-from app.ingest.page_filter import (
+from app.core.ingestion.page_filter import (
     log_exclusion,
 )
+from app.core.jev import JevAssessment, JevRelevanceScorer
 from app.storage.admission import (
     upsert_pending,
 )

@@ -11,10 +11,14 @@ from lxml import html as lxml_html
 from readability import Document
 
 from app.config.sources import SourceConfig
+from app.core.ingestion.page_filter import (
+    html_exclusion_reason,
+    log_exclusion,
+    url_exclusion_reason,
+)
 from app.core.models import Article
 from app.ingest.date_evidence import extract_date_evidence
 from app.ingest.fetcher import Fetcher
-from app.ingest.page_filter import html_exclusion_reason, log_exclusion, url_exclusion_reason
 
 try:
     _selectolax_parser = import_module("selectolax.parser")

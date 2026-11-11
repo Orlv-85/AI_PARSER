@@ -393,6 +393,7 @@ scripts/sources_onboarding_helper.py db-bootstrap | db-review | db-validate | db
 | `core/sources/candidate_fields.py` | `read_str`, `read_optional_str`, `read_optional_int`: the one reader of a candidate field (dict or object), used by `core/sources/*` and by `storage/source_repo.py`, `storage/source_candidate_repo.py`; a missing or `None` required field raises `candidate field is required: <name>`. Tests: `test_read_str_returns_text_of_present_field`, `test_read_str_default_covers_absent_field_only_else_raises`, `test_read_optional_str_and_int`, `test_read_optional_int_casts_text_and_rejects_garbage` |
 | `usecases/sources/validation.py` | `ValidationResult`, deterministic RSS/HTML validation, ingestion fetch adapters and validation persistence |
 | `usecases/sources/onboarding.py` | `SourceImportResult`, database import, overlap review, candidate review actions and YAML export |
+| `usecases/sources/bootstrap.py` | `bootstrap_sources_into_db`: `sources.yaml` into the sources table (`db-bootstrap`); skips a repeated URL and keeps the row that already owns a URL |
 | `core/sources/review.py` | Check probe (`probe_source`), evidence brief, `SourceReviewer` (Jev, DeepSeek), `evidence_fingerprint` |
 | `web/source_intake.py` | `SourceIntakeService`: check job, registry and same-host checks, cache, `approve_ready` |
 | `web/source_onboarding.py` | `SourceOnboardingService`: candidate lists, summaries and review actions returning web models |
