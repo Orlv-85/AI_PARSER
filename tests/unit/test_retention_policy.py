@@ -7,6 +7,7 @@ import yaml
 from typer.testing import CliRunner
 
 import app.cli.main as cli_main
+from app.usecases.archive import capture as archive_capture
 
 
 @pytest.mark.parametrize("stored,override,expected", [
@@ -125,7 +126,7 @@ def test_cli_default_and_explicit_retention_remain_compatible(monkeypatch):
 
     monkeypatch.setattr(cli_main, "create_all", lambda: None)
     monkeypatch.setattr(cli_main, "SessionLocal", TestSession)
-    monkeypatch.setattr(cli_main, "ArticleRepo", TestRepo)
+    monkeypatch.setattr(archive_capture, "ArticleRepo", TestRepo)
     runner = CliRunner()
     assert runner.invoke(cli_main.app, ["prune", "--dry-run"]).exit_code == 0
     assert runner.invoke(cli_main.app, ["prune", "--dry-run", "--older-than-days", "100"

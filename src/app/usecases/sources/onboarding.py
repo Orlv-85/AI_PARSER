@@ -325,3 +325,13 @@ def _find_by_normalized_url(candidate_repo: object, normalized_url: str) -> Any 
     if not callable(find_by_normalized_url):
         return None
     return find_by_normalized_url(normalized_url)
+
+
+def batch_outcomes(session_factory: Callable[[], Session], batch_id: int) -> dict[str, int] | None:
+    """Review counts of a batch; None when the batch does not exist."""
+    with session_factory() as session:
+        batch = SourceImportBatchRepo(session).get_batch(batch_id)
+        if batch is None:
+            return None
+        summary: dict[str, int] = SourceCandidateRepo(session).summarize_batch(batch_id=batch.id)
+        return summary

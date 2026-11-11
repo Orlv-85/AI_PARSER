@@ -82,7 +82,7 @@ flowchart LR
 | `src/app/storage/models_sql.py` | `BulletinRow`, table `bulletins` |
 | `src/app/storage/migrations/versions/*bulletins*.py` | create/drop schema |
 | `src/app/cli/main.py` | build, optional writer, save, print |
-| `src/app/usecases/bulletin/stored.py` | `stored_bulletin`: the stored row of a day or the latest ready one, in its own session |
+| `src/app/usecases/bulletin/stored.py` | `stored_bulletin`: the stored row of a day or the latest ready one, in its own session; `store_bulletin`: the CLI save, committed |
 | `src/app/web/routes/bulletin.py` | public JSON of that row; 400, 404 and 503 answers |
 | `src/app/web/app.py` | router registration and public read path |
 

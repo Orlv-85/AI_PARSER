@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from importlib import import_module
 from types import SimpleNamespace
 
@@ -400,3 +400,43 @@ def test_news_digests_rejects_invalid_item_urls(monkeypatch, tmp_path) -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_digest_and_stats_api_answer_503_when_storage_fails_and_422_for_reversed_range(
+    monkeypatch,
+):
+    def _storage_down() -> None:
+        raise SQLAlchemyError("down")
+
+    monkeypatch.setattr(import_module("app.web.app"), "create_all", _storage_down)
+    client = TestClient(create_app())
+    digest = {"report_date": "2026-05-01", "groups": [{"title": "Models", "items": [
+        {"title": "A", "summary": "B", "url": "https://example.com/a"}]}]}
+    answers = [
+        client.post("/api/news/digests", json=digest),
+        client.get("/api/news/digests?date=2026-05-01"),
+        client.get("/api/news/daily-signals?date=2026-05-01"),
+        client.get("/api/news/stats/daily?date_from=2026-05-01&date_to=2026-05-02"),
+    ]
+    assert [(r.status_code, r.json()) for r in answers] == [
+        (503, {"detail": "News storage is unavailable"})] * 4
+    reversed_range = client.get("/api/news/stats/daily?date_from=2026-05-02&date_to=2026-05-01")
+    assert (reversed_range.status_code, reversed_range.json()) == (
+        422, {"detail": "date_from must be <= date_to"})
+
+
+def test_stats_api_default_range_ends_yesterday_and_accepts_one_day(monkeypatch, tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'stats.db'}", future=True)
+    Base.metadata.create_all(bind=engine)
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(web_app_module, "SessionLocal", sessionmaker(bind=engine, future=True))
+    client = TestClient(create_app())
+    yesterday = datetime.now(UTC).date() - timedelta(days=1)
+
+    default = client.get("/api/news/stats/daily?days=3").json()
+    one_day = client.get("/api/news/stats/daily?date_from=2026-05-01&date_to=2026-05-01")
+
+    assert (default["date_from"], default["date_to"]) == (
+        (yesterday - timedelta(days=2)).isoformat(), yesterday.isoformat())
+    assert (one_day.status_code, one_day.json()["date_from"]) == (200, "2026-05-01")

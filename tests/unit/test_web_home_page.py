@@ -139,7 +139,7 @@ def test_page_views_runs_after_response(client, maker, monkeypatch, caplog, *,
         if failed:
             raise SQLAlchemyError("counter unavailable")
 
-    monkeypatch.setattr("app.web.routes.pages.PageViewRepo.increment", count)
+    monkeypatch.setattr("app.usecases.page_views.PageViewRepo.increment", count)
 
     async def observe_response(scope, receive, send):
         async def observe_send(message):
@@ -319,7 +319,7 @@ def test_home_errors(home, monkeypatch, bad):
     assert home.get("/", params={"date": bad}).status_code == 400
     def unavailable(*_args):
         raise SQLAlchemyError("private detail")
-    monkeypatch.setattr("app.web.routes.pages.BulletinRepo.latest_ready", unavailable)
+    monkeypatch.setattr("app.usecases.bulletin.stored.BulletinRepo.latest_ready", unavailable)
     # This lookup fails before a digest fallback, even if the store has no ready day.
     response = home.get("/")
     assert response.status_code == 503 and "News storage is unavailable" in response.text
@@ -331,7 +331,7 @@ def test_digest_errors_match(client, monkeypatch):
     assert client.get("/?date=bad").json() == client.get("/daily?date=bad").json()
     def unavailable(*_args, **_kwargs):
         raise SQLAlchemyError("private detail")
-    monkeypatch.setattr("app.web.routes.pages.NewsDigestRepo.get_digest", unavailable)
+    monkeypatch.setattr("app.usecases.digest.NewsDigestRepo.get_digest", unavailable)
     for url in ("/", "/daily"):
         response = client.get(url)
         assert response.status_code == 503

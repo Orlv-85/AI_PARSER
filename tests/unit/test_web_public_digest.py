@@ -14,8 +14,8 @@ from app.core.daily.signals_brief import HARD_EVENTS
 from app.core.daily.signals_model import EVENT_LABELS
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import Base, DailySignalBrief, DailySignalReport
+from app.usecases.daily import signals_reads
 from app.web.app import create_app
-from app.web.routes import common as common_routes
 from app.web.routes import pages as pages_routes
 from app.web.signals_view import AI_NOTE, SINGULAR, event_label
 
@@ -220,7 +220,7 @@ def _signals_client(monkeypatch, tmp_path, payload=None, *, broken=False, brief=
         class _Broken:
             def __init__(self, _session, **_kwargs):
                 raise SQLAlchemyError("signals table missing")
-        monkeypatch.setattr(common_routes, "DailySignalRepo", _Broken)
+        monkeypatch.setattr(signals_reads, "DailySignalRepo", _Broken)
     return TestClient(create_app())
 
 

@@ -209,7 +209,8 @@ scripts/run_daily_digest_job.sh (02:00 UTC, after the digest)
        _briefs                  one brief call per target day (paid runs only), via a second ledger run
   -> JSON run report (stdout + data/daily-signals/runs/<run_id>.json)
 
-GET /api/news/daily-signals?date=D               web/routes/common.py: _read_daily_signals (DB reads only)
+GET /api/news/daily-signals?date=D               web/routes/common.py: _read_daily_signals
+                                                 -> usecases/daily/signals_reads.py: stored_signals (DB reads only)
 GET /?date=D                                     web/signals_view.py: render_signals (server)
                                                  web/static/js/digest.js: renderSignals (client, same markup)
 ```
@@ -218,7 +219,7 @@ GET /?date=D                                     web/signals_view.py: render_sig
 
 | File | Role | Pure |
 | --- | --- | --- |
-| `usecases/daily/signals.py` | Run orchestration, brief step, operator entity commands (`merge_entities`, `alias_entity`, `add_override` with the selector conflict check) | no |
+| `usecases/daily/signals.py` | Run orchestration, brief step, operator entity commands (`merge_entities`, `alias_entity`, `add_override` with the selector conflict check; `run_entity_command` runs one with the recompute in one commit, a refused action writes nothing; `entity_overrides` lists them) | no |
 | `usecases/daily/signals_recompute.py` | `recompute_reports`, `RecomputeResult`, `digest_text` (digest title and summary of the stored observations; also used by the period run) | no |
 | `core/daily/signals_extract.py` | Extraction prompt, request body, answer validation (`EXTRACTION_VERSION`) | yes |
 | `core/daily/signals_entities.py` | Deterministic entity identity: keys, vendor classes, reconciliation, overrides | yes |

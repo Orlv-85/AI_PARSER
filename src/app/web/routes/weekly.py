@@ -1,20 +1,20 @@
 """Weekly analytics API: report read/publish, report list and data freshness."""
 
 import re
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, date, datetime, timedelta
 from html import unescape
-from typing import cast
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.storage.models_sql import Article, FetchRun
-from app.storage.repos import (
+from app.usecases.weekly_analytics import (
     WeeklyAnalyticsItem,
-    WeeklyAnalyticsRepo,
     WeeklyAnalyticsReport,
     WeeklyAnalyticsReportIndexEntry,
+    read_weekly_report,
+    save_weekly_report,
+    stored_reports,
+    weekly_freshness,
 )
 from app.web.models import (
     WeeklyAnalyticsFreshnessResponse,
@@ -25,10 +25,7 @@ from app.web.models import (
     WeeklyAnalyticsResponse,
 )
 from app.web.routes import WebDeps
-from app.web.routes.common import (
-    _OPTIONAL_WEEKLY_ANALYTICS_DATE_QUERY,
-    _resolve_weekly_default_report_date,
-)
+from app.web.routes.common import _OPTIONAL_WEEKLY_ANALYTICS_DATE_QUERY
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 
@@ -105,6 +102,11 @@ def _build_weekly_report_list_response(
     )
 
 
+def _items(items: list[WeeklyAnalyticsItemPayload]) -> list[dict[str, str]]:
+    return [{"title": item.title, "summary": item.summary, "url": str(item.url)}
+            for item in items]
+
+
 def build_weekly_router(deps: WebDeps) -> APIRouter:
     router = APIRouter()
 
@@ -116,21 +118,14 @@ def build_weekly_router(deps: WebDeps) -> APIRouter:
     ) -> WeeklyAnalyticsResponse:
         try:
             deps.create_all()
-            with deps.SessionLocal() as session:
-                repo = WeeklyAnalyticsRepo(session)
-                report_date = target_date or _resolve_weekly_default_report_date(
-                    repo=repo,
-                    today=datetime.now(UTC).date(),
-                )
-                weekly_report = repo.get_weekly_report(
-                    report_date=report_date
-                )
+            report_date, report = read_weekly_report(
+                deps.SessionLocal, target_date, datetime.now(UTC).date())
         except SQLAlchemyError as exc:
             raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
 
         return _build_weekly_analytics_response(
             report_date=report_date,
-            weekly_report=weekly_report,
+            weekly_report=report,
         )
 
     @router.post("/api/news/weekly-analytics", response_model=WeeklyAnalyticsResponse,
@@ -138,40 +133,16 @@ def build_weekly_router(deps: WebDeps) -> APIRouter:
     def save_weekly_ai_analytics(payload: WeeklyAnalyticsPayload) -> WeeklyAnalyticsResponse:
         try:
             deps.create_all()
-            with deps.SessionLocal() as session:
-                repo = WeeklyAnalyticsRepo(session)
-                repo.save_weekly_report(
-                    report_date=payload.report_date,
-                    date_from=payload.date_from,
-                    date_to=payload.date_to,
-                    summary=payload.summary,
-                    new=[
-                        {
-                            "title": item.title,
-                            "summary": item.summary,
-                            "url": str(item.url),
-                        }
-                        for item in payload.new
-                    ],
-                    trending_up=[
-                        {
-                            "title": item.title,
-                            "summary": item.summary,
-                            "url": str(item.url),
-                        }
-                        for item in payload.trending_up
-                    ],
-                    trending_down=[
-                        {
-                            "title": item.title,
-                            "summary": item.summary,
-                            "url": str(item.url),
-                        }
-                        for item in payload.trending_down
-                    ],
-                )
-                session.commit()
-                stored = repo.get_weekly_report(report_date=payload.report_date)
+            stored = save_weekly_report(
+                deps.SessionLocal,
+                report_date=payload.report_date,
+                date_from=payload.date_from,
+                date_to=payload.date_to,
+                summary=payload.summary,
+                new=_items(payload.new),
+                trending_up=_items(payload.trending_up),
+                trending_down=_items(payload.trending_down),
+            )
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except SQLAlchemyError as exc:
@@ -192,8 +163,7 @@ def build_weekly_router(deps: WebDeps) -> APIRouter:
     ) -> WeeklyAnalyticsReportListResponse:
         try:
             deps.create_all()
-            with deps.SessionLocal() as session:
-                items = WeeklyAnalyticsRepo(session).list_stored_reports(limit=limit)
+            items = stored_reports(deps.SessionLocal, limit)
         except SQLAlchemyError as exc:
             raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
         return _build_weekly_report_list_response(items=items)
@@ -208,49 +178,26 @@ def build_weekly_router(deps: WebDeps) -> APIRouter:
     ) -> WeeklyAnalyticsFreshnessResponse:
         try:
             deps.create_all()
-            with deps.SessionLocal() as session:
-                repo = WeeklyAnalyticsRepo(session)
-                report_date = target_date or _resolve_weekly_default_report_date(
-                    repo=repo,
-                    today=datetime.now(UTC).date(),
-                )
-                date_from = report_date - timedelta(days=6)
-                date_to = report_date
-                start_at = datetime.combine(date_from, time.min, tzinfo=UTC)
-                end_at = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=UTC)
-                article_count = (
-                    session.query(Article.id)
-                    .where(Article.published_at >= start_at)
-                    .where(Article.published_at < end_at)
-                    .count()
-                )
-                latest_fetch_run = session.execute(
-                    select(FetchRun).order_by(FetchRun.started_at.desc()).limit(1)
-                ).scalar_one_or_none()
+            fresh = weekly_freshness(deps.SessionLocal, target_date, datetime.now(UTC).date())
         except SQLAlchemyError as exc:
             raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
 
-        if latest_fetch_run is None:
-            return WeeklyAnalyticsFreshnessResponse(
-                report_date=report_date,
-                date_from=date_from,
-                date_to=date_to,
-                article_count=cast(int, article_count),
-            )
+        run = fresh.latest_fetch_run
+        dates = {"report_date": fresh.report_date, "date_from": fresh.date_from,
+                 "date_to": fresh.date_to, "article_count": fresh.article_count}
+        if run is None:
+            return WeeklyAnalyticsFreshnessResponse(**dates)
 
         return WeeklyAnalyticsFreshnessResponse(
-            report_date=report_date,
-            date_from=date_from,
-            date_to=date_to,
-            article_count=cast(int, article_count),
-            latest_fetch_run_id=latest_fetch_run.run_id,
-            latest_fetch_status=latest_fetch_run.status,
-            latest_fetch_started_at=latest_fetch_run.started_at,
-            latest_fetch_finished_at=latest_fetch_run.finished_at,
-            latest_fetch_fetched=latest_fetch_run.fetched_count,
-            latest_fetch_new=latest_fetch_run.new_count,
-            latest_fetch_duplicates=latest_fetch_run.duplicate_count,
-            latest_fetch_errors=latest_fetch_run.error_count,
+            **dates,
+            latest_fetch_run_id=run.run_id,
+            latest_fetch_status=run.status,
+            latest_fetch_started_at=run.started_at,
+            latest_fetch_finished_at=run.finished_at,
+            latest_fetch_fetched=run.fetched_count,
+            latest_fetch_new=run.new_count,
+            latest_fetch_duplicates=run.duplicate_count,
+            latest_fetch_errors=run.error_count,
         )
 
     return router

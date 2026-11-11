@@ -9,9 +9,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.config.settings import get_settings
+from app.usecases import digest as digest_usecases
 from app.usecases import news_reads
+from app.usecases.daily import signals_reads
 from app.web.app import create_app
-from app.web.routes import common as common_routes
 from app.web.routes import pages as pages_routes
 from app.web.routes.news import _view_filters
 
@@ -28,7 +29,7 @@ class _NoSignalsRepo:
 
 @pytest.fixture(autouse=True)
 def _no_daily_signals(monkeypatch) -> None:
-    monkeypatch.setattr(common_routes, "DailySignalRepo", _NoSignalsRepo)
+    monkeypatch.setattr(signals_reads, "DailySignalRepo", _NoSignalsRepo)
 
 
 def test_web_app_pages_and_update_flow(monkeypatch, tmp_path) -> None:
@@ -67,7 +68,7 @@ def test_web_app_pages_and_update_flow(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
     monkeypatch.setattr(news_reads, "ArticleRepo", _ArticleRepo)
-    monkeypatch.setattr(pages_routes, "NewsDigestRepo", _NewsDigestRepo)
+    monkeypatch.setattr(digest_usecases, "NewsDigestRepo", _NewsDigestRepo)
 
     app = create_app()
     client = TestClient(app)
@@ -501,7 +502,7 @@ def test_news_template_has_date_range_inputs_and_copy_links_markers(
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(pages_routes, "NewsDigestRepo", _NewsDigestRepo)
+    monkeypatch.setattr(digest_usecases, "NewsDigestRepo", _NewsDigestRepo)
 
     app = create_app()
     client = TestClient(app)
@@ -540,7 +541,7 @@ def test_news_template_has_network_error_handling_and_safe_row_rendering(
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(pages_routes, "NewsDigestRepo", _NewsDigestRepo)
+    monkeypatch.setattr(digest_usecases, "NewsDigestRepo", _NewsDigestRepo)
 
     app = create_app()
     client = TestClient(app)
@@ -578,7 +579,7 @@ def test_public_digest_template_has_selected_date_loading_hooks(
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(pages_routes, "NewsDigestRepo", _NewsDigestRepo)
+    monkeypatch.setattr(digest_usecases, "NewsDigestRepo", _NewsDigestRepo)
 
     app = create_app()
     client = TestClient(app)
@@ -623,7 +624,7 @@ def test_admin_route_is_protected_and_public_root_stays_open(monkeypatch, tmp_pa
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(pages_routes, "NewsDigestRepo", _NewsDigestRepo)
+    monkeypatch.setattr(digest_usecases, "NewsDigestRepo", _NewsDigestRepo)
 
     app = create_app()
     client = TestClient(app)
@@ -669,7 +670,7 @@ def test_public_root_hides_admin_controls_while_admin_route_shows_them(
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(pages_routes, "NewsDigestRepo", _NewsDigestRepo)
+    monkeypatch.setattr(digest_usecases, "NewsDigestRepo", _NewsDigestRepo)
 
     app = create_app()
     client = TestClient(app)
@@ -724,7 +725,7 @@ def test_public_and_admin_pages_expose_distinct_shell_markers(monkeypatch, tmp_p
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(pages_routes, "NewsDigestRepo", _NewsDigestRepo)
+    monkeypatch.setattr(digest_usecases, "NewsDigestRepo", _NewsDigestRepo)
 
     client = TestClient(create_app())
     login = client.post(
@@ -776,7 +777,7 @@ def test_public_and_admin_pages_use_distinct_surface_labels(monkeypatch, tmp_pat
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(pages_routes, "NewsDigestRepo", _NewsDigestRepo)
+    monkeypatch.setattr(digest_usecases, "NewsDigestRepo", _NewsDigestRepo)
 
     client = TestClient(create_app())
     login = client.post(

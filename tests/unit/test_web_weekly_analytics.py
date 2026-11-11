@@ -5,14 +5,16 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import get_settings
 from app.storage.models_sql import Article, Base, FetchRun, Source
 from app.storage.repos import WeeklyAnalyticsRepo
+from app.usecases import digest as digest_usecases
+from app.usecases import weekly_analytics as weekly_usecases
+from app.usecases.daily import signals_reads
 from app.web.app import create_app
-from app.web.routes import common as common_routes
-from app.web.routes import pages as pages_routes
 from app.web.routes import weekly as weekly_routes
 
 
@@ -28,7 +30,7 @@ class _NoSignalsRepo:
 
 @pytest.fixture(autouse=True)
 def _no_daily_signals(monkeypatch) -> None:
-    monkeypatch.setattr(common_routes, "DailySignalRepo", _NoSignalsRepo)
+    monkeypatch.setattr(signals_reads, "DailySignalRepo", _NoSignalsRepo)
 
 
 def test_weekly_ai_analytics_api_returns_report_sections_for_last_7_days(
@@ -89,7 +91,7 @@ def test_weekly_ai_analytics_api_returns_report_sections_for_last_7_days(
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(weekly_routes, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo)
+    monkeypatch.setattr(weekly_usecases, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo)
 
     client = TestClient(create_app())
 
@@ -175,7 +177,7 @@ def test_weekly_ai_analytics_api_sanitizes_stored_items_for_public_schema(
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(weekly_routes, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo)
+    monkeypatch.setattr(weekly_usecases, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo)
 
     client = TestClient(create_app())
 
@@ -230,7 +232,7 @@ def test_weekly_ai_analytics_api_can_save_report_payload(monkeypatch, tmp_path) 
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(weekly_routes, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo)
+    monkeypatch.setattr(weekly_usecases, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo)
 
     client = TestClient(create_app())
     response = client.post(
@@ -300,6 +302,25 @@ def test_weekly_ai_analytics_freshness_api_returns_article_and_fetch_counts(
                     freshness_score=0.8,
                     rank_score=0.95,
                 ),
+                *[
+                    Article(
+                        source_id=source.id,
+                        title=f"Edge story {key}",
+                        summary="On a bound of the weekly window.",
+                        content=None,
+                        url=f"https://example.com/{key}",
+                        url_canonical=f"https://example.com/{key}",
+                        url_canonical_hash=key,
+                        published_at=published_at,
+                        ai_relevance_score=0.9,
+                        freshness_score=0.8,
+                        rank_score=0.95,
+                    )
+                    for key, published_at in (
+                        ("first-midnight", datetime(2026, 3, 1, 0, 0, tzinfo=UTC)),
+                        ("next-midnight", datetime(2026, 3, 8, 0, 0, tzinfo=UTC)),
+                    )
+                ],
                 FetchRun(
                     run_id="20260308020000",
                     started_at=datetime(2026, 3, 8, 2, 0, tzinfo=UTC),
@@ -330,7 +351,7 @@ def test_weekly_ai_analytics_freshness_api_returns_article_and_fetch_counts(
         "report_date": "2026-03-07",
         "date_from": "2026-03-01",
         "date_to": "2026-03-07",
-        "article_count": 1,
+        "article_count": 2,
         "latest_fetch_run_id": "20260308020000",
         "latest_fetch_status": "finished",
         "latest_fetch_started_at": "2026-03-08T02:00:00",
@@ -377,7 +398,7 @@ def test_weekly_ai_analytics_reports_api_returns_published_list(
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
-    monkeypatch.setattr(weekly_routes, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo)
+    monkeypatch.setattr(weekly_usecases, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo)
 
     client = TestClient(create_app())
     response = client.get("/api/news/weekly-analytics/reports")
@@ -439,7 +460,7 @@ def test_weekly_ai_analytics_api_defaults_to_previous_utc_day(
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
     monkeypatch.setattr(weekly_routes, "datetime", _FrozenDateTime)
-    monkeypatch.setattr(weekly_routes, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo)
+    monkeypatch.setattr(weekly_usecases, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo)
 
     client = TestClient(create_app())
 
@@ -506,7 +527,7 @@ def test_weekly_ai_analytics_api_defaults_to_latest_published_report_date(
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _session_local)
     monkeypatch.setattr(weekly_routes, "datetime", _FrozenDateTime)
-    monkeypatch.setattr(weekly_routes, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo)
+    monkeypatch.setattr(weekly_usecases, "WeeklyAnalyticsRepo", _WeeklyAnalyticsRepo)
 
     client = TestClient(create_app())
 
@@ -549,7 +570,7 @@ def test_public_digest_page_has_no_legacy_weekly_preview(
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _DummySession)
-    monkeypatch.setattr(pages_routes, "NewsDigestRepo", _NewsDigestRepo)
+    monkeypatch.setattr(digest_usecases, "NewsDigestRepo", _NewsDigestRepo)
 
     client = TestClient(create_app())
 
@@ -802,3 +823,41 @@ def test_weekly_analytics_repo_uses_previous_week_baseline_for_section_meaning(t
         assert "Standalone Vector DBs Cool Off" in trending_down_titles
     finally:
         engine.dispose()
+
+
+def test_weekly_api_answers_503_when_storage_fails_and_409_for_a_refused_save(monkeypatch):
+    def _storage_down() -> None:
+        raise SQLAlchemyError("down")
+
+    class _RefusingRepo:
+        def __init__(self, _session) -> None:
+            pass
+
+        def save_weekly_report(self, **_report) -> None:
+            raise ValueError("report is locked")
+
+    report = {"report_date": "2026-05-03", "date_from": "2026-04-27", "date_to": "2026-05-03",
+              "summary": "Week", "new": [], "trending_up": [], "trending_down": []}
+    web_app_module = import_module("app.web.app")
+    monkeypatch.setattr(web_app_module, "create_all", _storage_down)
+    down = TestClient(create_app())
+    answers = [down.get("/api/news/weekly-analytics?date=2026-05-03"),
+               down.post("/api/news/weekly-analytics", json=report),
+               down.get("/api/news/weekly-analytics/reports"),
+               down.get("/api/news/weekly-analytics/freshness?date=2026-05-03")]
+    assert [(r.status_code, r.json()) for r in answers] == [
+        (503, {"detail": "News storage is unavailable"})] * 4
+
+    monkeypatch.setattr(web_app_module, "create_all", lambda: None)
+    monkeypatch.setattr(weekly_usecases, "WeeklyAnalyticsRepo", _RefusingRepo)
+    monkeypatch.setattr(web_app_module, "SessionLocal", _NullSession)
+    refused = TestClient(create_app()).post("/api/news/weekly-analytics", json=report)
+    assert (refused.status_code, refused.json()) == (409, {"detail": "report is locked"})
+
+
+class _NullSession:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args) -> None:
+        return None
