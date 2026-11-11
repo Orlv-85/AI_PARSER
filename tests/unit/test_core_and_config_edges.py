@@ -4,13 +4,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.config import sources as sources_config
-from app.config.sources import SourceConfig, bootstrap_sources_into_db, load_sources
+from app.config.sources import SourceConfig, load_sources
 from app.core.canonicalize import canonicalize_url
 from app.core.ingestion import scoring
 from app.core.ingestion.dedup import simhash64
 from app.core.ingestion.scoring import ai_relevance_score, freshness_score, rank_score
 from app.core.models import Article
+from app.usecases.sources import bootstrap as sources_bootstrap
+from app.usecases.sources.bootstrap import bootstrap_sources_into_db
 
 
 def test_load_sources_empty_file_returns_empty_list(tmp_path) -> None:
@@ -122,7 +123,7 @@ def test_bootstrap_sources_into_db_skips_duplicate_urls_and_reuses_existing_url(
             upserted.append(config.id)
             return SimpleNamespace(id=len(upserted), source_key=config.id, url=str(config.url))
 
-    monkeypatch.setattr(sources_config, "load_sources", lambda _path: loaded)
+    monkeypatch.setattr(sources_bootstrap, "load_sources", lambda _path: loaded)
 
     imported = bootstrap_sources_into_db(path=Path(path), repo=_Repo())
 

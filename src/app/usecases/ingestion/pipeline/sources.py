@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 from app.config.sources import SourceConfig
-from app.ingest.page_filter import (
+from app.core.ingestion.page_filter import (
     MANAGED_LINK_SELECTORS,
 )
 from app.storage.source_repo import SourceRepo

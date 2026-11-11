@@ -19,8 +19,8 @@ from typing import IO
 
 import httpx
 
+from app.core.bot_identity import DEFAULT_USER_AGENT
 from app.core.world.filter import filter_title, url_host
-from app.ingest.fetcher import DEFAULT_USER_AGENT
 
 GDELT_BASE_URL = "https://data.gdeltproject.org/gdeltv2/"
 KIND_GKG = "gkg"

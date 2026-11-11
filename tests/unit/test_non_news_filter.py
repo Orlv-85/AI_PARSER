@@ -9,13 +9,13 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
+from app.core.ingestion.page_filter import html_exclusion_reason, url_exclusion_reason
 from app.core.models import Article
 from app.ingest.html import (
     _build_html_article,
     extract_links_from_html,
     fetch_html_article,
 )
-from app.ingest.page_filter import html_exclusion_reason, url_exclusion_reason
 from app.ingest.rss import RssFetchResult, fetch_rss, parse_rss
 from app.storage.article_repo import ArticleRepo
 from app.storage.models_sql import Article as StoredArticle

@@ -5,11 +5,11 @@ from typing import Any, cast
 
 from sqlalchemy.orm import Session
 
+from app.core.ingestion.page_filter import html_exclusion_reason
 from app.core.sources.candidate_fields import read_str
 from app.core.sources.candidates import _infer_candidate_type
 from app.ingest.fetcher import Fetcher
 from app.ingest.html import extract_links_from_html
-from app.ingest.page_filter import html_exclusion_reason
 from app.ingest.rss import fetch_rss_with_metadata
 from app.storage.source_candidate_repo import SourceCandidateRepo
 

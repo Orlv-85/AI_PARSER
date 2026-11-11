@@ -1,10 +1,14 @@
-"""Layer rule (src/app/README.md, "Layers"; spec 019): cli, web -> usecases -> storage -> core."""
+"""Layer rule (src/app/README.md, "Layers"; spec 019).
+
+cli, web -> usecases -> storage -> ingest -> core; config and observability are leaves.
+"""
 import ast
 from pathlib import Path
 
 import pytest
 
 APP = Path(__file__).resolve().parents[2] / "src" / "app"
+PACKAGES = ("core", "storage", "ingest", "usecases", "config", "observability", "web", "cli")
 
 DYNAMIC_IMPORTERS = frozenset({"import_module", "__import__"})
 # core functions that calculate; a repository returns rows and the use case calls these.
@@ -75,7 +79,7 @@ def test_app_has_no_relative_imports():
     assert relative == []
 
 
-@pytest.mark.parametrize("other", ["storage", "usecases", "web", "cli"])
+@pytest.mark.parametrize("other", ["storage", "ingest", "usecases", "web", "cli"])
 def test_core_imports_no_lower_or_upper_layer(other):
     assert importers("core", other) == set()
 
@@ -88,6 +92,17 @@ def test_storage_imports_no_upper_layer(upper):
 @pytest.mark.parametrize("upper", ["web", "cli"])
 def test_use_cases_import_no_entry_point(upper):
     assert importers("usecases", upper) == set()
+
+
+@pytest.mark.parametrize("other", ["storage", "usecases", "web", "cli"])
+def test_ingest_imports_no_storage_or_upper_layer(other):
+    assert importers("ingest", other) == set()
+
+
+@pytest.mark.parametrize("leaf", ["config", "observability"])
+def test_leaf_packages_import_no_app_package(leaf):
+    assert {other: importers(leaf, other) for other in PACKAGES
+            if other != leaf and importers(leaf, other)} == {}
 
 
 def calculations_imported(source: str) -> set[str]:

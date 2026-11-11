@@ -71,6 +71,16 @@ or the feature doc first, then the failing test, then the code; full gate before
   `usecases/bulletin/assessor.py`. New pin tests (journal path, identity, caps, retry, usage log,
   close) were written and seen passing on the old code first. `core/` imports no `storage/`.
   `core/jev.py` no longer imports `app.config` (one less file for T015).
-- [ ] T015 `ingest/` and `config/` have no place in the rule. `core/` imports `app.ingest` (3 files)
+- [x] T015 `ingest/` and `config/` have no place in the rule. `core/` imports `app.ingest` (3 files)
   and `app.config` (1 file since T014: `core/sources/review.py`), `ingest/` imports `core/` back (3 files), and `config/sources.py`
   loads `app.storage.models_sql` by name. Decide the place of each package, then extend the test.
+  Done, decided 2026-11-11 (agent): the chain is `usecases -> storage -> ingest -> core`; `ingest`
+  is the network and parsing adapter and imports no `storage`, `usecases`, `web`, `cli`; `storage`
+  may use it (the page cache `article_evidence_cache.py` parses pages through it; moving the cache
+  to `ingest` would make `ingest` import storage's private file writes). `config` and
+  `observability` are leaves: they import no other `app` package. Moves, code unchanged:
+  `ingest/page_filter.py` -> `core/ingestion/page_filter.py` (pure rules, used by
+  `core/ingestion/reject_policy.py`), the bot identity from `ingest/fetcher.py` ->
+  `core/bot_identity.py` (used by `core/world/gdelt.py`, `core/sources/review.py`),
+  `bootstrap_sources_into_db` from `config/sources.py` -> `usecases/sources/bootstrap.py`.
+  `core/sources/review.py` keeps importing `Settings` from the leaf `config`.

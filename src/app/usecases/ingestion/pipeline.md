@@ -4,6 +4,8 @@ covers:
   - src/app/usecases/ingestion/pipeline/*.py
   - src/app/core/ingestion/admission.py
   - src/app/core/ingestion/scoring.py
+  - src/app/core/ingestion/page_filter.py
+  - src/app/core/bot_identity.py
   - src/app/core/canonicalize.py
   - src/app/core/jev.py
   - src/app/storage/admission.py
@@ -466,7 +468,8 @@ web update (thread or process)               web/service.py: UpdateRunService
 | `ingest/fetcher.py` | `Fetcher`: pooled client, per-source interval, retries, conditional headers | no |
 | `ingest/rss.py` | Feed parsing, `fetch_rss_with_metadata`, optional linked full text | no |
 | `ingest/html.py` | List links (lxml or selectolax), `HtmlListPageResult`, article page build | no |
-| `ingest/page_filter.py` | Non-news rules: URL, text, page schema; `MANAGED_LINK_SELECTORS` | yes |
+| `core/ingestion/page_filter.py` | Non-news rules: URL, text, page schema; `MANAGED_LINK_SELECTORS` | yes |
+| `core/bot_identity.py` | `BOT_TOKEN`, `DEFAULT_USER_AGENT`: the declared bot of every request (fetcher, page cache, probes, GDELT) | yes |
 | `ingest/date_evidence.py` | Date candidates and resolution (`DATE_EVIDENCE_VERSION`) | yes |
 | `core/jev.py` (not covered) | `jev_state` (bounded text sent to Jev); `JevRelevanceScorer`: one Jev request per text, in-cycle cache, stop after failure | no |
 | `storage/source_repo.py` (not covered) | `SourceRepo` (fetch state) | no |
@@ -503,8 +506,8 @@ encoded request would exceed the journal byte bound (`core/bulletin/world_change
 
 | Change | Place | Also |
 | --- | --- | --- |
-| Non-news URL/page rules | `ingest/page_filter.py` | tests in `test_non_news_filter.py` |
-| Selector of a DB-managed HTML source | `MANAGED_LINK_SELECTORS` in `ingest/page_filter.py` | YAML sources use `sources.yaml` |
+| Non-news URL/page rules | `core/ingestion/page_filter.py` | tests in `test_non_news_filter.py` |
+| Selector of a DB-managed HTML source | `MANAGED_LINK_SELECTORS` in `core/ingestion/page_filter.py` | YAML sources use `sources.yaml` |
 | Tracking parameters | `TRACKING_PARAMS` in `core/canonicalize.py` | changes identity of new URLs only |
 | Keyword relevance | `AI_KEYWORDS`, `STOP_WORDS` in `core/ingestion/scoring.py` | only used with admission off |
 | Rank weights, half-life | `rank_score`, `freshness_score` in `core/ingestion/scoring.py` | no rescoring of stored rows |
