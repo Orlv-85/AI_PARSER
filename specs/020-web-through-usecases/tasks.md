@@ -20,11 +20,11 @@ first, then the failing test, then the code; full gate before push
 
 ## Phase 2: Tables once per app (US2)
 
-- [ ] T003 `src/app/web/pages.md`, `src/app/usecases/sources/onboarding.md`: "once per app
+- [x] T003 `src/app/web/pages.md`, `src/app/usecases/sources/onboarding.md`: "once per app
   instance" rule with test names.
-- [ ] T004 Failing tests (plan, step 2): once per initializer, retry after a 503, two concurrent
+- [x] T004 Failing tests (plan, step 2): once per initializer, retry after a 503, two concurrent
   first requests, a fresh app calls again; for both initializers.
-- [ ] T005 `_once` wrapper with one per-app lock in `web/app.py`;
+- [x] T005 `_once` wrapper with one per-app lock in `web/app.py`;
   `WebDeps.create_onboarding_tables`; `routes/sources.py` no longer imports `Base`.
 
 ## Phase 3: Bodies through Pydantic (US3)
