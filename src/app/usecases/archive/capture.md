@@ -221,9 +221,9 @@ flowchart LR
 - `scripts/run_daily_archive_job.sh`: nightly job (image, lock, timeout, exit 0).
 - `scripts/install_daily_timers.sh`: installs the `ai-news-daily-archive` unit and timer next to
   fetch and digest (run by every deploy with the systemd scheduler).
-- `cli/archive.py`: `archive` Typer group (`capture`, `status`, `purge`, `import-db`, `dedupe-cache`)
-  and `prune`; the CLI calls `purge_archive`, `count_old_articles` and `prune_old_articles`
-  (`capture.py`), which own the session and the commit.
+- `cli/archive.py`: `archive` Typer group (`capture`, `status`, `purge`, `import-db`, `dedupe-cache`);
+  `cli/articles.py`: `prune`. They call `purge_archive`, `count_old_articles` and
+  `prune_old_articles` (`capture.py`), which own the session and the commit.
 - `storage/archive.py`: `ArchiveRepo` (upsert document, add version by hash, purge selection,
   due selection, `record_attempt`, state counts, window coverage, hosts without text, size).
 - `storage/models_sql.py`: `ArchiveDocument`, `ArchiveText` (tables `archive_documents`,
