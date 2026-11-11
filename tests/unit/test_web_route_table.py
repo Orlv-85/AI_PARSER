@@ -329,3 +329,6 @@ def test_router_handlers_only_delegate(module: str, factory: str) -> None:
         statement = handler.body[0]
         assert isinstance(statement, ast.Return), handler.name
         assert isinstance(statement.value, ast.Call | ast.Await), handler.name
+        # Mapping rows inline would move handler logic back into the factory.
+        assert not any(isinstance(node, ast.ListComp | ast.SetComp | ast.DictComp
+                                  | ast.GeneratorExp) for node in ast.walk(statement)), handler.name

@@ -340,7 +340,8 @@ check it.
   `ValueError` and `SQLAlchemyError` to HTTP answers. Tests:
   `test_entry_points_import_from_storage_only_row_types`, `test_entry_points_do_not_commit`,
   `test_source_onboarding_http_errors_map_only_named_value_errors`.
-  Route handlers in `build_sources_router` only delegate to module-level functions taking `deps`.
+  Route handlers in `build_sources_router` only delegate in one call: to a module-level function
+  taking `deps`, or to `deps.source_intake` for the check status.
   Tests: `test_router_handlers_only_delegate`.
 - Every `/api/source-onboarding/*` route and the admin page need an admin session when auth is on.
   Tests: `test_auth_middleware_coverage_is_pinned`, `test_route_table_order_names_and_models_are_pinned`.
