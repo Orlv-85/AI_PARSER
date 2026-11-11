@@ -12,9 +12,9 @@ first, then the failing test, then the code; full gate before push
 
 ## Phase 1: Entry-point check (US1)
 
-- [ ] T001 Rule text in `src/app/README.md` ("Layers"): entry points import from storage only
+- [x] T001 Rule text in `src/app/README.md` ("Layers"): entry points import from storage only
   `models_sql`; `web/app.py` is the composition root (FR-001, FR-002).
-- [ ] T002 `tests/unit/test_layer_imports.py`: a name-aware scan helper with its own tests (plan,
+- [x] T002 `tests/unit/test_layer_imports.py`: a name-aware scan helper with its own tests (plan,
   step 1); `STORAGE_IN_ENTRY_POINTS` and `COMMITS_IN_WEB`, each equal to what the scan finds; a
   test that `web/app.py` imports only the allowed names.
 
