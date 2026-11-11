@@ -39,4 +39,14 @@ first, then the failing test, then the code; full gate before push
 
 ## Phase 4: Handlers call use cases (US1) - after the owner's go, one PR per group
 
-- [ ] T009 Groups and order decided after phase 3 (start: source onboarding).
+Groups decided 2026-11-11 (agent): one PR each, in this order; each removes its files from
+`STORAGE_IN_ENTRY_POINTS` and `COMMITS_IN_WEB` first (the failing test), then moves the code.
+
+- [ ] T009 Source onboarding: `web/routes/sources.py`, `web/source_intake.py`,
+  `web/source_onboarding.py`. The two services move to `usecases/sources/` (`intake.py`,
+  `candidate_review.py`, with the review response models: use cases may not import `web/`);
+  session-owning use cases for import, validate and overlaps; handlers keep HTTP errors only.
+  Two engines: see `onboarding.md` Decisions.
+- [ ] T010 Web reads: `web/routes/` bulletin, common, news, pages, period, signals, weekly and
+  `web/service.py`; may split in two PRs when the diff is large.
+- [ ] T011 `cli/main.py`: reuses the session-owning use cases of T009-T010.

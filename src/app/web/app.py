@@ -18,6 +18,7 @@ from starlette.types import Scope
 from app.config.settings import get_settings
 from app.storage import SessionLocal, create_all
 from app.storage.models_sql import Base
+from app.usecases.sources.intake import SourceIntakeService
 from app.web.auth import SessionSigner, verify_bearer_token
 from app.web.routes import WebDeps
 from app.web.routes.bulletin import build_bulletin_router
@@ -30,7 +31,6 @@ from app.web.routes.updates import build_updates_router
 from app.web.routes.weekly import build_weekly_router
 from app.web.service import UpdateRunService
 from app.web.settings_store import UpdateSettingsStore
-from app.web.source_intake import SourceIntakeService
 
 _LOGGER = logging.getLogger(__name__)
 _PUBLIC_READ_METHODS = frozenset({"GET", "HEAD"})

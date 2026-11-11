@@ -14,10 +14,10 @@ from app.core.canonicalize import canonicalize_url
 from app.core.sources.review import SourceProbe
 from app.storage.models_sql import Base, Source, SourceCandidate
 from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
+from app.usecases.sources import intake as source_intake
+from app.usecases.sources.intake import SourceIntakeService, review_details
 from app.usecases.sources.onboarding import import_source_candidates
-from app.web import source_intake
 from app.web.app import create_app
-from app.web.source_intake import SourceIntakeService, review_details
 
 
 @pytest.fixture(name="intake")

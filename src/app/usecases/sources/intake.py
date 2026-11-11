@@ -1,3 +1,5 @@
+"""Source check job and bulk approval (SourceIntakeService); see onboarding.md next to this file."""
+
 import json
 import threading
 from collections.abc import Callable
@@ -18,7 +20,7 @@ from app.core.sources.review import (
 )
 from app.storage.models_sql import Source, SourceCandidate, SourceImportBatch
 from app.storage.source_candidate_repo import SourceCandidateRepo
-from app.web.source_onboarding import SourceOnboardingService
+from app.usecases.sources.candidate_review import SourceOnboardingService
 
 
 def _url_key(url: str) -> str:

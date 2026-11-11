@@ -1,5 +1,6 @@
 """Deterministic validation of source candidates."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -197,6 +198,21 @@ def run_source_validation_batch(
         )
         for candidate in candidates
     ]
+
+def validate_batch(
+    session_factory: Callable[[], Session],
+    *,
+    batch_id: int | None,
+    candidate_ids: list[int] | None,
+) -> list[ValidationResult]:
+    """Validates a batch or candidates in their own session and commits the results once."""
+    with session_factory() as session:
+        results = run_source_validation_batch(
+            session=session, batch_id=batch_id, candidate_ids=candidate_ids
+        )
+        session.commit()
+        return results
+
 
 def _fetch_feed_with_ingest(url: str) -> Any:
     with Fetcher() as fetcher:

@@ -2,6 +2,8 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from typing import Any, cast
 
+import pytest
+from fastapi import HTTPException
 from fastapi.routing import iter_route_contexts
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -12,8 +14,11 @@ from app.config.settings import get_settings
 from app.storage.models_sql import Base, Source
 from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
 from app.storage.source_repo import SourceRepo
+from app.usecases.sources import candidate_review as review_usecases
+from app.usecases.sources import onboarding as onboarding_usecases
+from app.usecases.sources import validation as validation_usecases
 from app.web.app import create_app
-from app.web.routes import sources as sources_routes
+from app.web.routes.sources import _http_errors
 
 
 def _build_client(monkeypatch, tmp_path) -> TestClient:
@@ -400,7 +405,7 @@ def test_source_onboarding_import_route_returns_503_when_storage_is_unavailable(
     def _raise_db_error(**_kwargs):
         raise SQLAlchemyError("db unavailable")
 
-    monkeypatch.setattr(sources_routes, "import_source_candidates", _raise_db_error)
+    monkeypatch.setattr(onboarding_usecases, "import_source_candidates", _raise_db_error)
 
     response = client.post(
         "/api/source-onboarding/import",
@@ -475,7 +480,9 @@ def test_source_onboarding_validate_route_accepts_candidate_ids_only(
             )
         ]
 
-    monkeypatch.setattr(sources_routes, "run_source_validation_batch", _run_source_validation_batch)
+    monkeypatch.setattr(
+        validation_usecases, "run_source_validation_batch", _run_source_validation_batch
+    )
 
     response = client.post(
         "/api/source-onboarding/validate",
@@ -512,7 +519,7 @@ def test_source_onboarding_validation_keeps_health_endpoint_responsive(
         assert release_validation.wait(timeout=10)
         return []
 
-    monkeypatch.setattr(sources_routes, "run_source_validation_batch", _blocking_validation)
+    monkeypatch.setattr(validation_usecases, "run_source_validation_batch", _blocking_validation)
 
     with client, ThreadPoolExecutor(max_workers=2) as executor:
         validation = executor.submit(
@@ -536,7 +543,7 @@ def test_source_onboarding_validate_route_returns_503_when_storage_is_unavailabl
     def _raise_db_error(**_kwargs):
         raise SQLAlchemyError("db unavailable")
 
-    monkeypatch.setattr(sources_routes, "run_source_validation_batch", _raise_db_error)
+    monkeypatch.setattr(validation_usecases, "run_source_validation_batch", _raise_db_error)
 
     response = client.post("/api/source-onboarding/validate", json={"batch_id": 1})
 
@@ -552,7 +559,7 @@ def test_source_onboarding_overlaps_and_listing_return_503_on_storage_errors(
     def _raise_db_error(**_kwargs):
         raise SQLAlchemyError("db unavailable")
 
-    monkeypatch.setattr(sources_routes, "review_candidate_overlaps", _raise_db_error)
+    monkeypatch.setattr(onboarding_usecases, "review_candidate_overlaps", _raise_db_error)
     overlaps = client.get("/api/source-onboarding/overlaps", params={"batch_id": 1})
     assert overlaps.status_code == 503
     assert overlaps.json()["detail"] == "News storage is unavailable"
@@ -567,7 +574,7 @@ def test_source_onboarding_overlaps_and_listing_return_503_on_storage_errors(
         def get_batch_summary(self, _batch_id: int):
             raise SQLAlchemyError("db unavailable")
 
-    monkeypatch.setattr(sources_routes, "SourceOnboardingService", _BrokenService)
+    monkeypatch.setattr(review_usecases, "SourceOnboardingService", _BrokenService)
 
     listed = client.get("/api/source-onboarding/candidates", params={"batch_id": 1})
     assert listed.status_code == 503
@@ -610,7 +617,7 @@ def test_source_onboarding_review_routes_return_503_on_storage_errors(
         def edit_candidate(self, _candidate_id: int, **_kwargs):
             raise SQLAlchemyError("db unavailable")
 
-    monkeypatch.setattr(sources_routes, "SourceOnboardingService", _BrokenService)
+    monkeypatch.setattr(review_usecases, "SourceOnboardingService", _BrokenService)
 
     approve = client.post("/api/source-onboarding/candidates/1/approve")
     assert approve.status_code == 503
@@ -655,7 +662,7 @@ def test_source_onboarding_disable_and_reject_routes_return_400_on_domain_errors
             _ = reason
             raise ValueError("candidate already rejected")
 
-    monkeypatch.setattr(sources_routes, "SourceOnboardingService", _DomainErrorService)
+    monkeypatch.setattr(review_usecases, "SourceOnboardingService", _DomainErrorService)
 
     disable = client.post("/api/source-onboarding/candidates/1/disable")
     assert disable.status_code == 400
@@ -709,7 +716,7 @@ def test_source_onboarding_validate_route_keeps_numeric_strings_and_error_order(
         captured.append(kwargs)
         return []
 
-    monkeypatch.setattr(sources_routes, "run_source_validation_batch", _run)
+    monkeypatch.setattr(validation_usecases, "run_source_validation_batch", _run)
     accepted = client.post(
         "/api/source-onboarding/validate",
         json={"batch_id": "3", "candidate_ids": ["7", 8, 9.0], "extra": 1},
@@ -746,7 +753,7 @@ def test_source_onboarding_bodies_decode_like_request_json(monkeypatch, tmp_path
         captured.append(kwargs["batch_id"])
         return []
 
-    monkeypatch.setattr(sources_routes, "run_source_validation_batch", _run)
+    monkeypatch.setattr(validation_usecases, "run_source_validation_batch", _run)
     for body in ('﻿{"batch_id": 4}'.encode(), '{"batch_id": 4}'.encode("utf-16"),
                  b'{"batch_id": 9, "batch_id": 4}', b'{"note": "\\ud800", "batch_id": 4}'):
         assert client.post("/api/source-onboarding/validate", content=body).status_code == 200
@@ -770,3 +777,14 @@ def test_source_onboarding_validate_route_checks_candidate_ids_left_to_right(
         "candidate_ids must be an integer")
     assert _validate_detail(client, {"candidate_ids": [3, None, 0]}) == (
         "candidate_ids must be a list of integers")
+
+
+def test_source_onboarding_http_errors_map_only_named_value_errors() -> None:
+    with pytest.raises(HTTPException) as mapped, _http_errors(409):
+        raise ValueError("check is running")
+    assert (mapped.value.status_code, mapped.value.detail) == (409, "check is running")
+    with pytest.raises(ValueError, match="unmapped"), _http_errors():
+        raise ValueError("unmapped")
+    with pytest.raises(HTTPException) as storage, _http_errors():
+        raise SQLAlchemyError("down")
+    assert (storage.value.status_code, storage.value.detail) == (503, "News storage is unavailable")

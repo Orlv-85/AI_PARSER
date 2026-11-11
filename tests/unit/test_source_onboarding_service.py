@@ -7,8 +7,8 @@ from sqlalchemy.orm import sessionmaker
 from app.storage.models_sql import Base, Source
 from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
 from app.storage.source_repo import SourceRepo
+from app.usecases.sources.candidate_review import SourceOnboardingService
 from app.usecases.sources.onboarding import review_source_candidate
-from app.web.source_onboarding import SourceOnboardingService
 
 
 def _build_session():
@@ -489,7 +489,7 @@ def test_source_onboarding_service_disable_requires_approved_source_id(monkeypat
         )()
 
     monkeypatch.setattr(
-        "app.web.source_onboarding.review_source_candidate",
+        "app.usecases.sources.candidate_review.review_source_candidate",
         _review_source_candidate,
     )
 

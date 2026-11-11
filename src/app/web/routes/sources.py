@@ -1,5 +1,7 @@
 """Source onboarding admin API: import, check, validate, overlaps and candidate review."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -9,27 +11,28 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.concurrency import run_in_threadpool
 
-from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
-from app.usecases.sources.onboarding import import_source_candidates, review_candidate_overlaps
-from app.usecases.sources.validation import run_source_validation_batch
-from app.web.models import (
-    WEB_BODY_ERROR,
+from app.usecases.sources.candidate_review import (
     SourceOnboardingApproveResponse,
     SourceOnboardingBatchSummary,
     SourceOnboardingCandidateListResponse,
     SourceOnboardingDisableResponse,
-    SourceOnboardingDuplicateRequest,
     SourceOnboardingDuplicateResponse,
-    SourceOnboardingEditRequest,
     SourceOnboardingEditResponse,
+    SourceOnboardingRejectResponse,
+    review_in_session,
+)
+from app.usecases.sources.onboarding import candidate_overlaps, import_batch
+from app.usecases.sources.validation import validate_batch
+from app.web.models import (
+    WEB_BODY_ERROR,
+    SourceOnboardingDuplicateRequest,
+    SourceOnboardingEditRequest,
     SourceOnboardingImportRequest,
     SourceOnboardingRejectRequest,
-    SourceOnboardingRejectResponse,
     SourceOnboardingValidateRequest,
     json_body,
 )
 from app.web.routes import WebDeps
-from app.web.source_onboarding import SourceOnboardingService
 
 _SOURCE_ONBOARDING_OVERLAP_BATCH_QUERY = Query(None, ge=1)
 _SOURCE_ONBOARDING_OVERLAP_CANDIDATE_QUERY = Query(default=[])
@@ -49,7 +52,20 @@ def _read_body[M: BaseModel](model: type[M], body: bytes, required: str) -> M:
         raise HTTPException(status_code=422, detail=required) from exc
 
 
-def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-many-statements
+@contextmanager
+def _http_errors(value_error_status: int | None = None) -> Iterator[None]:
+    """A use case's ValueError as `value_error_status` (if given), a storage error as 503."""
+    try:
+        yield
+    except ValueError as exc:
+        if value_error_status is None:
+            raise
+        raise HTTPException(status_code=value_error_status, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+
+
+def build_sources_router(deps: WebDeps) -> APIRouter:
     onboarding_session_local = deps.onboarding_session_local
     source_intake = deps.source_intake
     router = APIRouter()
@@ -60,43 +76,26 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
             SourceOnboardingImportRequest, await request.body(), "raw_text is required"
         ).raw_text
 
-        try:
+        with _http_errors(422):
             deps.create_onboarding_tables()
-            with onboarding_session_local() as session:
-                result = import_source_candidates(
-                    raw_text=raw_text,
-                    batch_repo=SourceImportBatchRepo(session),
-                    candidate_repo=SourceCandidateRepo(session),
-                )
-                session.commit()
-                batch_id = result.batch.id
-                parsed_count = result.parsed_count
-                accepted_count = result.accepted_count
-                rejected_count = result.rejected_count
-                candidate_ids = [candidate.id for candidate in result.candidates]
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+            result = import_batch(onboarding_session_local, raw_text)
 
         return JSONResponse(
             status_code=201,
             content={
-                "batch_id": batch_id,
-                "parsed_count": parsed_count,
-                "accepted_count": accepted_count,
-                "rejected_count": rejected_count,
-                "candidate_ids": candidate_ids,
+                "batch_id": result.batch_id,
+                "parsed_count": result.parsed_count,
+                "accepted_count": result.accepted_count,
+                "rejected_count": result.rejected_count,
+                "candidate_ids": result.candidate_ids,
             },
         )
 
     @router.get("/api/source-onboarding/latest")
     def latest_source_batch() -> dict[str, Any]:
-        try:
+        with _http_errors():
             deps.create_onboarding_tables()
             return {"batch_id": source_intake.latest_batch(), "job": source_intake.status()}
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
 
     @router.get("/api/source-onboarding/check-status")
     def source_check_status() -> dict[str, Any]:
@@ -104,25 +103,17 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
 
     @router.post("/api/source-onboarding/batches/{batch_id}/check", status_code=202)
     def check_source_batch(batch_id: int = FastAPIPath(..., ge=1)) -> dict[str, Any]:
-        try:
+        with _http_errors(409):
             deps.create_onboarding_tables()
             return dict(source_intake.start(batch_id))
-        except ValueError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
 
     @router.post("/api/source-onboarding/batches/{batch_id}/approve-ready")
     def approve_ready_sources(batch_id: int = FastAPIPath(..., ge=1)) -> dict[str, Any]:
-        try:
+        with _http_errors(409):
             deps.create_onboarding_tables()
             approved = source_intake.approve_ready(batch_id)
             return {"batch_id": batch_id, "approved_count": len(approved),
                     "candidate_ids": approved}
-        except ValueError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
 
     @router.post("/api/source-onboarding/validate")
     async def validate_source_onboarding_batch(request: Request) -> JSONResponse:
@@ -134,17 +125,11 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
         batch_id, candidate_ids = body.batch_id, body.candidate_ids
 
         def _validate_batch() -> JSONResponse:
-            try:
+            with _http_errors():
                 deps.create_onboarding_tables()
-                with onboarding_session_local() as session:
-                    results = run_source_validation_batch(
-                        session=session,
-                        batch_id=batch_id,
-                        candidate_ids=candidate_ids,
-                    )
-                    session.commit()
-            except SQLAlchemyError as exc:
-                raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+                results = validate_batch(
+                    onboarding_session_local, batch_id=batch_id, candidate_ids=candidate_ids
+                )
 
             return JSONResponse(
                 status_code=200,
@@ -174,16 +159,11 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
         candidate_id: list[int] = _SOURCE_ONBOARDING_OVERLAP_CANDIDATE_QUERY,
     ) -> JSONResponse:
         candidate_ids = list(candidate_id)
-        try:
+        with _http_errors():
             deps.create_onboarding_tables()
-            with onboarding_session_local() as session:
-                groups = review_candidate_overlaps(
-                    session=session,
-                    batch_id=batch_id,
-                    candidate_ids=candidate_ids or None,
-                )
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+            groups = candidate_overlaps(
+                onboarding_session_local, batch_id=batch_id, candidate_ids=candidate_ids or None
+            )
 
         return JSONResponse(
             status_code=200,
@@ -209,32 +189,30 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
         status: str | None = None,
         validation_status: str | None = None,
     ) -> SourceOnboardingCandidateListResponse:
-        try:
+        with _http_errors():
             deps.create_onboarding_tables()
-            with onboarding_session_local() as session:
-                service = SourceOnboardingService(session)
-                return service.list_candidates(
+            return review_in_session(
+                onboarding_session_local,
+                lambda service: service.list_candidates(
                     batch_id=batch_id,
                     status=status,
                     validation_status=validation_status,
-                )
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+                ),
+                commit=False,
+            )
 
     @router.get(
         "/api/source-onboarding/batches/{batch_id}/summary",
         response_model=SourceOnboardingBatchSummary,
     )
     def get_source_onboarding_batch_summary(batch_id: int) -> SourceOnboardingBatchSummary:
-        try:
+        with _http_errors(404):
             deps.create_onboarding_tables()
-            with onboarding_session_local() as session:
-                service = SourceOnboardingService(session)
-                return service.get_batch_summary(batch_id)
-        except ValueError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+            return review_in_session(
+                onboarding_session_local,
+                lambda service: service.get_batch_summary(batch_id),
+                commit=False,
+            )
 
     @router.post(
         "/api/source-onboarding/candidates/{candidate_id}/approve",
@@ -243,16 +221,13 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
     def approve_source_onboarding_candidate(
         candidate_id: int = FastAPIPath(..., ge=1),
     ) -> SourceOnboardingApproveResponse:
-        try:
+        with _http_errors(400):
             deps.create_onboarding_tables()
-            with onboarding_session_local() as session:
-                service = SourceOnboardingService(session)
-                response = service.approve_candidate(candidate_id)
-                session.commit()
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+            response = review_in_session(
+                onboarding_session_local,
+                lambda service: service.approve_candidate(candidate_id),
+                commit=True,
+            )
 
         return response
 
@@ -263,16 +238,13 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
     def disable_source_onboarding_candidate(
         candidate_id: int = FastAPIPath(..., ge=1),
     ) -> SourceOnboardingDisableResponse:
-        try:
+        with _http_errors(400):
             deps.create_onboarding_tables()
-            with onboarding_session_local() as session:
-                service = SourceOnboardingService(session)
-                response = service.disable_candidate(candidate_id)
-                session.commit()
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+            response = review_in_session(
+                onboarding_session_local,
+                lambda service: service.disable_candidate(candidate_id),
+                commit=True,
+            )
 
         return response
 
@@ -284,16 +256,13 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
         payload: SourceOnboardingRejectRequest,
         candidate_id: int = FastAPIPath(..., ge=1),
     ) -> SourceOnboardingRejectResponse:
-        try:
+        with _http_errors(400):
             deps.create_onboarding_tables()
-            with onboarding_session_local() as session:
-                service = SourceOnboardingService(session)
-                response = service.reject_candidate(candidate_id, reason=payload.reason)
-                session.commit()
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+            response = review_in_session(
+                onboarding_session_local,
+                lambda service: service.reject_candidate(candidate_id, reason=payload.reason),
+                commit=True,
+            )
 
         return response
 
@@ -305,20 +274,17 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
         payload: SourceOnboardingDuplicateRequest,
         candidate_id: int = FastAPIPath(..., ge=1),
     ) -> SourceOnboardingDuplicateResponse:
-        try:
+        with _http_errors(400):
             deps.create_onboarding_tables()
-            with onboarding_session_local() as session:
-                service = SourceOnboardingService(session)
-                response = service.mark_duplicate(
+            response = review_in_session(
+                onboarding_session_local,
+                lambda service: service.mark_duplicate(
                     candidate_id,
                     duplicate_of_candidate_id=payload.duplicate_of_candidate_id,
                     reason=payload.reason,
-                )
-                session.commit()
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+                ),
+                commit=True,
+            )
 
         return response
 
@@ -330,22 +296,19 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
         payload: SourceOnboardingEditRequest,
         candidate_id: int = FastAPIPath(..., ge=1),
     ) -> SourceOnboardingEditResponse:
-        try:
+        with _http_errors(400):
             deps.create_onboarding_tables()
-            with onboarding_session_local() as session:
-                service = SourceOnboardingService(session)
-                response = service.edit_candidate(
+            response = review_in_session(
+                onboarding_session_local,
+                lambda service: service.edit_candidate(
                     candidate_id,
                     raw_input=payload.raw_input,
                     normalized_url=payload.normalized_url,
                     candidate_type=payload.candidate_type,
                     review_note=payload.review_note,
-                )
-                session.commit()
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
+                ),
+                commit=True,
+            )
 
         return response
 
