@@ -10,7 +10,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from test_world_screen import jev_handler, make_assessor  # pylint: disable=import-error
 from typer.testing import CliRunner
 
+from app.cli import deps as cli_deps
 from app.cli import main as cli_main
+from app.cli import world as cli_world
 from app.config.settings import Settings
 from app.core.bulletin import world_change as wc
 from app.core.jev import CONTENT_LIMIT
@@ -375,8 +377,8 @@ def test_world_text_seam_feeds_step_b(session, tmp_path):
 @pytest.fixture(name="maker")
 def maker_fixture(engine, monkeypatch):
     maker = sessionmaker(bind=engine)
-    monkeypatch.setattr(cli_main, "SessionLocal", maker)
-    monkeypatch.setattr(cli_main, "create_all", lambda: None)
+    monkeypatch.setattr(cli_deps, "SessionLocal", maker)
+    monkeypatch.setattr(cli_deps, "create_all", lambda: None)
     return maker
 
 
@@ -404,9 +406,9 @@ def test_cli_world_screen_reads_archive_text(maker, monkeypatch, tmp_path):
     with maker() as session:
         seed(session, cand(1, title="One"))
         texts(session, tmp_path, Web())
-    monkeypatch.setattr(cli_main, "get_settings", lambda: Settings(
+    monkeypatch.setattr(cli_deps, "get_settings", lambda: Settings(
         _env_file=None, jev_api_key=SecretStr("k")))
-    monkeypatch.setattr(cli_main, "utc_today", lambda: date(2026, 11, 1))
+    monkeypatch.setattr(cli_world, "utc_today", lambda: date(2026, 11, 1))
     real_client = httpx.Client
     requests = []
     handler = jev_handler(requests=requests)

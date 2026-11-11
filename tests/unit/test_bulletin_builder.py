@@ -12,6 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from typer.testing import CliRunner
 
+from app.cli import deps as cli_deps
 from app.cli import main as cli_main
 from app.config.settings import Settings
 from app.core.bulletin import builder as builder_module
@@ -917,9 +918,9 @@ def test_world_stream_setting_defaults_off(monkeypatch):
 
 @pytest.fixture
 def cli(maker, monkeypatch):
-    monkeypatch.setattr(cli_main, "SessionLocal", maker)
-    monkeypatch.setattr(cli_main, "create_all", lambda: None)
-    monkeypatch.setattr(cli_main, "get_settings", lambda: Settings(_env_file=None))
+    monkeypatch.setattr(cli_deps, "SessionLocal", maker)
+    monkeypatch.setattr(cli_deps, "create_all", lambda: None)
+    monkeypatch.setattr(cli_deps, "get_settings", lambda: Settings(_env_file=None))
     return lambda *args: CliRunner().invoke(cli_main.app, ["bulletin", "build", *args])
 
 

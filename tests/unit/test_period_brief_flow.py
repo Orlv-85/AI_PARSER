@@ -19,7 +19,9 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from typer.testing import CliRunner
 
+from app.cli import deps as cli_deps
 from app.cli import main as cli_main
+from app.cli import periods as cli_periods
 from app.config.settings import Settings, get_settings
 from app.storage.models_sql import Base, PeriodSignalBrief, PeriodSignalReport
 from app.usecases.periodic import period_run
@@ -132,11 +134,12 @@ def test_a_brief_failure_keeps_the_numbers(maker, tmp_path, monkeypatch):
 
 # Command --------------------------------------------------------------------------------------
 def cli_env(maker, monkeypatch, *, brief=True):
-    monkeypatch.setattr(cli_main, "SessionLocal", maker)
-    monkeypatch.setattr(cli_main, "create_all", lambda: None)
-    monkeypatch.setattr(cli_main, "get_settings", lambda: settings(brief=brief))
-    monkeypatch.setattr(cli_main, "run_periods", lambda session, config, options, **kw: run_periods(
-        session, config, options, now=NOW, transport=PROVIDER.transport))
+    monkeypatch.setattr(cli_deps, "SessionLocal", maker)
+    monkeypatch.setattr(cli_deps, "create_all", lambda: None)
+    monkeypatch.setattr(cli_deps, "get_settings", lambda: settings(brief=brief))
+    monkeypatch.setattr(cli_periods, "run_periods",
+                        lambda session, config, options, **kw: run_periods(
+                            session, config, options, now=NOW, transport=PROVIDER.transport))
 
 
 PROVIDER = Provider()
@@ -162,7 +165,7 @@ def test_command_rejects_a_bad_max_usd_and_flag_off_stays_disabled(maker, tmp_pa
     cli_env(maker, monkeypatch)
     assert invoke("--max-usd", "0")[0] == 2
     assert invoke("--max-usd", "lots")[0] == 2
-    monkeypatch.setattr(cli_main, "get_settings", lambda: Settings(
+    monkeypatch.setattr(cli_deps, "get_settings", lambda: Settings(
         _env_file=None, daily_signals_comparable_from=FROM, period_signals_enabled=False,
         period_signals_brief_enabled=True))
     code, output = invoke("--with-brief", "--cache-dir", str(tmp_path / "off"))

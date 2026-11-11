@@ -17,6 +17,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from typer.testing import CliRunner
 
+from app.cli import bulletin as cli_bulletin
+from app.cli import deps as cli_deps
 from app.cli import main as cli_main
 from app.config.settings import Settings
 from app.core.bulletin.builder import Candidate, DayInput, build_bulletin
@@ -195,14 +197,14 @@ def test_latest_ready_skips_skipped_days(maker):
 
 @pytest.fixture
 def cli(maker, monkeypatch):
-    monkeypatch.setattr(cli_main, "SessionLocal", maker)
-    monkeypatch.setattr(cli_main, "create_all", lambda: Base.metadata.create_all(maker.kw["bind"]))
-    monkeypatch.setattr(cli_main, "get_settings", lambda: Settings(_env_file=None))
+    monkeypatch.setattr(cli_deps, "SessionLocal", maker)
+    monkeypatch.setattr(cli_deps, "create_all", lambda: Base.metadata.create_all(maker.kw["bind"]))
+    monkeypatch.setattr(cli_deps, "get_settings", lambda: Settings(_env_file=None))
 
     def no_writer(*args, **kwargs):
         pytest.fail("A build without --write must not open the writer")
 
-    monkeypatch.setattr(cli_main, "open_writer", no_writer)
+    monkeypatch.setattr(cli_bulletin, "open_writer", no_writer)
     return lambda *args: CliRunner().invoke(
         cli_main.app, ["bulletin", "build", "--date", DAY.isoformat(), *args])
 
@@ -250,7 +252,7 @@ def test_cli_build_stores_a_skipped_day(maker, cli):
 @pytest.mark.parametrize("dry_run", [False, True])
 def test_cli_build_stores_written_day(maker, cli, monkeypatch, reason, dry_run):
     seed_day(maker)
-    monkeypatch.setattr(cli_main, "get_settings",
+    monkeypatch.setattr(cli_deps, "get_settings",
                         lambda: Settings(_env_file=None, ds_api_key="fake-key"))
     requests = []
     note = "The work now follows a different process."
@@ -269,7 +271,7 @@ def test_cli_build_stores_written_day(maker, cli, monkeypatch, reason, dry_run):
     def fake_writer(*args, **kwargs):
         yield SimpleNamespace(ask=ask, cost_usd=lambda: 0.001)
 
-    monkeypatch.setattr(cli_main, "open_writer", fake_writer)
+    monkeypatch.setattr(cli_bulletin, "open_writer", fake_writer)
     args = ["--write", "--json", *(["--dry-run"] if dry_run else [])]
     result = cli(*args)
     assert result.exit_code == 0, result.output

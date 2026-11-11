@@ -180,7 +180,8 @@ The numbers live in the code: fields of `PeriodThresholds` (by kind) in `period_
   `test_the_nightly_default_does_nothing_before_the_first_month_is_complete`,
   `test_the_nightly_default_before_december_writes_nothing`,
   `test_plain_run_adds_the_month_report_and_a_kind_does_not`,
-  `test_month_before_the_first_month_writes_nothing`.
+  `test_month_before_the_first_month_writes_nothing`,
+  `test_a_month_failure_keeps_the_week_report`.
 - The nightly step in `scripts/run_daily_digest_job.sh` runs the default command after the daily
   signals with a time-budget guard; its failure never changes the job result. Tests: none (shell;
   checked by `bash -n`).
@@ -386,7 +387,7 @@ flowchart LR
 | `signals_period.py` | Public entry: re-exports `compute_period`, `PeriodInput`, `PeriodThresholds`, `payload_hash` | yes |
 | `period_model.py` | Bounds (`period_bounds`, `period_days`, `previous_start`, `next_start`), `PeriodThresholds`, `PeriodInput`, `PreviousPeriod`, `period_status` | yes |
 | `period_compute.py` | `compute_period` and one function per section; `PERIOD_METHODOLOGY_VERSION` | yes |
-| `usecases/periodic/period_run.py` | `run_periods`, `target_periods` (`target_weeks`, `target_months`), `brief_targets`, `first_period`, `latest_completed` (week and month wrappers): pick periods, apply the digest text to the stored observations, compute, store, then call the brief step | no |
+| `usecases/periodic/period_run.py` | `run_periods`, `run_week_and_month` (the plain run), `target_periods` (`target_weeks`, `target_months`), `brief_targets`, `first_period`, `latest_completed` (week and month wrappers): pick periods, apply the digest text to the stored observations, compute, store, then call the brief step | no |
 | `period_brief.py` | `PERIOD_BRIEF_VERSION`, values by kind, `period_packet`, `period_body`, `period_input_hash`, `parse_period_brief` | yes |
 | `usecases/periodic/period_brief_run.py` | `run_briefs`: targets, cache by hash, ledger per brief, attempts, store | no |
 | `storage/period_signals.py` | `PeriodSignalRepo`: `context`, `load_input`, `previous`, `save_report`, `get_report`, `latest`, `index`, `digest_items`, `get_brief`, `save_brief` | no |
@@ -396,7 +397,7 @@ flowchart LR
 | `web/period_view.py`, `web/period.html`, `web/static/css/period.css` | the `/weekly` HTML, template and styles; `latest_week` and `has_month` (in the route file) feed the nav links and the line on `/`; one template serves `/weekly` and `/monthly` | no |
 | `usecases/periodic/period_reads.py` | `period_index`, `stored_period`, `period_page`: stored rows in one session each; `SHOWN_STATUSES` (the default read shows the newest period with comparable numbers, else any stored one) | no |
 | `web/routes/period.py` | the two read routes and the `/weekly` and `/monthly` page routes; response models `PeriodSignalsResponse`, `PeriodSignalsIndexResponse` in `web/models.py` | no |
-| `cli/main.py` `period-signals` | options and flag check; flags `period_signals_enabled`, `period_signals_brief_enabled` and `period_signals_max_usd` in `config/settings.py` | no |
+| `cli/periods.py` `period-signals` | options and flag check; picks `run_week_and_month` for the plain run; flags `period_signals_enabled`, `period_signals_brief_enabled` and `period_signals_max_usd` in `config/settings.py` | no |
 | `core/daily/signals_trend.py` | Shared Rising/Cooling rule: `trend_windows`, `trend_delta`, `TrendRow` | yes |
 
 Flow: `compute_period` -> `coverage_line`, `period_status`, `comparison`, then `top_stories`,

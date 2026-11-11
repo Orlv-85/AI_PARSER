@@ -280,7 +280,7 @@ the safe direction: the story falls back to its title.
 | `src/app/core/daily/signals_brief.py` | `grounding_error` (shared), `request_body`, `request_key`, `BRIEF_PRICES` |
 | `src/app/core/bulletin/builder.py` | `Story` and `Bulletin` fields of the writer |
 | `src/app/core/bulletin/render.py` | Telegram note in the text |
-| `src/app/cli/main.py` | `bulletin build --write` |
+| `src/app/cli/bulletin.py` | `bulletin build --write` |
 
 Versions: `WRITER_VERSION` (prompt and checks), `WRITER_JOURNAL_VERSION` (journal identity).
 

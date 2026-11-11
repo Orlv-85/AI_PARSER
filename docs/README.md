@@ -23,6 +23,7 @@ Specs in `specs/` are the history of how a feature got there.
 | World news stream (018 item 5) | [src/app/core/world/world.md](../src/app/core/world/world.md) | `src/app/core/world/__init__.py` |
 | Article archive (016) | [src/app/usecases/archive/capture.md](../src/app/usecases/archive/capture.md) | `src/app/usecases/archive/capture.py` |
 | Web pages and static assets | [src/app/web/pages.md](../src/app/web/pages.md) | `src/app/web/routes/pages.py` |
+| CLI `ai-news` | [src/app/cli/main.md](../src/app/cli/main.md) | `src/app/cli/main.py` |
 
 ## General
 

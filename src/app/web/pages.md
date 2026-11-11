@@ -301,7 +301,7 @@ flowchart LR
 | `../usecases/digest.py`, `../usecases/collection_status.py`, `../usecases/bulletin/stored.py` (not covered) | stored digest, collection status and bulletin reads of the pages; handlers open no session |
 | `../storage/page_views.py` | `PageViewRepo`: atomic increment and read-only day/route totals; table `page_views` in `models_sql.py` |
 | `../storage/migrations/versions/a6b0180c0001_add_page_views.py` | Creates/drops `page_views`, composite day/route primary key |
-| `../cli/main.py` | Read-only `page-views` JSON command |
+| `../cli/site.py` | Read-only `page-views` JSON command |
 | `static/css/bulletin.css` | Bulletin-only typography, responsive story columns, light/dark palette and focus states |
 | `app.py` | `_NoCacheStaticFiles` mount at `/static`, `auth_middleware` (admin assets protected) |
 | `routes/period.py` | `/weekly` and `/monthly` routes, `latest_week` and `has_month` (nav links and line on `/`), next to the period API |

@@ -150,7 +150,7 @@ flowchart LR
 - `src/app/storage/models_sql.py`: `WorldChangeAssessment`.
 - `src/app/storage/migrations/versions/b8e2d4f61a07_add_world_change_assessments.py`:
   creates the table only when missing; downgrade drops it.
-- `src/app/cli/main.py`: `bulletin assess`.
+- `src/app/cli/bulletin.py`: `bulletin assess`.
 - `specs/018-daily-inference/records/eval_world_change.py`: offline check against labels
   (FR-002); not product code.
 

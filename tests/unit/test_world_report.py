@@ -15,6 +15,7 @@ from test_world_screen import (  # pylint: disable=import-error
 )
 from typer.testing import CliRunner
 
+from app.cli import deps as cli_deps
 from app.cli import main as cli_main
 from app.core.bulletin.world_change import WORLD_CHANGE_VERSION
 from app.storage.models_sql import Base, WorldCandidate, WorldChangeAssessment
@@ -137,8 +138,8 @@ def test_world_report_writes_nothing(engine, tmp_path, monkeypatch):
         seed(session, cand(1, title="One story"))
         force(session, "One story", STATE_SCREENED_IN, 0.9)
     created = []
-    monkeypatch.setattr(cli_main, "create_all", lambda: created.append(1))
-    monkeypatch.setattr(cli_main, "SessionLocal", lambda: Session(engine))
+    monkeypatch.setattr(cli_deps, "create_all", lambda: created.append(1))
+    monkeypatch.setattr(cli_deps, "SessionLocal", lambda: Session(engine))
     tables = set(inspect(engine).get_table_names())
     before = sorted(path.name for path in tmp_path.iterdir())
     result = CliRunner().invoke(cli_main.app, ["world", "report", "--date", "2026-10-30"])
@@ -155,7 +156,7 @@ def test_cli_world_report_prints_json(engine, tmp_path, monkeypatch):
         session.add(answer(item))
         session.commit()
     make_journal(tmp_path / "data/world", "2026-10-31", 1000)
-    monkeypatch.setattr(cli_main, "SessionLocal", lambda: Session(engine))
+    monkeypatch.setattr(cli_deps, "SessionLocal", lambda: Session(engine))
     result = CliRunner().invoke(cli_main.app, ["world", "report", "--date", "2026-10-30"])
     assert result.exit_code == 0, result.output
     report = json.loads(result.stdout)

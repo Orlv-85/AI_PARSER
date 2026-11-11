@@ -10,7 +10,9 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 from typer.testing import CliRunner
 
+from app.cli import deps as cli_deps
 from app.cli import main as cli_main
+from app.cli import world as cli_world
 from app.core.world.gdelt import (
     DOWNLOAD_TRIES,
     MAX_CONSECUTIVE_MISSING,
@@ -209,9 +211,9 @@ def test_yesterday_utc_is_previous_day():
 
 def test_cli_world_collect_prints_summary(engine, monkeypatch):
     files = {NAMES[0]: file_for(0)}
-    monkeypatch.setattr(cli_main, "make_client", lambda: client_for(files))
-    monkeypatch.setattr(cli_main, "SessionLocal", sessionmaker(engine))
-    monkeypatch.setattr(cli_main, "create_all", lambda: None)
+    monkeypatch.setattr(cli_world, "make_client", lambda: client_for(files))
+    monkeypatch.setattr(cli_deps, "SessionLocal", sessionmaker(engine))
+    monkeypatch.setattr(cli_deps, "create_all", lambda: None)
     monkeypatch.delenv("AINEWS_WORLD_COLLECT_ENABLED", raising=False)
     result = CliRunner().invoke(
         cli_main.app, ["world", "collect", "--date", "2026-10-30", "--max-files", "1"])
@@ -224,10 +226,10 @@ def test_cli_world_collect_prints_summary(engine, monkeypatch):
 
 
 def cli_collect(engine, monkeypatch, files, calls=None, args=()):
-    monkeypatch.setattr(cli_main, "make_client", lambda: client_for(files, calls))
-    monkeypatch.setattr(cli_main, "SessionLocal", sessionmaker(engine))
-    monkeypatch.setattr(cli_main, "create_all", lambda: None)
-    monkeypatch.setattr(cli_main, "yesterday_utc", lambda: DAY)
+    monkeypatch.setattr(cli_world, "make_client", lambda: client_for(files, calls))
+    monkeypatch.setattr(cli_deps, "SessionLocal", sessionmaker(engine))
+    monkeypatch.setattr(cli_deps, "create_all", lambda: None)
+    monkeypatch.setattr(cli_world, "yesterday_utc", lambda: DAY)
     monkeypatch.setattr("app.usecases.world_collect.PAUSE_SECONDS", 0)
     result = CliRunner().invoke(cli_main.app, ["world", "collect", "--max-files", "1", *args])
     assert result.exit_code == 0, result.output

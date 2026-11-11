@@ -7,6 +7,7 @@ import yaml
 from typer.testing import CliRunner
 
 import app.cli.main as cli_main
+from app.cli import deps as cli_deps
 from app.usecases.archive import capture as archive_capture
 
 
@@ -124,8 +125,8 @@ def test_cli_default_and_explicit_retention_remain_compatible(monkeypatch):
             calls.append(older_than_days)
             return 0
 
-    monkeypatch.setattr(cli_main, "create_all", lambda: None)
-    monkeypatch.setattr(cli_main, "SessionLocal", TestSession)
+    monkeypatch.setattr(cli_deps, "create_all", lambda: None)
+    monkeypatch.setattr(cli_deps, "SessionLocal", TestSession)
     monkeypatch.setattr(archive_capture, "ArticleRepo", TestRepo)
     runner = CliRunner()
     assert runner.invoke(cli_main.app, ["prune", "--dry-run"]).exit_code == 0

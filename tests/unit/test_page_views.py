@@ -20,8 +20,9 @@ maker = bulletin_helpers.maker
 
 def test_cli_page_views_prints_json(maker, monkeypatch):
     cli = import_module("app.cli.main")
-    monkeypatch.setattr(cli, "SessionLocal", maker)
-    monkeypatch.setattr(cli, "create_all", lambda: (_ for _ in ()).throw(AssertionError("write")))
+    deps = import_module("app.cli.deps")
+    monkeypatch.setattr(deps, "SessionLocal", maker)
+    monkeypatch.setattr(deps, "create_all", lambda: (_ for _ in ()).throw(AssertionError("write")))
     today = datetime.now(UTC).date()
     with maker() as session:
         session.execute(text("INSERT INTO page_views (day, route, count) VALUES "
@@ -45,7 +46,8 @@ def test_cli_page_views_prints_json(maker, monkeypatch):
 
 def test_page_views_empty_cli(maker, monkeypatch):
     cli = import_module("app.cli.main")
-    monkeypatch.setattr(cli, "SessionLocal", maker)
+    deps = import_module("app.cli.deps")
+    monkeypatch.setattr(deps, "SessionLocal", maker)
     result = CliRunner().invoke(cli.app, ["page-views"])
     assert result.exit_code == 0 and json.loads(result.output) == {}
 

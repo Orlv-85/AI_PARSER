@@ -4,7 +4,9 @@ A test that patches `module.NAME` only works when functions of `module` look NAM
 After a function moves to another module the patch silently stops applying; this test fails then.
 Checked targets: `monkeypatch.setattr/delattr("app.x.y.NAME", ...)`, `setattr(<module object>,
 "NAME", ...)` (aliases resolved from imports and `import_module`), and `f"app.x.y.{var}"` when
-`var` is a `pytest.mark.parametrize` argument of the test.
+`var` is a `pytest.mark.parametrize` argument of the test. A module is read when its own functions
+use NAME, or when a function of another `app` module reads `alias.NAME` with `alias` bound to it
+(`from app.cli import deps` -> `deps.SessionLocal`).
 """
 import ast
 import importlib.util
@@ -200,6 +202,43 @@ def _read_in_function(tree: ast.Module, name: str) -> bool:
     return False
 
 
+def _module_aliases(tree: ast.Module, module: str) -> set[str]:
+    """Top-level names under which `tree` binds the module `module` itself."""
+    parent, _, leaf = module.rpartition(".")
+    names: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module == parent:
+            names |= {alias.asname or alias.name for alias in node.names if alias.name == leaf}
+        elif isinstance(node, ast.Import):
+            names |= {alias.asname for alias in node.names
+                      if alias.name == module and alias.asname}
+    return names
+
+
+def _reads_attribute(tree: ast.Module, aliases: set[str], name: str) -> bool:
+    return any(isinstance(inner, ast.Attribute) and inner.attr == name
+               and isinstance(inner.value, ast.Name) and inner.value.id in aliases
+               for node in ast.walk(tree)
+               if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda))
+               for inner in ast.walk(node))
+
+
+@cache
+def _app_trees() -> tuple[ast.Module, ...]:
+    spec = importlib.util.find_spec("app")
+    assert spec is not None and spec.origin
+    return tuple(ast.parse(path.read_text(encoding="utf-8"))
+                 for path in sorted(Path(spec.origin).parent.rglob("*.py")))
+
+
+def _read_through_module(module: str, name: str) -> bool:
+    for tree in _app_trees():
+        aliases = _module_aliases(tree, module)
+        if aliases and _reads_attribute(tree, aliases, name):
+            return True
+    return False
+
+
 def _all_targets() -> tuple[list[Target], list[Target]]:
     module_targets: list[Target] = []
     object_targets: list[Target] = []
@@ -230,7 +269,8 @@ def _problems() -> list[str]:
             continue
         if (target.module, target.name) in KNOWN_NO_READER:
             continue
-        if not _read_in_function(source[0], target.name):
+        if not (_read_in_function(source[0], target.name)
+                or _read_through_module(target.module, target.name)):
             problems.append(
                 f"{target.path}:{target.line}: patch on {target.module}.{target.name} has no "
                 "effect: no reader in this module"
@@ -255,3 +295,14 @@ def test_guard_reader_check() -> None:
     assert _defines(tree, "sep")
     assert not _read_in_function(tree, "sep")
     assert _read_in_function(ast.parse("def f():\n    return sep\n"), "sep")
+
+
+def test_guard_reads_through_a_module_alias() -> None:
+    tree = ast.parse("from app.cli import deps\n\ndef run():\n    return deps.SessionLocal()\n")
+    assert _module_aliases(tree, "app.cli.deps") == {"deps"}
+    assert _reads_attribute(tree, {"deps"}, "SessionLocal")
+    assert not _reads_attribute(tree, {"deps"}, "create_all")
+    assert _module_aliases(ast.parse("import app.cli.deps as d\n"), "app.cli.deps") == {"d"}
+    assert _module_aliases(ast.parse("from app.cli import main\n"), "app.cli.deps") == set()
+    assert _read_through_module("app.cli.deps", "SessionLocal")
+    assert not _read_through_module("app.cli.deps", "not_a_name")

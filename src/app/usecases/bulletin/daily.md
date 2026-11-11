@@ -96,7 +96,7 @@ flowchart LR
 ## Code map
 
 - `daily.py`: shared assessment, preparation and writing helpers; daily orchestration.
-- `src/app/cli/main.py`: commands, date validation, JSON output, sessions and logging.
+- `src/app/cli/bulletin.py`: commands, date validation, JSON output, sessions and logging.
 - `src/app/storage/bulletin_store.md`: save/refuse contract and versions.
 - `scripts/run_daily_bulletin_job.sh`: switch, environment, release image, lock and timeout.
 - `scripts/install_daily_timers.sh`: bulletin service and UTC timer.

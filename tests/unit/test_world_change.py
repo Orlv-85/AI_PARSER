@@ -14,6 +14,8 @@ from sqlalchemy import create_engine, inspect, select
 from sqlalchemy.orm import Session, sessionmaker
 from typer.testing import CliRunner
 
+from app.cli import bulletin as cli_bulletin
+from app.cli import deps as cli_deps
 from app.cli import main as cli_main
 from app.config.settings import Settings
 from app.core.bulletin import world_change as wc
@@ -277,8 +279,8 @@ def maker_fixture(tmp_path, monkeypatch):
     engine = create_engine(f"sqlite:///{tmp_path / 'wc.db'}")
     Base.metadata.create_all(engine)
     maker = sessionmaker(bind=engine)
-    monkeypatch.setattr(cli_main, "SessionLocal", maker)
-    monkeypatch.setattr(cli_main, "create_all", lambda: None)
+    monkeypatch.setattr(cli_deps, "SessionLocal", maker)
+    monkeypatch.setattr(cli_deps, "create_all", lambda: None)
     yield maker
     engine.dispose()
 
@@ -338,7 +340,7 @@ def test_cli_dry_run_makes_no_request(maker, monkeypatch):
         raise AssertionError("no request in a dry run")
 
     monkeypatch.setattr(httpx.Client, "send", boom)
-    monkeypatch.setattr(cli_main, "open_assessor", boom)
+    monkeypatch.setattr(cli_bulletin, "open_assessor", boom)
     result = CliRunner().invoke(
         cli_main.app, ["bulletin", "assess", "--date", DAY.isoformat(), "--dry-run"])
     assert result.exit_code == 0, result.output
@@ -360,7 +362,7 @@ def test_cli_assess_needs_a_digest(maker):
 def test_cli_assess_skips_answered_and_summarizes(maker, monkeypatch, tmp_path):
     seed_digest(maker, 3)
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(cli_main, "get_settings", lambda: Settings(
+    monkeypatch.setattr(cli_deps, "get_settings", lambda: Settings(
         _env_file=None, jev_api_key=SecretStr("k")))
     requests = []
     real_client = httpx.Client
@@ -389,7 +391,7 @@ def test_cli_assess_skips_answered_and_summarizes(maker, monkeypatch, tmp_path):
 def test_cli_assess_needs_a_key(maker, monkeypatch, tmp_path):
     seed_digest(maker, 1)
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(cli_main, "get_settings", lambda: Settings(_env_file=None))
+    monkeypatch.setattr(cli_deps, "get_settings", lambda: Settings(_env_file=None))
     result = CliRunner().invoke(cli_main.app, ["bulletin", "assess", "--date", DAY.isoformat()])
     assert result.exit_code == 2
 
@@ -652,7 +654,7 @@ def test_cli_rejects_max_usd_above_ceiling(maker):
 def test_cli_dry_run_does_not_create_tables(maker, monkeypatch):
     seed_digest(maker, 1)
     calls = []
-    monkeypatch.setattr(cli_main, "create_all", lambda: calls.append(1))
+    monkeypatch.setattr(cli_deps, "create_all", lambda: calls.append(1))
     result = CliRunner().invoke(
         cli_main.app, ["bulletin", "assess", "--date", DAY.isoformat(), "--dry-run"])
     assert result.exit_code == 0

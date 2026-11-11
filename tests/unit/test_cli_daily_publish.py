@@ -3,6 +3,8 @@ import json
 from typer.testing import CliRunner
 
 import app.cli.main as cli_main
+from app.cli import daily as cli_daily
+from app.cli import deps as cli_deps
 
 
 def _session():
@@ -33,10 +35,10 @@ def _held_reports(*_args):
 
 
 def test_daily_publish_exits_two_for_held_collection(monkeypatch):
-    monkeypatch.setattr(cli_main, "create_all", _no_op)
-    monkeypatch.setattr(cli_main, "SessionLocal", _session)
-    monkeypatch.setattr(cli_main, "get_settings", _settings)
-    monkeypatch.setattr(cli_main, "publish_day", _held_report)
+    monkeypatch.setattr(cli_deps, "create_all", _no_op)
+    monkeypatch.setattr(cli_deps, "SessionLocal", _session)
+    monkeypatch.setattr(cli_deps, "get_settings", _settings)
+    monkeypatch.setattr(cli_daily, "publish_day", _held_report)
 
     result = CliRunner().invoke(cli_main.app, ["daily-publish"])
 
@@ -45,10 +47,10 @@ def test_daily_publish_exits_two_for_held_collection(monkeypatch):
 
 
 def test_daily_publish_catch_up_exits_two_when_a_day_is_held(monkeypatch):
-    monkeypatch.setattr(cli_main, "create_all", _no_op)
-    monkeypatch.setattr(cli_main, "SessionLocal", _session)
-    monkeypatch.setattr(cli_main, "get_settings", _settings)
-    monkeypatch.setattr(cli_main, "publish_catch_up", _held_reports)
+    monkeypatch.setattr(cli_deps, "create_all", _no_op)
+    monkeypatch.setattr(cli_deps, "SessionLocal", _session)
+    monkeypatch.setattr(cli_deps, "get_settings", _settings)
+    monkeypatch.setattr(cli_daily, "publish_catch_up", _held_reports)
 
     result = CliRunner().invoke(cli_main.app, ["daily-publish", "--catch-up"])
 
