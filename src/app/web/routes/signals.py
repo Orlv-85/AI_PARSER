@@ -5,9 +5,9 @@ from datetime import UTC, date, datetime, timedelta
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.storage.article_repo import ArticleRepo
-from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import NewsDigestReport
+from app.usecases.digest import save_digest, stored_digest
+from app.usecases.news_reads import ArticleDailyStats, daily_stats
 from app.web.models import (
     DailySignalsResponse,
     NewsDailyStatsItem,
@@ -54,7 +54,7 @@ def _build_news_daily_stats_response(
     *,
     date_from: date,
     date_to: date,
-    repo: ArticleRepo,
+    stats: list[ArticleDailyStats],
 ) -> NewsDailyStatsResponse:
     return NewsDailyStatsResponse(
         date_from=date_from,
@@ -70,7 +70,7 @@ def _build_news_daily_stats_response(
                 duplicate_count=item.duplicate_count,
                 error_count=item.error_count,
             )
-            for item in repo.daily_stats(date_from=date_from, date_to=date_to)
+            for item in stats
         ],
     )
 
@@ -82,27 +82,24 @@ def build_signals_router(deps: WebDeps) -> APIRouter:
     def save_news_digest(payload: NewsDigestPayload) -> NewsDigestResponse:
         try:
             deps.create_all()
-            with deps.SessionLocal() as session:
-                repo = NewsDigestRepo(session)
-                repo.save_digest(
-                    report_date=payload.report_date,
-                    groups=[
-                        {
-                            "title": group.title,
-                            "items": [
-                                {
-                                    "title": item.title,
-                                    "summary": item.summary,
-                                    "url": item.url,
-                                }
-                                for item in group.items
-                            ],
-                        }
-                        for group in payload.groups
-                    ],
-                )
-                session.commit()
-                stored = repo.get_digest(report_date=payload.report_date)
+            stored = save_digest(
+                deps.SessionLocal,
+                payload.report_date,
+                [
+                    {
+                        "title": group.title,
+                        "items": [
+                            {
+                                "title": item.title,
+                                "summary": item.summary,
+                                "url": item.url,
+                            }
+                            for item in group.items
+                        ],
+                    }
+                    for group in payload.groups
+                ],
+            )
         except SQLAlchemyError as exc:
             raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
 
@@ -112,8 +109,7 @@ def build_signals_router(deps: WebDeps) -> APIRouter:
     def get_news_digest(*, target_date: date = _NEWS_DIGEST_DATE_QUERY) -> NewsDigestResponse:
         try:
             deps.create_all()
-            with deps.SessionLocal() as session:
-                digest = NewsDigestRepo(session).get_digest(report_date=target_date)
+            digest = stored_digest(deps.SessionLocal, target_date)
         except SQLAlchemyError as exc:
             raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
 
@@ -140,12 +136,11 @@ def build_signals_router(deps: WebDeps) -> APIRouter:
             raise HTTPException(status_code=422, detail="date_from must be <= date_to")
         try:
             deps.create_all()
-            with deps.SessionLocal() as session:
-                response = _build_news_daily_stats_response(
-                    date_from=resolved_date_from,
-                    date_to=resolved_date_to,
-                    repo=ArticleRepo(session),
-                )
+            response = _build_news_daily_stats_response(
+                date_from=resolved_date_from,
+                date_to=resolved_date_to,
+                stats=daily_stats(deps.SessionLocal, resolved_date_from, resolved_date_to),
+            )
         except SQLAlchemyError as exc:
             raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
         return response

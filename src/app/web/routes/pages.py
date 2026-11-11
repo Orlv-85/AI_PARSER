@@ -16,11 +16,11 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import TypeAdapter, ValidationError, WithJsonSchema
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.storage.admission import read_collection_status
-from app.storage.bulletin_store import BulletinRepo
-from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import NewsDigestReport
-from app.storage.page_views import PageViewRepo
+from app.usecases.bulletin.stored import stored_bulletin
+from app.usecases.collection_status import collection_status
+from app.usecases.digest import stored_digest
+from app.usecases.page_views import count_page_view
 from app.web.auth import verify_password
 from app.web.bulletin_view import render_bulletin_page
 from app.web.models import LoginRequest, NewsCollectionStatusResponse, json_body
@@ -114,14 +114,12 @@ def _bulletin_response(deps: WebDeps, target_date: str | None, *,
     day = parse_day(target_date)
     try:
         deps.create_all()
-        with deps.SessionLocal() as session:
-            repo = BulletinRepo(session)
-            row = repo.get(day) if day is not None else repo.latest_ready()
-            if not preview and day is None and row is None:
-                return None
-            selected_day = row.day if row is not None else day
-            return HTMLResponse(render_bulletin_page(row, selected_day, preview=preview),
-                                status_code=404 if row is None else 200)
+        row = stored_bulletin(deps.SessionLocal, day)
+        if not preview and day is None and row is None:
+            return None
+        selected_day = row.day if row is not None else day
+        return HTMLResponse(render_bulletin_page(row, selected_day, preview=preview),
+                            status_code=404 if row is None else 200)
     except SQLAlchemyError:
         return HTMLResponse(render_bulletin_page(None, day,
                             message="News storage is unavailable.", preview=preview),
@@ -132,8 +130,7 @@ def _digest_response(deps: WebDeps, selected_date: date | None) -> str:
     report_date = selected_date or (datetime.now(UTC).date() - timedelta(days=1))
     try:
         deps.create_all()
-        with deps.SessionLocal() as session:
-            digest = NewsDigestRepo(session).get_digest(report_date=report_date)
+        digest = stored_digest(deps.SessionLocal, report_date)
     except SQLAlchemyError as exc:
         raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
     # Separate read: a signals failure never takes the digest page down.
@@ -161,9 +158,7 @@ def _digest_date(value: str | None) -> date | None:
 
 def _count_page(deps: WebDeps, route: str) -> None:
     try:
-        with deps.SessionLocal() as session:
-            PageViewRepo(session).increment(datetime.now(UTC).date(), route)
-            session.commit()
+        count_page_view(deps.SessionLocal, datetime.now(UTC).date(), route)
     except Exception as exc:  # Measurement must never take down a public page.
         _LOGGER.error("page_views_increment_failed route=%s error=%s", route, type(exc).__name__)
 
@@ -210,8 +205,7 @@ def _health_response() -> dict[str, str]:
 def _collection_status_response(deps: WebDeps) -> NewsCollectionStatusResponse:
     try:
         deps.create_all()
-        with deps.SessionLocal() as session:
-            paused, message = read_collection_status(session)
+        paused, message = collection_status(deps.SessionLocal)
     except SQLAlchemyError as exc:
         raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
     return NewsCollectionStatusResponse(paused=paused, message=message)

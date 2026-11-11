@@ -20,15 +20,10 @@ COMPOSITION_ROOT_NAMES = frozenset({"app.storage:SessionLocal", "app.storage:cre
 # Entry-point storage imports and web commits still in breach (spec 020); lists only shrink.
 STORAGE_IN_ENTRY_POINTS = {
     "cli/main.py",
-    "web/routes/common.py",
-    "web/routes/pages.py",
-    "web/routes/signals.py",
     "web/routes/weekly.py",
     "web/service.py",
 }
 COMMITS_IN_WEB = {
-    "web/routes/pages.py",
-    "web/routes/signals.py",
     "web/routes/weekly.py",
 }
 # core functions a repository may call: they key, encode or read, not calculate.

@@ -10,9 +10,9 @@ from sqlalchemy.orm import sessionmaker
 from app.config.settings import get_settings
 from app.storage.models_sql import Article, Base, FetchRun, Source
 from app.storage.repos import WeeklyAnalyticsRepo
+from app.usecases import digest as digest_usecases
+from app.usecases.daily import signals_reads
 from app.web.app import create_app
-from app.web.routes import common as common_routes
-from app.web.routes import pages as pages_routes
 from app.web.routes import weekly as weekly_routes
 
 
@@ -28,7 +28,7 @@ class _NoSignalsRepo:
 
 @pytest.fixture(autouse=True)
 def _no_daily_signals(monkeypatch) -> None:
-    monkeypatch.setattr(common_routes, "DailySignalRepo", _NoSignalsRepo)
+    monkeypatch.setattr(signals_reads, "DailySignalRepo", _NoSignalsRepo)
 
 
 def test_weekly_ai_analytics_api_returns_report_sections_for_last_7_days(
@@ -549,7 +549,7 @@ def test_public_digest_page_has_no_legacy_weekly_preview(
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
     monkeypatch.setattr(web_app_module, "SessionLocal", _DummySession)
-    monkeypatch.setattr(pages_routes, "NewsDigestRepo", _NewsDigestRepo)
+    monkeypatch.setattr(digest_usecases, "NewsDigestRepo", _NewsDigestRepo)
 
     client = TestClient(create_app())
 

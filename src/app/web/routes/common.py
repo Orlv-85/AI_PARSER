@@ -10,9 +10,7 @@ from fastapi import Query
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.config.settings import get_settings
-from app.storage.daily_signals import DailySignalRepo
-from app.storage.repos import WeeklyAnalyticsRepo
+from app.usecases.daily.signals_reads import stored_signals
 from app.web.models import DailySignalBrief, DailySignalsResponse
 
 _LOGGER = logging.getLogger(__name__)
@@ -50,20 +48,17 @@ def _read_daily_signals(
     report_date: date, *, session_local: Callable[[], Session]
 ) -> DailySignalsResponse:
     """Indexed reads of the stored snapshot and brief; never calls a provider."""
-    with session_local() as session:
-        repo = DailySignalRepo(session,
-                               comparable_from=get_settings().daily_signals_comparable_from)
-        row = repo.get_report(report_date)
-        payload = row.payload if row is not None else None
-        brief = _daily_signal_brief(report_date=report_date, row=repo.get_brief(report_date)) \
-            if row is not None else None
+    row, brief_row = stored_signals(session_local, report_date)
+    payload = row.payload if row is not None else None
+    brief = _daily_signal_brief(report_date=report_date, row=brief_row) \
+        if row is not None else None
     response = _daily_signals_response(report_date=report_date, payload=payload)
     if response.status != "unavailable":
         response.brief = brief
     return response
 
 
-def _resolve_weekly_default_report_date(*, repo: WeeklyAnalyticsRepo, today: date) -> date:
+def _resolve_weekly_default_report_date(*, repo: object, today: date) -> date:
     get_latest = getattr(repo, "get_latest_report_date", None)
     if callable(get_latest):
         try:

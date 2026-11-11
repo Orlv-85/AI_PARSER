@@ -4,6 +4,7 @@ covers:
   - src/app/web/routes/pages.py
   - src/app/web/bulletin_view.py
   - src/app/storage/page_views.py
+  - src/app/usecases/page_views.py
   - src/app/storage/migrations/versions/*page_views*.py
   - src/app/web/*.html
   - src/app/web/static/**
@@ -296,6 +297,8 @@ flowchart LR
 | --- | --- |
 | `routes/pages.py` | Thin page routes, module-level response/auth helpers, template rendering and placeholders; `_count_page` is scheduled after successful home/digest responses; `_bulletin_response` handles preview lookup, rendering and storage errors |
 | `bulletin_view.py`, `bulletin.html` | Escaped stored bulletin preview, status pages and adjacent-day links |
+| `../usecases/page_views.py` | `count_page_view`: one increment in its own session, committed |
+| `../usecases/digest.py`, `../usecases/collection_status.py`, `../usecases/bulletin/stored.py` (not covered) | stored digest, collection status and bulletin reads of the pages; handlers open no session |
 | `../storage/page_views.py` | `PageViewRepo`: atomic increment and read-only day/route totals; table `page_views` in `models_sql.py` |
 | `../storage/migrations/versions/a6b0180c0001_add_page_views.py` | Creates/drops `page_views`, composite day/route primary key |
 | `../cli/main.py` | Read-only `page-views` JSON command |

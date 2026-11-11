@@ -47,7 +47,7 @@ Groups decided 2026-11-11 (agent): one PR each, in this order; each removes its 
   `candidate_review.py`, with the review response models: use cases may not import `web/`);
   session-owning use cases for import, validate and overlaps; handlers keep HTTP errors only.
   Two engines: see `onboarding.md` Decisions.
-- [ ] T010 Plain reads: `web/routes/bulletin.py`, `news.py`, `period.py` (split 2026-11-11 (agent):
+- [x] T010 Plain reads: `web/routes/bulletin.py`, `news.py`, `period.py` (split 2026-11-11 (agent):
   about 20 session sites in the eight web files). Read use cases return stored rows; the
   handlers build the API answer after the session closes (no commit, so loaded rows stay readable).
 - [ ] T011 Daily signals and pages: `web/routes/common.py`, `signals.py`, `pages.py`.
