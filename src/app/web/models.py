@@ -1,7 +1,9 @@
+import json
 from datetime import date, datetime
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
+from pydantic_core import PydanticCustomError
 
 
 class WebUpdateSettings(BaseModel):
@@ -280,6 +282,94 @@ class SourceOnboardingCandidateListResponse(BaseModel):
     items: list[SourceOnboardingCandidateView]
     summary: SourceOnboardingBatchSummary
     filters: SourceOnboardingCandidateFilters
+
+
+# Error type of the body rules below; the handler returns its message as the string `detail`.
+WEB_BODY_ERROR = "web_body"
+
+
+def _body_error(message: str) -> PydanticCustomError:
+    return PydanticCustomError(WEB_BODY_ERROR, message)
+
+
+def _source_onboarding_id(value: object, field: str) -> int:
+    if isinstance(value, bool) or (isinstance(value, float) and not value.is_integer()):
+        raise _body_error(f"{field} must be an integer")
+    try:
+        parsed = int(cast(str | int | float, value))
+    except (TypeError, ValueError) as exc:
+        raise _body_error(f"{field} must be an integer") from exc
+    if parsed < 1:
+        raise _body_error(f"{field} must be >= 1")
+    return parsed
+
+
+def json_body(body: bytes) -> object:
+    """`body` decoded by stdlib json as Starlette's `request.json()` does (BOM, UTF-16/32, the last
+    of duplicate keys, lone surrogates); a body that is not JSON raises `ValueError`. The caller
+    validates the result with a body model (`model_validate`)."""
+    try:
+        return json.loads(body)
+    except RecursionError as exc:
+        raise ValueError("JSON nested too deeply") from exc
+
+
+class SourceOnboardingImportRequest(BaseModel):
+    """Body of `POST /api/source-onboarding/import`; rules in `usecases/sources/onboarding.md`."""
+
+    raw_text: str = Field(default="", validate_default=True)
+
+    @field_validator("raw_text", mode="before")
+    @classmethod
+    def _stripped_text(cls, value: object) -> str:
+        text = str(value).strip()
+        if not text:
+            raise _body_error("raw_text is required")
+        return text
+
+
+class SourceOnboardingValidateRequest(BaseModel):
+    """Body of `POST /api/source-onboarding/validate`; rules in `usecases/sources/onboarding.md`."""
+
+    batch_id: int | None = None
+    candidate_ids: list[int] | None = None
+
+    @field_validator("batch_id", mode="before")
+    @classmethod
+    def _batch_id(cls, value: object) -> int | None:
+        return None if value is None else _source_onboarding_id(value, "batch_id")
+
+    @field_validator("candidate_ids", mode="before")
+    @classmethod
+    def _candidate_ids(cls, value: object) -> list[int] | None:
+        if value is None:
+            return None
+        if not isinstance(value, list):
+            raise _body_error("candidate_ids must be a list of integers")
+        parsed: list[int] = []
+        for item in value:
+            if item is None:
+                raise _body_error("candidate_ids must be a list of integers")
+            parsed.append(_source_onboarding_id(item, "candidate_ids"))
+        return parsed
+
+    @model_validator(mode="after")
+    def _has_scope(self) -> SourceOnboardingValidateRequest:
+        if self.batch_id is None and not self.candidate_ids:
+            raise _body_error("batch_id or candidate_ids is required")
+        return self
+
+
+class LoginRequest(BaseModel):
+    """Body of `POST /api/auth/login`; rules in `web/pages.md`."""
+
+    username: str = ""
+    password: str = ""
+
+    @field_validator("username", "password", mode="before")
+    @classmethod
+    def _as_text(cls, value: object) -> str:
+        return str(value)
 
 
 class SourceOnboardingRejectRequest(BaseModel):

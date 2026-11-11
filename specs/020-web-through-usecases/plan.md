@@ -68,7 +68,9 @@ Order: 1, 2, 3, then the owner decides on 4. Step 1 first so steps 2-4 can only 
   (FR-005) and raise `PydanticCustomError` with the exact current string; a `model_validator`
   (`mode="after"`) does the scope check ("batch_id or candidate_ids is required"). Fields are
   declared in today's check order, so the first error is today's error.
-- Handler: `Model.model_validate_json(await request.body())`; on `ValidationError` it raises
+- Handler: `Model.model_validate(json_body(await request.body()))`: `json_body` decodes with
+  stdlib `json.loads` like `request.json()` (BOM, UTF-16/32, last duplicate key, lone
+  surrogates; `model_validate_json` rejects these, Astra review); on `ValidationError` it raises
   `HTTPException(422, errors()[0]["msg"])`; a JSON or type error of the whole body maps to the
   path's "required" string. Login keeps the early 200 when auth is off and parses inside
   `_login_response` (`test_page_router_handlers_only_delegate`).

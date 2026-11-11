@@ -23,7 +23,7 @@ from app.storage.models_sql import NewsDigestReport
 from app.storage.page_views import PageViewRepo
 from app.web.auth import verify_password
 from app.web.bulletin_view import render_bulletin_page
-from app.web.models import NewsCollectionStatusResponse
+from app.web.models import LoginRequest, NewsCollectionStatusResponse, json_body
 from app.web.period_view import home_line, month_nav_link, nav_link
 from app.web.routes import WebDeps
 from app.web.routes.bulletin import parse_day
@@ -222,9 +222,11 @@ async def _login_response(deps: WebDeps, request: Request) -> JSONResponse:
     signer = deps.signer
     if not deps.auth_enabled:
         return JSONResponse(status_code=200, content={"ok": True})
-    payload = await request.json()
-    username = str(payload.get("username", ""))
-    password = str(payload.get("password", ""))
+    try:
+        body = LoginRequest.model_validate(json_body(await request.body()))
+    except ValueError:  # not JSON or not an object: a failed login
+        body = LoginRequest()
+    username, password = body.username, body.password
     username_ok = bool(settings.auth_username) and username == settings.auth_username
     password_ok = bool(settings.auth_password_hash) and verify_password(
         password, settings.auth_password_hash

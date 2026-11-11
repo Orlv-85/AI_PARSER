@@ -95,7 +95,7 @@ and a string `detail`.
   runs until one call succeeds, then does nothing; one per-app lock serializes them; a failure
   propagates as now (503 from the handler).
 - **FR-005** The import, validate and login bodies are read with Pydantic models inside the
-  handler (`model_validate_json`), with the current rules kept: `raw_text` is `str(value).strip()`
+  handler (decoded by stdlib json as before, then `model_validate`), with the current rules kept: `raw_text` is `str(value).strip()`
   and must be non-empty; ids accept ints and numeric strings, reject bools, `null` items and
   values below 1; `batch_id` is checked before `candidate_ids`; scope check last; login credentials
   are `str(value)`. Status codes and `detail` strings stay the same for every case that does not
