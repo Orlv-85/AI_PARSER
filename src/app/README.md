@@ -11,7 +11,7 @@ Production jobs: `scripts/run_daily_fetch_job.sh`, `scripts/run_daily_digest_job
 | `config/` | `settings.py` (env `AINEWS_*`), `sources.py` (`sources.yaml` loader) |
 | `ingest/` | RSS/HTML fetching, page filtering, date evidence |
 | `core/` | Rules and calculations. Shared: `models.py`, `categories.py`, `canonicalize.py`, `jev.py`, `provider_costs.py` (paid provider prices, dollar caps), `canonical_json.py` (canonical JSON and its fingerprint). Packages: `ingestion/` (admission, scoring, dedup, `reject_policy.py` (conservative reject verdict)), `daily/` (rubric, provider requests, digest titles, daily signals calculations), `periodic/` (weekly and monthly signals calculations), `bulletin/` (builder, writer, world change), `world/` (world stream filter and reader), `sources/` (candidate fields and review rules) |
-| `usecases/` | Runs that open sessions and call repositories and providers: `ingestion/pipeline/` (fetch cycle), `daily/` (digest enrichment, daily signals run), `periodic/` (period runs), `bulletin/` (daily bulletin, writer run), `archive/` (article archive capture), `sources/` (onboarding, validation), world stream jobs (collect, screen, text, report) |
+| `usecases/` | Runs that open sessions and call repositories and providers: `ingestion/pipeline/` (fetch cycle), `daily/` (digest enrichment, daily signals run), `periodic/` (period runs), `bulletin/` (daily bulletin, day input, writer run), `archive/` (article archive capture), `sources/` (onboarding, validation), world stream jobs (collect, screen, text, report) |
 | `storage/` | SQLAlchemy models (`models_sql.py`), repositories, Alembic migrations, ledgers and journals; `journal_files.py` (private atomic file writes) |
 | `web/` | FastAPI app (`web/app.py`: auth middleware, router order), routers by area (`web/routes/`), API models (`web/models.py`), HTML templates |
 | `observability/` | Logging setup |
@@ -31,8 +31,8 @@ Imports go one way: `cli/`, `web/` -> `usecases/` -> `storage/` -> `core/` (spec
 - `storage/` may import `core/` types and constants it stores; it does not import `usecases/`,
   `cli/` or `web/`. Tests: `test_storage_imports_no_upper_layer`.
 - `storage/` does not import the calculating functions of `core/` named in
-  `tests/unit/test_layer_imports.py`; the use case calls them. Two files are listed there as
-  exceptions and that list only shrinks (spec 019, T010, T012). Tests:
+  `tests/unit/test_layer_imports.py`; the use case calls them. One file is listed there as an
+  exception and that list only shrinks (spec 019, T010). Tests:
   `test_storage_imports_calculations_only_in_listed_files`.
 - The import scan sees imports inside functions and modules loaded by a literal name; relative
   imports are not used. Tests: `test_imports_package_sees_every_import_form`,

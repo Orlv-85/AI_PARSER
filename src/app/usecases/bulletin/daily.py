@@ -13,10 +13,10 @@ from app.core.bulletin.phrases import load_phrases
 from app.core.bulletin.world_change import ASSESS_DEFAULT_MAX_USD, run_assessment
 from app.core.bulletin.writer import SourceText, write_bulletin
 from app.observability.logging import log_event
-from app.storage.bulletin_input import load_day_input
 from app.storage.bulletin_store import BulletinRepo
 from app.storage.bulletin_texts import load_sources
 from app.storage.world_change import WorldChangeRepo
+from app.usecases.bulletin.day_input import load_day_input
 from app.usecases.bulletin.writer_run import WRITER_MAX_USD_PER_DAY
 
 

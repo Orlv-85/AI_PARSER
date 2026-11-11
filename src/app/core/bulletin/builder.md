@@ -4,7 +4,7 @@ covers:
   - src/app/core/bulletin/builder*.py
   - src/app/core/bulletin/phrases*
   - src/app/core/bulletin/render.py
-  - src/app/storage/bulletin_input.py
+  - src/app/usecases/bulletin/day_input.py
 -->
 # Bulletin builder (bulletin, item 2)
 
@@ -154,7 +154,7 @@ flowchart LR
 ## Decisions
 
 - The core takes plain data (`DayInput`) and never reads the database: the loader
-  (`storage/bulletin_input.py`) is the edge. A test pins that the core imports no I/O module.
+  (`usecases/bulletin/day_input.py`) is the edge. A test pins that the core imports no I/O module.
 - Thresholds start at item 1's proposal (`MIN_CONFIDENCE` 0.7, `HARM_MIN` 0.7); they move after the
   FR-002 check and the first days.
 - Counts of the numbers line are stories of the signals' `event_counts`, not articles, so one launch
@@ -199,7 +199,7 @@ flowchart LR
 | `src/app/core/bulletin/phrases.json` | the phrase library (data) |
 | `src/app/core/bulletin/phrases.py` | `load_phrases`, validation and the never-list |
 | `src/app/core/bulletin/render.py` | `render_text` |
-| `src/app/storage/bulletin_input.py` | `load_day_input`: digest article ids, answers, signals, world; `_yesterday_story_keys`, `_bulletin_story_keys`: D-1 story URLs and title keys |
+| `src/app/usecases/bulletin/day_input.py` | `load_day_input`: digest article ids, answers, signals, world; `_yesterday_story_keys`, `_bulletin_story_keys`: D-1 story URLs and title keys |
 | `src/app/config/settings.py` | `world_stream_in_bulletin` |
 | `src/app/cli/main.py` | `bulletin build` |
 | `src/app/storage/bulletin_store.md` | `bulletin build` storage contract |

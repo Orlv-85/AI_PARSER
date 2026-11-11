@@ -12,10 +12,9 @@ CORE_USING_STORAGE = frozenset({"jev.py", "bulletin/world_change.py"})
 DYNAMIC_IMPORTERS = frozenset({"import_module", "__import__"})
 # core functions that calculate; a repository returns rows and the use case calls these.
 CALCULATIONS = frozenset({"reconcile", "digest_title", "digest_summary"})
-# storage files that still call them (spec 019, T010 and T012).
+# storage files that still call them (spec 019, T010).
 STORAGE_CALCULATING = {
     "daily_signals.py": {"reconcile", "digest_title", "digest_summary"},
-    "bulletin_input.py": {"digest_title"},
 }
 
 
