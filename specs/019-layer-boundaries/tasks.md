@@ -72,5 +72,5 @@ or the feature doc first, then the failing test, then the code; full gate before
   close) were written and seen passing on the old code first. `core/` imports no `storage/`.
   `core/jev.py` no longer imports `app.config` (one less file for T015).
 - [ ] T015 `ingest/` and `config/` have no place in the rule. `core/` imports `app.ingest` (3 files)
-  and `app.config` (2 files), `ingest/` imports `core/` back (3 files), and `config/sources.py`
+  and `app.config` (1 file since T014: `core/sources/review.py`), `ingest/` imports `core/` back (3 files), and `config/sources.py`
   loads `app.storage.models_sql` by name. Decide the place of each package, then extend the test.

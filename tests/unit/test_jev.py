@@ -369,6 +369,19 @@ def test_daily_scorer_opens_capped_admission_journal(tmp_path, monkeypatch, capl
     assert [r.args for r in usage] == [report]
 
 
+def test_daily_scorer_closes_journal_when_the_run_fails(tmp_path, monkeypatch, caplog) -> None:
+    monkeypatch.chdir(tmp_path)
+    settings = Settings(jev_enabled=True, jev_api_key="k", daily_enrichment_enabled=True,
+                        _env_file=None)
+    with caplog.at_level("INFO"), pytest.raises(RuntimeError, match="^run failed$"):
+        with jev_relevance_scorer(settings, getLogger("jev-test")) as scorer:
+            journal = scorer.payment_journal
+            raise RuntimeError("run failed")
+    with pytest.raises(sqlite3.ProgrammingError):
+        journal.db.execute("SELECT 1")
+    assert [r.getMessage() for r in caplog.records].count("daily_admission_usage") == 1
+
+
 def test_scorer_without_daily_enrichment_has_no_journal(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     settings = Settings(jev_enabled=True, jev_api_key="k", daily_enrichment_enabled=False,

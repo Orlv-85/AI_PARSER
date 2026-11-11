@@ -263,9 +263,11 @@ function. Each rule lists the tests that check it.
   `test_corrupt_accept_cache_requires_new_assessment`, `test_canonical_aliases_share_decision`.
 - With `daily_enrichment_enabled`, `jev_relevance_scorer` opens one payment journal per UTC day
   (`data/daily-admission/<day>/journal.sqlite3`, identity version `daily-admission-1`, fixed caps),
-  passes it to the scorer, logs `daily_admission_usage` with the journal report and closes it.
+  passes it to the scorer, logs `daily_admission_usage` with the journal report and closes it, also
+  when the run fails.
   Without it the scorer has no journal and nothing is written. The opener is a use case; `core/jev.py`
   only gets the journal. Tests: `test_daily_scorer_opens_capped_admission_journal`,
+  `test_daily_scorer_closes_journal_when_the_run_fails`,
   `test_scorer_without_daily_enrichment_has_no_journal`.
 - With the daily admission journal (`daily_enrichment_enabled`), a transport failure of a Jev call
   (timeout or dropped connection: the error types accepted by

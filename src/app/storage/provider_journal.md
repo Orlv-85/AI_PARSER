@@ -127,9 +127,11 @@ flowchart TD
 - `src/app/core/daily/provider_requests.py`: default keys, reservations and summary parsing;
   `src/app/core/provider_costs.py`: prices and explicit overload predicate;
   `src/app/core/canonical_json.py`: canonical serialization and fingerprints.
-- Callers: `src/app/core/jev.py`, `src/app/usecases/daily/enrichment.py`,
-  `src/app/core/bulletin/world_change.py`, `src/app/usecases/bulletin/writer_run.py`.
-  They choose journal identity, caps, retry policy and any custom key/reservation functions.
+- Openers (use cases): `src/app/usecases/ingestion/pipeline/scorer.py`,
+  `src/app/usecases/daily/enrichment.py`, `src/app/usecases/bulletin/assessor.py`,
+  `src/app/usecases/bulletin/writer_run.py`. They choose journal identity, caps, retry policy and
+  any custom key/reservation functions. `src/app/core/jev.py` and
+  `src/app/core/bulletin/world_change.py` only call the journal they are given.
 
 ## Tests
 

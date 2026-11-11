@@ -629,6 +629,17 @@ def test_open_assessor_logs_journal_usage_on_close(tmp_path, caplog):
         with open_assessor(Settings(_env_file=None), getLogger("t"), DAY, "0.05", root=tmp_path):
             pass
 
+def test_open_assessor_closes_journal_when_the_run_fails(tmp_path, caplog):
+    settings = Settings(_env_file=None, jev_api_key=SecretStr("k"))
+    with caplog.at_level("INFO"), pytest.raises(RuntimeError, match="^run failed$"):
+        with open_assessor(settings, getLogger("t"), DAY, "0.05", root=tmp_path) as assessor:
+            journal = assessor.payment_journal
+            raise RuntimeError("run failed")
+    with pytest.raises(sqlite3.ProgrammingError):
+        journal.db.execute("SELECT 1")
+    assert [r.getMessage() for r in caplog.records].count("bulletin_assess_usage") == 1
+
+
 def test_cli_rejects_max_usd_above_ceiling(maker):
     seed_digest(maker, 1)
     result = CliRunner().invoke(cli_main.app, [
