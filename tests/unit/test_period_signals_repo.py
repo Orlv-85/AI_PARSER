@@ -13,8 +13,11 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import Settings
 from app.storage.daily_signals import DailySignalRepo
-from app.storage.models_sql import Base, PeriodSignalReport
+from app.storage.models_sql import Article, Base, PeriodSignalReport
 from app.storage.period_signals import PeriodSignalRepo
+from app.usecases.daily.signals import add_override
+from app.usecases.daily.signals_recompute import recompute_reports
+from app.usecases.periodic import period_run as period_run_module
 from app.usecases.periodic.period_run import (
     PeriodRunError,
     PeriodRunOptions,
@@ -110,8 +113,8 @@ def test_changed_input_rewrites_only_that_period(maker):
     run(maker, backfill=2)
     seed_day(maker, W2 + timedelta(days=1), names=("Delta", "Echo", "Foxtrot", "Golf"))
     with maker() as session:
-        DailySignalRepo(session, comparable_from=COMPARABLE_FROM).recompute_reports(
-            W2 + timedelta(days=6), now=NOW)
+        recompute_reports(DailySignalRepo(session, comparable_from=COMPARABLE_FROM),
+                          W2 + timedelta(days=6), now=NOW)
         session.commit()
     again = run(maker, backfill=2)
     assert again["written"] == ["2026-10-19"]
@@ -121,10 +124,31 @@ def test_period_run_applies_entity_overrides(maker):
     seed_weeks(maker, W1, W2)
     run(maker, backfill=2)
     with maker() as session:
-        DailySignalRepo(session, comparable_from=COMPARABLE_FROM).add_override(
-            kind="alias", type_group_="artifact", match_key="bravo", target_base_key="alpha")
+        add_override(DailySignalRepo(session, comparable_from=COMPARABLE_FROM),
+                     kind="alias", type_group_="artifact", match_key="bravo",
+                     target_base_key="alpha")
         session.commit()
     assert run(maker, backfill=2)["written"] == ["2026-10-12", "2026-10-19"]
+
+
+
+def test_period_run_computes_from_the_digest_title_and_summary(maker, monkeypatch):
+    # T010 pin: the repository returns stored text; the period run applies the digest text.
+    seed_weeks(maker, W1, W2)
+    with maker() as session:
+        for article in session.scalars(select(Article)):
+            article.title = f"{article.title} (5 min read)"
+        session.commit()
+    seen = []
+    real = period_run_module.compute_period
+    monkeypatch.setattr(period_run_module, "compute_period",
+                        lambda period_input: seen.append(period_input) or real(period_input))
+    run(maker, backfill=2)
+    observations = [o for i in seen for items in i.observations.values() for o in items]
+    assert observations
+    assert all(o.title.startswith("Story ") and "min read" not in o.title for o in observations)
+    assert {o.summary for o in observations} == {"s"}
+
 
 
 def test_month_before_the_first_month_and_flag_off_do_nothing(maker):

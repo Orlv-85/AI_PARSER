@@ -11,7 +11,7 @@ Production jobs: `scripts/run_daily_fetch_job.sh`, `scripts/run_daily_digest_job
 | `config/` | `settings.py` (env `AINEWS_*`), `sources.py` (`sources.yaml` loader) |
 | `ingest/` | RSS/HTML fetching, page parsing, date evidence |
 | `core/` | Rules and calculations. Shared: `models.py`, `categories.py`, `canonicalize.py`, `jev.py`, `provider_costs.py` (paid provider prices, dollar caps), `provider_errors.py` (payment journal stop errors), `bot_identity.py` (declared bot user agent), `canonical_json.py` (canonical JSON and its fingerprint). Packages: `ingestion/` (admission, scoring, dedup, `page_filter.py` (non-news page rules), `reject_policy.py` (conservative reject verdict)), `daily/` (rubric, provider requests, digest titles, daily signals calculations), `periodic/` (weekly and monthly signals calculations), `bulletin/` (builder, writer, world change), `world/` (world stream filter and reader), `sources/` (candidate fields and review rules) |
-| `usecases/` | Runs that open sessions and call repositories and providers: `ingestion/pipeline/` (fetch cycle, Jev scorer with its journal), `daily/` (digest enrichment, daily signals run), `periodic/` (period runs), `bulletin/` (daily bulletin, day input, world change assessor with its journal, writer run), `archive/` (article archive capture), `sources/` (onboarding, validation, `sources.yaml` bootstrap into the database), world stream jobs (collect, screen, text, report) |
+| `usecases/` | Runs that open sessions and call repositories and providers: `ingestion/pipeline/` (fetch cycle, Jev scorer with its journal), `daily/` (digest enrichment, daily signals run and recompute), `periodic/` (period runs), `bulletin/` (daily bulletin, day input, world change assessor with its journal, writer run), `archive/` (article archive capture), `sources/` (onboarding, validation, `sources.yaml` bootstrap into the database), world stream jobs (collect, screen, text, report) |
 | `storage/` | SQLAlchemy models (`models_sql.py`), repositories, Alembic migrations, ledgers and journals; `journal_files.py` (private atomic file writes) |
 | `web/` | FastAPI app (`web/app.py`: auth middleware, router order), routers by area (`web/routes/`), API models (`web/models.py`), HTML templates |
 | `observability/` | Logging setup |
@@ -40,9 +40,8 @@ import.
   package of `app`; loading `sources.yaml` into the database is a use case
   (`usecases/sources/bootstrap.py`). Tests: `test_leaf_packages_import_no_app_package`.
 - `storage/` does not import the calculating functions of `core/` named in
-  `tests/unit/test_layer_imports.py`; the use case calls them. One file is listed there as an
-  exception and that list only shrinks (spec 019, T010). Tests:
-  `test_storage_imports_calculations_only_in_listed_files`.
+  `tests/unit/test_layer_imports.py`; the use case calls them. Tests:
+  `test_storage_imports_no_calculations`.
 - The import scan sees imports inside functions and modules loaded by a literal name; relative
   imports are not used. Tests: `test_imports_package_sees_every_import_form`,
   `test_app_has_no_relative_imports`.

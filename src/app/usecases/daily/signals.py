@@ -32,7 +32,15 @@ from app.core.daily.signals_brief import (
 )
 from app.core.daily.signals_brief import request_body as brief_body
 from app.core.daily.signals_brief import request_key as brief_key
-from app.core.daily.signals_entities import is_stopped, join, name_tokens
+from app.core.daily.signals_entities import (
+    Override,
+    evidence_classes,
+    is_stopped,
+    join,
+    name_tokens,
+    reconcile,
+    selectors_conflict,
+)
 from app.core.daily.signals_extract import (
     EXTRACTION_VERSION,
     MAX_INPUT_BYTES,
@@ -46,10 +54,11 @@ from app.core.daily.signals_extract import (
     source_text,
 )
 from app.core.provider_costs import microdollars
-from app.storage.daily_signals import DailySignalRepo
+from app.storage.daily_signals import DailySignalRepo, OverrideConflict
 from app.storage.daily_signals_ledger import LedgerStop, SignalsLedger
 from app.storage.journal_files import private_write
 from app.storage.models_sql import AIEntity, AIEntityOverride, Article
+from app.usecases.daily.signals_recompute import recompute_reports
 
 LOGGER = logging.getLogger(__name__)
 
@@ -339,8 +348,8 @@ def run_signals(session: Session, settings: Any, options: RunOptions, *,
                                          counts=counts)
     # Through the latest completed day, so a backfill never leaves later reports stale (F1).
     until = max(options.report_date, now().date() - timedelta(days=1))
-    result = repo.recompute_reports(until, all_days=options.recompute_all, since=days[0],
-                                    now=now())
+    result = recompute_reports(repo, until, all_days=options.recompute_all, since=days[0],
+                               now=now())
     session.commit()
     report.update(reports_written=[d.isoformat() for d in result.written],
                   reports_unchanged=result.unchanged, reports_kept=result.kept,
@@ -393,6 +402,38 @@ def _selector(repo: DailySignalRepo, entity_id: int) -> tuple[AIEntity, str, str
     return entity, entity.type_group, parts[2], vendor
 
 
+def add_override(repo: DailySignalRepo, *, kind: str, type_group_: str, match_key: str,
+                 target_base_key: str, vendor_class: str = "", target_vendor_class: str = "",
+                 target_entity_key: str | None = None,
+                 note: str | None = None) -> AIEntityOverride:
+    """Add an operator override; OverrideConflict when another override owns a selector."""
+    if kind not in ("alias", "merge"):
+        raise ValueError(kind)
+    existing = repo.overrides()
+    if target_entity_key is None:
+        # Reuse the manual entity that already owns the target selector, if any.
+        target_entity_key = next(
+            (o.target_entity_key for o in existing if o.type_group == type_group_
+             and o.target_base_key == target_base_key
+             and o.target_vendor_class == target_vendor_class), None)
+    candidate = Override(override_id=0, kind=kind, type_group=type_group_,
+                         match_key=match_key, vendor_class=vendor_class,
+                         target_base_key=target_base_key,
+                         target_vendor_class=target_vendor_class,
+                         target_entity_key=target_entity_key or "manual:new")
+    if (match_key, vendor_class) == (target_base_key, target_vendor_class) and kind == "merge":
+        raise OverrideConflict("source and target are the same selector")
+    evidence = repo.load_evidence()[0]
+    conflict = selectors_conflict(existing, candidate, evidence_classes(evidence).resolve,
+                                  reconcile(evidence).resolve_base)
+    if conflict is not None:
+        raise OverrideConflict(f"selector owned by override {conflict.override_id}")
+    return repo.insert_override(kind=kind, type_group_=type_group_, match_key=match_key,
+                                vendor_class=vendor_class, target_base_key=target_base_key,
+                                target_vendor_class=target_vendor_class,
+                                target_entity_key=target_entity_key, note=note)
+
+
 def merge_entities(repo: DailySignalRepo, source_id: int, target_id: int) -> AIEntityOverride:
     source, group, base, vendor = _selector(repo, source_id)
     target, target_group, target_base, target_vendor = _selector(repo, target_id)
@@ -402,7 +443,7 @@ def merge_entities(repo: DailySignalRepo, source_id: int, target_id: int) -> AIE
     if group != target_group:
         raise EntityCommandError(f"type groups differ: {group} vs {target_group}")
     manual = target.entity_key if target.entity_key.startswith("manual:") else None
-    return repo.add_override(kind="merge", type_group_=group, match_key=base, vendor_class=vendor,
+    return add_override(repo, kind="merge", type_group_=group, match_key=base, vendor_class=vendor,
                              target_base_key=target_base, target_vendor_class=target_vendor,
                              target_entity_key=manual,
                              note=f"merge {source.display_name} -> {target.display_name}"[:255])
@@ -414,7 +455,7 @@ def alias_entity(repo: DailySignalRepo, entity_id: int, name: str) -> AIEntityOv
     if is_stopped(name_tokens(name, target.type)):
         raise EntityCommandError(f"alias {name!r} is empty or a generic term")
     manual = target.entity_key if target.entity_key.startswith("manual:") else None
-    return repo.add_override(kind="alias", type_group_=group, match_key=alias,
+    return add_override(repo, kind="alias", type_group_=group, match_key=alias,
                              target_base_key=base, target_vendor_class=vendor,
                              target_entity_key=manual,
                              note=f"alias {name} -> {target.display_name}"[:255])

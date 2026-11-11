@@ -54,6 +54,7 @@ from app.usecases.daily.signals import (
     merge_entities,
     run_signals,
 )
+from app.usecases.daily.signals_recompute import recompute_reports
 from app.usecases.ingestion.pipeline import run_fetch_cycle
 from app.usecases.periodic.period_run import PeriodRunError, PeriodRunOptions, run_periods
 from app.usecases.sources.onboarding import import_source_candidates
@@ -250,7 +251,7 @@ def _entity_command(action) -> None:
             session.rollback()
             typer.echo(json.dumps({"state": "refused", "error": str(exc)}))
             raise typer.Exit(1) from exc
-        result = repo.recompute_reports(datetime.now(UTC).date() - timedelta(days=1))
+        result = recompute_reports(repo, datetime.now(UTC).date() - timedelta(days=1))
         session.commit()
         output["reports_written"] = [d.isoformat() for d in result.written]
     typer.echo(json.dumps(output, sort_keys=True))

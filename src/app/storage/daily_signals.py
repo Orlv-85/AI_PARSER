@@ -3,8 +3,7 @@ derived entities, overrides and stored snapshots."""
 import json
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -13,31 +12,20 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.canonicalize import canonical_url_hash
-from app.core.daily.signals_brief import digest_summary
 from app.core.daily.signals_compute import (
-    METHODOLOGY_VERSION,
     ArticleObs,
     DayCoverage,
     EntityMention,
-    LexicalHistory,
-    SnapshotInput,
-    Thresholds,
-    compute_snapshot,
-    payload_hash,
 )
 from app.core.daily.signals_entities import (
     Mention,
     Override,
     Reconciliation,
-    evidence_classes,
     join,
     name_tokens,
-    reconcile,
-    selectors_conflict,
     type_group,
 )
 from app.core.daily.signals_extract import EXTRACTION_VERSION, EXTRACTION_VERSIONS, Extraction
-from app.core.daily.titles import digest_title
 from app.storage.models_sql import (
     AIEntity,
     AIEntityOverride,
@@ -52,9 +40,7 @@ from app.storage.models_sql import (
     SignalMention,
 )
 
-RECOMPUTE_DAYS = 400
-# A stored day this far before the latest day is settled (signals.md, "Scope and days").
-SETTLED_DAYS = 14
+# Statuses of a stored day that can settle (SETTLED_DAYS in usecases/daily/signals_recompute.py).
 SETTLED_STATUSES = frozenset({"ready", "building_history"})
 
 
@@ -85,16 +71,6 @@ def _same_article(table: Any) -> Any:
 
 def _version_rank(version: str) -> int:
     return EXTRACTION_VERSIONS.index(version) if version in EXTRACTION_VERSIONS else -1
-
-
-@dataclass(frozen=True)
-class RecomputeResult:
-    written: list[date]
-    unchanged: int
-    entities: int
-    reconciliation: Reconciliation
-    kept: int = 0  # settled days and days that lost articles, left as stored
-    lost_articles: tuple[date, ...] = ()
 
 
 class DailySignalRepo:  # pylint: disable=too-many-public-methods
@@ -367,31 +343,11 @@ class DailySignalRepo:  # pylint: disable=too-many-public-methods
                 for o in self.session.scalars(
                     select(AIEntityOverride).order_by(AIEntityOverride.id))]
 
-    def add_override(self, *, kind: str, type_group_: str, match_key: str, target_base_key: str,
-                     vendor_class: str = "", target_vendor_class: str = "",
-                     target_entity_key: str | None = None,
-                     note: str | None = None) -> AIEntityOverride:
-        if kind not in ("alias", "merge"):
-            raise ValueError(kind)
-        existing = self.overrides()
-        if target_entity_key is None:
-            # Reuse the manual entity that already owns the target selector, if any.
-            target_entity_key = next(
-                (o.target_entity_key for o in existing if o.type_group == type_group_
-                 and o.target_base_key == target_base_key
-                 and o.target_vendor_class == target_vendor_class), None)
-        candidate = Override(override_id=0, kind=kind, type_group=type_group_,
-                             match_key=match_key, vendor_class=vendor_class,
-                             target_base_key=target_base_key,
-                             target_vendor_class=target_vendor_class,
-                             target_entity_key=target_entity_key or "manual:new")
-        if (match_key, vendor_class) == (target_base_key, target_vendor_class) and kind == "merge":
-            raise OverrideConflict("source and target are the same selector")
-        evidence = self.load_evidence()[0]
-        conflict = selectors_conflict(existing, candidate, evidence_classes(evidence).resolve,
-                                      reconcile(evidence).resolve_base)
-        if conflict is not None:
-            raise OverrideConflict(f"selector owned by override {conflict.override_id}")
+    def insert_override(self, *, kind: str, type_group_: str, match_key: str,
+                        target_base_key: str, vendor_class: str, target_vendor_class: str,
+                        target_entity_key: str | None, note: str | None) -> AIEntityOverride:
+        """Insert one checked override (usecases/daily/signals.py, `add_override`); a new manual
+        entity gets the key `manual:<id>`. OverrideConflict when the selector row exists."""
         row = AIEntityOverride(kind=kind, type_group=type_group_, match_key=match_key,
                                vendor_class=vendor_class, target_base_key=target_base_key,
                                target_vendor_class=target_vendor_class,
@@ -480,7 +436,7 @@ class DailySignalRepo:  # pylint: disable=too-many-public-methods
                 .join(NewsDigestItem, NewsDigestItem.group_id == NewsDigestGroup.id)
                 .where(NewsDigestReport.report_date.in_(sorted(wanted)))
                 .order_by(NewsDigestGroup.position, NewsDigestItem.position)):
-            summaries.setdefault((day, url), digest_summary(summary))
+            summaries.setdefault((day, url), str(summary or ""))
         out: dict[date, list[ArticleObs]] = defaultdict(list)
         for scope, article in self.session.execute(
                 select(DailySignalScope, Article)
@@ -494,7 +450,7 @@ class DailySignalRepo:  # pylint: disable=too-many-public-methods
                               key=lambda m: (m.entity_key, m.role))
             out[scope.scope_day].append(ArticleObs(
                 article_id=article.id, scope_day=scope.scope_day,
-                title=str(digest_title(article.title)), url=scope.item_url,
+                title=str(article.title), url=scope.item_url,
                 publisher=scope.publisher, published_at=article.published_at,
                 event_type=events[identity][1], mentions=tuple(mentions),
                 summary=summaries.get((scope.scope_day, scope.item_url), "")))
@@ -511,7 +467,7 @@ class DailySignalRepo:  # pylint: disable=too-many-public-methods
 
     def digest_items(self, day: date) -> list[dict[str, str]]:
         """Published digest items of a day in digest order (brief input)."""
-        return [{"title": title, "summary": digest_summary(summary), "url": url,
+        return [{"title": title, "summary": str(summary or ""), "url": url,
                  "publisher": publisher_group(url, self.publisher_overrides)}
                 for title, summary, url in self.session.execute(
                     select(NewsDigestItem.title, NewsDigestItem.summary, NewsDigestItem.url)
@@ -579,8 +535,8 @@ class DailySignalRepo:  # pylint: disable=too-many-public-methods
         self.session.flush()
         return row
 
-    def _keep(self, days: list[date], coverage: Mapping[date, DayCoverage], *, all_days: bool,
-              settled_before: date) -> tuple[set[date], set[date]]:
+    def stored_days_to_keep(self, days: list[date], coverage: Mapping[date, DayCoverage], *,
+                            all_days: bool, settled_before: date) -> tuple[set[date], set[date]]:
         """(days to leave as stored, those of them that lost matched articles)."""
         keep: set[date] = set()
         lost: set[date] = set()
@@ -601,48 +557,5 @@ class DailySignalRepo:  # pylint: disable=too-many-public-methods
                 keep.add(day)
         return keep, lost
 
-    def recompute_reports(self, until: date, *, all_days: bool = False,
-                          since: date | None = None, now: datetime | None = None,
-                          thresholds: Thresholds | None = None) -> RecomputeResult:
-        """Reconcile entities and recompute every comparable published day up to `until`;
-        write only reports that are missing or whose payload hash changed.
 
-        A stored day before `since` (the run's first day; default `until`) and more than
-        SETTLED_DAYS before `until` with a settled status is left as stored unless `all_days`.
-        A day that lost matched articles since its snapshot is left as stored in every mode."""
-        evidence, rows = self.load_evidence()
-        result = reconcile(evidence, self.overrides())
-        ids = self.apply_reconciliation(result, rows)
-        coverage = self.coverage()
-        start = self.comparable_from if all_days else \
-            max(self.comparable_from, until - timedelta(days=RECOMPUTE_DAYS))
-        targets = sorted(d for d, c in coverage.items()
-                         if start <= d <= until and c.kind == "signals")
-        keep, lost = self._keep(targets, coverage, all_days=all_days, settled_before=min(
-            since or until, until - timedelta(days=SETTLED_DAYS)))
-        targets = [d for d in targets if d not in keep]
-        t = thresholds or Thresholds()
-        span = 2 * t.window_days
-        needed = {d - timedelta(days=i) for d in targets for i in range(span)}
-        observations = self.observations(result, rows, needed)
-        history = LexicalHistory(self.history_texts(until))
-        written, unchanged = [], 0
-        generated = now or _now()
-        for day in targets:
-            payload = compute_snapshot(SnapshotInput(
-                day=day, observations=observations, coverage=coverage, entities=result.entities,
-                entity_ids=ids, extraction_version=EXTRACTION_VERSION, generated_at=generated,
-                comparable_from=self.comparable_from, thresholds=t, history=history))
-            digest = payload_hash(payload)
-            stored = self.get_report(day)
-            if stored is not None and stored.payload_hash == digest:
-                unchanged += 1
-                continue
-            self.save_report(day, payload, digest)
-            written.append(day)
-        return RecomputeResult(written=written, unchanged=unchanged,
-                               entities=len(result.entities), reconciliation=result,
-                               kept=len(keep), lost_articles=tuple(sorted(lost)))
-
-
-__all__ = ["METHODOLOGY_VERSION", "DailySignalRepo", "OverrideConflict", "RecomputeResult"]
+__all__ = ["DailySignalRepo", "OverrideConflict"]

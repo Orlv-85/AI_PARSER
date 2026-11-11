@@ -8,6 +8,7 @@ from sqlalchemy import create_engine, event, func, select
 from sqlalchemy.orm import Session
 
 from app.core.canonicalize import canonical_url_hash
+from app.core.daily.signals_entities import reconcile
 from app.core.daily.signals_extract import ExtractedEntity, Extraction
 from app.storage import daily_signals as module
 from app.storage.daily_signals import DailySignalRepo, OverrideConflict
@@ -23,6 +24,9 @@ from app.storage.models_sql import (
     SignalMention,
 )
 from app.usecases.archive.capture import prune_articles
+from app.usecases.daily import signals_recompute
+from app.usecases.daily.signals import add_override
+from app.usecases.daily.signals_recompute import digest_text, recompute_reports
 
 COMPARABLE_FROM = date(2026, 10, 10)
 D = date(2026, 10, 16)
@@ -210,10 +214,10 @@ def test_reconciliation_persists_stable_ids_and_inactive(session, repo):
     digest(session, D, a.url)
     repo.replace_membership(D)
     repo.save_extraction(a, extraction(model("Atlas"), model("Bravo")), content_hash="h1")
-    repo.recompute_reports(D, now=NOW)
+    recompute_reports(repo, D, now=NOW)
     ids = dict(session.execute(select(AIEntity.entity_key, AIEntity.id)).all())
     repo.save_extraction(a, extraction(model("Atlas")), content_hash="h2")
-    repo.recompute_reports(D, now=NOW)
+    recompute_reports(repo, D, now=NOW)
     rows = {e.entity_key: e for e in session.scalars(select(AIEntity))}
     assert rows["auto:artifact:atlas"].id == ids["auto:artifact:atlas"]
     assert rows["auto:artifact:atlas"].active and not rows["auto:artifact:bravo"].active
@@ -229,25 +233,25 @@ def test_overrides_stored_applied_refused_and_deleted(session, repo):
     repo.replace_membership(D)
     repo.save_extraction(a, extraction(model("GPT-6")), content_hash="h")
     repo.save_extraction(b, extraction(model("GPT-6 Astra", new=True)), content_hash="h")
-    repo.recompute_reports(D, now=NOW)
+    recompute_reports(repo, D, now=NOW)
     assert [i["name"] for i in json.loads(repo.get_report(D).payload)["new"]] == ["GPT-6 Astra"]
-    row = repo.add_override(kind="alias", type_group_="artifact", match_key="gpt6astra",
+    row = add_override(repo, kind="alias", type_group_="artifact", match_key="gpt6astra",
                             target_base_key="gpt6")
     assert row.target_entity_key == f"manual:{row.id}"
-    repo.recompute_reports(D, now=NOW)
+    recompute_reports(repo, D, now=NOW)
     assert json.loads(repo.get_report(D).payload)["new"] == []
     assert {m.entity_key for m in session.scalars(select(SignalMention))} == {row.target_entity_key}
     with pytest.raises(OverrideConflict):
-        repo.add_override(kind="merge", type_group_="artifact", match_key="gpt6",
+        add_override(repo, kind="merge", type_group_="artifact", match_key="gpt6",
                           target_base_key="gpt7")
     with pytest.raises(OverrideConflict):
-        repo.add_override(kind="alias", type_group_="artifact", match_key="gpt6astra",
+        add_override(repo, kind="alias", type_group_="artifact", match_key="gpt6astra",
                           target_base_key="gpt6")
-    second = repo.add_override(kind="merge", type_group_="artifact", match_key="gpt6sol",
+    second = add_override(repo, kind="merge", type_group_="artifact", match_key="gpt6sol",
                                target_base_key="gpt6")
     assert second.target_entity_key == row.target_entity_key
     assert repo.delete_override(row.id) and not repo.delete_override(row.id)
-    repo.recompute_reports(D, now=NOW)
+    recompute_reports(repo, D, now=NOW)
     assert [i["name"] for i in json.loads(repo.get_report(D).payload)["new"]] == ["GPT-6 Astra"]
 
 
@@ -273,7 +277,7 @@ def test_first_seen_independent_of_insertion_order(tmp_path):
                 repo.replace_membership(day)
                 repo.save_extraction(article, extraction(model("Atlas"), model(f"Only {day}")),
                                      content_hash="h")
-            repo.recompute_reports(D, now=NOW)
+            recompute_reports(repo, D, now=NOW)
             results.append(first_seen(session))
         engine.dispose()
     assert results[0] == results[1] == results[2]
@@ -290,10 +294,10 @@ def test_correction_moves_first_seen_later(session, repo):
     repo.replace_membership(D)
     repo.save_extraction(a, extraction(model("Atlas")), content_hash="h")
     repo.save_extraction(b, extraction(model("Atlas")), content_hash="h")
-    repo.recompute_reports(D, now=NOW)
+    recompute_reports(repo, D, now=NOW)
     assert first_seen(session)["auto:artifact:atlas"] == early
     repo.save_extraction(a, extraction(model("Bravo")), content_hash="h2")
-    repo.recompute_reports(D, now=NOW)
+    recompute_reports(repo, D, now=NOW)
     assert first_seen(session)["auto:artifact:atlas"] == D
 
 
@@ -307,7 +311,7 @@ def test_prune_keeps_evidence_and_first_seen_then_purge(session, repo):
     repo.replace_membership(D)
     repo.save_extraction(old, extraction(model("Atlas")), content_hash="h")
     repo.save_extraction(new, extraction(model("Atlas", new=True)), content_hash="h")
-    repo.recompute_reports(D, now=NOW)
+    recompute_reports(repo, D, now=NOW)
     old_id = old.id
     deleted, _ = prune_articles(session, older_than_days=365)
     session.flush()
@@ -316,11 +320,11 @@ def test_prune_keeps_evidence_and_first_seen_then_purge(session, repo):
     assert session.scalar(select(func.count(ArticleSignal.id))) == 1
     assert session.scalar(select(func.count(DailySignalScope.id))) == 1
     assert len(mentions(session, old_id)) == 1
-    repo.recompute_reports(D, now=NOW)
+    recompute_reports(repo, D, now=NOW)
     assert first_seen(session)["auto:artifact:atlas"] == early
     assert json.loads(repo.get_report(D).payload)["new"] == []
     assert repo.purge_evidence(old_id) == 1
-    repo.recompute_reports(D, now=NOW)
+    recompute_reports(repo, D, now=NOW)
     assert first_seen(session)["auto:artifact:atlas"] == D
     assert [i["name"] for i in json.loads(repo.get_report(D).payload)["new"]] == ["Atlas"]
 
@@ -335,13 +339,13 @@ def test_version_bump_of_one_day_keeps_other_reports(session, repo, monkeypatch)
         repo.replace_membership(day)
         repo.save_extraction(articles[day], extraction(model("Atlas"), model(f"Solo {day.day}")),
                              content_hash="h", version="v1")
-    repo.recompute_reports(D, now=NOW)
+    recompute_reports(repo, D, now=NOW)
     before = {r.report_date: r.payload_hash for r in session.scalars(select(DailySignalReport))}
     seen = first_seen(session)
     repo.save_extraction(articles[D], extraction(model("Atlas"), model("Solo 16")),
                          content_hash="h", version="v2")
-    result = repo.recompute_reports(D, now=NOW)
-    assert result.written == [] and first_seen(session) == seen
+    result = recompute_reports(repo, D, now=NOW)
+    assert not result.written and first_seen(session) == seen
     after = {r.report_date: r.payload_hash for r in session.scalars(select(DailySignalReport))}
     assert after == before
 
@@ -357,11 +361,11 @@ def test_recompute_creates_missing_and_rewrites_only_changed(session, repo):
         digest(session, day, article.url)
         repo.replace_membership(day)
         repo.save_extraction(article, extraction(model("Atlas")), content_hash="h")
-    first = repo.recompute_reports(D, now=NOW)
+    first = recompute_reports(repo, D, now=NOW)
     assert first.written == [D - timedelta(days=1), D]
     assert repo.get_report(legacy) is None
-    second = repo.recompute_reports(D, now=NOW + timedelta(hours=1))
-    assert second.written == [] and second.unchanged == 2
+    second = recompute_reports(repo, D, now=NOW + timedelta(hours=1))
+    assert not second.written and second.unchanged == 2
     stored = repo.get_report(D)
     payload = json.loads(stored.payload)
     assert stored.status == payload["status"] == "building_history"
@@ -380,10 +384,10 @@ def test_coverage_only_change_updates_history_note(session, repo):
     digest(session, D, today.url)
     repo.replace_membership(D)
     repo.save_extraction(today, extraction(model("Atlas")), content_hash="h")
-    repo.recompute_reports(D, now=NOW)
+    recompute_reports(repo, D, now=NOW)
     assert json.loads(repo.get_report(D).payload)["novelty_history_days"] == 0
     repo.save_extraction(other, extraction(model("Charlie")), content_hash="h")
-    assert repo.recompute_reports(D, now=NOW).written == [D]
+    assert recompute_reports(repo, D, now=NOW).written == [D]
     assert json.loads(repo.get_report(D).payload)["novelty_history_days"] == 1
 
 
@@ -393,14 +397,14 @@ def test_family_only_change_removes_new_item(session, repo):
     repo.replace_membership(D)
     repo.save_extraction(today, extraction(model("Nemotron 3.5 Bolt 74B-A9B", new=True)),
                          content_hash="h")
-    repo.recompute_reports(D, now=NOW)
+    recompute_reports(repo, D, now=NOW)
     assert len(json.loads(repo.get_report(D).payload)["new"]) == 1
     early = D - timedelta(days=3)
     old = add_article(session, "https://p.com/old")
     digest(session, early, old.url)
     repo.replace_membership(early)
     repo.save_extraction(old, extraction(model("Nemotron 3.5 Bolt 74B")), content_hash="h")
-    assert D in repo.recompute_reports(D, now=NOW).written
+    assert D in recompute_reports(repo, D, now=NOW).written
     assert json.loads(repo.get_report(D).payload)["new"] == []
 
 
@@ -411,20 +415,20 @@ def test_recompute_bound_and_all_days(session, repo):
         digest(session, day, article.url)
         repo.replace_membership(day)
         repo.save_extraction(article, extraction(model("Atlas")), content_hash="h")
-    assert repo.recompute_reports(days[1], now=NOW).written == [days[1]]
-    assert repo.recompute_reports(days[1], now=NOW, all_days=True).written == [days[0]]
+    assert recompute_reports(repo, days[1], now=NOW).written == [days[1]]
+    assert recompute_reports(repo, days[1], now=NOW, all_days=True).written == [days[0]]
 
 
 def _settled_day_with_new_item(session, repo):
     """Day D with New "Atlas", a later day L that makes D settled, then earlier evidence of
     "Atlas" (D-3) that would remove it from D's New on a recompute."""
-    later = D + timedelta(days=module.SETTLED_DAYS + 6)
+    later = D + timedelta(days=signals_recompute.SETTLED_DAYS + 6)
     for day, name in ((D, "Atlas"), (later, "Bravo")):
         article = add_article(session, f"https://p.com/{day}")
         digest(session, day, article.url)
         repo.replace_membership(day)
         repo.save_extraction(article, extraction(model(name, new=True)), content_hash="h")
-    repo.recompute_reports(later, now=NOW)
+    recompute_reports(repo, later, now=NOW)
     assert [i["name"] for i in json.loads(repo.get_report(D).payload)["new"]] == ["Atlas"]
     early = D - timedelta(days=3)
     old = add_article(session, "https://p.com/early")
@@ -436,15 +440,15 @@ def _settled_day_with_new_item(session, repo):
 
 def test_settled_day_keeps_its_snapshot(session, repo):
     later = _settled_day_with_new_item(session, repo)
-    result = repo.recompute_reports(later, now=NOW)
-    assert D not in result.written and result.kept >= 1 and result.lost_articles == ()
+    result = recompute_reports(repo, later, now=NOW)
+    assert D not in result.written and result.kept >= 1 and not result.lost_articles
     assert [i["name"] for i in json.loads(repo.get_report(D).payload)["new"]] == ["Atlas"]
 
 
 @pytest.mark.parametrize("call", [{"since": D}, {"all_days": True}])
 def test_run_days_and_recompute_all_rewrite_settled_days(session, repo, call):
     later = _settled_day_with_new_item(session, repo)
-    assert D in repo.recompute_reports(later, now=NOW, **call).written
+    assert D in recompute_reports(repo, later, now=NOW, **call).written
     assert json.loads(repo.get_report(D).payload)["new"] == []
 
 
@@ -456,13 +460,13 @@ def test_day_that_lost_articles_keeps_its_snapshot(session, repo, all_days):
     repo.replace_membership(D)
     for article in (old, new):
         repo.save_extraction(article, extraction(model("Atlas")), content_hash="h")
-    repo.recompute_reports(D, now=NOW)
+    recompute_reports(repo, D, now=NOW)
     before = repo.get_report(D).payload_hash
     prune_articles(session, older_than_days=365)
     session.flush()
     session.expire_all()
-    result = repo.recompute_reports(D, now=NOW, all_days=all_days)
-    assert result.written == [] and result.lost_articles == (D,)
+    result = recompute_reports(repo, D, now=NOW, all_days=all_days)
+    assert not result.written and result.lost_articles == (D,)
     stored = repo.get_report(D)
     assert stored.payload_hash == before
     assert json.loads(stored.payload)["coverage"]["extracted"] == 2
@@ -501,12 +505,12 @@ def test_synthetic_year_recompute_time(session, repo, capsys):
             repo.save_extraction(article, extraction(*[model(n) for n in rng.sample(names, 4)]),
                                  content_hash="h")
     began = time.perf_counter()
-    first = repo.recompute_reports(start + timedelta(days=59), now=NOW)
+    first = recompute_reports(repo, start + timedelta(days=59), now=NOW)
     elapsed = time.perf_counter() - began
     began = time.perf_counter()
-    second = repo.recompute_reports(start + timedelta(days=59), now=NOW)
+    second = recompute_reports(repo, start + timedelta(days=59), now=NOW)
     again = time.perf_counter() - began
-    assert len(first.written) == 60 and second.written == []
+    assert len(first.written) == 60 and not second.written
     with capsys.disabled():
         print(f"\n60 days x 20 articles x 4 mentions: first recompute {elapsed:.2f}s, "
               f"unchanged recompute {again:.2f}s")
@@ -541,7 +545,7 @@ def test_reused_article_id_without_fk_enforcement_inherits_nothing(tmp_path):
         evidence, rows = repo.load_evidence()
         assert {(rows[m.mention_id].url_canonical_hash, m.scope_day) for m in evidence} == {
             (canonical_url_hash("https://a.com/old"), d1)}
-        result = repo.recompute_reports(D, now=NOW)
+        result = recompute_reports(repo, D, now=NOW)
         observed = repo.observations(result.reconciliation, rows, [d1, D])
         assert observed.get(d1, []) == [] and observed.get(D, []) == []
         repo.save_extraction(reused, extraction(model("Bravo")), content_hash="h2")
@@ -577,7 +581,7 @@ def test_title_only_history_suppresses_new_through_digest_text(session, repo):
     repo.replace_membership(D)
     repo.save_extraction(a, extraction(("Surface Laptop Ultra", "hardware", "primary", True)),
                          content_hash="h")
-    repo.recompute_reports(D, now=NOW)
+    recompute_reports(repo, D, now=NOW)
     payload = json.loads(repo.get_report(D).payload)
     assert payload["new"] == []
     assert payload["new_suppressed"][0]["day"] == "2026-10-07"
@@ -596,7 +600,7 @@ def test_lexical_history_reads_digest_text_not_article_summaries(session, repo):
     digest(session, D, a.url)
     repo.replace_membership(D)
     repo.save_extraction(a, extraction(model("Muse Spark Open", True)), content_hash="h")
-    repo.recompute_reports(D, now=NOW)
+    recompute_reports(repo, D, now=NOW)
     payload = json.loads(repo.get_report(D).payload)
     assert [i["name"] for i in payload["new"]] == ["Muse Spark Open"]
 
@@ -614,9 +618,11 @@ def test_observations_carry_the_digest_summary_of_that_day(session, repo):
     for article in (shared, other):
         repo.save_extraction(article, extraction(model("Atlas")), content_hash="h")
     evidence, rows = repo.load_evidence()
-    result = module.reconcile(evidence, repo.overrides())
+    result = reconcile(evidence, repo.overrides())
     repo.apply_reconciliation(result, rows)
-    obs = repo.observations(result, rows, [D - timedelta(days=1), D])
+    stored = repo.observations(result, rows, [D - timedelta(days=1), D])
+    assert {o.summary for items in stored.values() for o in items} >= {"None"}
+    obs = digest_text(stored)
     summaries = {(d, o.url): o.summary for d, items in obs.items() for o in items}
     # N1: save_digest stores a None summary as the string "None"; 007 reads it as "".
     assert session.scalar(select(NewsDigestItem.summary).where(
@@ -624,9 +630,10 @@ def test_observations_carry_the_digest_summary_of_that_day(session, repo):
     assert summaries == {(D - timedelta(days=1), shared.url): "Day one text.",
                          (D - timedelta(days=1), other.url): "",
                          (D, shared.url): "Day two text.", (D, other.url): ""}
+    # The repository returns the stored text; the brief packet reads "None" as "" (ArticleRefs).
     items = repo.digest_items(D)
     assert [(i["url"], i["summary"], i["publisher"]) for i in items] == [
-        (shared.url, "Day two text.", "a.com"), (other.url, "", "b.com")]
+        (shared.url, "Day two text.", "a.com"), (other.url, "None", "b.com")]
     assert repo.digest_items(D + timedelta(days=1)) == []
 
 
@@ -653,3 +660,31 @@ def test_publisher_group_uses_registrable_domain_and_overrides() -> None:
     assert group("https://www.example.com/a", {"www.example.com": "Example"}) == "Example"
     assert group("https://blog.example.com/a", {"example.com": "Example"}) == "Example"
     assert group("not a url", {}) == "unknown"
+
+
+def test_report_uses_the_digest_title_of_an_article(session, repo):
+    # T010 pin: the article title reaches the report without aggregator decorations.
+    a = add_article(session, "https://a.com/1", title="Atlas ships agents (5 min read)")
+    digest(session, D, a.url)
+    repo.replace_membership(D)
+    repo.save_extraction(a, extraction(model("Atlas", True)), content_hash="h")
+    recompute_reports(repo, D, now=NOW)
+    payload = repo.get_report(D).payload
+    assert "Atlas ships agents" in payload
+    assert "min read" not in payload
+
+
+def test_add_override_refuses_a_bad_kind_and_a_merge_into_itself(repo):
+    with pytest.raises(ValueError, match="^rename$"):
+        add_override(repo, kind="rename", type_group_="artifact", match_key="a",
+                     target_base_key="b")
+    with pytest.raises(OverrideConflict, match="same selector"):
+        add_override(repo, kind="merge", type_group_="artifact", match_key="atlas",
+                     target_base_key="atlas")
+    assert not repo.overrides()
+
+
+def test_add_override_keeps_a_given_target_entity_key(repo):
+    row = add_override(repo, kind="alias", type_group_="artifact", match_key="bravo",
+                       target_base_key="alpha", target_entity_key="manual:7")
+    assert row.target_entity_key == "manual:7"

@@ -27,6 +27,7 @@ from app.core.periodic.period_model import (
     previous_start,
 )
 from app.storage.period_signals import PeriodContext, PeriodSignalRepo
+from app.usecases.daily.signals_recompute import digest_text
 from app.usecases.periodic.period_brief_run import run_briefs
 
 LOGGER = logging.getLogger(__name__)
@@ -155,8 +156,9 @@ def run_periods(session: Session, settings: Any, options: PeriodRunOptions, *,
     ctx = _context(repo) if weeks else None
     for start in weeks:
         # Oldest first: the next period reads this one as its previous period.
-        payload = compute_period(repo.load_input(options.kind, start, ctx=ctx,
-                                                 generated_at=moment))
+        period_input = repo.load_input(options.kind, start, ctx=ctx, generated_at=moment)
+        payload = compute_period(replace(period_input,
+                                         observations=digest_text(period_input.observations)))
         changed = repo.save_report(payload, payload_hash(payload))
         session.commit()
         report["periods"][start.isoformat()] = {

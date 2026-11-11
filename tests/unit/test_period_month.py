@@ -32,6 +32,7 @@ from app.core.periodic.period_model import (
 from app.storage.daily_signals import DailySignalRepo
 from app.storage.models_sql import Base, PeriodSignalBrief, PeriodSignalReport
 from app.storage.period_signals import PeriodSignalRepo
+from app.usecases.daily.signals_recompute import recompute_reports
 from app.usecases.periodic import period_run
 from app.usecases.periodic.period_run import (
     PeriodRunError,
@@ -268,8 +269,8 @@ def seed_month(maker, start):
     for day in days:
         seed_day(maker, day, names=names)
     with maker() as session:
-        DailySignalRepo(session, comparable_from=COMPARABLE_FROM).recompute_reports(
-            days[-1], now=FIRST_NIGHT)
+        recompute_reports(DailySignalRepo(session, comparable_from=COMPARABLE_FROM),
+                          days[-1], now=FIRST_NIGHT)
         session.commit()
 
 

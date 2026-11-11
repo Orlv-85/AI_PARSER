@@ -6,6 +6,7 @@ from app.core.daily.signals_extract import ExtractedEntity, Extraction
 from app.storage.daily_signals import DailySignalRepo
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import Article
+from app.usecases.daily.signals_recompute import recompute_reports
 
 COMPARABLE_FROM = date(2026, 10, 10)
 NOW = datetime(2026, 10, 28, 3, 0)  # a Wednesday: the latest completed week starts 2026-10-19
@@ -41,6 +42,6 @@ def seed_weeks(maker, *starts: date, comparable_from: date = COMPARABLE_FROM) ->
         for offset in range(7):
             seed_day(maker, start + timedelta(days=offset), comparable_from=comparable_from)
     with maker() as session:
-        DailySignalRepo(session, comparable_from=comparable_from).recompute_reports(
-            last, now=NOW)
+        recompute_reports(DailySignalRepo(session, comparable_from=comparable_from),
+                          last, now=NOW)
         session.commit()

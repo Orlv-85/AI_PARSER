@@ -11,7 +11,13 @@ from app.core.daily.signals_extract import ExtractedEntity, Extraction
 from app.storage.daily_signals import DailySignalRepo, OverrideConflict
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import AIEntity, Article, Base, SignalMention
-from app.usecases.daily.signals import EntityCommandError, alias_entity, merge_entities
+from app.usecases.daily.signals import (
+    EntityCommandError,
+    add_override,
+    alias_entity,
+    merge_entities,
+)
+from app.usecases.daily.signals_recompute import recompute_reports
 
 D = date(2026, 10, 16)
 
@@ -49,7 +55,7 @@ def publish(repo, day, *articles):
 
 
 def recompute(repo):
-    repo.recompute_reports(D, now=datetime(2026, 10, 17, tzinfo=UTC))
+    recompute_reports(repo, D, now=datetime(2026, 10, 17, tzinfo=UTC))
     repo.session.flush()
 
 
@@ -129,7 +135,7 @@ def test_overlapping_selectors_refused(repo):
     merge_entities(repo, entity_id(repo, "auto:artifact:atlas:openai"),
                    entity_id(repo, "auto:artifact:atlaspro"))
     with pytest.raises(OverrideConflict):
-        repo.add_override(kind="merge", type_group_="artifact", match_key="atlas",
+        add_override(repo, kind="merge", type_group_="artifact", match_key="atlas",
                           vendor_class="", target_base_key="orion")
     # The vendorless-only selector does not overlap the OpenAI class and joins the same target.
     merge_entities(repo, entity_id(repo, "auto:artifact:atlas:?"),
@@ -177,5 +183,5 @@ def test_merge_survives_later_singular_evidence(repo):
     assert {key for _, key in owners(repo, "Orion Tools") + owners(repo, "Orion Tool")
             + owners(repo, "Helix")} == {"manual:2"}
     with pytest.raises(OverrideConflict):
-        repo.add_override(kind="merge", type_group_="artifact", match_key="geminiagent",
+        add_override(repo, kind="merge", type_group_="artifact", match_key="geminiagent",
                           target_base_key="helix")
