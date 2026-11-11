@@ -664,3 +664,109 @@ def test_source_onboarding_disable_and_reject_routes_return_400_on_domain_errors
     reject = client.post("/api/source-onboarding/candidates/1/reject", json={"reason": "x"})
     assert reject.status_code == 400
     assert reject.json()["detail"] == "candidate already rejected"
+
+
+_BAD_BODIES = (b"not json", b"", b"[]", b'"text"', b"7")
+
+
+def test_source_onboarding_import_route_rejects_non_json_body(monkeypatch, tmp_path) -> None:
+    client = _build_client(monkeypatch, tmp_path)
+    for body in _BAD_BODIES:
+        response = client.post("/api/source-onboarding/import", content=body)
+        assert (body, response.status_code, response.json()) == (
+            body, 422, {"detail": "raw_text is required"})
+
+
+def test_source_onboarding_validate_route_rejects_non_json_body(monkeypatch, tmp_path) -> None:
+    client = _build_client(monkeypatch, tmp_path)
+    for body in _BAD_BODIES:
+        response = client.post("/api/source-onboarding/validate", content=body)
+        assert (body, response.status_code, response.json()) == (
+            body, 422, {"detail": "batch_id or candidate_ids is required"})
+
+
+def _validate_detail(client: TestClient, payload: object) -> str:
+    response = client.post("/api/source-onboarding/validate", json=payload)
+    assert response.status_code == 422, payload
+    return str(response.json()["detail"])
+
+
+def test_source_onboarding_validate_route_rejects_fractional_ids(monkeypatch, tmp_path) -> None:
+    client = _build_client(monkeypatch, tmp_path)
+    assert _validate_detail(client, {"batch_id": 1.5}) == "batch_id must be an integer"
+    assert _validate_detail(client, {"batch_id": "1.5"}) == "batch_id must be an integer"
+    assert _validate_detail(client, {"candidate_ids": [2, 1.5]}) == (
+        "candidate_ids must be an integer")
+
+
+def test_source_onboarding_validate_route_keeps_numeric_strings_and_error_order(
+    monkeypatch, tmp_path
+) -> None:
+    client = _build_client(monkeypatch, tmp_path)
+    captured: list[dict[str, object]] = []
+
+    def _run(**kwargs):
+        captured.append(kwargs)
+        return []
+
+    monkeypatch.setattr(sources_routes, "run_source_validation_batch", _run)
+    accepted = client.post(
+        "/api/source-onboarding/validate",
+        json={"batch_id": "3", "candidate_ids": ["7", 8, 9.0], "extra": 1},
+    )
+    assert accepted.status_code == 200
+    assert [(c["batch_id"], c["candidate_ids"]) for c in captured] == [(3, [7, 8, 9])]
+    assert _validate_detail(client, {"batch_id": 0, "candidate_ids": "abc"}) == (
+        "batch_id must be >= 1")
+    assert _validate_detail(client, {"batch_id": None, "candidate_ids": [True]}) == (
+        "candidate_ids must be an integer")
+    assert _validate_detail(client, {"candidate_ids": [0]}) == "candidate_ids must be >= 1"
+    assert _validate_detail(client, {"candidate_ids": []}) == (
+        "batch_id or candidate_ids is required")
+    assert _validate_detail(client, {"batch_id": None, "candidate_ids": None}) == (
+        "batch_id or candidate_ids is required")
+
+
+def test_source_onboarding_body_routes_have_no_openapi_body(monkeypatch, tmp_path) -> None:
+    paths = _build_client(monkeypatch, tmp_path).get("/openapi.json").json()["paths"]
+    for path in ("/api/source-onboarding/import", "/api/source-onboarding/validate",
+                 "/api/auth/login"):
+        operation = paths[path]["post"]
+        assert "requestBody" not in operation, path
+        assert "422" not in operation["responses"], path
+
+
+def test_source_onboarding_bodies_decode_like_request_json(monkeypatch, tmp_path) -> None:
+    """Bodies are decoded by stdlib json as `request.json()` did: BOM, UTF-16, last duplicate key,
+    lone surrogates; too deep nesting is a client error, not 500."""
+    client = _build_client(monkeypatch, tmp_path)
+    captured: list[object] = []
+
+    def _run(**kwargs):
+        captured.append(kwargs["batch_id"])
+        return []
+
+    monkeypatch.setattr(sources_routes, "run_source_validation_batch", _run)
+    for body in ('﻿{"batch_id": 4}'.encode(), '{"batch_id": 4}'.encode("utf-16"),
+                 b'{"batch_id": 9, "batch_id": 4}', b'{"note": "\\ud800", "batch_id": 4}'):
+        assert client.post("/api/source-onboarding/validate", content=body).status_code == 200
+    assert captured == [4, 4, 4, 4]
+    surrogate = client.post("/api/source-onboarding/validate", content=b'{"batch_id": "\\ud800"}')
+    assert surrogate.json() == {"detail": "batch_id must be an integer"}
+    deep = b"[" * 10**6 + b"]" * 10**6
+    for path, detail in (("/api/source-onboarding/import", "raw_text is required"),
+                         ("/api/source-onboarding/validate",
+                          "batch_id or candidate_ids is required")):
+        response = client.post(path, content=deep)
+        assert (response.status_code, response.json()) == (422, {"detail": detail})
+
+
+def test_source_onboarding_validate_route_checks_candidate_ids_left_to_right(
+    monkeypatch, tmp_path
+) -> None:
+    client = _build_client(monkeypatch, tmp_path)
+    assert _validate_detail(client, {"candidate_ids": [0, None]}) == "candidate_ids must be >= 1"
+    assert _validate_detail(client, {"candidate_ids": [False, None]}) == (
+        "candidate_ids must be an integer")
+    assert _validate_detail(client, {"candidate_ids": [3, None, 0]}) == (
+        "candidate_ids must be a list of integers")

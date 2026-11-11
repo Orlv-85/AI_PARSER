@@ -181,8 +181,11 @@ def _client(monkeypatch, tmp_path) -> TestClient:
 
 
 def _is_blocked(response: Any) -> bool:
+    """Stopped by the auth middleware; the login's own 401 for bad credentials is not a block."""
     location: str | None = response.headers.get("location")
-    return response.status_code == 401 or (response.status_code == 303 and location == "/login")
+    if response.status_code == 401:
+        return bool(response.json() == {"detail": "Unauthorized"})
+    return response.status_code == 303 and location == "/login"
 
 
 def _concrete(path: str) -> str:

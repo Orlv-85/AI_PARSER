@@ -1,10 +1,11 @@
 """Source onboarding admin API: import, check, validate, overlaps and candidate review."""
 
-from typing import Any, SupportsIndex, SupportsInt, cast
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi import Path as FastAPIPath
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.concurrency import run_in_threadpool
 
@@ -12,6 +13,7 @@ from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportB
 from app.usecases.sources.onboarding import import_source_candidates, review_candidate_overlaps
 from app.usecases.sources.validation import run_source_validation_batch
 from app.web.models import (
+    WEB_BODY_ERROR,
     SourceOnboardingApproveResponse,
     SourceOnboardingBatchSummary,
     SourceOnboardingCandidateListResponse,
@@ -20,8 +22,11 @@ from app.web.models import (
     SourceOnboardingDuplicateResponse,
     SourceOnboardingEditRequest,
     SourceOnboardingEditResponse,
+    SourceOnboardingImportRequest,
     SourceOnboardingRejectRequest,
     SourceOnboardingRejectResponse,
+    SourceOnboardingValidateRequest,
+    json_body,
 )
 from app.web.routes import WebDeps
 from app.web.source_onboarding import SourceOnboardingService
@@ -30,43 +35,18 @@ _SOURCE_ONBOARDING_OVERLAP_BATCH_QUERY = Query(None, ge=1)
 _SOURCE_ONBOARDING_OVERLAP_CANDIDATE_QUERY = Query(default=[])
 
 
-def _parse_source_onboarding_identifier(
-    value: object,
-    *,
-    field_name: str,
-) -> int | None:
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        raise HTTPException(status_code=422, detail=f"{field_name} must be an integer")
+def _read_body[M: BaseModel](model: type[M], body: bytes, required: str) -> M:
+    """The body as `model`; any error is 422 with one string `detail` for the admin page."""
     try:
-        parsed = int(
-            cast(
-                str | bytes | bytearray | SupportsInt | SupportsIndex,
-                value,
-            )
-        )
-    except (TypeError, ValueError) as exc:
-        raise HTTPException(status_code=422, detail=f"{field_name} must be an integer") from exc
-    if parsed < 1:
-        raise HTTPException(status_code=422, detail=f"{field_name} must be >= 1")
-    return parsed
-
-
-def _parse_source_onboarding_candidate_ids(value: object) -> list[int] | None:
-    if value is None:
-        return None
-    if not isinstance(value, list):
-        raise HTTPException(status_code=422, detail="candidate_ids must be a list of integers")
-    parsed_ids: list[int] = []
-    for candidate_id in value:
-        if candidate_id is None:
-            raise HTTPException(status_code=422, detail="candidate_ids must be a list of integers")
-        parsed_id = _parse_source_onboarding_identifier(candidate_id, field_name="candidate_ids")
-        if parsed_id is None:  # pragma: no cover - guarded above
-            raise HTTPException(status_code=422, detail="candidate_ids must be a list of integers")
-        parsed_ids.append(parsed_id)
-    return parsed_ids
+        return model.model_validate(json_body(body))
+    except ValidationError as exc:
+        # The validators raise every field error as WEB_BODY_ERROR; anything else is the body
+        # itself not being an object.
+        error = exc.errors()[0]
+        detail = error["msg"] if error["type"] == WEB_BODY_ERROR else required
+        raise HTTPException(status_code=422, detail=detail) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=required) from exc
 
 
 def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-many-statements
@@ -76,12 +56,9 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
 
     @router.post("/api/source-onboarding/import")
     async def import_source_onboarding_batch(request: Request) -> JSONResponse:
-        payload = await request.json()
-        if not isinstance(payload, dict):
-            raise HTTPException(status_code=422, detail="raw_text is required")
-        raw_text = str(payload.get("raw_text", "")).strip()
-        if not raw_text:
-            raise HTTPException(status_code=422, detail="raw_text is required")
+        raw_text = _read_body(
+            SourceOnboardingImportRequest, await request.body(), "raw_text is required"
+        ).raw_text
 
         try:
             deps.create_onboarding_tables()
@@ -149,16 +126,12 @@ def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-man
 
     @router.post("/api/source-onboarding/validate")
     async def validate_source_onboarding_batch(request: Request) -> JSONResponse:
-        payload = await request.json()
-        if not isinstance(payload, dict):
-            raise HTTPException(status_code=422, detail="batch_id or candidate_ids is required")
-
-        raw_batch_id = payload.get("batch_id")
-        raw_candidate_ids = payload.get("candidate_ids")
-        batch_id = _parse_source_onboarding_identifier(raw_batch_id, field_name="batch_id")
-        candidate_ids = _parse_source_onboarding_candidate_ids(raw_candidate_ids)
-        if batch_id is None and not candidate_ids:
-            raise HTTPException(status_code=422, detail="batch_id or candidate_ids is required")
+        body = _read_body(
+            SourceOnboardingValidateRequest,
+            await request.body(),
+            "batch_id or candidate_ids is required",
+        )
+        batch_id, candidate_ids = body.batch_id, body.candidate_ids
 
         def _validate_batch() -> JSONResponse:
             try:

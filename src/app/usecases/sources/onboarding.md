@@ -85,7 +85,8 @@ check it.
   `test_tables_initializers_share_lock`.
 - Entry points: `POST /api/source-onboarding/import` (`raw_text` required: 422; parse error: 422;
   storage error: 503; success: 201), CLI `ai-news import-candidates`, admin page (paste or JSON file;
-  the page refuses files over 1 MB before upload). Tests:
+  the page refuses files over 1 MB before upload). A body that is not JSON or not an object also
+  gets 422 `raw_text is required`. Tests: `test_source_onboarding_import_route_rejects_non_json_body`,
   `test_source_onboarding_import_route_rejects_non_mapping_and_blank_text`,
   `test_source_onboarding_import_route_returns_503_when_storage_is_unavailable`,
   `test_upload_api_returns_immediately_health_and_progress_remain_available`,
@@ -145,8 +146,22 @@ check it.
 - `run_source_validation_batch` needs a batch id or candidate ids and validates in id order,
   candidates of any status (an approved one included; its source is not touched); unknown ids are
   skipped, an unknown batch gives an empty result; the caller commits once. `POST /api/source-onboarding/validate` runs it in a worker thread (health
-  stays responsive); bad ids: 422; storage error: 503. CLI `ai-news validate-candidates`, helper
-  `db-validate`. Tests: `test_run_source_validation_batch_requires_scope`,
+  stays responsive); bad body or ids: 422; storage error: 503. CLI `ai-news validate-candidates`,
+  helper `db-validate`. The 422 `detail` is one string, checked in this order: not JSON or not an
+  object: `batch_id or candidate_ids is required`; `batch_id` a bool, a fraction or not a number:
+  `batch_id must be an integer`, below 1: `batch_id must be >= 1`; `candidate_ids` not a list:
+  `candidate_ids must be a list of integers`, then items left to right, the first bad item decides:
+  `null`: `candidate_ids must be a list of integers`, a bool, a fraction or not a number:
+  `candidate_ids must be an integer`, below 1: `candidate_ids must be >= 1`; neither given:
+  `batch_id or candidate_ids is required`. Numeric strings (`"7"`) are accepted. The body is decoded
+  by stdlib json as `request.json()` did (BOM, UTF-16/32, the last of duplicate keys); nesting too
+  deep for it is the "required" 422. Tests:
+  `test_source_onboarding_bodies_decode_like_request_json`,
+  `test_source_onboarding_validate_route_checks_candidate_ids_left_to_right`,
+  `test_source_onboarding_validate_route_rejects_non_json_body`,
+  `test_source_onboarding_validate_route_rejects_fractional_ids`,
+  `test_source_onboarding_validate_route_keeps_numeric_strings_and_error_order`,
+  `test_run_source_validation_batch_requires_scope`,
   `test_run_source_validation_rejects_missing_candidate`,
   `test_source_onboarding_validate_route_rejects_invalid_payload_shapes`,
   `test_source_onboarding_validate_rejects_invalid_identifier_payloads`,
@@ -318,6 +333,9 @@ check it.
   `test_export_approved_sources_yaml_serializes_html_sources`.
 
 **Access**
+- The import and validate bodies are read into Pydantic models inside the handler (not as typed
+  body parameters), so `detail` stays one string for the admin page and OpenAPI shows no request
+  body for them. Tests: `test_source_onboarding_body_routes_have_no_openapi_body`.
 - Every `/api/source-onboarding/*` route and the admin page need an admin session when auth is on.
   Tests: `test_auth_middleware_coverage_is_pinned`, `test_route_table_order_names_and_models_are_pinned`.
 

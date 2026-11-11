@@ -1,0 +1,16 @@
+1. **Blocker — previously accepted encodings now fail.** [sources.py:40](/Users/vyacheslavorlovskiy/GitHub/AI_PARSER/docs/work/worktrees/020-t006/src/app/web/routes/sources.py:40), [pages.py:226](/Users/vyacheslavorlovskiy/GitHub/AI_PARSER/docs/work/worktrees/020-t006/src/app/web/routes/pages.py:226). `request.json()` accepted UTF-8 BOM and UTF-16/32 bodies; `model_validate_json()` rejects them. Confirmed valid login changes **200 → 401**; valid onboarding bodies now receive the “required” 422. This violates FR-005’s compatibility requirement. **Fix:** preserve the old encoding detection before model validation and add regression cases for all three operations.
+
+2. **Blocker — parser limits change accepted requests and existing error strings.** Same locations. Confirmed differences:
+   - Valid credentials with an ignored extra containing 250 nested arrays: **200 → 401**.
+   - Valid credentials with `"extra":"\ud800"`: **200 → 401**.
+   - Validate with `{"batch_id":"\ud800"}`: 422 `"batch_id must be an integer"` → 422 `"batch_id or candidate_ids is required"`. The equivalent candidate-ID case also loses its field-specific detail.
+   - A deeply nested `batch_id` similarly changes the integer error to the required error.
+   - Even an overwritten duplicate value containing `"\ud800"` causes rejection; the old decoder uses the final value.
+
+   **Fix:** preserve the old decoder’s behavior before applying the models, including ignored and overwritten values. Reconcile that compatibility approach with the plan’s `model_validate_json` requirement, and add regression tests.
+
+3. **Should fix — documented candidate-ID error precedence is inaccurate.** [onboarding.md:145](/Users/vyacheslavorlovskiy/GitHub/AI_PARSER/docs/work/worktrees/020-t006/src/app/usecases/sources/onboarding.md:145). The stated order puts “list with `null`” before item validation. Both implementations process items sequentially: `[0, null]` returns `"candidate_ids must be >= 1"`; `[false, null]` returns `"candidate_ids must be an integer"`. **Fix:** document left-to-right item validation, with the first invalid item determining the error; add these mixed-error cases.
+
+4. **Note — `_read_body`’s fallback is broader than whole-body errors.** [sources.py:43](/Users/vyacheslavorlovskiy/GitHub/AI_PARSER/docs/work/worktrees/020-t006/src/app/web/routes/sources.py:43). Every non-`web_body` error becomes the required string, regardless of location. I found no reachable non-custom field error with the current validators. **Fix:** explicitly restrict this mapping to root JSON/model-type errors.
+
+Validation: **131 targeted tests passed**, plus direct old/new parser and login comparisons. No remaining body-parsing 500 was reproduced. Fractional-ID rejection and conversion of previous malformed-body/Infinity failures to client errors were confirmed. Auth-off short-circuiting, failed-login logging, ordinary duplicate-key handling, OpenAPI, and middleware coverage showed no additional discrepancy. No files were edited; no network or sub-agents were used.

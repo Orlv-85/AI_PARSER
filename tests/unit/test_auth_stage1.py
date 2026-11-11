@@ -132,6 +132,37 @@ def test_login_fail_returns_generic_error(monkeypatch, tmp_path) -> None:
     assert "unknown user" not in detail
 
 
+def test_login_rejects_malformed_body(monkeypatch, tmp_path) -> None:
+    client = _build_authenticated_client(monkeypatch, tmp_path)
+    for body in (b"not json", b"", b"[]", b'"operator"'):
+        login = client.post("/api/auth/login", content=body)
+        assert (body, login.status_code, login.json()) == (
+            body, 401, {"detail": "Invalid username or password"})
+        assert "set-cookie" not in login.headers
+
+
+def test_login_decodes_body_like_request_json(monkeypatch, tmp_path) -> None:
+    client = _build_authenticated_client(monkeypatch, tmp_path)
+    good = '{"username": "operator", "password": "s3cret-pass"'
+    for body in (("\ufeff" + good + "}").encode(), (good + "}").encode("utf-16"),
+                 (good + ', "extra": "\\ud800"}').encode(),
+                 (good + ', "extra": ' + "[" * 250 + "]" * 250 + "}").encode()):
+        assert client.post("/api/auth/login", content=body).status_code == 200, body[:40]
+    deep = client.post("/api/auth/login", content=b"[" * 10**6 + b"]" * 10**6)
+    assert (deep.status_code, deep.json()) == (401, {"detail": "Invalid username or password"})
+
+
+def test_login_ignores_malformed_body_when_auth_disabled(monkeypatch, tmp_path) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("AINEWS_AUTH_ENABLED", "false")
+    get_settings.cache_clear()
+    client = TestClient(create_app())
+    for body in (b"not json", b"[]"):
+        login = client.post("/api/auth/login", content=body)
+        assert (body, login.status_code, login.json()) == (body, 200, {"ok": True})
+    get_settings.cache_clear()
+
+
 def test_logout_invalidates_session(monkeypatch, tmp_path) -> None:
     client = _build_authenticated_client(monkeypatch, tmp_path)
 

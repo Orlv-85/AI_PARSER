@@ -41,8 +41,12 @@ flowchart LR
   `test_login_page_renders_login_form_when_not_authenticated`, `test_route_table_order_names_and_models_are_pinned`
   (`/weekly` and `/monthly` are in the open routes).
 - Authenticated login requires both the configured username and password, returns `{"ok": true}`
-  and an HttpOnly cookie; logout keeps that success JSON contract. Tests:
-  `test_extracted_login_preserves_credentials_and_json`, `test_logout_invalidates_session`.
+  and an HttpOnly cookie; logout keeps that success JSON contract. A body that is not JSON or not
+  an object is a failed login (401 `Invalid username or password`); with auth off the login answers
+  200 without reading the body. Tests: `test_extracted_login_preserves_credentials_and_json`,
+  `test_logout_invalidates_session`, `test_login_rejects_malformed_body`,
+  `test_login_ignores_malformed_body_when_auth_disabled`, `test_login_decodes_body_like_request_json`
+  (the body is decoded by stdlib json as `request.json()` did).
 - `/daily` always shows the digest of the requested day (default: yesterday, UTC) and the Daily Signals block
   (`render_signals`); a signals read failure keeps the page. Tests:
   `test_public_digest_page_renders_digest_shell_with_yesterday_selected`,
