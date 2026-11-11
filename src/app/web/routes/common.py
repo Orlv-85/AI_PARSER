@@ -3,11 +3,10 @@
 import json
 import logging
 from collections.abc import Callable
-from datetime import date, timedelta
-from typing import Any, cast
+from datetime import date
+from typing import Any
 
 from fastapi import Query
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.usecases.daily.signals_reads import stored_signals
@@ -57,14 +56,3 @@ def _read_daily_signals(
         response.brief = brief
     return response
 
-
-def _resolve_weekly_default_report_date(*, repo: object, today: date) -> date:
-    get_latest = getattr(repo, "get_latest_report_date", None)
-    if callable(get_latest):
-        try:
-            latest_published = get_latest()
-        except SQLAlchemyError:
-            latest_published = None
-        if latest_published is not None:
-            return cast(date, latest_published)
-    return today - timedelta(days=1)

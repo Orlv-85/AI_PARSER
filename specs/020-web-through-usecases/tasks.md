@@ -50,6 +50,8 @@ Groups decided 2026-11-11 (agent): one PR each, in this order; each removes its 
 - [x] T010 Plain reads: `web/routes/bulletin.py`, `news.py`, `period.py` (split 2026-11-11 (agent):
   about 20 session sites in the eight web files). Read use cases return stored rows; the
   handlers build the API answer after the session closes (no commit, so loaded rows stay readable).
-- [ ] T011 Daily signals and pages: `web/routes/common.py`, `signals.py`, `pages.py`.
-- [ ] T012 `web/routes/weekly.py`, `web/service.py`.
-- [ ] T013 `cli/main.py`: reuses the session-owning use cases of T009-T012.
+- [x] T011 Daily signals and pages: `web/routes/common.py`, `signals.py`, `pages.py`.
+- [x] T012 `web/routes/weekly.py`, `web/service.py`.
+- [x] T013 `cli/main.py`: second composition root (FR-002 amended); repository calls and commits
+  move to use cases, reusing those of T009-T012. T012 and T013 in one PR (owner 2026-11-11:
+  "both at once"). The two lists are removed; the commit check covers `cli/` too.

@@ -338,7 +338,7 @@ check it.
   session from the onboarding session factory and commits its writes (`import_batch`,
   `validate_batch`, `candidate_overlaps`, `review_in_session`, `SourceIntakeService`); handlers map
   `ValueError` and `SQLAlchemyError` to HTTP answers. Tests:
-  `test_entry_points_import_storage_only_in_listed_files`, `test_web_commits_only_in_listed_files`,
+  `test_entry_points_import_from_storage_only_row_types`, `test_entry_points_do_not_commit`,
   `test_source_onboarding_http_errors_map_only_named_value_errors`.
 - Every `/api/source-onboarding/*` route and the admin page need an admin session when auth is on.
   Tests: `test_auth_middleware_coverage_is_pinned`, `test_route_table_order_names_and_models_are_pinned`.
@@ -425,7 +425,7 @@ scripts/sources_onboarding_helper.py db-bootstrap | db-review | db-validate | db
 | `core/sources/candidates.py` | Pure URL extraction, normalization, parsing and overlap grouping; owns `NormalizedSourceCandidate` and `CandidateOverlapGroup` |
 | `core/sources/candidate_fields.py` | `read_str`, `read_optional_str`, `read_optional_int`: the one reader of a candidate field (dict or object), used by `core/sources/*` and by `storage/source_repo.py`, `storage/source_candidate_repo.py`; a missing or `None` required field raises `candidate field is required: <name>`. Tests: `test_read_str_returns_text_of_present_field`, `test_read_str_default_covers_absent_field_only_else_raises`, `test_read_optional_str_and_int`, `test_read_optional_int_casts_text_and_rejects_garbage` |
 | `usecases/sources/validation.py` | `ValidationResult`, deterministic RSS/HTML validation, ingestion fetch adapters and validation persistence (`validate_batch` owns the session) |
-| `usecases/sources/onboarding.py` | `SourceImportResult`, database import (`import_batch` owns the session), overlap review (`candidate_overlaps`), candidate review actions and YAML export |
+| `usecases/sources/onboarding.py` | `SourceImportResult`, database import (`import_batch` owns the session; the CLI uses it too), overlap review (`candidate_overlaps`), batch counts (`batch_outcomes`), candidate review actions and YAML export |
 | `usecases/sources/bootstrap.py` | `bootstrap_sources_into_db`: `sources.yaml` into the sources table (`db-bootstrap`); skips a repeated URL and keeps the row that already owns a URL |
 | `core/sources/review.py` | Check probe (`probe_source`), evidence brief, `SourceReviewer` (Jev, DeepSeek), `evidence_fingerprint` |
 | `usecases/sources/intake.py` | `SourceIntakeService`: check job, registry and same-host checks, cache, `approve_ready` |

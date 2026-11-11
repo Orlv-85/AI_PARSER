@@ -5,6 +5,10 @@ import pytest
 
 import app.cli.main as cli_main
 from app.config.sources import SourceConfig
+from app.usecases import news_reads
+from app.usecases.archive import capture as capture_uc
+from app.usecases.sources import onboarding as onboarding_uc
+from app.usecases.sources import validation as validation_uc
 
 
 class _ArticleRepo:
@@ -116,7 +120,7 @@ def test_top_and_search_commands(monkeypatch) -> None:
     monkeypatch.setattr(cli_main.typer, "echo", emitted.append)
     monkeypatch.setattr(cli_main, "create_all", lambda: None)
     monkeypatch.setattr(cli_main, "SessionLocal", _build_session)
-    monkeypatch.setattr(cli_main, "ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr(news_reads, "ArticleRepo", _ArticleRepo)
 
     cli_main.top(hours=48, limit=5)
     cli_main.search(query="ai", days=3)
@@ -159,8 +163,8 @@ def test_prune_command_dry_run_and_apply(monkeypatch) -> None:
     monkeypatch.setattr(cli_main.typer, "echo", emitted.append)
     monkeypatch.setattr(cli_main, "create_all", lambda: None)
     monkeypatch.setattr(cli_main, "SessionLocal", _SessionCM)
-    monkeypatch.setattr(cli_main, "ArticleRepo", _ArticleRepo)
-    monkeypatch.setattr(cli_main, "prune_articles", lambda _session, *, older_than_days: (7, 2))
+    monkeypatch.setattr(capture_uc, "ArticleRepo", _ArticleRepo)
+    monkeypatch.setattr(capture_uc, "prune_articles", lambda _session, *, older_than_days: (7, 2))
 
     cli_main.prune(older_than_days=100, dry_run=True)
     cli_main.prune(older_than_days=100, dry_run=False)
@@ -214,8 +218,8 @@ def test_review_batch_outcomes_command_reports_deterministic_summary(monkeypatch
     monkeypatch.setattr(cli_main.typer, "echo", emitted.append)
     monkeypatch.setattr(cli_main, "create_all", lambda: None)
     monkeypatch.setattr(cli_main, "SessionLocal", _SessionCM)
-    monkeypatch.setattr(cli_main, "SourceImportBatchRepo", _BatchRepo)
-    monkeypatch.setattr(cli_main, "SourceCandidateRepo", _SourceCandidateRepo)
+    monkeypatch.setattr(onboarding_uc, "SourceImportBatchRepo", _BatchRepo)
+    monkeypatch.setattr(onboarding_uc, "SourceCandidateRepo", _SourceCandidateRepo)
 
     cli_main.review_batch_outcomes(batch_id=17)
 
@@ -252,9 +256,10 @@ def test_import_candidates_command_persists_batch_and_reports_counts(monkeypatch
     monkeypatch.setattr(cli_main.typer, "echo", emitted.append)
     monkeypatch.setattr(cli_main, "create_all", lambda: None)
     monkeypatch.setattr(cli_main, "SessionLocal", _SessionCM)
-    monkeypatch.setattr(cli_main, "SourceImportBatchRepo", lambda session: ("batch", session))
-    monkeypatch.setattr(cli_main, "SourceCandidateRepo", lambda session: ("candidate", session))
-    monkeypatch.setattr(cli_main, "import_source_candidates", _import_source_candidates)
+    monkeypatch.setattr(onboarding_uc, "SourceImportBatchRepo", lambda session: ("batch", session))
+    monkeypatch.setattr(onboarding_uc, "SourceCandidateRepo",
+                        lambda session: ("candidate", session))
+    monkeypatch.setattr(onboarding_uc, "import_source_candidates", _import_source_candidates)
 
     cli_main.import_candidates("https://example.com/feed.xml")
 
@@ -304,7 +309,7 @@ def test_validate_candidates_command_runs_batch_or_candidate_validation(monkeypa
     monkeypatch.setattr(cli_main.typer, "echo", emitted.append)
     monkeypatch.setattr(cli_main, "create_all", lambda: None)
     monkeypatch.setattr(cli_main, "SessionLocal", _SessionCM)
-    monkeypatch.setattr(cli_main, "run_source_validation_batch", _run_source_validation_batch)
+    monkeypatch.setattr(validation_uc, "run_source_validation_batch", _run_source_validation_batch)
 
     cli_main.validate_candidates(batch_id=None, candidate_id=[5, 9])
 
@@ -333,7 +338,7 @@ def test_review_batch_outcomes_command_rejects_missing_batch(monkeypatch) -> Non
 
     monkeypatch.setattr(cli_main, "create_all", lambda: None)
     monkeypatch.setattr(cli_main, "SessionLocal", _SessionCM)
-    monkeypatch.setattr(cli_main, "SourceImportBatchRepo", _BatchRepo)
+    monkeypatch.setattr(onboarding_uc, "SourceImportBatchRepo", _BatchRepo)
 
     with pytest.raises(cli_main.typer.BadParameter, match="source import batch not found"):
         cli_main.review_batch_outcomes(batch_id=999)

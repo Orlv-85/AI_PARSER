@@ -40,3 +40,20 @@ def daily_stats(session_factory: Callable[[], Session], date_from: date, date_to
         stats: list[ArticleDailyStats] = ArticleRepo(session).daily_stats(
             date_from=date_from, date_to=date_to)
         return stats
+
+
+def top_articles(session_factory: Callable[[], Session], *, hours: int, limit: int,
+                 min_ai_relevance: float) -> list[Article]:
+    """Top ranked articles of the window (CLI `top`)."""
+    with session_factory() as session:
+        rows: list[Article] = ArticleRepo(session).query_top(
+            hours=hours, limit=limit, min_ai_relevance=min_ai_relevance)
+        return rows
+
+
+def search_articles(session_factory: Callable[[], Session], *, query: str, days: int
+                    ) -> list[Article]:
+    """Articles matching `query` (CLI `search`)."""
+    with session_factory() as session:
+        rows: list[Article] = ArticleRepo(session).search(query=query, days=days)
+        return rows

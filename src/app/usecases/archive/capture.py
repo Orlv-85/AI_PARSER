@@ -419,3 +419,29 @@ def import_db(session: Session, source_url: str, *, apply: bool = False) -> dict
     if apply:
         result.update(documents=documents, new_versions=versions)
     return result
+
+
+def count_old_articles(session_factory: Callable[[], Session], older_than_days: int) -> int:
+    """Articles past the cutoff (the prune dry run)."""
+    with session_factory() as session:
+        count: int = ArticleRepo(session).count_older_than(older_than_days=older_than_days)
+        return count
+
+
+def prune_old_articles(session_factory: Callable[[], Session], older_than_days: int
+                       ) -> tuple[int, int]:
+    """`prune_articles` in its own session, committed."""
+    with session_factory() as session:
+        deleted = prune_articles(session, older_than_days=older_than_days)
+        session.commit()
+        return deleted
+
+
+def purge_archive(session_factory: Callable[[], Session], *, url: str | None,
+                  source_key: str | None, host: str | None, apply: bool) -> tuple[int, int]:
+    """Documents and versions of one URL, source or host; deleted and committed with `apply`."""
+    with session_factory() as session:
+        counts: tuple[int, int] = ArchiveRepo(session).purge(
+            url=url, source_key=source_key, host=host, apply=apply)
+        session.commit()
+        return counts

@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.canonical_json import fingerprint
@@ -459,3 +460,30 @@ def alias_entity(repo: DailySignalRepo, entity_id: int, name: str) -> AIEntityOv
                              target_base_key=base, target_vendor_class=vendor,
                              target_entity_key=manual,
                              note=f"alias {name} -> {target.display_name}"[:255])
+
+
+def run_entity_command(session_factory: Callable[[], Session], settings: Any,
+                       action: Callable[[DailySignalRepo], dict[str, Any]],
+                       until: date) -> dict[str, Any]:
+    """One override action, then a recompute up to `until`, committed together. A refused action
+    (any ValueError, e.g. an override conflict) raises EntityCommandError and writes nothing."""
+    with session_factory() as session:
+        repo = DailySignalRepo(session, comparable_from=settings.daily_signals_comparable_from,
+                               publisher_overrides=settings.weekly_publisher_overrides)
+        try:
+            output = action(repo)
+        except ValueError as exc:
+            session.rollback()
+            if isinstance(exc, EntityCommandError):
+                raise
+            raise EntityCommandError(str(exc)) from exc
+        result = recompute_reports(repo, until)
+        session.commit()
+        output["reports_written"] = [d.isoformat() for d in result.written]
+        return output
+
+
+def entity_overrides(session_factory: Callable[[], Session]) -> list[AIEntityOverride]:
+    """Stored entity overrides in id order."""
+    with session_factory() as session:
+        return list(session.scalars(select(AIEntityOverride).order_by(AIEntityOverride.id)))

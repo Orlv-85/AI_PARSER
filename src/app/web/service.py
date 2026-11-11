@@ -9,8 +9,7 @@ from typing import Any
 
 from app.config.settings import get_settings
 from app.observability import setup_json_logging
-from app.storage import SessionLocal
-from app.storage.admission import PAUSED_MESSAGE, read_collection_status
+from app.usecases.collection_status import PAUSED_MESSAGE, collection_status
 from app.usecases.ingestion.pipeline import run_fetch_cycle
 from app.web.models import UpdateStatus, WebUpdateSettings
 
@@ -106,8 +105,7 @@ class UpdateRunService:
 
     def _apply_screening_status_locked(self) -> None:
         try:
-            with SessionLocal() as session:
-                paused, message = read_collection_status(session)
+            paused, message = collection_status()
         except Exception:
             return
         self._status.screening_paused = paused

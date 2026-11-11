@@ -6,7 +6,6 @@ from pathlib import Path
 
 import typer
 import uvicorn
-from sqlalchemy import select
 
 from app.config.settings import get_settings
 from app.config.sources import load_sources
@@ -21,18 +20,13 @@ from app.core.world.screen import WORLD_JEV_MAX_USD_PER_DAY
 from app.observability import setup_json_logging
 from app.observability.logging import log_event
 from app.storage import SessionLocal, create_all
-from app.storage.archive import ArchiveRepo
-from app.storage.article_repo import ArticleRepo
-from app.storage.bulletin_store import BulletinRepo
-from app.storage.daily_signals import DailySignalRepo, OverrideConflict
-from app.storage.models_sql import AIEntityOverride
-from app.storage.page_views import PAGE_VIEWS_DEFAULT_DAYS, PageViewRepo
-from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
 from app.usecases.archive.capture import (
     ARCHIVE_CACHE_ROOT,
     DAILY_CACHE_ROOT,
+    count_old_articles,
     dedupe_page_cache,
-    prune_articles,
+    prune_old_articles,
+    purge_archive,
 )
 from app.usecases.archive.capture import capture as archive_capture
 from app.usecases.archive.capture import import_db as archive_import_db
@@ -45,20 +39,24 @@ from app.usecases.bulletin.daily import (
     run_daily,
     write_prepared,
 )
+from app.usecases.bulletin.stored import store_bulletin
 from app.usecases.bulletin.writer_run import WRITER_MAX_USD_PER_DAY, open_writer
 from app.usecases.daily.enrichment import publish_catch_up, publish_day
 from app.usecases.daily.signals import (
     EntityCommandError,
     RunOptions,
     alias_entity,
+    entity_overrides,
     merge_entities,
+    run_entity_command,
     run_signals,
 )
-from app.usecases.daily.signals_recompute import recompute_reports
 from app.usecases.ingestion.pipeline import run_fetch_cycle
+from app.usecases.news_reads import search_articles, top_articles
+from app.usecases.page_views import PAGE_VIEWS_DEFAULT_DAYS, page_view_totals
 from app.usecases.periodic.period_run import PeriodRunError, PeriodRunOptions, run_periods
-from app.usecases.sources.onboarding import import_source_candidates
-from app.usecases.sources.validation import run_source_validation_batch
+from app.usecases.sources.onboarding import batch_outcomes, import_batch
+from app.usecases.sources.validation import validate_batch
 from app.usecases.world_collect import collect_day, yesterday_utc
 from app.usecases.world_report import build_report
 from app.usecases.world_screen import open_world_assessor, run_screen, utc_today
@@ -90,8 +88,7 @@ def sources() -> None:
 def page_views(days: int = typer.Option(PAGE_VIEWS_DEFAULT_DAYS, "--days", min=1)) -> None:
     """Read anonymous UTC day/route totals (src/app/web/pages.md)."""
     today = datetime.now(UTC).date()
-    with SessionLocal() as session:
-        totals = PageViewRepo(session).totals(today - timedelta(days=days - 1), today)
+    totals = page_view_totals(SessionLocal, today - timedelta(days=days - 1), today)
     typer.echo(json.dumps(totals, sort_keys=True))
 
 
@@ -242,18 +239,12 @@ app.add_typer(entities_app, name="daily-signals-entities")
 def _entity_command(action) -> None:
     settings = get_settings()
     create_all()
-    with SessionLocal() as session:
-        repo = DailySignalRepo(session, comparable_from=settings.daily_signals_comparable_from,
-                               publisher_overrides=settings.weekly_publisher_overrides)
-        try:
-            output = action(repo)
-        except (EntityCommandError, OverrideConflict, ValueError) as exc:
-            session.rollback()
-            typer.echo(json.dumps({"state": "refused", "error": str(exc)}))
-            raise typer.Exit(1) from exc
-        result = recompute_reports(repo, datetime.now(UTC).date() - timedelta(days=1))
-        session.commit()
-        output["reports_written"] = [d.isoformat() for d in result.written]
+    try:
+        output = run_entity_command(SessionLocal, settings, action,
+                                    datetime.now(UTC).date() - timedelta(days=1))
+    except EntityCommandError as exc:
+        typer.echo(json.dumps({"state": "refused", "error": str(exc)}))
+        raise typer.Exit(1) from exc
     typer.echo(json.dumps(output, sort_keys=True))
 
 
@@ -286,9 +277,7 @@ def entities_overrides(delete: int | None = typer.Option(None, "--delete", min=1
     """List overrides, or delete one (then recompute)."""
     if delete is None:
         create_all()
-        with SessionLocal() as session:
-            rows = [_override_json(o) for o in session.scalars(
-                select(AIEntityOverride).order_by(AIEntityOverride.id))]
+        rows = [_override_json(o) for o in entity_overrides(SessionLocal)]
         typer.echo(json.dumps({"overrides": rows}, sort_keys=True))
         return
 
@@ -339,15 +328,14 @@ def top(
     min_ai_relevance: float = typer.Option(0.2, "--min-ai-relevance", min=0.0, max=1.0),
 ) -> None:
     create_all()
-    with SessionLocal() as session:
-        repo = ArticleRepo(session)
-        articles = repo.query_top(hours=hours, limit=limit, min_ai_relevance=min_ai_relevance)
-        for article in articles:
-            typer.echo(
-                f"{article.rank_score:.3f}\t"
-                f"{article.published_at.isoformat() if article.published_at else 'unknown'}\t"
-                f"{article.title}\t{article.url_canonical}"
-            )
+    articles = top_articles(SessionLocal, hours=hours, limit=limit,
+                            min_ai_relevance=min_ai_relevance)
+    for article in articles:
+        typer.echo(
+            f"{article.rank_score:.3f}\t"
+            f"{article.published_at.isoformat() if article.published_at else 'unknown'}\t"
+            f"{article.title}\t{article.url_canonical}"
+        )
 
 
 @app.command()
@@ -356,12 +344,9 @@ def search(
     days: int = typer.Option(7, "--days", min=1),
 ) -> None:
     create_all()
-    with SessionLocal() as session:
-        repo = ArticleRepo(session)
-        articles = repo.search(query=query, days=days)
-        for article in articles:
-            published = article.published_at.isoformat() if article.published_at else "unknown"
-            typer.echo(f"{published}\t{article.title}\t{article.url_canonical}")
+    for article in search_articles(SessionLocal, query=query, days=days):
+        published = article.published_at.isoformat() if article.published_at else "unknown"
+        typer.echo(f"{published}\t{article.title}\t{article.url_canonical}")
 
 
 @app.command()
@@ -374,24 +359,20 @@ def prune(
     ),
 ) -> None:
     create_all()
-    with SessionLocal() as session:
-        repo = ArticleRepo(session)
-        if dry_run:
-            old_articles = repo.count_older_than(older_than_days=older_than_days)
-            typer.echo(
-                "prune dry-run: "
-                f"older_than_days={older_than_days} "
-                f"articles_to_delete={old_articles}"
-            )
-            return
-
-        deleted_articles, deleted_aliases = prune_articles(
-            session, older_than_days=older_than_days)
-        session.commit()
+    if dry_run:
+        old_articles = count_old_articles(SessionLocal, older_than_days)
         typer.echo(
-            f"prune complete: older_than_days={older_than_days} "
-            f"deleted_articles={deleted_articles} deleted_aliases={deleted_aliases}"
+            "prune dry-run: "
+            f"older_than_days={older_than_days} "
+            f"articles_to_delete={old_articles}"
         )
+        return
+
+    deleted_articles, deleted_aliases = prune_old_articles(SessionLocal, older_than_days)
+    typer.echo(
+        f"prune complete: older_than_days={older_than_days} "
+        f"deleted_articles={deleted_articles} deleted_aliases={deleted_aliases}"
+    )
 
 
 archive_app = typer.Typer(help="Private article archive (no web access, no provider calls).")
@@ -433,10 +414,8 @@ def archive_purge(
         typer.echo("archive purge needs exactly one of --url, --source, --host", err=True)
         raise typer.Exit(2)
     create_all()
-    with SessionLocal() as session:
-        documents, versions = ArchiveRepo(session).purge(url=url, source_key=source, host=host,
-                                                         apply=apply)
-        session.commit()
+    documents, versions = purge_archive(SessionLocal, url=url, source_key=source, host=host,
+                                        apply=apply)
     typer.echo(json.dumps({"state": "deleted" if apply else "dry_run", "documents": documents,
                            "versions": versions}, sort_keys=True))
 
@@ -534,9 +513,7 @@ def bulletin_daily(
 def _store_bulletin(day: date, bulletin: Bulletin | None, reason: str | None,
                     numbers: dict[str, object]) -> None:
     create_all()
-    with SessionLocal() as session:
-        BulletinRepo(session).save(day, bulletin=bulletin, reason=reason, numbers=numbers)
-        session.commit()
+    store_bulletin(SessionLocal, day, bulletin=bulletin, reason=reason, numbers=numbers)
 
 
 @bulletin_app.command("build")
@@ -701,23 +678,13 @@ def import_candidates(
     ),
 ) -> None:
     create_all()
-    with SessionLocal() as session:
-        result = import_source_candidates(
-            raw_text=raw_text,
-            batch_repo=SourceImportBatchRepo(session),
-            candidate_repo=SourceCandidateRepo(session),
-        )
-        session.commit()
-        batch_id = result.batch.id
-        parsed_count = result.parsed_count
-        accepted_count = result.accepted_count
-        rejected_count = result.rejected_count
+    result = import_batch(SessionLocal, raw_text)
     typer.echo(
         "source import complete: "
-        f"batch_id={batch_id} "
-        f"parsed={parsed_count} "
-        f"accepted={accepted_count} "
-        f"rejected={rejected_count}"
+        f"batch_id={result.batch_id} "
+        f"parsed={result.parsed_count} "
+        f"accepted={result.accepted_count} "
+        f"rejected={result.rejected_count}"
     )
 
 
@@ -731,13 +698,7 @@ def validate_candidates(
         raise typer.BadParameter("Provide --batch-id or at least one --candidate-id.")
 
     create_all()
-    with SessionLocal() as session:
-        results = run_source_validation_batch(
-            session=session,
-            batch_id=batch_id,
-            candidate_ids=candidate_ids or None,
-        )
-        session.commit()
+    results = validate_batch(SessionLocal, batch_id=batch_id, candidate_ids=candidate_ids or None)
 
     typer.echo(f"source validation complete: validated={len(results)}")
     for result in results:
@@ -752,12 +713,9 @@ def review_batch_outcomes(
     batch_id: int = typer.Option(..., "--batch-id", min=1),
 ) -> None:
     create_all()
-    with SessionLocal() as session:
-        batch_repo = SourceImportBatchRepo(session)
-        batch = batch_repo.get_batch(batch_id)
-        if batch is None:
-            raise typer.BadParameter(f"source import batch not found: {batch_id}")
-        summary = SourceCandidateRepo(session).summarize_batch(batch_id=batch.id)
+    summary = batch_outcomes(SessionLocal, batch_id)
+    if summary is None:
+        raise typer.BadParameter(f"source import batch not found: {batch_id}")
 
     typer.echo(
         "batch review outcomes: "

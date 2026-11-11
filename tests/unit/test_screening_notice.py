@@ -17,6 +17,7 @@ from app.storage.admission import (
     set_collection_paused,
 )
 from app.storage.models_sql import Base, CollectionStatus
+from app.usecases import collection_status as collection_status_module
 from app.usecases.ingestion.pipeline import run_fetch_cycle
 from app.web import service as service_module
 from app.web.auth import hash_password
@@ -91,7 +92,7 @@ def sessions(tmp_path, monkeypatch):
     sessions = sessionmaker(bind=engine, autoflush=False)
     monkeypatch.setattr(app_module, "create_all", lambda: None)
     monkeypatch.setattr(app_module, "SessionLocal", sessions)
-    monkeypatch.setattr(service_module, "SessionLocal", sessions)
+    monkeypatch.setattr(collection_status_module, "SessionLocal", sessions)
     monkeypatch.setattr(
         service_module,
         "get_settings",

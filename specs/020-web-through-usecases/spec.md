@@ -89,7 +89,10 @@ and a string `detail`.
   do more are listed in the test, and the list only shrinks. The scan reads static imports,
   `from app import storage`, wildcard imports and literal `import_module` / `__import__`.
 - **FR-002** `web/app.py` is the composition root: it may import `SessionLocal` and `create_all`
-  from `app.storage` to build `WebDeps`; no other exception is permanent.
+  from `app.storage` to build `WebDeps`. `cli/main.py` is the CLI's composition root with the
+  same two names (amended 2026-11-11 (agent), step 4: CLI commands hand a session or the session
+  factory to use cases; repository calls and commits live in the use cases; about 55 tests patch
+  `cli/main.py`'s `SessionLocal` and `create_all`). No other exception is permanent.
 - **FR-003** `web/` files that call `commit()` are listed in the test; the list only shrinks.
 - **FR-004** `create_app` wraps both table initializers (news storage and onboarding engine): each
   runs until one call succeeds, then does nothing; one per-app lock serializes them; a failure
@@ -110,5 +113,5 @@ and a string `detail`.
 
 - **SC-001** After steps 1-3: the layer test lists the files still in breach; the bad-body tests
   pass; each initializer runs once per app after its first success.
-- **SC-002** After step 4 (if approved): the lists of FR-001 and FR-003 are empty; only FR-002
-  remains.
+- **SC-002** After step 4 (if approved): the lists of FR-001 and FR-003 are empty and removed; only
+  FR-002 remains; no entry point commits.
