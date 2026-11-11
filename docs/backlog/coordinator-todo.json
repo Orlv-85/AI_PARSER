@@ -1,7 +1,7 @@
 {
   "title": "Coordinator todo: checks, fixes and open decisions",
   "created": "2026-10-27",
-  "updated": "2026-11-01",
+  "updated": "2026-11-11",
   "status": "active",
   "how_to_use": "The coordinator keeps this list current (docs PR). Product ideas live in backlog-todo.json, agent tooling in tooling-todo.json; items here may point to them. Statuses: todo, in_progress, waiting_owner, backlog, deferred, done. Done items stay one week, then are removed.",
   "items": [
@@ -197,6 +197,15 @@
       "source": "coordinator 2026-11-01",
       "facts": "Production container (read-only check 2026-11-01): argon2 and bcrypt not importable, so src/app/web/auth.py hashes with its scrypt fallback (n=2**14). CI and local .venv the same. Works; scrypt is sound.",
       "options": "Either drop both from pyproject.toml (matches reality) or pin them in build/requirements.txt (new hashes become argon2; old scrypt hashes still verify). Auth change: needs the owner's yes."
+    },
+    {
+      "id": "WEB-IMPORT-GUARDS",
+      "title": "Web import guards for world and archive code check direct imports only",
+      "priority": "P3",
+      "status": "todo",
+      "source": "review of PR 221, finding 10 (specs/019-layer-boundaries/records/review-step2-2026-11-10.md); re-checked by the coordinator 2026-11-11 by reading the tests",
+      "facts": "tests/unit/test_world_storage.py, test_world_tables_not_read_by_digest: the web loop bans the prefix 'app.storage.world.' (trailing dot), so the names produced by `import app.storage.world` and `from app.storage import world` do not match it. This is not an open hole today: the first loop of the same test fails on the exact name 'app.storage.world' in every file outside its allowed list, and no web file is on that list. The real gap is that both web guards (this one and test_archive_not_imported_by_web_or_mcp in tests/unit/test_article_archive.py) look at direct imports only, while web modules import app.usecases.* (web/routes/sources.py, web/service.py, web/source_onboarding.py); a path web -> usecases -> world or archive code would pass.",
+      "options": "1) Drop the trailing dot (ban 'app.storage.world' as a prefix boundary: equal or followed by a dot), with a test of the scan on the two missed forms. 2) Decide whether the rule is 'web does not import' or 'web does not reach': if reach, check the transitive import closure of web modules, or state in the docs (core/world/world.md, usecases/archive/capture.md) that the rule covers direct imports only. Small; no behavior change."
     }
   ]
 }
