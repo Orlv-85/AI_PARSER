@@ -362,6 +362,7 @@ flowchart LR
 | `?month=` is `YYYY-MM`; `YYYY-MM-DD` redirects (303) to it (decided 2026-10-28 (agent)) | mirrors `?week=` (any day lands on its period) and gives one canonical URL |
 | "Monthly" nav link follows any stored month row, not the default month (decided 2026-10-28 (agent)) | the plan says "when a month exists"; `/monthly` shows a partial month with its status line anyway |
 | No October month view (owner answer Q4; plan "Decided") | October is partial (data from 2026-10-12); the first month is November, shown from 2026-12-01 |
+| Payload and packet shapes are `TypedDict`s (`period_payload.py`, `Packet` in `signals_brief.py`); merge and ranking state lives in dataclasses and tuples, not in `_`-keys (decided 2026-11-12 (agent)) | mypy checks the keys; the stored JSON stays byte-identical, so no methodology bump |
 
 ## Invariants
 
@@ -387,6 +388,7 @@ flowchart LR
 | `signals_period.py` | Public entry: re-exports `compute_period`, `PeriodInput`, `PeriodThresholds`, `payload_hash` | yes |
 | `period_model.py` | Bounds (`period_bounds`, `period_days`, `previous_start`, `next_start`), `PeriodThresholds`, `PeriodInput`, `PreviousPeriod`, `period_status` | yes |
 | `period_compute.py` | `compute_period` and one function per section; `PERIOD_METHODOLOGY_VERSION` | yes |
+| `period_payload.py` | Shape of the stored payload: `PeriodPayload`, `PeriodStory`, `MonthTrendItem`, `EventMix` and the rest; the daily items come from `core/daily/signals_payload.py` | yes |
 | `usecases/periodic/period_run.py` | `run_periods`, `run_week_and_month` (the plain run), `target_periods` (`target_weeks`, `target_months`), `brief_targets`, `first_period`, `latest_completed` (week and month wrappers): pick periods, apply the digest text to the stored observations, compute, store, then call the brief step | no |
 | `period_brief.py` | `PERIOD_BRIEF_VERSION`, values by kind, `period_packet`, `period_body`, `period_input_hash`, `parse_period_brief` | yes |
 | `usecases/periodic/period_brief_run.py` | `run_briefs`: targets, cache by hash, ledger per brief, attempts, store | no |

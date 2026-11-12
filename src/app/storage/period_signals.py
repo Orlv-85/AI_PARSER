@@ -8,7 +8,7 @@ import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import Row, select
 from sqlalchemy.exc import IntegrityError
@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.core.daily.signals_entities import Reconciliation
 from app.core.daily.signals_extract import EXTRACTION_VERSION
 from app.core.daily.signals_model import DayCoverage
+from app.core.daily.signals_payload import SnapshotPayload
 from app.core.periodic.period_model import (
     MONTH,
     PeriodInput,
@@ -70,9 +71,9 @@ class PeriodSignalRepo:
         return PeriodContext(result=result, evidence=evidence, coverage=self.daily.coverage(),
                              entity_ids=ids)
 
-    def snapshots(self, days: list[date]) -> dict[date, dict[str, Any]]:
+    def snapshots(self, days: list[date]) -> dict[date, SnapshotPayload]:
         """Stored daily payloads of the days; an unreadable payload counts as no snapshot."""
-        out: dict[date, dict[str, Any]] = {}
+        out: dict[date, SnapshotPayload] = {}
         rows = self.session.execute(select(DailySignalReport.report_date, DailySignalReport.payload)
                                     .where(DailySignalReport.report_date.in_(days)))
         for day, payload in rows:
@@ -82,7 +83,7 @@ class PeriodSignalRepo:
                 LOGGER.error("period_signals_snapshot_unreadable report_date=%s", day.isoformat())
                 continue
             if isinstance(data, dict):
-                out[day] = data
+                out[day] = cast(SnapshotPayload, data)
         return out
 
     def previous(self, kind: str, start: date) -> PreviousPeriod | None:

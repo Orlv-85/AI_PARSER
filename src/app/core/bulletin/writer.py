@@ -9,7 +9,7 @@ import re
 from collections.abc import Callable, Mapping
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, NotRequired, TypedDict, TypeIs
 
 from app.core.bulletin.builder import (
     HEADLINE_MAX_WORDS,
@@ -84,7 +84,7 @@ WRITER_PROMPT = (
     "markdown, no emojis."
 )
 
-Ask = Callable[[dict[str, Any]], tuple[Any, str | None]]
+Ask = Callable[[dict[str, Any]], tuple[object, str | None]]
 
 
 class WriterInvalid(ValueError):
@@ -104,10 +104,45 @@ class SourceText:
     text: str | None
 
 
+class PacketArticle(TypedDict):
+    outlet: str
+    title: str
+    text: NotRequired[str]
+    summary: NotRequired[str]
+
+
+class PacketStory(TypedDict):
+    id: str
+    area: str
+    outlets: list[str]
+    articles: list[PacketArticle]
+
+
+class WriterPacket(TypedDict):
+    day: str
+    stories: list[PacketStory]
+
+
+class WriterSummary(TypedDict):
+    version: str
+    model: str
+    reason: str | None
+    stories_model: int
+    stories_title: int
+    headline_origin: str
+    dropped: list[str]
+    cost_usd: NotRequired[float]
+
+
+class _Answer(TypedDict):
+    headline: str
+    stories: list[object]
+
+
 @dataclass
 class WriterResult:
     bulletin: Bulletin
-    summary: dict[str, Any]
+    summary: WriterSummary
 
 
 @dataclass
@@ -130,8 +165,9 @@ def all_stories(bulletin: Bulletin) -> list[Story]:
 
 
 def _article(link: dict[str, str], source: SourceText | None, title: str, budget: int
-             ) -> dict[str, str]:
-    article = {"outlet": link["outlet"], "title": (source.title if source else "") or title}
+             ) -> PacketArticle:
+    article: PacketArticle = {"outlet": link["outlet"],
+                              "title": (source.title if source else "") or title}
     if source and source.text:
         article["text"] = cut(source.text, budget)
     elif source and source.summary:
@@ -139,9 +175,9 @@ def _article(link: dict[str, str], source: SourceText | None, title: str, budget
     return article
 
 
-def build_packet(bulletin: Bulletin, sources: Mapping[str, SourceText]) -> dict[str, Any]:
+def build_packet(bulletin: Bulletin, sources: Mapping[str, SourceText]) -> WriterPacket:
     """The model-visible JSON: stories with their articles; the packet is also the evidence."""
-    stories = []
+    stories: list[PacketStory] = []
     for number, story in enumerate(all_stories(bulletin), start=1):
         links = story.links[:ARTICLES_PER_STORY]
         found = [sources.get(link["url"]) for link in links]
@@ -152,22 +188,22 @@ def build_packet(bulletin: Bulletin, sources: Mapping[str, SourceText]) -> dict[
     return {"day": bulletin.date, "stories": stories}
 
 
-def writer_body(packet: Mapping[str, Any], model: str) -> dict[str, Any]:
+def writer_body(packet: WriterPacket, model: str) -> dict[str, Any]:
     """The provider request; the packet keeps its own characters (no \\u escapes) to save tokens."""
-    body = cast(dict[str, Any], request_body(
-        packet, model, prompt=WRITER_PROMPT, max_output=WRITER_MAX_OUTPUT))
+    body: dict[str, Any] = request_body(
+        packet, model, prompt=WRITER_PROMPT, max_output=WRITER_MAX_OUTPUT)
     body["messages"][1]["content"] = json.dumps(packet, ensure_ascii=False, sort_keys=True)
     return body
 
 
-def _evidence(story: Mapping[str, Any]) -> str:
+def _evidence(story: PacketStory) -> str:
     parts = list(story["outlets"])
     for article in story["articles"]:
-        parts.extend(article.get(key, "") for key in ("title", "summary", "text"))
+        parts.extend((article["title"], article.get("summary", ""), article.get("text", "")))
     return "\n".join(parts)
 
 
-def _answer(data: Any) -> dict[str, Any]:
+def _answer(data: object) -> _Answer:
     if not isinstance(data, Mapping) or data.get("model") not in MODEL_NAMES:
         raise WriterInvalid("model")
     try:
@@ -184,10 +220,10 @@ def _answer(data: Any) -> dict[str, Any]:
         raise WriterInvalid("schema") from error
     if not _answer_shaped(content):
         raise WriterInvalid("schema")
-    return cast(dict[str, Any], content)
+    return content
 
 
-def _answer_shaped(content: Any) -> bool:
+def _answer_shaped(content: object) -> TypeIs[_Answer]:
     return (isinstance(content, dict) and set(content) == {"headline", "stories"}
             and isinstance(content["headline"], str) and isinstance(content["stories"], list))
 
@@ -206,7 +242,7 @@ class _TextRule:
     min_chars: int | None = None
 
 
-def _text(value: Any, evidence: str, where: str, dropped: list[str],
+def _text(value: object, evidence: str, where: str, dropped: list[str],
           rule: _TextRule) -> str | None:
     if not isinstance(value, str):
         dropped.append(f"{where}:schema")
@@ -241,14 +277,15 @@ def split_sentences(text: str) -> list[str]:
     return pieces
 
 
-def _split_items(raw: list[Any]) -> list[Any]:
-    pieces: list[Any] = []
+def _split_items(raw: list[object]) -> list[object]:
+    pieces: list[object] = []
     for item in raw:
         pieces.extend(split_sentences(item) if isinstance(item, str) else [item])
     return pieces
 
 
-def _sentences(raw: Any, evidence: str, where: str, limit: int, dropped: list[str]) -> list[str]:
+def _sentences(raw: object, evidence: str, where: str, limit: int, dropped: list[str]
+               ) -> list[str]:
     if not isinstance(raw, list):
         dropped.append(f"{where}:schema")
         return []
@@ -264,14 +301,14 @@ def _sentences(raw: Any, evidence: str, where: str, limit: int, dropped: list[st
     return kept
 
 
-def _story_text(entry: Mapping[str, Any], evidence: str, dropped: list[str]) -> _StoryText:
-    sid = entry["id"]
+def _story_text(sid: str, entry: Mapping[str, object], evidence: str, dropped: list[str]
+                ) -> _StoryText:
     headline = _text(entry.get("headline"), evidence, f"{sid}:headline", dropped, _TextRule(
         STORY_HEADLINE_MIN_WORDS, STORY_HEADLINE_MAX_WORDS, copy=True, min_chars=8))
-    gloss = entry.get("gloss")
-    if gloss is not None:
-        gloss = _text(gloss, evidence, f"{sid}:gloss", dropped,
-                      _TextRule(2, GLOSS_MAX_WORDS, copy=True, min_chars=8))
+    raw_gloss = entry.get("gloss")
+    gloss = None if raw_gloss is None else _text(
+        raw_gloss, evidence, f"{sid}:gloss", dropped,
+        _TextRule(2, GLOSS_MAX_WORDS, copy=True, min_chars=8))
     return _StoryText(
         headline=headline, gloss=gloss,
         site=_sentences(entry.get("site"), evidence, f"{sid}:site", SITE_SENTENCES_MAX, dropped),
@@ -279,7 +316,7 @@ def _story_text(entry: Mapping[str, Any], evidence: str, dropped: list[str]) -> 
                             TELEGRAM_SENTENCES_MAX, dropped))
 
 
-def parse_writer(data: Any, packet: Mapping[str, Any], dropped: list[str]
+def parse_writer(data: object, packet: WriterPacket, dropped: list[str]
                  ) -> tuple[str | None, dict[str, _StoryText]]:
     """(headline of the day or None, story texts by id) from one provider answer.
 
@@ -290,12 +327,13 @@ def parse_writer(data: Any, packet: Mapping[str, Any], dropped: list[str]
     headline = _text(content["headline"], "\n".join(evidence.values()), "headline", dropped,
                      _TextRule(HEADLINE_MIN_WORDS, HEADLINE_MAX_WORDS, min_chars=8))
     texts: dict[str, _StoryText] = {}
-    for entry in content["stories"]:
-        sid = entry.get("id") if isinstance(entry, dict) else None
+    for raw in content["stories"]:
+        entry: Mapping[str, object] = raw if isinstance(raw, dict) else {}
+        sid = entry.get("id")
         if not isinstance(sid, str) or sid not in evidence or sid in texts:
             dropped.append(f"{sid}:unknown_story")
             continue
-        texts[sid] = _story_text(entry, evidence[sid], dropped)
+        texts[sid] = _story_text(sid, entry, evidence[sid], dropped)
     return headline, texts
 
 
@@ -315,7 +353,7 @@ def _apply(bulletin: Bulletin, headline: str | None, texts: Mapping[str, _StoryT
 
 
 def _summary(model: str, reason: str | None, bulletin: Bulletin, dropped: list[str]
-             ) -> dict[str, Any]:
+             ) -> WriterSummary:
     stories = all_stories(bulletin)
     written = sum(1 for s in stories if s.text_origin == "model")
     return {"version": WRITER_VERSION, "model": model, "reason": reason,

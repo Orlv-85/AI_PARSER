@@ -5,9 +5,8 @@ signals_naming and signals_history; the names below are re-exported for importer
 """
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import date, timedelta
-from typing import Any
 
 from app.core.canonical_json import fingerprint
 from app.core.daily.signals_entities import Entity, same_family, token_prefix
@@ -24,6 +23,18 @@ from app.core.daily.signals_model import (
     Thresholds,
 )
 from app.core.daily.signals_naming import proper_name, same_vendor, specific_variant, unit_key
+from app.core.daily.signals_payload import (
+    Coverage,
+    EventCount,
+    Folded,
+    Hidden,
+    NewItem,
+    Section,
+    SnapshotPayload,
+    Suppressed,
+    TopStory,
+    TrendItem,
+)
 from app.core.daily.signals_stories import Story, _article_order, cluster, linked_articles, links
 from app.core.daily.signals_trend import TrendRow, trend_delta, trend_windows, unit_articles
 
@@ -35,12 +46,50 @@ __all__ = [
 METHODOLOGY_VERSION = "daily-signals-4"
 
 
-def payload_hash(payload: Mapping[str, Any]) -> str:
+def payload_hash(payload: Mapping[str, object]) -> str:
     return str(fingerprint({k: v for k, v in payload.items() if k != "generated_at"}))
 
 
 def _r(value: float) -> float:
     return round(value, 3)
+
+
+@dataclass
+class _NewCandidate:
+    """A New item with its entity key, article ids and type rank (not stored)."""
+    key: str
+    ids: set[int]
+    type_rank: int
+    item: NewItem
+
+
+@dataclass
+class _Spike:
+    """A spike item with its unit, representative entity key and article ids (not stored)."""
+    unit: str
+    key: str
+    ids: set[int]
+    item: TrendItem
+
+
+@dataclass
+class _Trend:
+    """A Rising or Cooling item with the delta and the window count it is ranked by."""
+    unit: str
+    delta: float
+    count: int
+    item: TrendItem
+
+
+@dataclass(frozen=True)
+class _Counts:
+    today: int
+    current_7d: int | None = None
+    previous_7d: int | None = None
+    expected_7d: float | None = None
+
+
+type FoldTarget = TopStory | NewItem | TrendItem
 
 
 class _Snapshot:  # pylint: disable=too-many-instance-attributes
@@ -50,9 +99,9 @@ class _Snapshot:  # pylint: disable=too-many-instance-attributes
         self.day = data.day
         self.articles = sorted(data.observations.get(data.day, ()), key=_article_order)
         self.notes: list[str] = []
-        self.sections: dict[str, dict[str, Any]] = {}
-        self.suppressed: list[dict[str, Any]] = []
-        self.hidden: list[dict[str, Any]] = []
+        self.sections: dict[str, Section] = {}
+        self.suppressed: list[Suppressed] = []
+        self.hidden: list[Hidden] = []
 
     def complete(self, day: date) -> bool:
         cov = self.data.coverage.get(day)
@@ -66,7 +115,7 @@ class _Snapshot:  # pylint: disable=too-many-instance-attributes
         return entity_id
 
     # New ------------------------------------------------------------------------------------
-    def new_items(self) -> tuple[list[dict[str, Any]], set[str]]:
+    def new_items(self) -> tuple[list[_NewCandidate], set[str]]:
         """(shown items, entity keys of the shown items and their grouped variants); items past
         `new_max` go to `self.hidden`."""
         by_entity, quotes = self._new_mentions()
@@ -75,13 +124,11 @@ class _Snapshot:  # pylint: disable=too-many-instance-attributes
         candidates.sort(key=self._new_order)
         shown, members = self._group_variants(candidates)
         keys: set[str] = set()
-        for index, item in enumerate(shown):
-            key = item.pop("_key")
-            item.pop("_type_rank")
+        for index, c in enumerate(shown):
             if index < self.t.new_max:
-                keys |= members[key]
+                keys |= members[c.key]
             else:
-                self.hidden.append({"name": item["name"], "entity_id": item["entity_id"]})
+                self.hidden.append({"name": c.item["name"], "entity_id": c.item["entity_id"]})
         return shown[:self.t.new_max], keys
 
     def _new_mentions(self) -> tuple[dict[str, list[ArticleObs]], dict[str, str]]:
@@ -106,22 +153,22 @@ class _Snapshot:  # pylint: disable=too-many-instance-attributes
             return False
         return self._new_name_ok(key, e)
 
-    def _group_variants(self, candidates: list[dict[str, Any]]
-                        ) -> tuple[list[dict[str, Any]], dict[str, set[str]]]:
+    def _group_variants(self, candidates: list[_NewCandidate]
+                        ) -> tuple[list[_NewCandidate], dict[str, set[str]]]:
         """(items in order with same-family candidates as `variants`, item key -> its keys)."""
-        shown: list[dict[str, Any]] = []
+        shown: list[_NewCandidate] = []
         grouped: set[str] = set()
         members: dict[str, set[str]] = {}
-        for item in candidates:
-            key = item["_key"]
+        for c in candidates:
+            key = c.key
             if key in grouped:
                 continue
-            family = [o for o in candidates if o["_key"] != key and o["_key"] not in grouped
-                      and same_family(self.entity(key), self.entity(o["_key"]))]
-            item["variants"] = sorted(o["name"] for o in family)
-            grouped.update(o["_key"] for o in family)
-            members[key] = {key} | {o["_key"] for o in family}
-            shown.append(item)
+            family = [o for o in candidates if o.key != key and o.key not in grouped
+                      and same_family(self.entity(key), self.entity(o.key))]
+            c.item["variants"] = sorted(o.item["name"] for o in family)
+            grouped.update(o.key for o in family)
+            members[key] = {key} | {o.key for o in family}
+            shown.append(c)
         return shown, members
 
     def _new_name_ok(self, key: str, e: Entity) -> bool:
@@ -134,14 +181,14 @@ class _Snapshot:  # pylint: disable=too-many-instance-attributes
             reason = "lexical_history" if seen is not None else None
         if reason is None:
             return True
-        item: dict[str, Any] = {"name": e.display_name, "entity_id": self.entity_id(key),
-                                "reason": reason}
+        item: Suppressed = {"name": e.display_name, "entity_id": self.entity_id(key),
+                            "reason": reason}
         if seen is not None:
-            item |= {"day": seen[0].isoformat(), "match": seen[1], "text": seen[2]}
+            item["day"], item["match"], item["text"] = seen[0].isoformat(), seen[1], seen[2]
         self.suppressed.append(item)
         return False
 
-    def _new_item(self, key: str, articles: list[ArticleObs], quote: str) -> dict[str, Any]:
+    def _new_item(self, key: str, articles: list[ArticleObs], quote: str) -> _NewCandidate:
         e = self.entity(key)
         publishers = len({a.publisher for a in articles})
         older = [o for o in self.data.entities.values()
@@ -152,20 +199,22 @@ class _Snapshot:  # pylint: disable=too-many-instance-attributes
         line, source = one_liner(e.display_name, quote,
                                  [a.summary for a in linked_articles(articles, self.t.links_max)],
                                  self.t.one_liner_max)
-        return {"_key": key, "_ids": {a.article_id for a in articles},
-                "_type_rank": order.index(e.entity_type) if e.entity_type in order else len(order),
-                "entity_id": self.entity_id(key), "name": e.display_name, "type": e.entity_type,
-                "vendor": e.vendor, "level": level,
-                "variant_of": variant_of.display_name if variant_of else None, "variants": [],
-                "novelty_quote": quote, "one_liner": line, "one_liner_source": source,
-                "articles": len(articles), "publishers": publishers,
-                "links": links(articles, self.t.links_max)}
+        return _NewCandidate(
+            key=key, ids={a.article_id for a in articles},
+            type_rank=order.index(e.entity_type) if e.entity_type in order else len(order),
+            item={"entity_id": self.entity_id(key), "name": e.display_name,
+                  "type": e.entity_type, "vendor": e.vendor, "level": level,
+                  "variant_of": variant_of.display_name if variant_of else None, "variants": [],
+                  "novelty_quote": quote, "one_liner": line, "one_liner_source": source,
+                  "articles": len(articles), "publishers": publishers,
+                  "links": links(articles, self.t.links_max)})
 
     @staticmethod
-    def _new_order(item: dict[str, Any]) -> tuple:
+    def _new_order(c: _NewCandidate) -> tuple[int, int, int, int, str]:
+        item = c.item
         if item["level"] == "confirmed":
-            return 0, -item["publishers"], -item["articles"], item["_type_rank"], item["name"]
-        return 1, item["_type_rank"], -item["publishers"], -item["articles"], item["name"]
+            return 0, -item["publishers"], -item["articles"], c.type_rank, item["name"]
+        return 1, c.type_rank, -item["publishers"], -item["articles"], item["name"]
 
     # Counts ---------------------------------------------------------------------------------
     def unit_articles(self, day: date) -> dict[str, list[ArticleObs]]:
@@ -180,24 +229,27 @@ class _Snapshot:  # pylint: disable=too-many-instance-attributes
         return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[0][0]
 
     def trend_item(self, unit: str, days: Iterable[date], articles: Sequence[ArticleObs],
-                   **fields: Any) -> dict[str, Any] | None:
+                   counts: _Counts, trailing_mean: float | None = None) -> TrendItem | None:
+        """The item of `unit`; a `trailing_mean` marks it as a spike."""
         key = self.representative(unit, days)
         e = self.entity(key)
         if e.needs_review:
             return None
         return {"entity_id": self.entity_id(key), "name": e.display_name, "type": e.entity_type,
-                "vendor": e.vendor, "current_7d": None, "previous_7d": None, "expected_7d": None,
-                "trailing_mean": None, "spike": False, **fields,
+                "vendor": e.vendor, "current_7d": counts.current_7d,
+                "previous_7d": counts.previous_7d, "expected_7d": counts.expected_7d,
+                "trailing_mean": trailing_mean, "spike": trailing_mean is not None,
+                "today": counts.today, "publishers": len({a.publisher for a in articles}),
                 "links": links(articles, self.t.links_max)}
 
-    def spikes(self, excluded: set[str]) -> list[dict[str, Any]] | None:
+    def spikes(self, excluded: set[str]) -> list[_Spike] | None:
         trailing = [self.day - timedelta(days=i) for i in range(1, self.t.spike_trailing_days + 1)]
         usable = [d for d in trailing if self.comparable(d) and self.complete(d)
                   and self.data.coverage[d].items >= self.t.spike_trailing_min_items]
         if len(usable) < self.t.spike_min_trailing_days:
             return None
         history = [self.unit_articles(d) for d in usable]
-        out = []
+        out: list[_Spike] = []
         for unit, articles in sorted(self.unit_articles(self.day).items()):
             publishers = len({a.publisher for a in articles})
             if unit in excluded or len(articles) < self.t.spike_min_articles \
@@ -205,27 +257,25 @@ class _Snapshot:  # pylint: disable=too-many-instance-attributes
                 continue
             mean = sum(len(h.get(unit, ())) for h in history) / len(usable)
             if len(articles) >= self.t.spike_ratio * max(mean, self.t.spike_mean_floor):
-                item = self.trend_item(unit, [self.day], articles, today=len(articles),
-                                       trailing_mean=_r(mean), spike=True, publishers=publishers)
+                item = self.trend_item(unit, [self.day], articles, _Counts(today=len(articles)),
+                                       trailing_mean=_r(mean))
                 if item is not None:
-                    item["_unit"] = unit
-                    item["_key"] = self.representative(unit, [self.day])
-                    item["_ids"] = {a.article_id for a in articles}
-                    out.append(item)
-        out.sort(key=lambda i: (-i["today"], i["name"]))
+                    out.append(_Spike(unit, self.representative(unit, [self.day]),
+                                      {a.article_id for a in articles}, item))
+        out.sort(key=lambda s: (-s.item["today"], s.item["name"]))
         return out
 
     # Spike folding (007 noise rules 3 and 4) ---------------------------------------------------
-    def fold_spikes(self, spikes: list[dict[str, Any]], stories: list[Story],
-                    shown: list[tuple[Story, dict[str, Any]]], new: list[dict[str, Any]]
-                    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    def fold_spikes(self, spikes: list[_Spike], stories: list[Story],
+                    shown: list[tuple[Story, TopStory]], new: list[_NewCandidate]
+                    ) -> tuple[list[_Spike], list[Folded]]:
         """(kept spikes with a reason, folded records); the target item lists the spike name
         under `spikes`."""
-        kept: list[dict[str, Any]] = []
-        folded: list[dict[str, Any]] = []
+        kept: list[_Spike] = []
+        folded: list[Folded] = []
         for spike in spikes:
-            ids = spike["_ids"]
-            org = self.entity(spike["_key"]).type_group == "org"
+            ids, name = spike.ids, spike.item["name"]
+            org = self.entity(spike.key).type_group == "org"
 
             def share(other: set[int], ids: set[int] = ids) -> bool:
                 shared: bool = len(ids & other) >= self.t.fold_share * len(ids)
@@ -234,42 +284,42 @@ class _Snapshot:  # pylint: disable=too-many-instance-attributes
             target = self._fold_target(spike, org=org, share=share, into=(shown, new, kept))
             if target is not None:
                 kind, into, record = target
-                record.setdefault("spikes", []).append(spike["name"])
-                folded.append({"name": spike["name"], "into": into, "reason": kind})
+                record.setdefault("spikes", []).append(name)
+                folded.append({"name": name, "into": into, "reason": kind})
                 continue
             holding = [(len(ids & {m.article_id for m in s.members}), s.publishers, s.label)
                        for s in stories]
             best = min(holding, key=lambda h: (-h[0], -h[1], h[2]), default=None)
             if org and (best is None or best[0] < self.t.diffuse_story_min):
-                folded.append({"name": spike["name"], "into": None, "reason": "diffuse"})
+                folded.append({"name": name, "into": None, "reason": "diffuse"})
                 continue
-            spike["reason"] = best[2] if best is not None and best[0] else None
+            spike.item["reason"] = best[2] if best is not None and best[0] else None
             kept.append(spike)
         return kept, folded
 
-    def _fold_target(self, spike: dict[str, Any], *, org: bool, share,
-                     into: tuple[list[tuple[Story, dict[str, Any]]], list[dict[str, Any]],
-                                 list[dict[str, Any]]]):
+    def _fold_target(self, spike: _Spike, *, org: bool, share: Callable[[set[int]], bool],
+                     into: tuple[list[tuple[Story, TopStory]], list[_NewCandidate], list[_Spike]]
+                     ) -> tuple[str, str, FoldTarget] | None:
         """Where a spike folds: a shown story, a new item or a kept spike (`into`)."""
         shown, new, kept = into
-        name = name_key(spike["name"])
+        spike_name = spike.item["name"]
+        name = name_key(spike_name)
         for story, out in shown:
             if not share({m.article_id for m in story.members}):
                 continue
-            if spike["_unit"] in {unit_key(k) for k in story.entity_keys} \
+            if spike.unit in {unit_key(k) for k in story.entity_keys} \
                     or name in name_key(story.label) \
-                    or (org and any(same_vendor(self.entity(k).vendor, spike["name"])
+                    or (org and any(same_vendor(self.entity(k).vendor, spike_name)
                                     for k in story.entity_keys)):
                 return "story", story.label, out
         if not org:
             return None
-        for item in new:
-            if share(item["_ids"]) and same_vendor(item["vendor"], spike["name"]):
-                return "new", item["name"], item
+        for c in new:
+            if share(c.ids) and same_vendor(c.item["vendor"], spike_name):
+                return "new", c.item["name"], c.item
         for other in kept:
-            if share(other["_ids"]) and same_vendor(self.entity(other["_key"]).vendor,
-                                                    spike["name"]):
-                return "spike", other["name"], other
+            if share(other.ids) and same_vendor(self.entity(other.key).vendor, spike_name):
+                return "spike", other.item["name"], other.item
         return None
 
     def comparable(self, day: date) -> bool:
@@ -284,63 +334,54 @@ class _Snapshot:  # pylint: disable=too-many-instance-attributes
     def extracted(self, days: Iterable[date]) -> int:
         return sum(self.data.coverage[d].extracted for d in days)
 
-    def trends(self, excluded: set[str], spikes: list[dict[str, Any]] | None,
-               kept: list[dict[str, Any]]):
+    def trends(self, excluded: set[str], spikes: list[_Spike] | None, kept: list[_Spike]
+               ) -> tuple[list[TrendItem], list[TrendItem], bool]:
         """Rising and cooling; `spikes` flag rising items, only `kept` spikes are listed."""
         usable = self.windows()
         if usable is None:
-            rising = [dict(s) for s in kept][:self.t.rising_max]
-            return rising, [], False
+            return [s.item.copy() for s in kept][:self.t.rising_max], [], False
         cur_days, prev_days = usable
-        spike_units = {s["_unit"]: s for s in spikes or []}
+        spike_units = {s.unit: s for s in spikes or []}
         today = self.unit_articles(self.day)
-        rising, cooling = [], []
+        rising: list[_Trend] = []
+        cooling: list[_Trend] = []
         for row in trend_delta(self.data.coverage, self.data.observations,
                                (cur_days, prev_days), excluded=excluded, t=self.t):
-            counts = {"current_7d": row.current, "previous_7d": row.previous,
-                      "expected_7d": _r(row.expected), "today": len(today.get(row.unit, ()))}
-            item = self._rising_item(row, cur_days, counts, spike_units.get(row.unit))
-            if item is not None:
-                rising.append(item)
-            item = self._cooling_item(row, prev_days, counts)
-            if item is not None:
-                cooling.append(item)
-        rising.sort(key=lambda i: (-i["_delta"], -i["current_7d"], i["name"]))
-        cooling.sort(key=lambda i: (-i["_delta"], -i["previous_7d"], i["name"]))
-        listed = {i["_unit"] for i in rising}
-        rising += [dict(s) for s in kept if s["_unit"] not in listed]
-        for item in rising + cooling:
-            item.pop("_delta", None)
-        return rising[:self.t.rising_max], cooling[:self.t.cooling_max], True
+            counts = _Counts(today=len(today.get(row.unit, ())), current_7d=row.current,
+                             previous_7d=row.previous, expected_7d=_r(row.expected))
+            trend = self._rising_item(row, cur_days, counts, spike_units.get(row.unit))
+            if trend is not None:
+                rising.append(trend)
+            trend = self._cooling_item(row, prev_days, counts)
+            if trend is not None:
+                cooling.append(trend)
+        for trends in (rising, cooling):
+            trends.sort(key=lambda r: (-r.delta, -r.count, r.item["name"]))
+        listed = {r.unit for r in rising}
+        items = [r.item for r in rising] + [s.item.copy() for s in kept if s.unit not in listed]
+        return items[:self.t.rising_max], [r.item for r in cooling][:self.t.cooling_max], True
 
-    def _rising_item(self, row: TrendRow, cur_days: list[date], counts: dict[str, Any],
-                     spike: dict[str, Any] | None) -> dict[str, Any] | None:
+    def _rising_item(self, row: TrendRow, cur_days: list[date], counts: _Counts,
+                     spike: _Spike | None) -> _Trend | None:
         if not row.rising:
             return None
-        item = self.trend_item(row.unit, cur_days, row.current_articles, **counts,
-                               publishers=len({a.publisher for a in row.current_articles}),
-                               spike=spike is not None,
-                               trailing_mean=spike["trailing_mean"] if spike else None)
+        item = self.trend_item(row.unit, cur_days, row.current_articles, counts,
+                               trailing_mean=spike.item["trailing_mean"] if spike else None)
         if item is None:
             return None
-        if spike is not None and "reason" in spike:
-            item["reason"] = spike["reason"]
-        item["_unit"] = row.unit
-        item["_delta"] = row.rising_delta
-        return item
+        if spike is not None and "reason" in spike.item:
+            item["reason"] = spike.item["reason"]
+        return _Trend(row.unit, row.rising_delta, row.current, item)
 
-    def _cooling_item(self, row: TrendRow, prev_days: list[date], counts: dict[str, Any]
-                      ) -> dict[str, Any] | None:
+    def _cooling_item(self, row: TrendRow, prev_days: list[date], counts: _Counts
+                      ) -> _Trend | None:
         if not row.cooling:
             return None
-        item = self.trend_item(row.unit, prev_days, row.previous_articles, **counts,
-                               publishers=len({a.publisher for a in row.previous_articles}))
-        if item is not None:
-            item["_delta"] = row.cooling_delta
-        return item
+        item = self.trend_item(row.unit, prev_days, row.previous_articles, counts)
+        return None if item is None else _Trend(row.unit, row.cooling_delta, row.previous, item)
 
     # Payload --------------------------------------------------------------------------------
-    def build(self) -> dict[str, Any]:
+    def build(self) -> SnapshotPayload:
         cov = self.data.coverage.get(self.day) or DayCoverage(self.day, "signals", False)
         new, new_keys = self.new_items()
         history_days = self._complete_days(lambda d, c: d < self.day)
@@ -353,9 +394,6 @@ class _Snapshot:  # pylint: disable=too-many-instance-attributes
         kept, folded = self.fold_spikes(spikes or [], stories, shown, new)
         rising, cooling, usable = self.trends(excluded, spikes, kept)
         self._trend_sections(usable)
-        for item in rising + new:
-            for key in ("_unit", "_key", "_ids"):
-                item.pop(key, None)
         status = self._day_status(cov)
         return {
             "report_date": self.day.isoformat(),
@@ -371,7 +409,7 @@ class _Snapshot:  # pylint: disable=too-many-instance-attributes
             "sections": self.sections,
             "thresholds": _thresholds(self.t),
             "quiet": cov.items < self.t.quiet_items or not top,
-            "new": new,
+            "new": [c.item for c in new],
             "new_suppressed": sorted(self.suppressed, key=lambda i: (i["name"], i["entity_id"])),
             "new_hidden": self.hidden,
             "top_stories": [out for _, out in shown],
@@ -382,7 +420,7 @@ class _Snapshot:  # pylint: disable=too-many-instance-attributes
             "article_event_types": {a.url: a.event_type for a in self.articles},
         }
 
-    def _new_section(self, history_days: int) -> dict[str, Any]:
+    def _new_section(self, history_days: int) -> Section:
         if history_days < self.t.history_note_days:
             return {"state": "building", "note": f"History: {history_days} complete days."}
         return {"state": "ready", "note": None}
@@ -424,14 +462,14 @@ class _Snapshot:  # pylint: disable=too-many-instance-attributes
             return "building_history"
         return "ready"
 
-    def _story(self, story: Story) -> dict[str, Any]:
+    def _story(self, story: Story) -> TopStory:
         return {"label": story.label, "event_type": story.event_type,
                 "articles": len(story.members), "publishers": story.publishers,
                 "entities": [self.entity(k).display_name for k in story.entity_keys],
                 "spikes": [], "links": links(story.members, self.t.links_max)}
 
-    def _event_counts(self, stories: list[Story]) -> list[dict[str, Any]]:
-        out = []
+    def _event_counts(self, stories: list[Story]) -> list[EventCount]:
+        out: list[EventCount] = []
         articles = Counter(a.event_type for a in self.articles)
         for event, label in EVENT_LABELS.items():
             members = [s for s in stories if s.event_type == event]
@@ -444,17 +482,17 @@ class _Snapshot:  # pylint: disable=too-many-instance-attributes
         return out
 
 
-def _coverage(cov: DayCoverage) -> dict[str, int]:
+def _coverage(cov: DayCoverage) -> Coverage:
     return {"items": cov.items, "matched": cov.matched, "extracted": cov.extracted,
             "failed": cov.failed, "skipped": cov.skipped, "pending": cov.pending,
             "unmatched": max(0, cov.items - cov.matched)}
 
 
-def _thresholds(t: Thresholds) -> dict[str, Any]:
+def _thresholds(t: Thresholds) -> dict[str, object]:
     return {k: _r(v) if isinstance(v, float) else list(v) if isinstance(v, tuple) else v
             for k, v in asdict(t).items()}
 
 
-def compute_snapshot(data: SnapshotInput) -> dict[str, Any]:
+def compute_snapshot(data: SnapshotInput) -> SnapshotPayload:
     """The stored payload for one comparable published day."""
     return _Snapshot(data).build()

@@ -8,11 +8,12 @@ import re
 import unicodedata
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, NotRequired, TypedDict
 
 from app.core.canonical_json import encoded, fingerprint
 from app.core.daily.signals_entities import QUOTES
 from app.core.daily.signals_extract import GROUNDING
+from app.core.daily.signals_payload import Link, SnapshotPayload, TrendItem
 
 BRIEF_VERSION = "daily-signals-brief-4"
 # 8 one-per-item sentences took 876 tokens (2026-10-29); two attempts stay under $0.05.
@@ -81,6 +82,49 @@ class PacketTooLarge(ValueError):
     """The packet exceeds PACKET_MAX_BYTES even with every summary at the floor."""
 
 
+class PacketArticle(TypedDict):
+    title: str
+    summary: str
+    publisher: NotRequired[str]
+
+
+class PacketItem(TypedDict, total=False):
+    """A story, New item, spike or riser of a daily or period packet."""
+    label: str
+    name: str
+    type: str | None
+    vendor: str | None
+    event: str
+    kind: str
+    outlets: int
+    what: str
+    today: int
+    usual_per_day: float | None
+    articles: list[str]
+
+
+class Packet(TypedDict):
+    """The model-visible brief input; `day` and `spikes` are daily, the rest of the optional keys
+    belong to the period packet."""
+    quiet: bool
+    digest_items: int
+    stories: list[PacketItem]
+    new: list[PacketItem]
+    event_counts: dict[str, int]
+    articles: dict[str, PacketArticle]
+    day: NotRequired[str]
+    spikes: NotRequired[list[PacketItem]]
+    kind: NotRequired[str]
+    start: NotRequired[str]
+    end: NotRequired[str]
+    risers: NotRequired[list[PacketItem]]
+
+
+DigestItem = Mapping[str, str | None]  # title, summary, url and optionally publisher
+IdMap = dict[str, dict[str, str]]
+_Seen = set[tuple[str | int, ...]]
+
+
 @dataclass(frozen=True)
 class Sentence:
     text: str
@@ -95,7 +139,7 @@ def norm(value: str | None) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
-def digest_summary(value: Any) -> str:
+def digest_summary(value: object) -> str:
     """A digest item summary; empty or the literal "None" (a stored None) reads as ""."""
     text = str(value or "").strip()
     return "" if text == "None" else text
@@ -114,36 +158,34 @@ def is_review(titles: Sequence[str]) -> bool:
         sum(1 for t in titles if REVIEW_TITLE.search(t)) >= REVIEW_SHARE * len(titles)
 
 
-def _items(payload: Mapping[str, Any], group: str) -> list[Mapping[str, Any]]:
-    return [i for i in payload.get(group) or [] if isinstance(i, Mapping)]
+def items_of[T](group: Iterable[T] | None) -> list[T]:
+    """The mapping entries of one stored payload list (missing or malformed entries skipped)."""
+    return [i for i in group or [] if isinstance(i, Mapping)]
 
 
-def kept_spikes(payload: Mapping[str, Any]) -> list[Mapping[str, Any]]:
-    return [i for i in _items(payload, "rising") if i.get("spike")]
+def kept_spikes(payload: SnapshotPayload) -> list[TrendItem]:
+    return [i for i in items_of(payload.get("rising")) if i.get("spike")]
 
 
 class ArticleRefs:
     """Article ids `a1..aN` in order of first reference, from the published digest items.
 
-    `groups` are the payload item lists whose links tell the publisher of a digest url."""
+    `links` are the payload item links; they tell the publisher of a digest url."""
 
-    def __init__(self, digest_items: Iterable[Mapping[str, Any]],
-                 groups: Iterable[Iterable[Mapping[str, Any]]]):
-        self.by_url: dict[str, Mapping[str, Any]] = {}
-        self.ordered: list[Mapping[str, Any]] = []
+    def __init__(self, digest_items: Iterable[DigestItem], links: Iterable[Link]):
+        self.by_url: dict[str, DigestItem] = {}
+        self.ordered: list[DigestItem] = []
         for item in digest_items:
             url = str(item.get("url") or "")
             if url and url not in self.by_url:
                 self.by_url[url] = item
                 self.ordered.append(item)
         self.link_publisher: dict[str, str] = {}
-        for group in groups:
-            for item in group:
-                for link in item.get("links") or []:
-                    self.link_publisher.setdefault(link["url"], link.get("publisher") or "")
+        for link in links:
+            self.link_publisher.setdefault(link["url"], link.get("publisher") or "")
         self.ids: dict[str, str] = {}
-        self.articles: dict[str, dict[str, str]] = {}
-        self.id_map: dict[str, dict[str, str]] = {}
+        self.articles: dict[str, PacketArticle] = {}
+        self.id_map: IdMap = {}
 
     def ref(self, url: str) -> str | None:
         item = self.by_url.get(url)
@@ -152,8 +194,9 @@ class ArticleRefs:
         if url not in self.ids:
             key = f"a{len(self.ids) + 1}"
             self.ids[url] = key
-            article = {"title": norm(str(item.get("title") or "")),
-                       "summary": cut(digest_summary(item.get("summary")), SUMMARY_MAX)}
+            article: PacketArticle = {
+                "title": norm(str(item.get("title") or "")),
+                "summary": cut(digest_summary(item.get("summary")), SUMMARY_MAX)}
             publisher = item.get("publisher") or self.link_publisher.get(url)
             if publisher:
                 article["publisher"] = str(publisher)
@@ -162,12 +205,12 @@ class ArticleRefs:
                                 "publisher": str(publisher or "")}
         return self.ids[url]
 
-    def of(self, item: Mapping[str, Any], limit: int = LINKS_PER_ITEM) -> list[str]:
-        return [x for link in (item.get("links") or [])[:limit]
-                if (x := self.ref(link["url"])) is not None]
+    def of(self, links: Sequence[Link] | None, limit: int = LINKS_PER_ITEM) -> list[str]:
+        """Ids of the first `limit` links that are digest items."""
+        return [x for link in (links or [])[:limit] if (x := self.ref(link["url"])) is not None]
 
 
-def fit_packet(packet: Mapping[str, Any], max_bytes: int) -> None:
+def fit_packet(packet: Packet, max_bytes: int) -> None:
     """Shorten every article summary (down to SUMMARY_FLOOR) until the packet fits."""
     articles = packet["articles"]
     while len(encoded(packet).encode()) > max_bytes:
@@ -181,34 +224,41 @@ def fit_packet(packet: Mapping[str, Any], max_bytes: int) -> None:
             raise PacketTooLarge(str(len(encoded(packet).encode())))
 
 
-def brief_packet(payload: Mapping[str, Any], digest_items: Iterable[Mapping[str, Any]]
-                 ) -> tuple[dict[str, Any], dict[str, dict[str, str]]]:
+def brief_packet(payload: SnapshotPayload, digest_items: Iterable[DigestItem]
+                 ) -> tuple[Packet, IdMap]:
     """(packet, id map) for one day from its stored snapshot and published digest items.
 
     Digest items carry title, summary, url and optionally publisher. Ids `a1..aN` follow the first
     reference: top stories, New items, kept spikes, then (quiet day) the digest itself."""
-    refs = ArticleRefs(digest_items, [_items(payload, g) for g in ("top_stories", "new", "rising")])
+    top, new_items = items_of(payload.get("top_stories")), items_of(payload.get("new"))
+    rising = items_of(payload.get("rising"))
+    refs = ArticleRefs(digest_items, [link for item in (*top, *new_items, *rising)
+                                      for link in item.get("links") or []])
     ref = refs.ref
 
-    coverage = payload.get("coverage") or {}
+    coverage = payload.get("coverage")
     quiet = bool(payload.get("quiet"))
-    stories = []
-    for story in _items(payload, "top_stories"):
-        entry: dict[str, Any] = {"label": norm(story["label"]), "outlets": story["publishers"],
-                                 "event": story["event_type"], "articles": refs.of(story)}
+    stories: list[PacketItem] = []
+    for story in top:
+        entry: PacketItem = {"label": norm(story["label"]), "outlets": story["publishers"],
+                             "event": story["event_type"], "articles": refs.of(story.get("links"))}
         if is_review([norm(link["title"]) for link in story.get("links") or []]):
             entry["kind"] = "review"
         stories.append(entry)
-    new = [{"name": n["name"], "type": n["type"], "vendor": n.get("vendor"),
-            "outlets": n["publishers"], "what": n.get("one_liner") or n.get("novelty_quote") or "",
-            "articles": refs.of(n)} for n in _items(payload, "new")]
-    spikes = [{"name": s["name"], "today": s["today"], "usual_per_day": s.get("trailing_mean"),
-               "articles": refs.of(s)} for s in kept_spikes(payload)]
-    packet: dict[str, Any] = {
-        "day": payload["report_date"], "quiet": quiet, "digest_items": coverage.get("items", 0),
+    new: list[PacketItem] = [
+        {"name": n["name"], "type": n["type"], "vendor": n.get("vendor"),
+         "outlets": n["publishers"], "what": n.get("one_liner") or n.get("novelty_quote") or "",
+         "articles": refs.of(n.get("links"))} for n in new_items]
+    spikes: list[PacketItem] = [
+        {"name": s["name"], "today": s["today"], "usual_per_day": s.get("trailing_mean"),
+         "articles": refs.of(s.get("links"))} for s in kept_spikes(payload)]
+    packet: Packet = {
+        "day": payload["report_date"], "quiet": quiet,
+        "digest_items": coverage.get("items", 0) if coverage else 0,
         "stories": stories, "new": new, "spikes": spikes,
-        "event_counts": {e["label"]: e["stories"] for e in _items(payload, "event_counts")
-                         if e["event_type"] in HARD_EVENTS and e["stories"]}}
+        "event_counts": {e["label"]: e["stories"] for e in items_of(payload.get("event_counts"))
+                         if e["event_type"] in HARD_EVENTS and e["stories"]},
+        "articles": {}}
     if quiet:
         for item in refs.ordered[:QUIET_ARTICLES_MAX]:
             ref(str(item["url"]))
@@ -217,12 +267,12 @@ def brief_packet(payload: Mapping[str, Any], digest_items: Iterable[Mapping[str,
     return packet, refs.id_map
 
 
-def input_hash(packet: Mapping[str, Any], model: str, version: str | None = None) -> str:
+def input_hash(packet: Packet, model: str, version: str | None = None) -> str:
     return str(fingerprint({"packet": packet, "version": version or BRIEF_VERSION,
                             "model": model}))
 
 
-def request_body(packet: Mapping[str, Any], model: str, recovery: str | None = None, *,
+def request_body(packet: Mapping[str, object], model: str, recovery: str | None = None, *,
                  prompt: str = BRIEF_PROMPT, max_output: int = MAX_OUTPUT) -> dict[str, Any]:
     """The provider request; the period brief passes its own prompt and output bound."""
     system = prompt + (RECOVERY.format(reason=recovery) if recovery else "")
@@ -237,7 +287,7 @@ def request_key(body: Mapping[str, Any], version: str | None = None) -> str:
                             "version": version or BRIEF_VERSION}))
 
 
-def _content(data: Any, model: str) -> list[Any]:
+def _content(data: object, model: str) -> list[object]:
     if not isinstance(data, Mapping) or data.get("model") != model:
         raise BriefInvalid("model")
     try:
@@ -258,14 +308,16 @@ def _content(data: Any, model: str) -> list[Any]:
 class _Context:
     """Per-article grounding text built once per packet."""
 
-    def __init__(self, packet: Mapping[str, Any]):
+    def __init__(self, packet: Packet):
         self.packet = packet
-        self.articles: Mapping[str, Mapping[str, str]] = packet["articles"]
+        self.articles: Mapping[str, PacketArticle] = packet["articles"]
         self.whats: dict[str, list[str]] = {}
         self.names: dict[str, list[str]] = {}
         self.outlets: dict[str, set[str]] = {}
-        for group in ("stories", "new", "spikes", "risers"):
-            for item in packet.get(group) or []:
+        groups = {"stories": packet["stories"], "new": packet["new"],
+                  "spikes": packet.get("spikes", []), "risers": packet.get("risers", [])}
+        for group, items in groups.items():
+            for item in items:
                 for a in item["articles"]:
                     if item.get("what"):
                         self.whats.setdefault(a, []).append(norm(item["what"]))
@@ -275,8 +327,8 @@ class _Context:
                     if group in ("stories", "new"):
                         self.outlets.setdefault(a, set()).add(str(item["outlets"]))
         for a, article in self.articles.items():
-            if article.get("publisher"):
-                self.names.setdefault(a, []).append(article["publisher"].rsplit(".", 1)[0])
+            if publisher := article.get("publisher"):
+                self.names.setdefault(a, []).append(publisher.rsplit(".", 1)[0])
 
     def text(self, article_id: str) -> str:
         article = self.articles[article_id]
@@ -284,7 +336,7 @@ class _Context:
                          *self.whats.get(article_id, [])])
 
 
-def _span_ok(span: Any) -> bool:
+def _span_ok(span: object) -> bool:
     return isinstance(span, str) and bool(span.strip()) and 5 <= len(span.split()) <= 40 \
         and len(span) <= 300
 
@@ -334,7 +386,7 @@ def grounding_error(text: str, numbers: set[str], names: str,
     return None
 
 
-def _shape(raw: Any, ctx: _Context) -> tuple[str, list[str], dict[str, str]]:
+def _shape(raw: object, ctx: _Context) -> tuple[str, list[str], dict[str, str]]:
     """(text, ids, quote) of a sentence with a valid schema, length, script and quote."""
     if not isinstance(raw, dict) or set(raw) != {"text", "ids", "quote"}:
         raise BriefInvalid("schema")
@@ -345,7 +397,7 @@ def _shape(raw: Any, ctx: _Context) -> tuple[str, list[str], dict[str, str]]:
     return text, ids, quote
 
 
-def _check_text(text: Any) -> None:
+def _check_text(text: object) -> None:
     if not isinstance(text, str) or not 20 <= len(text) <= 240:
         raise BriefInvalid("text_length")
     if MARKUP.search(text):
@@ -354,13 +406,13 @@ def _check_text(text: Any) -> None:
         raise BriefInvalid("non_english")
 
 
-def _check_ids(ids: Any, ctx: _Context) -> None:
+def _check_ids(ids: object, ctx: _Context) -> None:
     if not isinstance(ids, list) or not 1 <= len(ids) <= 3 or \
             any(not isinstance(i, str) or i not in ctx.articles for i in ids):
         raise BriefInvalid("unknown_id")
 
 
-def _check_quote(quote: Any, ids: list[str], ctx: _Context) -> None:
+def _check_quote(quote: object, ids: list[str], ctx: _Context) -> None:
     if not isinstance(quote, dict) or set(quote) != {"id", "span"} or quote["id"] not in ids \
             or not _span_ok(quote["span"]):
         raise BriefInvalid("quote_schema")
@@ -381,7 +433,7 @@ def _check_grounding(text: str, ids: list[str], ctx: _Context) -> None:
         raise BriefInvalid(code)
 
 
-def _claim(ids: list[str], ctx: _Context, seen: set[Any]) -> None:
+def _claim(ids: list[str], ctx: _Context, seen: _Seen) -> None:
     """Record the sentence ids and its stories in `seen`; a repeat of either is refused."""
     key = tuple(sorted(ids))
     if key in seen:
@@ -395,7 +447,7 @@ def _claim(ids: list[str], ctx: _Context, seen: set[Any]) -> None:
     seen.update(stories)
 
 
-def _sentence(raw: Any, ctx: _Context, seen: set[Any]) -> Sentence:
+def _sentence(raw: object, ctx: _Context, seen: _Seen) -> Sentence:
     text, ids, quote = _shape(raw, ctx)
     _check_grounding(text, ids, ctx)
     _claim(ids, ctx, seen)
@@ -403,7 +455,7 @@ def _sentence(raw: Any, ctx: _Context, seen: set[Any]) -> Sentence:
                     quote=quote["span"].strip())
 
 
-def parse_brief(data: Any, packet: Mapping[str, Any], model: str,
+def parse_brief(data: object, packet: Packet, model: str,
                 rules: BriefRules = DAILY_BRIEF, *,
                 dropped: list[str] | None = None) -> list[Sentence]:
     """Validate one provider answer against the packet (plan validation rules 1-9).
@@ -419,7 +471,7 @@ def parse_brief(data: Any, packet: Mapping[str, Any], model: str,
     if len(raw) < low or (not keep_valid and len(raw) > high):
         raise BriefInvalid("sentence_count")
     ctx = _Context(packet)
-    seen: set[Any] = set()
+    seen: _Seen = set()
     out: list[Sentence] = []
     errors: list[BriefInvalid] = []
     for index, item in enumerate(raw, start=1):

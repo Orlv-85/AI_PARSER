@@ -6,6 +6,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
 from app.core.daily.signals_model import EVENT_FAMILY, ArticleObs
+from app.core.daily.signals_payload import Link
 from app.core.ingestion.dedup import hamming_distance, simhash64
 
 TITLE_STOP = frozenset("""a an the and or of to in on for with by from at as is are be its it this
@@ -115,6 +116,6 @@ def linked_articles(articles: Iterable[ArticleObs], limit: int) -> list[ArticleO
     return (first + rest)[:limit]
 
 
-def links(articles: Iterable[ArticleObs], limit: int) -> list[dict[str, str]]:
+def links(articles: Iterable[ArticleObs], limit: int) -> list[Link]:
     return [{"title": a.title, "url": a.url, "publisher": a.publisher}
             for a in linked_articles(articles, limit)]

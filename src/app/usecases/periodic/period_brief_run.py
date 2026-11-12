@@ -16,6 +16,8 @@ from typing import Any
 from app.core.daily.signals_brief import (
     BRIEF_PRICES,
     BriefInvalid,
+    IdMap,
+    Packet,
     PacketTooLarge,
     brief_payload,
 )
@@ -57,8 +59,8 @@ class _PeriodWork:
 
     kind: str
     start: date
-    packet: dict[str, Any]
-    id_map: dict[str, Any]
+    packet: Packet
+    id_map: IdMap
     digest: str
 
 
@@ -102,7 +104,7 @@ def _attempts(repo: PeriodSignalRepo, ledger: SignalsLedger, work: _PeriodWork,
 
 
 def _prepare(repo: PeriodSignalRepo, kind: str, start: date,  # pylint: disable=too-many-return-statements
-             model: str) -> tuple[str, tuple[dict[str, Any], dict[str, Any], str] | None]:
+             model: str) -> tuple[str, tuple[Packet, IdMap, str] | None]:
     """(state, work): a final state without work, or "due" with (packet, id map, input hash)."""
     row = repo.get_report(kind, start)
     if row is None:
