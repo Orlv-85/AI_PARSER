@@ -8,14 +8,21 @@ import httpx
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
-from app.storage.archive import WORLD_SOURCE_KEY, ArchiveRepo
-from app.storage.article_evidence_cache import EXTRACTION_VERSION, PageCache, url_key
+from app.storage.archive import WORLD_SOURCE_KEY, ArchiveRepo, DocumentMeta
+from app.storage.article_evidence_cache import (
+    EXTRACTION_VERSION,
+    DownloadLimits,
+    PageCache,
+    url_key,
+)
 from app.storage.models_sql import ArchiveDocument, ArchiveText, Article, Base
 from app.usecases.archive import capture as capture_module
 from app.usecases.archive.capture import (
     ARCHIVE_MAX_PER_HOST,
     ARCHIVE_RAW_KEEP_DAYS,
     ARCHIVE_RETRY_DELAYS,
+    CaptureOptions,
+    PageFetch,
     capture,
     dedupe_page_cache,
 )
@@ -57,13 +64,21 @@ def _transport(routes, calls):
     return handle
 
 
+NO_PAUSE = DownloadLimits(host_interval=0, respect_robots=False)
+
+
 def _capture(session, tmp_path, routes=None, calls=None, **kwargs):
     calls = [] if calls is None else calls
     transport = httpx.MockTransport(_transport(routes or {}, calls))
-    options = {"cache_root": tmp_path / "archive", "daily_cache_root": tmp_path / "daily",
-               "host_interval": 0, "client_factory": lambda: httpx.AsyncClient(transport=transport),
-               **kwargs}
-    return capture(session, **options)
+    clock = kwargs.pop("clock", time.monotonic)
+    fetch = page_fetch(tmp_path, lambda: httpx.AsyncClient(transport=transport), clock=clock)
+    options = {k: kwargs.pop(k) for k in ("scope_all", "no_download", "max_seconds") if k in kwargs}
+    return capture(session, CaptureOptions(**options), fetch=fetch, **kwargs)
+
+
+def page_fetch(tmp_path, client_factory, **kwargs):
+    return PageFetch(cache_root=tmp_path / "archive", daily_cache_root=tmp_path / "daily",
+                     client_factory=client_factory, host_interval=0, **kwargs)
 
 
 def _document(session, url):
@@ -83,8 +98,7 @@ def test_capture_reuses_daily_publish_page(tmp_path) -> None:
 
     async def seed():
         async with httpx.AsyncClient(transport=httpx.MockTransport(_transport({}, []))) as client:
-            await capture_module.SourcePageDownloader(daily, client, host_interval=0,
-                                                      respect_robots=False).fetch_one(url)
+            await capture_module.SourcePageDownloader(daily, client, NO_PAUSE).fetch_one(url)
     asyncio.run(seed())
     before = {p.relative_to(tmp_path): p.stat().st_mtime_ns
               for p in (tmp_path / "daily").rglob("*")}
@@ -198,8 +212,7 @@ def test_capture_resumes_attempt_of_killed_run(tmp_path) -> None:
     async def download():
         transport = httpx.MockTransport(_transport({}, []))
         async with httpx.AsyncClient(transport=transport) as client:
-            await capture_module.SourcePageDownloader(cache, client, host_interval=0,
-                                                      respect_robots=False).fetch_one(url)
+            await capture_module.SourcePageDownloader(cache, client, NO_PAUSE).fetch_one(url)
     asyncio.run(download())
     calls: list[str] = []
     _capture(session, tmp_path, calls=calls)
@@ -239,10 +252,8 @@ def test_capture_outage_keeps_attempts(tmp_path) -> None:
 
     def refuse(request):
         raise httpx.ConnectError("DNS unavailable", request=request)
-    summary = capture(session, cache_root=tmp_path / "archive",
-                      daily_cache_root=tmp_path / "daily", host_interval=0,
-                      client_factory=lambda: httpx.AsyncClient(
-                          transport=httpx.MockTransport(refuse)))
+    summary = capture(session, fetch=page_fetch(tmp_path, lambda: httpx.AsyncClient(
+        transport=httpx.MockTransport(refuse))))
     assert summary["outage"] is True
     assert summary["outage_kept"] == summary["downloads"] > 0
     assert summary["failed"] == {} and summary["gave_up"] == 0
@@ -259,10 +270,8 @@ def test_capture_timeouts_are_an_outage(tmp_path) -> None:
 
     def time_out(request):
         raise httpx.ConnectTimeout("network down", request=request)
-    summary = capture(session, cache_root=tmp_path / "archive",
-                      daily_cache_root=tmp_path / "daily", host_interval=0,
-                      client_factory=lambda: httpx.AsyncClient(
-                          transport=httpx.MockTransport(time_out)))
+    summary = capture(session, fetch=page_fetch(tmp_path, lambda: httpx.AsyncClient(
+        transport=httpx.MockTransport(time_out))))
     assert summary["outage"] is True
     assert summary["outage_kept"] == summary["downloads"] > 0
     assert summary["failed"] == {} and summary["gave_up"] == 0
@@ -338,8 +347,7 @@ def test_download_documents_touches_only_given_ids(tmp_path) -> None:
     ids = [_document_after_sync(session, chosen)]
 
     summary = capture_module.download_documents(
-        session, ids, cache_root=tmp_path / "archive", daily_cache_root=tmp_path / "daily",
-        client_factory=lambda: httpx.AsyncClient(transport=transport), host_interval=0)
+        session, ids, fetch=page_fetch(tmp_path, lambda: httpx.AsyncClient(transport=transport)))
 
     assert _pages(calls) == [chosen]
     assert summary["downloads"] == 1
@@ -352,8 +360,7 @@ def test_download_documents_without_due_documents_reports_no_outage(tmp_path) ->
         raise AssertionError("no download expected")
 
     summary = capture_module.download_documents(
-        _session(), [], cache_root=tmp_path / "archive", daily_cache_root=tmp_path / "daily",
-        client_factory=no_client, host_interval=0)
+        _session(), [], fetch=page_fetch(tmp_path, no_client))
 
     assert (summary["outage"], summary["downloads"], summary["skipped_time"]) == (False, 0, 0)
 
@@ -368,9 +375,20 @@ def _document_after_sync(session, url) -> int:
 def _world_document(session, key="w"):
     url = f"https://world.example.org/{key}"
     return ArchiveRepo(session).upsert_document(
-        url_canonical_hash=f"world/{key}", url=url, url_canonical=url,
-        source_key=WORLD_SOURCE_KEY, host="world.example.org", title="World", published_at=None,
-        publication_day=None, publication_status=None, article_id=None, first_seen_at=NOW)
+        DocumentMeta(
+            url_canonical_hash=f"world/{key}",
+            url=url,
+            url_canonical=url,
+            source_key=WORLD_SOURCE_KEY,
+            host="world.example.org",
+            title="World",
+            published_at=None,
+            publication_day=None,
+            publication_status=None,
+            article_id=None,
+            first_seen_at=NOW,
+        ),
+    )
 
 
 def test_archive_coverage_skips_world_documents() -> None:

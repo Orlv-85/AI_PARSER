@@ -138,7 +138,7 @@ def test_article_storage_bounds_long_titles_in_both_insert_modes(tmp_path, batch
         if batch:
             assert repo.upsert_articles_batch([row]) == (1, 0)
         else:
-            _, is_new = repo.insert_article(**row)
+            _, is_new = repo.insert_article(row)
             assert is_new
         session.commit()
     with sessions() as session:

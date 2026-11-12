@@ -36,7 +36,7 @@ from app.core.periodic.period_brief import (
     period_input_hash,
     period_packet,
 )
-from app.storage.daily_signals_ledger import SignalsLedger
+from app.storage.daily_signals_ledger import RunEnv, SignalsLedger
 from app.storage.models_sql import Base, PeriodSignalBrief
 from app.storage.period_signals import PeriodSignalRepo
 from app.usecases.periodic import period_brief_run as run
@@ -62,9 +62,9 @@ def go(maker, tmp_path, provider, targets=(("week", WEEK_START),), *, max_usd="0
     with maker() as session:
         repo = PeriodSignalRepo(session, comparable_from=date(2026, 10, 10))
         return run.run_briefs(
-            session, repo, settings(**config), list(targets), max_usd=max_usd,
-            cache_dir=tmp_path / "cache", max_seconds=600, transport=provider.transport,
-            now=lambda: datetime(2026, 10, 28, 3, 0))
+            repo, settings(**config), list(targets),
+            run.BriefBudget(max_usd, tmp_path / "cache", 600),
+            RunEnv(transport=provider.transport, now=lambda: datetime(2026, 10, 28, 3, 0)))
 
 
 def brief_row(maker, kind="week", start=WEEK_START):

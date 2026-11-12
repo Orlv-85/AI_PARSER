@@ -16,14 +16,14 @@ from app.ingest.html import (
     extract_links_from_html,
     fetch_html_article,
 )
-from app.ingest.rss import RssFetchResult, fetch_rss, parse_rss
+from app.ingest.rss import RssFetchResult, RssOptions, fetch_rss, parse_rss
 from app.storage.article_repo import ArticleRepo
 from app.storage.models_sql import Article as StoredArticle
 from app.storage.models_sql import Base
 from app.storage.source_repo import SourceRepo
 from app.usecases.ingestion.pipeline import run_fetch_cycle
 from app.usecases.ingestion.pipeline.html_links import _process_html_links_two_stage
-from app.usecases.ingestion.pipeline.models import AdmissionState
+from app.usecases.ingestion.pipeline.models import AdmissionState, SourceRun
 from app.usecases.ingestion.pipeline.rss import _process_fetched_source_items
 from app.usecases.ingestion.pipeline.sources import _managed_source_to_config
 
@@ -124,8 +124,15 @@ def test_all_pipeline_item_paths_filter_before_models_and_preserve_dedupe(batch,
         settings = Settings(article_batch_upsert_enabled=batch, rss_known_streak_stop=0)
         for _ in range(2):
             result = _process_fetched_source_items(
-                items=items, config=source, db_source_id=db_source.id, article_repo=repo,
-                settings=settings, relevance_scorer=SimpleNamespace(classify=classify))
+                SourceRun(
+                    config=source,
+                    db_source_id=db_source.id,
+                    article_repo=repo,
+                    settings=settings,
+                    relevance_scorer=SimpleNamespace(classify=classify),
+                ),
+                items,
+            )
         assert result[:2] == (0, 1)
         assert all(str(item.url) == "https://example.com/news/ai" for item in scored)
         assert session.scalar(select(func.count()).select_from(StoredArticle)) == 1
@@ -145,10 +152,24 @@ def test_two_stage_filters_before_limit_and_model_call(monkeypatch) -> None:
         repo = ArticleRepo(session)
         settings = Settings(html_max_links_per_source=1, html_known_streak_stop=0)
         links = [BAD_URLS[0], "https://example.com/news/new-agent"]
-        assert _process_html_links_two_stage(links=links, config=source, db_source_id=db_source.id,
-                                            article_repo=repo, settings=settings)[:2] == (1, 1)
-        assert _process_html_links_two_stage(links=links, config=source, db_source_id=db_source.id,
-                                            article_repo=repo, settings=settings)[1:4] == (0, 1, 1)
+        assert _process_html_links_two_stage(
+            SourceRun(
+                config=source,
+                db_source_id=db_source.id,
+                article_repo=repo,
+                settings=settings,
+            ),
+            links,
+        )[:2] == (1, 1)
+        assert _process_html_links_two_stage(
+            SourceRun(
+                config=source,
+                db_source_id=db_source.id,
+                article_repo=repo,
+                settings=settings,
+            ),
+            links,
+        )[1:4] == (0, 1, 1)
         assert downloaded == [links[1]]
 
 
@@ -172,10 +193,15 @@ def test_positive_html_evidence_survives_pipeline_commerce_check(monkeypatch) ->
     Base.metadata.create_all(engine)
     with Session(engine) as session:
         db_source = SourceRepo(session).upsert_source(_source())
-        result = _process_fetched_source_items(items=[item], config=_source(),
-                                              db_source_id=db_source.id,
-                                              article_repo=ArticleRepo(session),
-                                              settings=Settings())
+        result = _process_fetched_source_items(
+            SourceRun(
+                config=_source(),
+                db_source_id=db_source.id,
+                article_repo=ArticleRepo(session),
+                settings=Settings(),
+            ),
+            [item],
+        )
         assert result[:2] == (1, 0)
 
 
@@ -220,15 +246,19 @@ def test_rss_linked_landing_is_removed_before_text_extraction(monkeypatch) -> No
                         lambda **_kwargs: pytest.fail("Landing extraction was attempted"))
     fetcher = SimpleNamespace(fetch_text=lambda **_kwargs:
                               "<h1>Platform</h1><p>Features</p><a>Request a demo</a>")
-    assert not fetch_rss("example", "https://example.com/feed", fetcher=fetcher,
-                         extract_full_text=True)
+    assert not fetch_rss(
+        "example",
+        "https://example.com/feed",
+        fetcher=fetcher,
+        options=RssOptions(extract_full_text=True),
+    )
 
 
 def test_rss_item_without_row_is_skipped_without_counting(monkeypatch) -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
     monkeypatch.setattr("app.usecases.ingestion.pipeline.screening._build_article_row",
-                        lambda **_kwargs: None)
+                        lambda *_args, **_kwargs: None)
     with Session(engine) as session:
         source = _source("rss")
         db_source = SourceRepo(session).upsert_source(source)
@@ -236,9 +266,14 @@ def test_rss_item_without_row_is_skipped_without_counting(monkeypatch) -> None:
                        url="https://example.com/news/ai")
         for batch in (False, True):
             result = _process_fetched_source_items(
-                items=[item], config=source, db_source_id=db_source.id,
-                article_repo=ArticleRepo(session),
-                settings=Settings(article_batch_upsert_enabled=batch, rss_known_streak_stop=0))
+                SourceRun(
+                    config=source,
+                    db_source_id=db_source.id,
+                    article_repo=ArticleRepo(session),
+                    settings=Settings(article_batch_upsert_enabled=batch, rss_known_streak_stop=0),
+                ),
+                [item],
+            )
             assert result == (0, 0, 0, False)
         assert session.scalar(select(func.count()).select_from(StoredArticle)) == 0
 
@@ -249,7 +284,7 @@ def _rss_row(rank, category=None):
 
 
 def test_rss_disabled_admission_state_uses_scorer_not_screening(monkeypatch) -> None:
-    def forbidden(**_kwargs):
+    def forbidden(*_args, **_kwargs):
         pytest.fail("_screen_candidate called with admission disabled")
     monkeypatch.setattr("app.usecases.ingestion.pipeline.screening._screen_candidate", forbidden)
     engine = create_engine("sqlite:///:memory:")
@@ -261,11 +296,16 @@ def test_rss_disabled_admission_state_uses_scorer_not_screening(monkeypatch) -> 
         item = Article(source_key="example", title="AI release",
                        url="https://example.com/news/ai")
         result = _process_fetched_source_items(
-            items=[item], config=source, db_source_id=db_source.id,
-            article_repo=ArticleRepo(session),
-            settings=Settings(article_batch_upsert_enabled=False, rss_known_streak_stop=0),
-            relevance_scorer=SimpleNamespace(classify=scored.append),
-            admission_state=AdmissionState(enabled=False))
+            SourceRun(
+                config=source,
+                db_source_id=db_source.id,
+                article_repo=ArticleRepo(session),
+                settings=Settings(article_batch_upsert_enabled=False, rss_known_streak_stop=0),
+                relevance_scorer=SimpleNamespace(classify=scored.append),
+                admission_state=AdmissionState(enabled=False),
+            ),
+            [item],
+        )
         assert result[:2] == (1, 0)
         assert scored == [item]
 
@@ -276,7 +316,7 @@ def test_rss_batch_duplicate_hash_merges_scores_and_category(
         monkeypatch, second_category, expected_category) -> None:
     rows = iter([_rss_row(1, "old"), _rss_row(10, second_category)])
     monkeypatch.setattr("app.usecases.ingestion.pipeline.screening._build_article_row",
-                        lambda **_kwargs: next(rows))
+                        lambda *_args, **_kwargs: next(rows))
     captured = []
 
     def upsert(*, rows, **_kwargs):
@@ -286,8 +326,14 @@ def test_rss_batch_duplicate_hash_merges_scores_and_category(
     items = [Article(source_key="example", title="AI release",
                      url="https://example.com/news/ai") for _ in range(2)]
     result = _process_fetched_source_items(
-        items=items, config=_source("rss"), db_source_id=1, article_repo=SimpleNamespace(),
-        settings=Settings(article_batch_upsert_enabled=True, rss_known_streak_stop=0))
+        SourceRun(
+            config=_source("rss"),
+            db_source_id=1,
+            article_repo=SimpleNamespace(),
+            settings=Settings(article_batch_upsert_enabled=True, rss_known_streak_stop=0),
+        ),
+        items,
+    )
     assert result == (1, 1, 0, False)
     assert len(captured) == 1
     assert (captured[0]["ai_relevance_score"], captured[0]["freshness_score"],
@@ -307,9 +353,14 @@ def test_rss_known_streak_does_not_skip_items_of_other_source_types() -> None:
 
         def process():
             return _process_fetched_source_items(
-                items=[item], config=source, db_source_id=db_source.id,
-                article_repo=ArticleRepo(session),
-                settings=Settings(article_batch_upsert_enabled=False, rss_known_streak_stop=1))
+                SourceRun(
+                    config=source,
+                    db_source_id=db_source.id,
+                    article_repo=ArticleRepo(session),
+                    settings=Settings(article_batch_upsert_enabled=False, rss_known_streak_stop=1),
+                ),
+                [item],
+            )
 
         assert process() == (1, 0, 0, False)
         # Stored now, yet not skipped as known: the streak stop is for RSS feeds only.

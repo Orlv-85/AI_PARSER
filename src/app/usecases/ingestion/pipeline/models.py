@@ -80,8 +80,8 @@ class SourceRun:
     db_source_id: int
     article_repo: ArticleRepo
     settings: Settings
-    relevance_scorer: JevRelevanceScorer | None
-    admission_state: AdmissionState | None
+    relevance_scorer: JevRelevanceScorer | None = None
+    admission_state: AdmissionState | None = None
 
     @property
     def admission_enabled(self) -> bool:

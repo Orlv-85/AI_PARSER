@@ -4,6 +4,7 @@ Behavior: src/app/core/bulletin/world_change.md.
 """
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import date
 from logging import Logger
 from pathlib import Path
@@ -18,18 +19,29 @@ from app.core.bulletin.world_change import (
     WorldChangeAssessor,
 )
 from app.core.provider_costs import microdollars
-from app.storage.provider_journal import PilotJournal
+from app.storage.provider_journal import JournalPolicy, PilotJournal
+
+
+@dataclass(frozen=True)
+class JournalFile:
+    """Where an assessor keeps its journal and how its usage is logged; the defaults are the
+    bulletin's (data/bulletin/<day>/, one file per cap)."""
+
+    root: Path | None = None
+    version: str = WORLD_CHANGE_VERSION
+    usage_event: str = "bulletin_assess_usage"
+    file_name: str | None = None
+
+
+BULLETIN_JOURNAL = JournalFile()
 
 
 @contextmanager
-def open_assessor(settings, logger: Logger, target: date, max_usd: str, *,
-                  root: Path | None = None, version: str = WORLD_CHANGE_VERSION,
-                  usage_event: str = "bulletin_assess_usage",
-                  file_name: str | None = None) -> Iterator[WorldChangeAssessor]:
-    """Assessor with its own capped journal in data/bulletin/<day>/ (one file per cap).
-
-    The world stream passes its own `root`, journal `version`, `usage_event` and `file_name`.
-    """
+def open_assessor(settings, logger: Logger, target: date, max_usd: str,
+                  journal_file: JournalFile = BULLETIN_JOURNAL) -> Iterator[WorldChangeAssessor]:
+    """Assessor with its own capped journal; the world stream passes its own `journal_file`."""
+    root, version = journal_file.root, journal_file.version
+    usage_event, file_name = journal_file.usage_event, journal_file.file_name
     api_key = getattr(settings, "jev_api_key", None)
     secret = api_key.get_secret_value().strip() if api_key is not None else ""
     if not secret:
@@ -41,8 +53,8 @@ def open_assessor(settings, logger: Logger, target: date, max_usd: str, *,
     caps = {"total": str((cap + 1) / 1e6), "jev": str(cap / 1e6), "deepseek": "0.000001"}
     journal = PilotJournal(root / (file_name or f"journal-{version}-{cap}.sqlite3"),
                          {"version": version, "day": target.isoformat()}, caps,
-                         transport_review_reason=TRANSPORT_REVIEW_REASON,
-                         transport_retry_delays=TRANSPORT_RETRY_DELAYS)
+                         JournalPolicy(transport_review_reason=TRANSPORT_REVIEW_REASON,
+                                       transport_retry_delays=TRANSPORT_RETRY_DELAYS))
     try:
         with httpx.Client(timeout=ASSESS_TIMEOUT_SECONDS) as client:
             yield WorldChangeAssessor(client, settings.jev_model, logger,

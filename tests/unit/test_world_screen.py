@@ -42,7 +42,7 @@ from app.storage.world import (
     WorldRepo,
 )
 from app.usecases.bulletin.assessor import open_assessor
-from app.usecases.world_screen import open_world_assessor, rank_clusters, run_screen
+from app.usecases.world_screen import ScreenOptions, open_world_assessor, rank_clusters, run_screen
 
 DAY = date(2026, 10, 30)
 TODAY = date(2026, 11, 1)
@@ -125,7 +125,7 @@ def force(session, title, state, confidence=None, **fields):
 def screen(session, handler, **kwargs):
     assessor = make_assessor(handler)
     try:
-        return run_screen(session, assessor, DAY, **kwargs)
+        return run_screen(session, assessor, DAY, ScreenOptions(**kwargs))
     finally:
         assessor.client.close()
 
@@ -456,7 +456,7 @@ def run_with_world_journal(maker, today, target, limit):
         transport=httpx.MockTransport(usage_handler(requests)), **kw)
     try:
         with maker() as session, open_world_assessor(settings, getLogger("t"), today) as assessor:
-            summary = run_screen(session, assessor, target, limit_usd=limit)
+            summary = run_screen(session, assessor, target, ScreenOptions(limit_usd=limit))
             return summary, len(requests), assessor.payment_journal.report()
     finally:
         wc.httpx.Client = client_factory
@@ -498,7 +498,7 @@ def test_world_run_limit_stops_before_request(session, tmp_path, caplog):
     assessor = make_assessor(usage_handler(requests), journal)
     try:
         with caplog.at_level(logging.ERROR):
-            summary = run_screen(session, assessor, DAY, limit_usd=0.0001)
+            summary = run_screen(session, assessor, DAY, ScreenOptions(limit_usd=0.0001))
     finally:
         journal.close()
         assessor.client.close()
@@ -540,7 +540,8 @@ def test_world_run_limit_equal_to_spend_stops(session, tmp_path):
     requests = []
     assessor = make_assessor(usage_handler(requests, tokens=1000), journal)
     try:
-        summary = run_screen(session, assessor, DAY, limit_usd=42 / 1e6)  # one request costs 42
+        # One request costs 42.
+        summary = run_screen(session, assessor, DAY, ScreenOptions(limit_usd=42 / 1e6))
     finally:
         journal.close()
         assessor.client.close()
@@ -555,8 +556,12 @@ def test_world_run_limit_also_stops_step_b(session, tmp_path):
     requests = []
     assessor = make_assessor(usage_handler(requests, tokens=1000), journal)
     try:
-        summary = run_screen(session, assessor, DAY, limit_usd=42 / 1e6,
-                             texts=lambda c: "some text")
+        summary = run_screen(
+            session,
+            assessor,
+            DAY,
+            ScreenOptions(texts=lambda c: "some text", limit_usd=42 / 1e6),
+        )
     finally:
         journal.close()
         assessor.client.close()
@@ -626,12 +631,12 @@ def test_dry_run_respects_top_n(session):
     seed(session, *(cand(n, title=f"Dry story {n}") for n in range(1, 5)))
     for n in range(1, 5):
         force(session, f"Dry story {n}", STATE_TEXT_READY, 0.5 + n / 10)
-    full = run_screen(session, None, DAY, dry_run=True)
-    cut = run_screen(session, None, DAY, dry_run=True, top_n=2)
+    full = run_screen(session, None, DAY, ScreenOptions(dry_run=True))
+    cut = run_screen(session, None, DAY, ScreenOptions(top_n=2, dry_run=True))
     assert (full["would_assess"], cut["would_assess"]) == (4, 2)
     seed(session, cand(9, title="Waiting dry story"))
     force(session, "Waiting dry story", STATE_SCREENED_IN, 0.99)
-    cut = run_screen(session, None, DAY, dry_run=True, top_n=2)
+    cut = run_screen(session, None, DAY, ScreenOptions(top_n=2, dry_run=True))
     assert (cut["would_assess"], cut["awaiting_text"]) == (1, 1)
 
 

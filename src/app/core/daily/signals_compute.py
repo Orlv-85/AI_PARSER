@@ -25,7 +25,7 @@ from app.core.daily.signals_model import (
 )
 from app.core.daily.signals_naming import proper_name, same_vendor, specific_variant, unit_key
 from app.core.daily.signals_stories import Story, _article_order, cluster, linked_articles, links
-from app.core.daily.signals_trend import trend_delta, trend_windows, unit_articles, window_units
+from app.core.daily.signals_trend import trend_delta, trend_windows, unit_articles
 
 __all__ = [
     "METHODOLOGY_VERSION", "ArticleObs", "DayCoverage", "EntityMention", "LexicalHistory",
@@ -227,8 +227,7 @@ class _Snapshot:  # pylint: disable=too-many-instance-attributes
                 shared: bool = len(ids & other) >= self.t.fold_share * len(ids)
                 return shared
 
-            target = self._fold_target(spike, org=org, share=share, shown=shown, new=new,
-                                       kept=kept)
+            target = self._fold_target(spike, org=org, share=share, into=(shown, new, kept))
             if target is not None:
                 kind, into, record = target
                 record.setdefault("spikes", []).append(spike["name"])
@@ -245,8 +244,10 @@ class _Snapshot:  # pylint: disable=too-many-instance-attributes
         return kept, folded
 
     def _fold_target(self, spike: dict[str, Any], *, org: bool, share,
-                     shown: list[tuple[Story, dict[str, Any]]], new: list[dict[str, Any]],
-                     kept: list[dict[str, Any]]):
+                     into: tuple[list[tuple[Story, dict[str, Any]]], list[dict[str, Any]],
+                                 list[dict[str, Any]]]):
+        """Where a spike folds: a shown story, a new item or a kept spike (`into`)."""
+        shown, new, kept = into
         name = name_key(spike["name"])
         for story, out in shown:
             if not share({m.article_id for m in story.members}):
@@ -290,10 +291,8 @@ class _Snapshot:  # pylint: disable=too-many-instance-attributes
         cur_days, prev_days = usable
         today = self.unit_articles(self.day)
         rising, cooling = [], []
-        for row in trend_delta(self.data.coverage, cur_days, prev_days,
-                               cur_units=window_units(self.data.observations, cur_days),
-                               prev_units=window_units(self.data.observations, prev_days),
-                               excluded=excluded, t=self.t):
+        for row in trend_delta(self.data.coverage, self.data.observations,
+                               (cur_days, prev_days), excluded=excluded, t=self.t):
             counts = {"current_7d": row.current, "previous_7d": row.previous,
                       "expected_7d": _r(row.expected), "today": len(today.get(row.unit, ()))}
             if row.rising:

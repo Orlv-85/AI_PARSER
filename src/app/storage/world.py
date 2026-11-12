@@ -4,6 +4,7 @@ Never reads or writes articles or digest tables (FR-016).
 """
 import re
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import delete, select
@@ -54,6 +55,16 @@ def _stamp_time(stamp: str) -> datetime | None:
         return datetime.strptime(stamp, "%Y%m%d%H%M%S").replace(tzinfo=UTC)
     except ValueError:
         return None
+
+
+@dataclass(frozen=True)
+class FileOutcome:
+    """State of one scanned GDELT file with its row counts and error."""
+
+    state: str
+    rows: int = 0
+    matched: int = 0
+    error: str | None = None
 
 
 class WorldRepo:
@@ -140,9 +151,9 @@ class WorldRepo:
         self.session.flush()
         return candidate
 
-    def record_file(self, stamp: str, kind: str, state: str, *, rows: int = 0, matched: int = 0,
-                    error: str | None = None) -> WorldFile:
+    def record_file(self, stamp: str, kind: str, outcome: FileOutcome) -> WorldFile:
         """Store the state of one GDELT file, replacing an earlier row of the same file."""
+        state, error = outcome.state, outcome.error
         if state not in FILE_STATES:
             raise ValueError(f"unknown file state: {state}")
         row = self.session.get(WorldFile, (stamp, kind))
@@ -150,8 +161,8 @@ class WorldRepo:
             row = WorldFile(stamp=stamp, kind=kind)
             self.session.add(row)
         row.state = state
-        row.rows = rows
-        row.matched = matched
+        row.rows = outcome.rows
+        row.matched = outcome.matched
         row.error = (error or "")[:255] or None
         row.updated_at = datetime.now(UTC)
         self.session.flush()

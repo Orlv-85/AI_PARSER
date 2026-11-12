@@ -5,6 +5,7 @@ import json
 from datetime import date, timedelta
 
 import httpx
+from fixture_options import options  # pylint: disable=import-error
 
 from app.core.periodic.period_model import period_bounds
 from app.storage.digest_repo import NewsDigestRepo
@@ -23,9 +24,10 @@ def story_url(name, start):
     return f"https://{name.lower()}.example.com/{start.isoformat()}/post"
 
 
-def period_payload(kind="week", start=WEEK_START, *, status="ready", stories=5, quiet=False,
-                   rising=False, items=300):
+def period_payload(kind="week", start=WEEK_START, **opts):
     """A stored period payload with `stories` top stories, each with one linked article."""
+    status, stories, quiet, rising, items = options(
+        opts, status="ready", stories=5, quiet=False, rising=False, items=300)
     end = period_bounds(kind, start)[1]
     top = [{"label": f"Acme launches {name}", "event_type": "model_release", "entities": [name],
             "days": [start.isoformat()], "articles": 2, "publishers": 2,

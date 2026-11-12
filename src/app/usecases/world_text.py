@@ -6,12 +6,9 @@ them; the stored text is the `TextSource` of step B. Lives outside core/world/ b
 storage.
 """
 from collections import Counter
-from collections.abc import Callable
 from datetime import date
-from pathlib import Path
 from typing import Any
 
-import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -33,12 +30,7 @@ from app.storage.world import (
     STATE_TEXT_READY,
     WorldRepo,
 )
-from app.usecases.archive.capture import (
-    ARCHIVE_CACHE_ROOT,
-    DAILY_CACHE_ROOT,
-    archive_articles,
-    download_documents,
-)
+from app.usecases.archive.capture import PageFetch, archive_articles, download_documents
 from app.usecases.world_screen import TextSource, rank_clusters
 
 TEXT_PREFIX = "text"
@@ -101,10 +93,9 @@ def _settle(repo: WorldRepo, rep: WorldCandidate, document: ArchiveDocument,
     return "kept"
 
 
-def run_texts(  # pylint: disable=too-many-arguments,too-many-locals
+def run_texts(  # pylint: disable=too-many-locals
     session: Session, target: date, *, top_n: int = WORLD_TOP_N, dry_run: bool = False,
-    cache_root: Path = ARCHIVE_CACHE_ROOT, daily_cache_root: Path = DAILY_CACHE_ROOT,
-    client_factory: Callable[[], httpx.AsyncClient] | None = None, host_interval: float = 1.0,
+    fetch: PageFetch | None = None,
 ) -> dict[str, Any]:
     """Get text for the representatives of the top clusters that are still `screened_in`."""
     repo = WorldRepo(session)
@@ -121,9 +112,7 @@ def run_texts(  # pylint: disable=too-many-arguments,too-many-locals
     documents = _documents(session, reps)
     due = [d.id for d in documents.values() if d.state == STATE_PENDING]
     if due:
-        result = download_documents(
-            session, due, cache_root=cache_root, daily_cache_root=daily_cache_root,
-            client_factory=client_factory, host_interval=host_interval)
+        result = download_documents(session, due, fetch=fetch)
         summary["downloads"] = result["downloads"]
         summary["cache_reused"] = result["cache_reused"]
         summary["outage"] = result["outage"]

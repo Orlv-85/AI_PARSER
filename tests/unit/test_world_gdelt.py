@@ -9,6 +9,7 @@ from datetime import date
 from pathlib import Path
 
 import httpx
+from fixture_options import options  # pylint: disable=import-error
 from typer.testing import CliRunner
 
 from app.cli import main as cli_main
@@ -24,6 +25,7 @@ from app.core.world.gdelt import (
     STATUS_OK,
     STATUS_PARTIAL,
     DayStats,
+    GdeltScan,
     day_file_names,
     parse_gkg_line,
     scan_day,
@@ -35,8 +37,9 @@ SECOND = "20261030001500.gkg.csv.zip"
 T_FIRST = "20261030000000.translation.gkg.csv.zip"
 
 
-def gkg_line(title: str, url: str, *, domain: str = "example.org", lang: str = "",
-             themes: str = "EDUCATION", extras: bool = True, columns: int = 27) -> str:
+def gkg_line(title: str, url: str, **opts) -> str:
+    domain, lang, themes, extras, columns = options(
+        opts, domain="example.org", lang="", themes="EDUCATION", extras=True, columns=27)
     cols = [""] * columns
     cols[0:5] = ["20261030000000-1", "20261030000000", "1", domain, url][:min(columns, 5)]
     if columns > 7:
@@ -67,12 +70,19 @@ def client_for(files: dict[str, bytes], calls: list[str] | None = None) -> httpx
     return httpx.Client(transport=httpx.MockTransport(handler))
 
 
-def run_scan(files: dict[str, bytes], tmp_path: Path, **kwargs: object):
+def quiet_scan(client: httpx.Client, tmp_path: Path,
+               own_domains: frozenset[str] = frozenset()) -> GdeltScan:
+    return GdeltScan(client, own_domains=own_domains, tmp_dir=tmp_path, pause=0, retry_delay=0,
+                     sleep=lambda _s: None)
+
+
+def run_scan(files: dict[str, bytes], tmp_path: Path, own_domains: frozenset[str] = frozenset(),
+             **kwargs: object):
     stats = DayStats()
     with client_for(files) as client:
         found = list(
-            scan_day(DAY, client=client, stats=stats, tmp_dir=tmp_path, pause=0,
-                     retry_delay=0, sleep=lambda _s: None, **kwargs)  # type: ignore[arg-type]
+            scan_day(DAY, scan=quiet_scan(client, tmp_path, own_domains), stats=stats,
+                     **kwargs)  # type: ignore[arg-type]
         )
     return found, stats
 
@@ -147,8 +157,8 @@ def test_missing_file_counts_as_missing(tmp_path: Path) -> None:
     stats = DayStats()
     files = {FIRST: zipped(gkg_line("AI in class", "https://example.org/a"))}
     with client_for(files, calls) as client:
-        found = list(scan_day(DAY, client=client, stats=stats, kinds=(KIND_GKG,), max_files=2,
-                              tmp_dir=tmp_path, pause=0, retry_delay=0, sleep=lambda _s: None))
+        found = list(scan_day(DAY, stats=stats, kinds=(KIND_GKG,), max_files=2,
+                              scan=quiet_scan(client, tmp_path)))
     assert len(found) == 1
     assert stats.files_read == 1 and stats.files_missing == 1
     assert calls.count(SECOND) == DOWNLOAD_TRIES
@@ -169,8 +179,9 @@ def test_download_retries_then_succeeds(tmp_path: Path) -> None:
 
     stats = DayStats()
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        found = list(scan_day(DAY, client=client, stats=stats, kinds=(KIND_GKG,), max_files=1,
-                              tmp_dir=tmp_path, retry_delay=30, sleep=sleeps.append))
+        found = list(scan_day(DAY, stats=stats, kinds=(KIND_GKG,), max_files=1,
+                              scan=GdeltScan(client, tmp_dir=tmp_path, retry_delay=30,
+                                             sleep=sleeps.append)))
     assert len(found) == 1 and stats.files_missing == 0
     assert len(attempts) == 3
     assert sleeps == [30, 30]
@@ -227,8 +238,8 @@ def test_scan_leaves_no_file_on_disk(tmp_path: Path, monkeypatch) -> None:
     handles.clear()
     stats = DayStats()
     with client_for(files) as client:
-        iterator = scan_day(DAY, client=client, stats=stats, kinds=(KIND_GKG,), max_files=1,
-                            tmp_dir=tmp_path, pause=0)
+        iterator = scan_day(DAY, stats=stats, kinds=(KIND_GKG,), max_files=1,
+                            scan=GdeltScan(client, tmp_dir=tmp_path, pause=0))
         assert next(iterator).url == "https://example.org/a"
         assert not all(handle.closed for handle in handles)  # the file is open while read
         iterator.close()  # early stop
@@ -238,8 +249,8 @@ def test_scan_leaves_no_file_on_disk(tmp_path: Path, monkeypatch) -> None:
 
     def consumer_fails() -> None:
         with client_for(files) as client:
-            for _candidate in scan_day(DAY, client=client, stats=DayStats(), kinds=(KIND_GKG,),
-                                       max_files=1, tmp_dir=tmp_path, pause=0):
+            for _candidate in scan_day(DAY, stats=DayStats(), kinds=(KIND_GKG,),
+                                       max_files=1, scan=GdeltScan(client, tmp_dir=tmp_path, pause=0)):
                 raise RuntimeError("consumer failed")
 
     try:
@@ -255,8 +266,8 @@ def test_truncated_zip_is_retried_then_missing(tmp_path: Path) -> None:
     calls: list[str] = []
     stats = DayStats()
     with client_for({FIRST: good[: len(good) // 2]}, calls) as client:
-        found = list(scan_day(DAY, client=client, stats=stats, kinds=(KIND_GKG,), max_files=1,
-                              tmp_dir=tmp_path, pause=0, retry_delay=0, sleep=lambda _s: None))
+        found = list(scan_day(DAY, stats=stats, kinds=(KIND_GKG,), max_files=1,
+                              scan=quiet_scan(client, tmp_path)))
     assert not found
     assert calls.count(FIRST) == DOWNLOAD_TRIES
     assert stats.files_missing == 1 and stats.files_read == 0
@@ -295,8 +306,8 @@ def test_scan_stops_after_consecutive_missing(tmp_path: Path) -> None:
     calls: list[str] = []
     stats = DayStats()
     with client_for({}, calls) as client:
-        found = list(scan_day(DAY, client=client, stats=stats, kinds=(KIND_GKG,), max_files=30,
-                              tmp_dir=tmp_path, pause=0, retry_delay=0, sleep=lambda _s: None))
+        found = list(scan_day(DAY, stats=stats, kinds=(KIND_GKG,), max_files=30,
+                              scan=quiet_scan(client, tmp_path)))
     assert not found
     assert stats.stopped_early and stats.files_missing == 30
     assert stats.status == STATUS_PARTIAL
@@ -320,8 +331,8 @@ def test_scan_memory_is_bounded(tmp_path: Path) -> None:
     with client_for({FIRST: payload}) as client:
         tracemalloc.start()
         try:
-            for _candidate in scan_day(DAY, client=client, stats=stats, kinds=(KIND_GKG,),
-                                       max_files=1, tmp_dir=tmp_path, pause=0):
+            for _candidate in scan_day(DAY, stats=stats, kinds=(KIND_GKG,),
+                                       max_files=1, scan=GdeltScan(client, tmp_dir=tmp_path, pause=0)):
                 kept += 1
             _current, peak = tracemalloc.get_traced_memory()
         finally:

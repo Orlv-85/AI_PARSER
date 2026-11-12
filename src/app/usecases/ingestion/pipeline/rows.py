@@ -14,7 +14,7 @@ from app.core.ingestion.scoring import ai_relevance_score, freshness_score, rank
 from app.core.jev import JevAssessment, jev_state
 from app.core.models import Article as CoreArticle
 from app.storage.article_repo import ArticleRepo
-from app.usecases.ingestion.pipeline.models import COMPARISON_MIN_CONFIDENCE
+from app.usecases.ingestion.pipeline.models import COMPARISON_MIN_CONFIDENCE, SourceRun
 
 # A publication time further ahead than this is not a timezone skew; it is replaced.
 FUTURE_DATE_TOLERANCE = timedelta(hours=24)
@@ -140,11 +140,13 @@ def _assessment_fields(item: object, assessment: JevAssessment | None) -> dict[s
 
 
 def _build_article_row(
-    *, item: object, config: SourceConfig, db_source_id: int, canonical: str,
-    canonical_hash: str, assessment: JevAssessment | None, admission_enabled: bool,
+    run: SourceRun, item: object, *, canonical: str, canonical_hash: str,
+    assessment: JevAssessment | None,
 ) -> dict[str, object] | None:
-    if admission_enabled and assessment is None:
+    """Article row of an item; None when admission is on and the item has no assessment."""
+    if run.admission_enabled and assessment is None:
         return None
+    config, db_source_id = run.config, run.db_source_id
     relevance = _row_relevance(item, assessment)
     published, provenance = _publication_time(item)
     dates = getattr(item, "date_evidence", None) or {}

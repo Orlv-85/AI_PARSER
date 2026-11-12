@@ -21,6 +21,8 @@ from app.usecases.archive import capture as capture_module
 from app.usecases.archive.capture import (
     ARCHIVE_MIN_TEXT_CHARS,
     ARTICLE_CONTENT_VERSION,
+    CaptureOptions,
+    PageFetch,
     archive_articles,
     capture,
     prune_articles,
@@ -219,14 +221,14 @@ def test_capture_window_and_seed_make_no_requests(tmp_path, monkeypatch) -> None
     _article(session, "p", days_old=1, content=None)  # due, but --no-download
     session.commit()
 
-    summary = capture(session, no_download=True, max_seconds=1, cache_root=tmp_path / "a",
-                      daily_cache_root=tmp_path / "d")
+    summary = capture(session, CaptureOptions(no_download=True, max_seconds=1),
+                      fetch=PageFetch(cache_root=tmp_path / "a", daily_cache_root=tmp_path / "d"))
     assert (summary["window_days"], summary["articles_synced"]) == (7, 4)
     assert (summary["downloads"], summary["cache_reused"]) == (0, 0)
     assert _counts(session) == (4, 3)
     assert not (tmp_path / "a").exists()
 
-    summary = capture(session, scope_all=True, no_download=True)
+    summary = capture(session, CaptureOptions(scope_all=True, no_download=True))
     assert (summary["window_days"], summary["articles_synced"]) == (None, 5)
     assert summary["new_versions"] == {"article_content": 1}
     assert _counts(session) == (5, 4)
@@ -256,10 +258,10 @@ def test_capture_summary_reports_coverage(tmp_path, caplog) -> None:
 
     logger = logging.getLogger("test_archive_capture")
     with caplog.at_level(logging.INFO, logger="test_archive_capture"):
-        summary = capture(session, logger=logger, cache_root=tmp_path / "archive",
-                          daily_cache_root=tmp_path / "daily", host_interval=0,
-                          client_factory=lambda: httpx.AsyncClient(
+        fetch = PageFetch(cache_root=tmp_path / "archive", daily_cache_root=tmp_path / "daily",
+                          host_interval=0, client_factory=lambda: httpx.AsyncClient(
                               transport=httpx.MockTransport(_site)))
+        summary = capture(session, logger=logger, fetch=fetch)
     texts = sum(len(t) for t in session.scalars(select(ArchiveText.text)))
     assert summary == {
         "window_days": 7, "articles_synced": 3, "window_documents": 3, "window_archived": 2,

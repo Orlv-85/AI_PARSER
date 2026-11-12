@@ -392,30 +392,34 @@ def test_get_weekly_report_returns_saved_published_report_for_matching_week() ->
         _seed_weekly_analytics_articles(write_session)
         repos.WeeklyAnalyticsRepo(write_session).save_weekly_report(
             report_date=target_date,
-            date_from=date(2026, 3, 2),
-            date_to=target_date,
-            summary="Published weekly management snapshot for the completed Monday-Sunday week.",
-            new=[
-                {
-                    "title": "AI Browser Launches",
-                    "summary": "Saved weekly section items should be served from storage.",
-                    "url": "https://example.com/ai-browser-recent",
-                }
-            ],
-            trending_up=[
-                {
-                    "title": "Coding Agents Expand",
-                    "summary": "Published reports should preserve the reviewed trend narrative.",
-                    "url": "https://example.com/coding-agents-recent",
-                }
-            ],
-            trending_down=[
-                {
-                    "title": "Standalone Vector DBs Cool Off",
-                    "summary": "Published reports should keep the stored comparison section.",
-                    "url": "https://example.com/vector-dbs-prior",
-                }
-            ],
+            draft=repos.WeeklyDraft(
+                date_from=date(2026, 3, 2),
+                date_to=target_date,
+                summary=("Published weekly management snapshot for the completed "
+                         "Monday-Sunday week."),
+                new=[
+                    {
+                        "title": "AI Browser Launches",
+                        "summary": "Saved weekly section items should be served from storage.",
+                        "url": "https://example.com/ai-browser-recent",
+                    }
+                ],
+                trending_up=[
+                    {
+                        "title": "Coding Agents Expand",
+                        "summary": ("Published reports should preserve the reviewed trend "
+                                    "narrative."),
+                        "url": "https://example.com/coding-agents-recent",
+                    }
+                ],
+                trending_down=[
+                    {
+                        "title": "Standalone Vector DBs Cool Off",
+                        "summary": "Published reports should keep the stored comparison section.",
+                        "url": "https://example.com/vector-dbs-prior",
+                    }
+                ],
+            ),
         )
         write_session.commit()
 
@@ -444,18 +448,20 @@ def test_save_weekly_report_truncates_oversized_titles_for_storage_limits() -> N
         repo = repos.WeeklyAnalyticsRepo(session)
         report = repo.save_weekly_report(
             report_date=target_date,
-            date_from=date(2026, 3, 2),
-            date_to=target_date,
-            summary="Stored report with oversized source title.",
-            new=[
-                {
-                    "title": long_title,
-                    "summary": "Long title should be truncated before persistence.",
-                    "url": "https://example.com/very-long-title",
-                }
-            ],
-            trending_up=[],
-            trending_down=[],
+            draft=repos.WeeklyDraft(
+                date_from=date(2026, 3, 2),
+                date_to=target_date,
+                summary="Stored report with oversized source title.",
+                new=[
+                    {
+                        "title": long_title,
+                        "summary": "Long title should be truncated before persistence.",
+                        "url": "https://example.com/very-long-title",
+                    }
+                ],
+                trending_up=[],
+                trending_down=[],
+            ),
         )
         session.commit()
 

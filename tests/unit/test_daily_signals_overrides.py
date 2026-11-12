@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.canonicalize import canonical_url_hash
 from app.core.daily.signals_extract import ExtractedEntity, Extraction
-from app.storage.daily_signals import DailySignalRepo, OverrideConflict
+from app.storage.daily_signals import DailySignalRepo, NewOverride, OverrideConflict
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import AIEntity, Article, Base, SignalMention
 from app.usecases.daily.signals import (
@@ -135,8 +135,16 @@ def test_overlapping_selectors_refused(repo):
     merge_entities(repo, entity_id(repo, "auto:artifact:atlas:openai"),
                    entity_id(repo, "auto:artifact:atlaspro"))
     with pytest.raises(OverrideConflict):
-        add_override(repo, kind="merge", type_group_="artifact", match_key="atlas",
-                          vendor_class="", target_base_key="orion")
+        add_override(
+            repo,
+            NewOverride(
+                kind="merge",
+                type_group="artifact",
+                match_key="atlas",
+                target_base_key="orion",
+                vendor_class="",
+            ),
+        )
     # The vendorless-only selector does not overlap the OpenAI class and joins the same target.
     merge_entities(repo, entity_id(repo, "auto:artifact:atlas:?"),
                    entity_id(repo, "auto:artifact:atlaspro"))
@@ -183,5 +191,12 @@ def test_merge_survives_later_singular_evidence(repo):
     assert {key for _, key in owners(repo, "Orion Tools") + owners(repo, "Orion Tool")
             + owners(repo, "Helix")} == {"manual:2"}
     with pytest.raises(OverrideConflict):
-        add_override(repo, kind="merge", type_group_="artifact", match_key="geminiagent",
-                          target_base_key="helix")
+        add_override(
+            repo,
+            NewOverride(
+                kind="merge",
+                type_group="artifact",
+                match_key="geminiagent",
+                target_base_key="helix",
+            ),
+        )

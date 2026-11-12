@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from fixture_options import options  # pylint: disable=import-error
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -551,8 +552,15 @@ def answer(world_change="changed", confidence=0.9, area="Work", actor="organisat
     return WorldChange(world_change, confidence, area, 0.8, actor, 0.8, harm)
 
 
-def seed_day(maker, *, status="ready", quiet=False, items=83, history=(),
-             source_name="TechCrunch (main feed)"):
+def seed_day(maker, **opts):
+    status, quiet, items, history, source_name = options(
+        opts,
+        status="ready",
+        quiet=False,
+        items=83,
+        history=(),
+        source_name="TechCrunch (main feed)",
+    )
     with maker() as session:
         session.add(Source(source_key="s", name=source_name, type="rss", url="https://t.com"))
         session.flush()
@@ -589,9 +597,16 @@ def _add_report(session, day, payload):
         updated_at=datetime.now(UTC)))
 
 
-def add_world(maker, state="assessed", url="https://news.example/ai-court",
-              answered=True, domain="www.news.example", *, title="Court rules on AI evidence",
-              gdelt_file="20261030120000", language="eng"):
+def add_world(
+    maker,
+    state="assessed",
+    url="https://news.example/ai-court",
+    answered=True,
+    domain="www.news.example",
+    **opts,
+):
+    title, gdelt_file, language = options(
+        opts, title="Court rules on AI evidence", gdelt_file="20261030120000", language="eng")
     with maker() as session:
         digest = canonical_url_hash(url)
         session.add(WorldCandidate(

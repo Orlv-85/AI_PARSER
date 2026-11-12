@@ -474,7 +474,7 @@ web update (thread or process)               web/service.py: UpdateRunService
 | `ingest/date_evidence.py` | Date candidates and resolution (`DATE_EVIDENCE_VERSION`) | yes |
 | `core/jev.py` (not covered) | `jev_state` (bounded text sent to Jev); `JevRelevanceScorer`: one Jev request per text, in-cycle cache, stop after failure | no |
 | `storage/source_repo.py` (not covered) | `SourceRepo` (fetch state) | no |
-| `storage/article_repo.py` (not covered) | `ArticleRepo` (known hashes, insert, batch upsert) | no |
+| `storage/article_repo.py` (not covered) | `ArticleRepo` (known hashes, `insert_article` of one row dict, batch upsert of row dicts) | no |
 
 `jev_state` accepts an optional `content_limit`, defaulting to `CONTENT_LIMIT`; ingestion and
 daily enrichment keep the default. The world-change assessor supplies a smaller limit when the

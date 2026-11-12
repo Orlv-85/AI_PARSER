@@ -46,6 +46,18 @@ class WeeklyAnalyticsReportIndexEntry:
     created_at: datetime
 
 
+@dataclass(frozen=True)
+class WeeklyDraft:
+    """A weekly report as its author sends it; any missing part makes the repo generate it."""
+
+    date_from: date | None = None
+    date_to: date | None = None
+    summary: str | None = None
+    new: list[dict[str, str] | WeeklyAnalyticsItem] | None = None
+    trending_up: list[dict[str, str] | WeeklyAnalyticsItem] | None = None
+    trending_down: list[dict[str, str] | WeeklyAnalyticsItem] | None = None
+
+
 class WeeklyAnalyticsRepo:
     _TITLE_MAX_LEN = 512
     _URL_MAX_LEN = 2048
@@ -132,16 +144,11 @@ class WeeklyAnalyticsRepo:
         return entries[:limit]
 
     def save_weekly_report(
-        self,
-        *,
-        report_date: date,
-        date_from: date | None = None,
-        date_to: date | None = None,
-        summary: str | None = None,
-        new: list[dict[str, str] | WeeklyAnalyticsItem] | None = None,
-        trending_up: list[dict[str, str] | WeeklyAnalyticsItem] | None = None,
-        trending_down: list[dict[str, str] | WeeklyAnalyticsItem] | None = None,
+        self, *, report_date: date, draft: WeeklyDraft | None = None,
     ) -> WeeklyAnalyticsReport:
+        draft = draft or WeeklyDraft()
+        date_from, date_to, summary = draft.date_from, draft.date_to, draft.summary
+        new, trending_up, trending_down = draft.new, draft.trending_up, draft.trending_down
         should_generate = any(
             value is None
             for value in (date_from, date_to, summary, new, trending_up, trending_down)

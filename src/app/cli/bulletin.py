@@ -13,6 +13,7 @@ from app.observability import setup_json_logging
 from app.observability.logging import log_event
 from app.usecases.bulletin.assessor import open_assessor
 from app.usecases.bulletin.daily import (
+    BulletinEnv,
     assess_day,
     has_provider_key,
     prepare_bulletin,
@@ -39,8 +40,8 @@ def bulletin_assess(
     logger = setup_json_logging()
     with deps.SessionLocal() as session:
         try:
-            summary = assess_day(session, deps.get_settings(), logger, target,
-                                 opener=open_assessor, max_usd=max_usd, dry_run=dry_run)
+            env = BulletinEnv(deps.get_settings(), logger, assessor_factory=open_assessor)
+            summary = assess_day(session, env, target, max_usd=max_usd, dry_run=dry_run)
         except ValueError as exc:
             typer.echo(f"bulletin assess: {exc}", err=True)
             raise typer.Exit(2) from exc
@@ -61,8 +62,9 @@ def bulletin_daily(
     try:
         deps.create_all()
         with deps.SessionLocal() as session:
-            summary = run_daily(session, deps.get_settings(), logger, target, utc_today,
-                                assessor_factory=open_assessor, writer_factory=open_writer)
+            env = BulletinEnv(deps.get_settings(), logger, assessor_factory=open_assessor,
+                              writer_factory=open_writer)
+            summary = run_daily(session, env, target, utc_today)
     except Exception as exc:  # The unattended command reserves nonzero exits for usage errors.
         log_event(logger, level=logging.ERROR, event="bulletin_daily_failed",
                   date=target.isoformat(), error=type(exc).__name__, detail=str(exc)[:200])
@@ -93,7 +95,8 @@ def bulletin_build(
             typer.echo(f"bulletin build: no digest for {target}", err=True)
             raise typer.Exit(2)
     if write:
-        write_prepared(prepared, settings, logger, utc_today(), opener=open_writer, max_usd=max_usd)
+        write_prepared(prepared, BulletinEnv(settings, logger, writer_factory=open_writer),
+                       utc_today(), max_usd=max_usd)
     if not dry_run:
         deps.create_all()
         store_bulletin(deps.SessionLocal, target, bulletin=prepared.bulletin,

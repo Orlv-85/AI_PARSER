@@ -18,10 +18,11 @@ from app.core.world.gdelt import (
     MAX_CONSECUTIVE_MISSING,
     MAX_MISSING_FILES_OK,
     Candidate,
+    GdeltScan,
     day_file_names,
 )
 from app.storage.models_sql import Base, WorldCandidate, WorldFile
-from app.storage.world import FILE_DONE, FILE_MISSING, WORLD_RETENTION_DAYS, WorldRepo
+from app.storage.world import FILE_DONE, FILE_MISSING, WORLD_RETENTION_DAYS, FileOutcome, WorldRepo
 from app.usecases.world_collect import collect_day, yesterday_utc
 
 DAY = date(2026, 10, 30)
@@ -80,8 +81,8 @@ def engine_fixture(tmp_path):
 
 def run(engine, files, tmp_path, calls=None, on_request=None, **kwargs):
     with Session(engine) as session, client_for(files, calls, on_request) as client:
-        return collect_day(session, DAY, client=client, tmp_dir=tmp_path, pause=0,
-                           retry_delay=0, sleep=lambda _s: None, **kwargs)
+        scan = GdeltScan(client, tmp_dir=tmp_path, pause=0, retry_delay=0, sleep=lambda _s: None)
+        return collect_day(session, DAY, scan=scan, **kwargs)
 
 
 def test_collect_resumes_without_reprocessing_files(engine, tmp_path):
@@ -170,7 +171,7 @@ def test_collect_stop_counts_done_files_as_skipped(engine, tmp_path):
     with Session(engine) as session:
         repo = WorldRepo(session)
         for name in NAMES[20:23]:
-            repo.record_file(name[:14], "gkg", FILE_DONE)
+            repo.record_file(name[:14], "gkg", FileOutcome(FILE_DONE))
         session.commit()
     summary = run(engine, {}, tmp_path, max_files=30)
     assert summary.skipped == 3
@@ -230,7 +231,6 @@ def cli_collect(engine, monkeypatch, files, calls=None, args=()):
     monkeypatch.setattr(cli_deps, "SessionLocal", sessionmaker(engine))
     monkeypatch.setattr(cli_deps, "create_all", lambda: None)
     monkeypatch.setattr(cli_world, "yesterday_utc", lambda: DAY)
-    monkeypatch.setattr("app.usecases.world_collect.PAUSE_SECONDS", 0)
     result = CliRunner().invoke(cli_main.app, ["world", "collect", "--max-files", "1", *args])
     assert result.exit_code == 0, result.output
     return [json.loads(line) for line in result.output.splitlines()
@@ -253,7 +253,7 @@ def test_collect_default_runs_yesterday_and_day_before(engine, monkeypatch):
 def test_collect_catch_up_recovers_missed_night(engine, monkeypatch):
     # Yesterday is already done; the night of the day before was missed and is collected now.
     with Session(engine) as session:
-        WorldRepo(session).record_file(NAMES[0][:14], "gkg", FILE_DONE)
+        WorldRepo(session).record_file(NAMES[0][:14], "gkg", FileOutcome(FILE_DONE))
         session.commit()
     lines = cli_collect(engine, monkeypatch, two_day_files())
     assert (lines[0]["files"], lines[0]["skipped"]) == (0, 1)

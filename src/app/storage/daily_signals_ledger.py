@@ -44,10 +44,50 @@ class Dispatch:
 
 @dataclass(frozen=True)
 class LedgerConfig:
-    endpoint: str
+    """Caps of one ledger run."""
+
     max_calls: int
     max_usd_micro: int
     deadline: float  # clock value after which no POST may start
+    clock: Callable[[], float] = time.monotonic
+
+
+@dataclass(frozen=True)
+class LedgerProvider:
+    """The provider a ledger calls; `transport` replaces the network in tests."""
+
+    api_key: str
+    endpoint: str = ENDPOINTS["deepseek"]
+    prices: tuple[float, float] = DEFAULT_PRICES
+    transport: httpx.BaseTransport | None = None
+
+
+@dataclass(frozen=True)
+class CallTag:
+    """What a call is for; stored with its row."""
+
+    article_id: int | None = None
+    version: str | None = None
+    scope_day: str | None = None
+
+
+NO_TAG = CallTag()
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+@dataclass(frozen=True)
+class RunEnv:
+    """Seams of a paid run: HTTP transport, monotonic clock for deadlines, wall clock."""
+
+    transport: httpx.BaseTransport | None = None
+    clock: Callable[[], float] = time.monotonic
+    now: Callable[[], datetime] = _utc_now
+
+
+DEFAULT_ENV = RunEnv()
 
 
 def _now() -> str:
@@ -55,12 +95,8 @@ def _now() -> str:
 
 
 class SignalsLedger:  # pylint: disable=too-many-instance-attributes
-    def __init__(self, path: Path, *, run_id: str, api_key: str, max_calls: int,
-                 max_usd_micro: int, deadline: float,
-                 clock: Callable[[], float] = time.monotonic,
-                 transport: httpx.BaseTransport | None = None,
-                 endpoint: str = ENDPOINTS["deepseek"],
-                 prices: tuple[float, float] = DEFAULT_PRICES) -> None:
+    def __init__(self, path: Path, *, run_id: str, provider: LedgerProvider,
+                 caps: LedgerConfig) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
         os.fchmod(fd, 0o600)
@@ -81,13 +117,15 @@ class SignalsLedger:  # pylint: disable=too-many-instance-attributes
         self.db.execute("UPDATE calls SET state = 'unknown' "
                         "WHERE state = 'reserved' AND run_id != ?", (run_id,))
         self.run_id = run_id
-        self.caps = LedgerConfig(endpoint, max_calls, max_usd_micro, deadline)
-        self.clock = clock
-        self.prices = prices
+        self.caps = caps
+        self.clock = caps.clock
+        self.prices = provider.prices
+        self.endpoint = provider.endpoint
         # The key lives only in the client's headers; it is never stored in the ledger.
         self.client = httpx.Client(
-            transport=transport, timeout=CONNECT_TIMEOUT,
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"})
+            transport=provider.transport, timeout=CONNECT_TIMEOUT,
+            headers={"Authorization": f"Bearer {provider.api_key}",
+                     "Content-Type": "application/json"})
         self.consecutive_failures = 0
         self.stop_reason: str | None = None
 
@@ -131,8 +169,7 @@ class SignalsLedger:  # pylint: disable=too-many-instance-attributes
         return dict(self.db.execute("SELECT state, COUNT(*) FROM calls WHERE run_id = ? "
                                     "GROUP BY state", (self.run_id,)).fetchall())
 
-    def _reserve(self, request_key: str, reserved_micro: int, article_id: int | None,
-                 version: str | None, scope_day: str | None) -> int:
+    def _reserve(self, request_key: str, reserved_micro: int, tag: CallTag) -> int:
         self.db.execute("BEGIN IMMEDIATE")
         try:
             if self.clock() + PRE_POST_RESERVE_SECONDS > self.caps.deadline:
@@ -145,7 +182,8 @@ class SignalsLedger:  # pylint: disable=too-many-instance-attributes
                 "INSERT INTO calls (request_key, article_id, extraction_version, scope_day, "
                 "run_id, state, reserved_micro, created_at) "
                 "VALUES (?, ?, ?, ?, ?, 'reserved', ?, ?)",
-                (request_key, article_id, version, scope_day, self.run_id, reserved_micro, _now()))
+                (request_key, tag.article_id, tag.version, tag.scope_day, self.run_id,
+                 reserved_micro, _now()))
             self.db.execute("COMMIT")
             return int(cursor.lastrowid or 0)
         except BaseException:
@@ -156,7 +194,7 @@ class SignalsLedger:  # pylint: disable=too-many-instance-attributes
         """One physical POST; (status, body) or (None, None) on transport error or abort."""
         started = self.clock()
         try:
-            with self.client.stream("POST", self.caps.endpoint, json=body) as response:
+            with self.client.stream("POST", self.endpoint, json=body) as response:
                 chunks = []
                 for chunk in response.iter_bytes():
                     chunks.append(chunk)
@@ -167,8 +205,7 @@ class SignalsLedger:  # pylint: disable=too-many-instance-attributes
             return None, None
 
     def dispatch(self, body: dict[str, Any], *, request_key: str, reserved_micro: int,
-                 article_id: int | None = None, version: str | None = None,
-                 scope_day: str | None = None) -> Dispatch:
+                 tag: CallTag = NO_TAG) -> Dispatch:
         """Replay a saved 200 answer or make exactly one POST; raises LedgerStop at a cap."""
         saved = self.replay(request_key)
         if saved is not None:
@@ -178,7 +215,7 @@ class SignalsLedger:  # pylint: disable=too-many-instance-attributes
         if self.consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
             self.stop_reason = "provider_unavailable"
             raise LedgerStop(self.stop_reason)
-        row_id = self._reserve(request_key, reserved_micro, article_id, version, scope_day)
+        row_id = self._reserve(request_key, reserved_micro, tag)
         status, raw = self._post(body)
         data = None
         if raw is not None:

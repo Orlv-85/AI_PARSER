@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.canonicalize import canonical_url_hash
 from app.core.world.gdelt import Candidate
-from app.storage.archive import ArchiveRepo
+from app.storage.archive import ArchiveRepo, DocumentMeta
 from app.storage.models_sql import (
     ArchiveDocument,
     Article,
@@ -34,6 +34,7 @@ from app.storage.world import (
     STATE_TEXT_READY,
     TRANSITIONS,
     WORLD_RETENTION_DAYS,
+    FileOutcome,
     InvalidTransition,
     WorldRepo,
     cluster_key,
@@ -156,20 +157,20 @@ def test_world_no_text_keeps_reason(session):
 
 def test_world_file_states_record_and_skip_done(session):
     repo = WorldRepo(session)
-    repo.record_file("20261031000000", "gkg", FILE_DONE, rows=10, matched=3)
-    repo.record_file("20261031000000", "translation", FILE_MISSING, error="HTTP 404")
-    repo.record_file("20261031001500", "gkg", FILE_DONE, rows=5)
-    repo.record_file("20261030234500", "gkg", FILE_DONE)
+    repo.record_file("20261031000000", "gkg", FileOutcome(FILE_DONE, rows=10, matched=3))
+    repo.record_file("20261031000000", "translation", FileOutcome(FILE_MISSING, error="HTTP 404"))
+    repo.record_file("20261031001500", "gkg", FileOutcome(FILE_DONE, rows=5))
+    repo.record_file("20261030234500", "gkg", FileOutcome(FILE_DONE))
     assert repo.done_files(date(2026, 10, 31)) == {
         ("20261031000000", "gkg"), ("20261031001500", "gkg")}
-    repo.record_file("20261031000000", "translation", FILE_DONE, rows=7)
-    again = repo.record_file("20261031000000", "gkg", FILE_MISSING, error="broken zip")
+    repo.record_file("20261031000000", "translation", FileOutcome(FILE_DONE, rows=7))
+    again = repo.record_file("20261031000000", "gkg", FileOutcome(FILE_MISSING, error="broken zip"))
     assert (again.rows, again.error) == (0, "broken zip")
     assert repo.done_files(date(2026, 10, 31)) == {
         ("20261031000000", "translation"), ("20261031001500", "gkg")}
     assert session.scalar(select(func.count()).select_from(WorldFile)) == 4
     with pytest.raises(ValueError):
-        repo.record_file("20261031003000", "gkg", "weird")
+        repo.record_file("20261031003000", "gkg", FileOutcome("weird"))
 
 
 def test_world_prune_keeps_archive(session):
@@ -177,14 +178,25 @@ def test_world_prune_keeps_archive(session):
     old = NOW - timedelta(days=WORLD_RETENTION_DAYS + 1)
     repo.upsert_candidates([candidate("https://example.org/old")], now=old)
     repo.upsert_candidates([candidate("https://example.org/new")], now=NOW - timedelta(days=1))
-    repo.record_file("20260930000000", "gkg", FILE_DONE)
+    repo.record_file("20260930000000", "gkg", FileOutcome(FILE_DONE))
     session.get(WorldFile, ("20260930000000", "gkg")).updated_at = old
-    repo.record_file("20261031000000", "gkg", FILE_DONE)
+    repo.record_file("20261031000000", "gkg", FileOutcome(FILE_DONE))
     url = "https://example.org/old"
     ArchiveRepo(session).upsert_document(
-        url_canonical_hash=canonical_url_hash(url), url=url, url_canonical=url, source_key=None,
-        host="example.org", title="t", published_at=None, publication_day=None,
-        publication_status=None, article_id=None, first_seen_at=old)
+        DocumentMeta(
+            url_canonical_hash=canonical_url_hash(url),
+            url=url,
+            url_canonical=url,
+            source_key=None,
+            host="example.org",
+            title="t",
+            published_at=None,
+            publication_day=None,
+            publication_status=None,
+            article_id=None,
+            first_seen_at=old,
+        ),
+    )
     session.add(WorldChangeAssessment(
         url_canonical_hash=canonical_url_hash(url), world_change="none",
         world_change_confidence=0.5, area="Work", area_confidence=0.5, actor="people",
@@ -208,7 +220,7 @@ def test_world_candidate_cuts_long_url_title_and_error(session):
     assert row.url_canonical_hash == canonical_url_hash(long_url)
     repo.transition(row, STATE_FAILED, error="e" * 400)
     assert len(row.last_error) == 255
-    repo.record_file("20261031000000", "gkg", FILE_MISSING, error="x" * 400)
+    repo.record_file("20261031000000", "gkg", FileOutcome(FILE_MISSING, error="x" * 400))
     assert len(session.get(WorldFile, ("20261031000000", "gkg")).error) == 255
 
 
@@ -250,7 +262,7 @@ def test_world_transition_unknown_stored_state_is_invalid(session):
 def test_world_storage_never_touches_articles(session):
     repo = WorldRepo(session)
     repo.upsert_candidates([candidate()], now=NOW)
-    repo.record_file("20261031000000", "gkg", FILE_DONE)
+    repo.record_file("20261031000000", "gkg", FileOutcome(FILE_DONE))
     repo.prune(now=NOW + timedelta(days=90))
     assert session.scalar(select(func.count()).select_from(Article)) == 0
     tree = ast.parse((SRC / "storage" / "world.py").read_text(encoding="utf-8"))

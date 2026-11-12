@@ -7,6 +7,7 @@ import pytest
 
 from app.ingest.date_evidence import extract_date_evidence
 from app.storage.article_evidence_cache import (
+    DownloadLimits,
     PageCache,
     SourcePageDownloader,
     inspect_page,
@@ -93,8 +94,8 @@ def test_untrusted_instructions_are_data_only():
 def _fetch(cache, transport, urls, **kwargs):
     async def operation():
         async with httpx.AsyncClient(transport=httpx.MockTransport(transport)) as client:
-            downloader = SourcePageDownloader(cache, client, host_interval=0,
-                                              **{"respect_robots": False, **kwargs})
+            downloader = SourcePageDownloader(cache, client, DownloadLimits(
+                **{"host_interval": 0, "respect_robots": False, **kwargs}))
             await asyncio.gather(*(downloader.fetch_one(url) for url in urls))
             return downloader
     return asyncio.run(operation())
@@ -545,8 +546,8 @@ def test_outage_set_before_dispatch_returns_without_attempt(tmp_path):
     async def operation():
         async with httpx.AsyncClient(transport=httpx.MockTransport(
                 lambda _: pytest.fail("no request"))) as client:
-            downloader = SourcePageDownloader(cache, client, host_interval=0,
-                                              respect_robots=False)
+            downloader = SourcePageDownloader(cache, client, DownloadLimits(
+                host_interval=0, respect_robots=False))
             downloader.outage = True
             await downloader.fetch_one(url)
 

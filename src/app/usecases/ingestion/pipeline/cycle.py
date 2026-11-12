@@ -27,6 +27,7 @@ from app.usecases.ingestion.pipeline.models import (
     FetchResult,
     FetchSummary,
     SourceMetrics,
+    SourceRun,
 )
 from app.usecases.ingestion.pipeline.replay import _replay_pending_for_source
 from app.usecases.ingestion.pipeline.scorer import jev_relevance_scorer
@@ -70,6 +71,14 @@ class _CycleContext:  # pylint: disable=too-many-instance-attributes
     relevance_scorer: JevRelevanceScorer | None
     admission_state: AdmissionState
     full_text_semaphore: BoundedSemaphore | None
+
+
+def _source_run(ctx: _CycleContext, config: SourceConfig, db_source_id: int) -> SourceRun:
+    return SourceRun(
+        config=config, db_source_id=db_source_id, article_repo=ctx.article_repo,
+        settings=ctx.settings, relevance_scorer=ctx.relevance_scorer,
+        admission_state=ctx.admission_state,
+    )
 
 
 def _collect_enabled_sources(
@@ -129,13 +138,8 @@ def _process_source_with_admission(
     state = ctx.admission_state
     with ctx.session.begin_nested():
         replay_count = _replay_pending_for_source(
-            session=ctx.session,
-            config=config,
-            db_source_id=db_source_id,
-            article_repo=ctx.article_repo,
-            settings=ctx.settings,
-            relevance_scorer=ctx.relevance_scorer,
-            admission_state=state,
+            ctx.session,
+            _source_run(ctx, config, db_source_id),
             metrics=source_metrics,
         )
         source_metrics.replay_items += replay_count
@@ -153,15 +157,8 @@ def _process_source_with_admission(
             if fetch_result is not None:
                 fresh_metrics = SourceMetrics(source_id=config.id, source_type=config.type)
                 _process_source_result(
-                    fetch_result=fetch_result,
-                    config=config,
-                    db_source_id=db_source_id,
-                    source_repo=ctx.source_repo,
-                    article_repo=ctx.article_repo,
-                    settings=ctx.settings,
-                    metrics=fresh_metrics,
-                    relevance_scorer=ctx.relevance_scorer,
-                    admission_state=state,
+                    _source_run(ctx, config, db_source_id), fetch_result,
+                    source_repo=ctx.source_repo, metrics=fresh_metrics,
                 )
                 _merge_fresh_metrics(source_metrics, fresh_metrics)
         if state.paused:
@@ -189,28 +186,19 @@ def _process_prefetched_source(
         return False
     with ctx.session.begin_nested():
         _process_source_result(
-            fetch_result=fetch_result,
-            config=config,
-            db_source_id=db_source_id,
-            source_repo=ctx.source_repo,
-            article_repo=ctx.article_repo,
-            settings=ctx.settings,
-            metrics=source_metrics,
-            relevance_scorer=ctx.relevance_scorer,
-            admission_state=ctx.admission_state,
+            _source_run(ctx, config, db_source_id), fetch_result,
+            source_repo=ctx.source_repo, metrics=source_metrics,
         )
     return True
 
 
-def _record_persist_failure(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+def _record_persist_failure(
     ctx: _CycleContext,
     totals: _RunTotals,
     config: SourceConfig,
     source_metrics: SourceMetrics,
-    snapshot: _Snapshot,
     exc: Exception,
 ) -> None:
-    _restore_admission(ctx.admission_state, snapshot)
     source_metrics.new_items = 0
     source_metrics.duplicate_items = 0
     source_metrics.skipped_known_items = 0
@@ -289,7 +277,8 @@ def _run_sources(
             ):
                 continue
         except Exception as exc:
-            _record_persist_failure(ctx, totals, config, source_metrics, snapshot, exc)
+            _restore_admission(ctx.admission_state, snapshot)
+            _record_persist_failure(ctx, totals, config, source_metrics, exc)
 
         _finish_source(ctx, totals, config, source_metrics, snapshot)
         if ctx.admission_state.paused:

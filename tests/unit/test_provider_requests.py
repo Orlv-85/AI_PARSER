@@ -22,7 +22,7 @@ from app.core.daily.provider_requests import (
     summary_request,
     topic_request,
 )
-from app.core.jev import JevInputTooLarge, JevRelevanceScorer
+from app.core.jev import JevInputTooLarge, JevRelevanceScorer, ScorerConfig
 from app.storage.provider_journal import PilotJournal, PilotStopped
 
 ROW = {"url": "https://example.com/article/ai", "title": "Synthetic AI release",
@@ -42,8 +42,11 @@ def jev_response(**overrides):
 
 def test_pilot_reuses_ordinary_admission_but_hashes_actual_topic_and_source():
     with httpx.Client() as client:
-        ordinary = JevRelevanceScorer(client, "jev-1.13.0", getLogger(__name__),
-                                      semantic_admission_enabled=True).questions()
+        ordinary = JevRelevanceScorer(
+            client,
+            getLogger(__name__),
+            ScorerConfig("jev-1.13.0", semantic_admission_enabled=True),
+        ).questions()
     body = jev_request(ROW)
     assert body["questions"]["admission"] == ordinary["admission"]
     assert len(TOPIC_CRITERIA) == 10

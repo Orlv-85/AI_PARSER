@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
-from typing import Any, cast
+from typing import cast
 
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
@@ -15,6 +15,7 @@ from app.storage.repos import (
     WeeklyAnalyticsRepo,
     WeeklyAnalyticsReport,
     WeeklyAnalyticsReportIndexEntry,
+    WeeklyDraft,
 )
 
 __all__ = ["WeeklyAnalyticsItem", "WeeklyAnalyticsReport", "WeeklyAnalyticsReportIndexEntry"]
@@ -51,14 +52,14 @@ def read_weekly_report(session_factory: Callable[[], Session], target_date: date
         return report_date, repo.get_weekly_report(report_date=report_date)
 
 
-def save_weekly_report(session_factory: Callable[[], Session], **report: Any
-                       ) -> WeeklyAnalyticsReport:
+def save_weekly_report(session_factory: Callable[[], Session], report_date: date,
+                       draft: WeeklyDraft) -> WeeklyAnalyticsReport:
     """Stores a report, commits, and returns it as stored."""
     with session_factory() as session:
         repo = WeeklyAnalyticsRepo(session)
-        repo.save_weekly_report(**report)
+        repo.save_weekly_report(report_date=report_date, draft=draft)
         session.commit()
-        return repo.get_weekly_report(report_date=report["report_date"])
+        return repo.get_weekly_report(report_date=report_date)
 
 
 def stored_reports(session_factory: Callable[[], Session], limit: int

@@ -112,5 +112,4 @@ disable = [
   "broad-exception-caught",
   "logging-too-many-args",
   "invalid-name",
-  "too-many-arguments",
 ]

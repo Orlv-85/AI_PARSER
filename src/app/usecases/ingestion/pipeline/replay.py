@@ -1,31 +1,28 @@
 """Replay of pending admission candidates before a source's fresh fetch."""
 import json
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy.orm import Session
 
-from app.config.settings import Settings
-from app.config.sources import SourceConfig
 from app.core.ingestion.admission import (
     admission_cache_key,
     bounded_evidence,
     evidence_hash,
 )
-from app.core.jev import JevRelevanceScorer
 from app.core.models import Article as CoreArticle
 from app.storage.admission import (
     get_cached_decision,
     list_pending,
     settle_pending,
 )
-from app.storage.article_repo import ArticleRepo
 from app.usecases.ingestion.pipeline.html_links import _process_html_links_two_stage
 from app.usecases.ingestion.pipeline.models import (
     PENDING_REPLAY_LIMIT,
     PENDING_REPLAY_MAX_AGE_DAYS,
     AdmissionState,
     SourceMetrics,
+    SourceRun,
 )
 from app.usecases.ingestion.pipeline.rows import (
     _article_from_candidate,
@@ -67,11 +64,12 @@ def _take_fresh_pending(session: Session, db_source_id: int) -> list[Any]:
 
 
 def _replay_pending_for_source(  # pylint: disable=too-many-branches
-    *, session: Session, config: SourceConfig, db_source_id: int,
-    article_repo: ArticleRepo, settings: Settings,
-    relevance_scorer: JevRelevanceScorer | None, admission_state: AdmissionState,
-    metrics: SourceMetrics,
+    session: Session, run: SourceRun, metrics: SourceMetrics,
 ) -> int:
+    """Replay the source's pending candidates; `run` carries the admission state."""
+    config, db_source_id = run.config, run.db_source_id
+    article_repo, settings = run.article_repo, run.settings
+    admission_state = cast(AdmissionState, run.admission_state)
     pending = _take_fresh_pending(session, db_source_id)
     bodies: list[tuple[Any, CoreArticle]] = []
     links: list[Any] = []
@@ -86,11 +84,7 @@ def _replay_pending_for_source(  # pylint: disable=too-many-branches
 
     if bodies:
         items = [item for _, item in bodies]
-        new, duplicates, skipped, _ = _process_fetched_source_items(
-            items=items, config=config, db_source_id=db_source_id,
-            article_repo=article_repo, settings=settings,
-            relevance_scorer=relevance_scorer, admission_state=admission_state,
-        )
+        new, duplicates, skipped, _ = _process_fetched_source_items(run, items)
         metrics.fetched_items += len(items)
         metrics.new_items += new
         metrics.duplicate_items += duplicates
@@ -115,11 +109,7 @@ def _replay_pending_for_source(  # pylint: disable=too-many-branches
     replayed = len(bodies)
     if links and not admission_state.paused:
         urls = [str(json.loads(entry.payload)["candidate"]["url"]) for entry in links]
-        fetched, new, duplicates, skipped, _ = _process_html_links_two_stage(
-            links=urls, config=config, db_source_id=db_source_id,
-            article_repo=article_repo, settings=settings,
-            relevance_scorer=relevance_scorer, admission_state=admission_state,
-        )
+        fetched, new, duplicates, skipped, _ = _process_html_links_two_stage(run, urls)
         replayed += len(links)
         metrics.fetched_items += fetched
         metrics.new_items += new

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from fixture_options import options  # pylint: disable=import-error
 from period_fixtures import fixture_period_input  # pylint: disable=import-error
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -34,7 +35,8 @@ def client_fixture(monkeypatch, tmp_path):
     get_settings.cache_clear()
 
 
-def store(maker, engine, start, payload, *, status="ready", kind="week", end=None):
+def store(maker, engine, start, payload, **opts):
+    status, kind, end = options(opts, status="ready", kind="week", end=None)
     Base.metadata.create_all(bind=engine)
     now = datetime.now(UTC)
     with maker() as session:

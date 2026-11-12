@@ -14,6 +14,7 @@ from app.config.settings import Settings
 from app.core.canonicalize import canonical_url_hash
 from app.core.daily.signals_extract import ExtractedEntity, Extraction
 from app.storage.daily_signals import DailySignalRepo
+from app.storage.daily_signals_ledger import RunEnv
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import AIEntity, AIEntityOverride, Article, Base, DailySignalReport
 
@@ -178,7 +179,7 @@ def test_json_line_includes_the_brief_block(factory, monkeypatch, tmp_path):
 
     real = cli_daily.run_signals
     monkeypatch.setattr(cli_daily, "run_signals", lambda *a: real(
-        *a, transport=httpx.MockTransport(provider)))
+        *a, RunEnv(transport=httpx.MockTransport(provider))))
     code, out = invoke("daily-signals", "--cache-dir", str(tmp_path / "c"))
     report = json.loads(out)
     assert code == 0 and report["state"] == "ok"

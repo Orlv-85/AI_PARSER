@@ -11,7 +11,13 @@ from app.core.canonicalize import canonical_url_hash
 from app.core.daily.signals_entities import reconcile
 from app.core.daily.signals_extract import ExtractedEntity, Extraction
 from app.storage import daily_signals as module
-from app.storage.daily_signals import DailySignalRepo, OverrideConflict
+from app.storage.daily_signals import (
+    BriefRecord,
+    DailySignalRepo,
+    NewOverride,
+    OverrideConflict,
+    SignalFailure,
+)
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import (
     AIEntity,
@@ -26,7 +32,7 @@ from app.storage.models_sql import (
 from app.usecases.archive.capture import prune_articles
 from app.usecases.daily import signals_recompute
 from app.usecases.daily.signals import add_override
-from app.usecases.daily.signals_recompute import digest_text, recompute_reports
+from app.usecases.daily.signals_recompute import RecomputeScope, digest_text, recompute_reports
 
 COMPARABLE_FROM = date(2026, 10, 10)
 D = date(2026, 10, 16)
@@ -150,7 +156,7 @@ def test_cache_by_content_hash_and_failures(session, repo):
     digest(session, D, article.url)
     repo.replace_membership(D)
     assert repo.get_cached(article, "h1") is None
-    repo.save_failure(article, content_hash="h1", status="failed", reason="unknown")
+    repo.save_failure(article, SignalFailure(status="failed", reason="unknown"), content_hash="h1")
     assert repo.coverage()[D].failed == 1
     repo.save_extraction(article, extraction(model("Atlas")), content_hash="h1")
     assert repo.get_cached(article, "h1") is not None
@@ -160,7 +166,7 @@ def test_cache_by_content_hash_and_failures(session, repo):
     assert json.loads(row.payload)["entities"][0]["name"] == "Atlas"
     assert repo.coverage()[D].extracted == 1
     with pytest.raises(ValueError):
-        repo.save_failure(article, content_hash="h1", status="ok", reason="x")
+        repo.save_failure(article, SignalFailure(status="ok", reason="x"), content_hash="h1")
 
 
 def test_reextraction_replaces_all_days_of_that_version(session, repo):
@@ -235,20 +241,48 @@ def test_overrides_stored_applied_refused_and_deleted(session, repo):
     repo.save_extraction(b, extraction(model("GPT-6 Astra", new=True)), content_hash="h")
     recompute_reports(repo, D, now=NOW)
     assert [i["name"] for i in json.loads(repo.get_report(D).payload)["new"]] == ["GPT-6 Astra"]
-    row = add_override(repo, kind="alias", type_group_="artifact", match_key="gpt6astra",
-                            target_base_key="gpt6")
+    row = add_override(
+        repo,
+        NewOverride(
+            kind="alias",
+            type_group="artifact",
+            match_key="gpt6astra",
+            target_base_key="gpt6",
+        ),
+    )
     assert row.target_entity_key == f"manual:{row.id}"
     recompute_reports(repo, D, now=NOW)
     assert json.loads(repo.get_report(D).payload)["new"] == []
     assert {m.entity_key for m in session.scalars(select(SignalMention))} == {row.target_entity_key}
     with pytest.raises(OverrideConflict):
-        add_override(repo, kind="merge", type_group_="artifact", match_key="gpt6",
-                          target_base_key="gpt7")
+        add_override(
+            repo,
+            NewOverride(
+                kind="merge",
+                type_group="artifact",
+                match_key="gpt6",
+                target_base_key="gpt7",
+            ),
+        )
     with pytest.raises(OverrideConflict):
-        add_override(repo, kind="alias", type_group_="artifact", match_key="gpt6astra",
-                          target_base_key="gpt6")
-    second = add_override(repo, kind="merge", type_group_="artifact", match_key="gpt6sol",
-                               target_base_key="gpt6")
+        add_override(
+            repo,
+            NewOverride(
+                kind="alias",
+                type_group="artifact",
+                match_key="gpt6astra",
+                target_base_key="gpt6",
+            ),
+        )
+    second = add_override(
+        repo,
+        NewOverride(
+            kind="merge",
+            type_group="artifact",
+            match_key="gpt6sol",
+            target_base_key="gpt6",
+        ),
+    )
     assert second.target_entity_key == row.target_entity_key
     assert repo.delete_override(row.id) and not repo.delete_override(row.id)
     recompute_reports(repo, D, now=NOW)
@@ -416,7 +450,8 @@ def test_recompute_bound_and_all_days(session, repo):
         repo.replace_membership(day)
         repo.save_extraction(article, extraction(model("Atlas")), content_hash="h")
     assert recompute_reports(repo, days[1], now=NOW).written == [days[1]]
-    assert recompute_reports(repo, days[1], now=NOW, all_days=True).written == [days[0]]
+    every_day = RecomputeScope(all_days=True)
+    assert recompute_reports(repo, days[1], every_day, now=NOW).written == [days[0]]
 
 
 def _settled_day_with_new_item(session, repo):
@@ -448,7 +483,7 @@ def test_settled_day_keeps_its_snapshot(session, repo):
 @pytest.mark.parametrize("call", [{"since": D}, {"all_days": True}])
 def test_run_days_and_recompute_all_rewrite_settled_days(session, repo, call):
     later = _settled_day_with_new_item(session, repo)
-    assert D in recompute_reports(repo, later, now=NOW, **call).written
+    assert D in recompute_reports(repo, later, RecomputeScope(**call), now=NOW).written
     assert json.loads(repo.get_report(D).payload)["new"] == []
 
 
@@ -465,7 +500,7 @@ def test_day_that_lost_articles_keeps_its_snapshot(session, repo, all_days):
     prune_articles(session, older_than_days=365)
     session.flush()
     session.expire_all()
-    result = recompute_reports(repo, D, now=NOW, all_days=all_days)
+    result = recompute_reports(repo, D, RecomputeScope(all_days=all_days), now=NOW)
     assert not result.written and result.lost_articles == (D,)
     stored = repo.get_report(D)
     assert stored.payload_hash == before
@@ -639,18 +674,38 @@ def test_observations_carry_the_digest_summary_of_that_day(session, repo):
 
 def test_save_brief_upserts_by_day(session, repo):
     assert repo.get_brief(D) is None
-    first = repo.save_brief(D, brief_version="v", model="m", input_hash="h1", status="invalid",
-                            payload={}, reason="schema,schema")
+    first = repo.save_brief(
+        D,
+        BriefRecord(
+            brief_version="v",
+            model="m",
+            input_hash="h1",
+            status="invalid",
+            payload={},
+            reason="schema,schema",
+        ),
+    )
     session.commit()
-    second = repo.save_brief(D, brief_version="v", model="m", input_hash="h2", status="ok",
-                             payload={"sentences": [{"text": "x", "links": [], "quote": "q"}]})
+    second = repo.save_brief(
+        D,
+        BriefRecord(
+            brief_version="v",
+            model="m",
+            input_hash="h2",
+            status="ok",
+            payload={"sentences": [{"text": "x", "links": [], "quote": "q"}]},
+        ),
+    )
     session.commit()
     assert first.id == second.id
     row = repo.get_brief(D)
     assert (row.input_hash, row.status, row.reason) == ("h2", "ok", None)
     assert json.loads(row.payload)["sentences"][0]["quote"] == "q"
     with pytest.raises(ValueError):
-        repo.save_brief(D, brief_version="v", model="m", input_hash="h", status="bad", payload={})
+        repo.save_brief(
+            D,
+            BriefRecord(brief_version="v", model="m", input_hash="h", status="bad", payload={}),
+        )
 
 
 def test_publisher_group_uses_registrable_domain_and_overrides() -> None:
@@ -676,15 +731,32 @@ def test_report_uses_the_digest_title_of_an_article(session, repo):
 
 def test_add_override_refuses_a_bad_kind_and_a_merge_into_itself(repo):
     with pytest.raises(ValueError, match="^rename$"):
-        add_override(repo, kind="rename", type_group_="artifact", match_key="a",
-                     target_base_key="b")
+        add_override(
+            repo,
+            NewOverride(kind="rename", type_group="artifact", match_key="a", target_base_key="b"),
+        )
     with pytest.raises(OverrideConflict, match="same selector"):
-        add_override(repo, kind="merge", type_group_="artifact", match_key="atlas",
-                     target_base_key="atlas")
+        add_override(
+            repo,
+            NewOverride(
+                kind="merge",
+                type_group="artifact",
+                match_key="atlas",
+                target_base_key="atlas",
+            ),
+        )
     assert not repo.overrides()
 
 
 def test_add_override_keeps_a_given_target_entity_key(repo):
-    row = add_override(repo, kind="alias", type_group_="artifact", match_key="bravo",
-                       target_base_key="alpha", target_entity_key="manual:7")
+    row = add_override(
+        repo,
+        NewOverride(
+            kind="alias",
+            type_group="artifact",
+            match_key="bravo",
+            target_base_key="alpha",
+            target_entity_key="manual:7",
+        ),
+    )
     assert row.target_entity_key == "manual:7"

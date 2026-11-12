@@ -5,16 +5,14 @@ Behavior, decisions, invariants and code map: signals.md next to this file.
 """
 import json
 import logging
-import time
 import uuid
 from collections import Counter
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -55,11 +53,25 @@ from app.core.daily.signals_extract import (
     source_text,
 )
 from app.core.provider_costs import microdollars
-from app.storage.daily_signals import DailySignalRepo, OverrideConflict
-from app.storage.daily_signals_ledger import LedgerStop, SignalsLedger
+from app.storage.daily_signals import (
+    BriefRecord,
+    DailySignalRepo,
+    NewOverride,
+    OverrideConflict,
+    SignalFailure,
+)
+from app.storage.daily_signals_ledger import (
+    DEFAULT_ENV,
+    CallTag,
+    LedgerConfig,
+    LedgerProvider,
+    LedgerStop,
+    RunEnv,
+    SignalsLedger,
+)
 from app.storage.journal_files import private_write
 from app.storage.models_sql import AIEntity, AIEntityOverride, Article
-from app.usecases.daily.signals_recompute import recompute_reports
+from app.usecases.daily.signals_recompute import RecomputeScope, recompute_reports
 
 LOGGER = logging.getLogger(__name__)
 
@@ -105,7 +117,7 @@ class _Extractor:
         """Provider answer data for a 200 response, or None (attempt failed, stays pending)."""
         result = self.ledger.dispatch(
             body, request_key=signals_request_key(body), reserved_micro=reservation_micro(body),
-            article_id=article.id, version=EXTRACTION_VERSION, scope_day=scope_day.isoformat())
+            tag=CallTag(article.id, EXTRACTION_VERSION, scope_day.isoformat()))
         self.counts["replayed" if result.replayed else "dispatched"] += 1
         if result.state != "response":
             self.counts[f"attempt_{result.state}"] += 1
@@ -118,8 +130,8 @@ class _Extractor:
         published = article.published_at.date() if article.published_at else None
         base = request_body(text, retry=retry)
         if byte_bound(base) > MAX_INPUT_BYTES:
-            self.repo.save_failure(article, content_hash=content_hash, status="skipped",
-                                   reason="input_too_large")
+            self.repo.save_failure(article, SignalFailure("skipped", "input_too_large"),
+                                   content_hash=content_hash)
             return "skipped"
         reasons = []
         # A retry's recovery body differs too, so a saved invalid answer is never replayed.
@@ -129,8 +141,8 @@ class _Extractor:
                 # An incomplete retry keeps the row skipped with its retry unused (F11); the
                 # next --retry-skipped sends the same retry bodies again.
                 if not retry:
-                    self.repo.save_failure(article, content_hash=content_hash, status="failed",
-                                           reason="attempt_incomplete")
+                    self.repo.save_failure(article, SignalFailure("failed", "attempt_incomplete"),
+                                           content_hash=content_hash)
                 return "pending"
             try:
                 extraction = parse_extraction(text, data, published)
@@ -144,8 +156,8 @@ class _Extractor:
                                                                       article.summary,
                                                                       article.title)})
             return "ok"
-        self.repo.save_failure(article, content_hash=content_hash, status="skipped",
-                               reason="invalid_output:" + ",".join(reasons), retry_used=retry)
+        failure = SignalFailure("skipped", "invalid_output:" + ",".join(reasons), retry_used=retry)
+        self.repo.save_failure(article, failure, content_hash=content_hash)
         return "skipped"
 
 
@@ -158,9 +170,10 @@ def _gate(settings: Any, options: RunOptions, key: str) -> str | None:
     return None if key else "missing_provider_key"
 
 
-def _extract_days(session: Session, repo: DailySignalRepo, ledger: SignalsLedger, *,
-                  options: RunOptions, report: dict[str, Any], counts: Counter[str]) -> int:
+def _extract_days(repo: DailySignalRepo, ledger: SignalsLedger, *, options: RunOptions,
+                  report: dict[str, Any], counts: Counter[str]) -> int:
     """Extract pending articles of the run days; returns the run spend in microdollars."""
+    session = repo.session
     extractor = _Extractor(repo, ledger, counts)
     attempted: set[tuple[int, str, str]] = set()
     try:
@@ -235,7 +248,7 @@ def _brief_day(session: Session, repo: DailySignalRepo, run: _BriefRun, day: dat
         body = brief_body(packet, run.model, recovery=reasons[-1] if reasons else None)
         result = run.ledger.dispatch(body, request_key=brief_key(body),
                                      reserved_micro=run.ledger.bound_micro(body, MAX_OUTPUT),
-                                     version=BRIEF_VERSION, scope_day=day.isoformat())
+                                     tag=CallTag(version=BRIEF_VERSION, scope_day=day.isoformat()))
         if result.state != "response":
             return f"skipped:attempt_{result.state}"
         dropped: list[str] = []
@@ -244,21 +257,38 @@ def _brief_day(session: Session, repo: DailySignalRepo, run: _BriefRun, day: dat
         except BriefInvalid as error:
             reasons.append(str(error))
             continue
-        repo.save_brief(day, brief_version=BRIEF_VERSION, model=run.model, input_hash=digest,
-                        status="ok", payload=brief_payload(sentences, id_map),
-                        reason=("dropped:" + ",".join(dropped))[:1000] if dropped else None)
+        repo.save_brief(day, BriefRecord(
+            BRIEF_VERSION, run.model, digest, "ok", brief_payload(sentences, id_map),
+            reason=("dropped:" + ",".join(dropped))[:1000] if dropped else None))
         session.commit()
         return "ok"
-    repo.save_brief(day, brief_version=BRIEF_VERSION, model=run.model, input_hash=digest,
-                    status="invalid", payload={}, reason=",".join(reasons)[:1000])
+    repo.save_brief(day, BriefRecord(BRIEF_VERSION, run.model, digest, "invalid", {},
+                                     reason=",".join(reasons)[:1000]))
     session.commit()
     return "invalid"
 
 
-def _briefs(session: Session, repo: DailySignalRepo, settings: Any, options: RunOptions, *,
-            extraction_micro: int, ledger_options: dict[str, Any]) -> dict[str, Any]:
+@dataclass(frozen=True)
+class _LedgerSetup:
+    """What every ledger of one run shares; `open` adds the caps of one step."""
+
+    path: Path
+    run_id: str
+    provider: LedgerProvider
+    deadline: float
+    clock: Callable[[], float]
+
+    def open(self, max_calls: int, max_usd_micro: int, suffix: str = "") -> SignalsLedger:
+        return SignalsLedger(self.path, run_id=self.run_id + suffix, provider=self.provider,
+                             caps=LedgerConfig(max_calls, max_usd_micro, self.deadline,
+                                               self.clock))
+
+
+def _briefs(repo: DailySignalRepo, settings: Any, options: RunOptions, *,
+            extraction_micro: int, setup: _LedgerSetup) -> dict[str, Any]:
     """The brief step of a paid run (007 FR-001..FR-003, FR-008). `--max-usd` is the run total:
     briefs get what extraction left, at most BRIEF_MAX_USD_PER_DAY per target day."""
+    session = repo.session
     model = settings.daily_signals_brief_model
     out: dict[str, Any] = {"model": model, "days": {}, "run": {"calls": 0, "usd": 0.0},
                            "terminal_reason": None}
@@ -275,8 +305,8 @@ def _briefs(session: Session, repo: DailySignalRepo, settings: Any, options: Run
         out["terminal_reason"] = skip
         return out
     assert prices is not None
-    ledger = SignalsLedger(max_calls=2 * len(targets), max_usd_micro=cap, prices=prices,
-                           **ledger_options)
+    ledger = replace(setup, provider=replace(setup.provider, prices=prices)).open(
+        2 * len(targets), cap, suffix="-brief")
     run = _BriefRun(ledger=ledger, model=model, now=lambda: datetime.now(UTC))
     try:
         for index, day in enumerate(targets):
@@ -309,12 +339,11 @@ def _incomplete_days(repo: DailySignalRepo, days: list[date],
     return out
 
 
-def run_signals(session: Session, settings: Any, options: RunOptions, *,
-                transport: httpx.BaseTransport | None = None,
-                clock: Callable[[], float] = time.monotonic,
-                now: Callable[[], datetime] = lambda: datetime.now(UTC)) -> dict[str, Any]:
+def run_signals(session: Session, settings: Any, options: RunOptions,
+                env: RunEnv = DEFAULT_ENV) -> dict[str, Any]:
     """One bounded signals run; returns the run report (no key, no article text)."""
-    started = clock()
+    now = env.now
+    started = env.clock()
     run_id = now().strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
     days = run_days(options)
     report: dict[str, Any] = {
@@ -336,20 +365,19 @@ def run_signals(session: Session, settings: Any, options: RunOptions, *,
         session.commit()
     counts: Counter[str] = Counter()
     extraction_micro = 0
-    ledger_options = {"path": options.cache_dir / "ledger.sqlite3", "api_key": key,
-                      "deadline": started + options.max_seconds, "clock": clock,
-                      "transport": transport}
+    setup = _LedgerSetup(options.cache_dir / "ledger.sqlite3", run_id,
+                         LedgerProvider(api_key=key, transport=env.transport),
+                         started + options.max_seconds, env.clock)
     if options.recompute_only:
         report["state"] = "recompute_only"
     else:
         options.cache_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-        ledger = SignalsLedger(run_id=run_id, max_calls=options.max_calls,
-                               max_usd_micro=microdollars(options.max_usd), **ledger_options)
-        extraction_micro = _extract_days(session, repo, ledger, options=options, report=report,
+        ledger = setup.open(options.max_calls, microdollars(options.max_usd))
+        extraction_micro = _extract_days(repo, ledger, options=options, report=report,
                                          counts=counts)
     # Through the latest completed day, so a backfill never leaves later reports stale (F1).
     until = max(options.report_date, now().date() - timedelta(days=1))
-    result = recompute_reports(repo, until, all_days=options.recompute_all, since=days[0],
+    result = recompute_reports(repo, until, RecomputeScope(options.recompute_all, days[0]),
                                now=now())
     session.commit()
     report.update(reports_written=[d.isoformat() for d in result.written],
@@ -360,10 +388,8 @@ def run_signals(session: Session, settings: Any, options: RunOptions, *,
                   incomplete_days=_incomplete_days(repo, days, report["terminal_reason"]))
     if not options.recompute_only:
         try:
-            brief_ledger = {**ledger_options, "run_id": run_id + "-brief"}
-            report["brief"] = _briefs(session, repo, settings, options,
-                                      extraction_micro=extraction_micro,
-                                      ledger_options=brief_ledger)
+            report["brief"] = _briefs(repo, settings, options,
+                                      extraction_micro=extraction_micro, setup=setup)
         except Exception as error:  # pylint: disable=broad-exception-caught
             # A brief failure never changes the extraction result or the stored snapshots.
             session.rollback()
@@ -372,7 +398,7 @@ def run_signals(session: Session, settings: Any, options: RunOptions, *,
                                "days": {},
                                "run": {"calls": 0, "usd": 0.0},
                                "terminal_reason": f"error:{type(error).__name__}"}
-    report["seconds"] = round(clock() - started, 1)
+    report["seconds"] = round(env.clock() - started, 1)
     if not options.recompute_only:
         runs = options.cache_dir / "runs"
         runs.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -403,36 +429,31 @@ def _selector(repo: DailySignalRepo, entity_id: int) -> tuple[AIEntity, str, str
     return entity, entity.type_group, parts[2], vendor
 
 
-def add_override(repo: DailySignalRepo, *, kind: str, type_group_: str, match_key: str,
-                 target_base_key: str, vendor_class: str = "", target_vendor_class: str = "",
-                 target_entity_key: str | None = None,
-                 note: str | None = None) -> AIEntityOverride:
+def add_override(repo: DailySignalRepo, new: NewOverride) -> AIEntityOverride:
     """Add an operator override; OverrideConflict when another override owns a selector."""
-    if kind not in ("alias", "merge"):
-        raise ValueError(kind)
+    if new.kind not in ("alias", "merge"):
+        raise ValueError(new.kind)
     existing = repo.overrides()
-    if target_entity_key is None:
+    if new.target_entity_key is None:
         # Reuse the manual entity that already owns the target selector, if any.
-        target_entity_key = next(
-            (o.target_entity_key for o in existing if o.type_group == type_group_
-             and o.target_base_key == target_base_key
-             and o.target_vendor_class == target_vendor_class), None)
-    candidate = Override(override_id=0, kind=kind, type_group=type_group_,
-                         match_key=match_key, vendor_class=vendor_class,
-                         target_base_key=target_base_key,
-                         target_vendor_class=target_vendor_class,
-                         target_entity_key=target_entity_key or "manual:new")
-    if (match_key, vendor_class) == (target_base_key, target_vendor_class) and kind == "merge":
+        new = replace(new, target_entity_key=next(
+            (o.target_entity_key for o in existing if o.type_group == new.type_group
+             and o.target_base_key == new.target_base_key
+             and o.target_vendor_class == new.target_vendor_class), None))
+    candidate = Override(override_id=0, kind=new.kind, type_group=new.type_group,
+                         match_key=new.match_key, vendor_class=new.vendor_class,
+                         target_base_key=new.target_base_key,
+                         target_vendor_class=new.target_vendor_class,
+                         target_entity_key=new.target_entity_key or "manual:new")
+    if ((new.match_key, new.vendor_class) == (new.target_base_key, new.target_vendor_class)
+            and new.kind == "merge"):
         raise OverrideConflict("source and target are the same selector")
     evidence = repo.load_evidence()[0]
     conflict = selectors_conflict(existing, candidate, evidence_classes(evidence).resolve,
                                   reconcile(evidence).resolve_base)
     if conflict is not None:
         raise OverrideConflict(f"selector owned by override {conflict.override_id}")
-    return repo.insert_override(kind=kind, type_group_=type_group_, match_key=match_key,
-                                vendor_class=vendor_class, target_base_key=target_base_key,
-                                target_vendor_class=target_vendor_class,
-                                target_entity_key=target_entity_key, note=note)
+    return repo.insert_override(new)
 
 
 def merge_entities(repo: DailySignalRepo, source_id: int, target_id: int) -> AIEntityOverride:
@@ -444,10 +465,10 @@ def merge_entities(repo: DailySignalRepo, source_id: int, target_id: int) -> AIE
     if group != target_group:
         raise EntityCommandError(f"type groups differ: {group} vs {target_group}")
     manual = target.entity_key if target.entity_key.startswith("manual:") else None
-    return add_override(repo, kind="merge", type_group_=group, match_key=base, vendor_class=vendor,
-                             target_base_key=target_base, target_vendor_class=target_vendor,
-                             target_entity_key=manual,
-                             note=f"merge {source.display_name} -> {target.display_name}"[:255])
+    return add_override(repo, NewOverride(
+        kind="merge", type_group=group, match_key=base, vendor_class=vendor,
+        target_base_key=target_base, target_vendor_class=target_vendor, target_entity_key=manual,
+        note=f"merge {source.display_name} -> {target.display_name}"[:255]))
 
 
 def alias_entity(repo: DailySignalRepo, entity_id: int, name: str) -> AIEntityOverride:
@@ -456,10 +477,10 @@ def alias_entity(repo: DailySignalRepo, entity_id: int, name: str) -> AIEntityOv
     if is_stopped(name_tokens(name, target.type)):
         raise EntityCommandError(f"alias {name!r} is empty or a generic term")
     manual = target.entity_key if target.entity_key.startswith("manual:") else None
-    return add_override(repo, kind="alias", type_group_=group, match_key=alias,
-                             target_base_key=base, target_vendor_class=vendor,
-                             target_entity_key=manual,
-                             note=f"alias {name} -> {target.display_name}"[:255])
+    return add_override(repo, NewOverride(
+        kind="alias", type_group=group, match_key=alias, target_base_key=base,
+        target_vendor_class=vendor, target_entity_key=manual,
+        note=f"alias {name} -> {target.display_name}"[:255]))
 
 
 def run_entity_command(session_factory: Callable[[], Session], settings: Any,

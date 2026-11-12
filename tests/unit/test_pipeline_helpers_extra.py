@@ -4,12 +4,14 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from threading import BoundedSemaphore
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
 from app.core.models import Article
+from app.ingest.fetcher import Validators
 from app.ingest.html import HtmlListPageResult
 from app.usecases.ingestion.pipeline.cycle import _full_text_semaphore
 from app.usecases.ingestion.pipeline.fetch import (
@@ -18,7 +20,7 @@ from app.usecases.ingestion.pipeline.fetch import (
     _source_group_max_workers,
 )
 from app.usecases.ingestion.pipeline.html_links import _process_html_links_two_stage
-from app.usecases.ingestion.pipeline.models import AdmissionState
+from app.usecases.ingestion.pipeline.models import AdmissionState, SourceRun
 from app.usecases.ingestion.pipeline.rows import _upsert_article_rows
 from app.usecases.ingestion.pipeline.sources import _persist_fetch_state_if_present
 
@@ -83,7 +85,7 @@ class _Repo:
     def exists_by_canonical_hash(self, canonical_hash: str) -> bool:
         return canonical_hash in self.known
 
-    def insert_article(self, **_row):
+    def insert_article(self, _row):
         return SimpleNamespace(), self.is_new
 
     def upsert_articles_batch(self, rows: list[dict[str, object]]) -> tuple[int, int]:
@@ -102,9 +104,7 @@ class _FakeFetcher:
 
 def _fetch(settings: Settings, fetch_state: dict[str, object | None] | None = None):
     return _fetch_source_items(
-        config=_html_source(),
-        db_source_id=1,
-        fetch_state=fetch_state or NO_VALIDATORS,
+        source=(0, _html_source(), 1, fetch_state or NO_VALIDATORS),
         settings=settings,
         logger=_Logger(),
         run_id="run",
@@ -168,8 +168,9 @@ def test_fetch_source_items_html_conditional_default_path(monkeypatch) -> None:
     assert isinstance(conditional, HtmlListPageResult)
     assert conditional.links == ["https://example.com/news/3"]
     assert conditional.etag == '"etag-3"'
-    assert captured[0]["if_none_match"] == '"etag-old"'
-    assert captured[0]["if_modified_since"] == "Tue, 02 Jan 2024 00:00:00 GMT"
+    sent = cast(Validators, captured[0]["validators"])
+    assert sent.if_none_match == '"etag-old"'
+    assert sent.if_modified_since == "Tue, 02 Jan 2024 00:00:00 GMT"
 
 
 def test_fetch_source_items_html_two_stage_default_nonconditional_path(monkeypatch) -> None:
@@ -204,8 +205,9 @@ def test_fetch_source_items_html_two_stage_default_nonconditional_path(monkeypat
     _fetch(_settings(fetch_conditional_html_list_enabled=True))
 
     assert captured
-    assert captured[0]["if_none_match"] is None
-    assert captured[0]["if_modified_since"] is None
+    sent = cast(Validators, captured[0]["validators"])
+    assert sent.if_none_match is None
+    assert sent.if_modified_since is None
 
 
 class _SpyFetcher:
@@ -269,16 +271,18 @@ def test_process_html_links_two_stage_closes_fetcher_when_placeholder_loop_raise
 
     with pytest.raises(RuntimeError, match="placeholder write failed"):
         _process_html_links_two_stage(
-            links=["https://example.com/news/new"],
-            config=_html_source(),
-            db_source_id=1,
-            article_repo=_Repo(),  # type: ignore[arg-type]
-            settings=_settings(
-                jev_model="model",
-                semantic_admission_policy_version="policy",
-                semantic_admission_prompt_version="prompt",
+            SourceRun(
+                config=_html_source(),
+                db_source_id=1,
+                article_repo=_Repo(),
+                settings=_settings(
+                    jev_model="model",
+                    semantic_admission_policy_version="policy",
+                    semantic_admission_prompt_version="prompt",
+                ),
+                admission_state=AdmissionState(enabled=True),
             ),
-            admission_state=AdmissionState(enabled=True),
+            ["https://example.com/news/new"],
         )
 
     assert len(_SpyFetcher.instances) == 1
@@ -355,11 +359,13 @@ def test_process_html_links_two_stage_covers_non_batch_edge_paths(monkeypatch) -
     monkeypatch.setattr("app.usecases.ingestion.pipeline.rows.rank_score", lambda **_kwargs: 1.0)
 
     fetched, new_count, duplicates, skipped, early_stop = _process_html_links_two_stage(
-        links=links,
-        config=_html_source(),
-        db_source_id=1,
-        article_repo=_Repo(known={"known"}, is_new=False),  # type: ignore[arg-type]
-        settings=_settings(html_max_links_per_source=-1, article_batch_upsert_enabled=False),
+        SourceRun(
+            config=_html_source(),
+            db_source_id=1,
+            article_repo=_Repo(known={"known"}, is_new=False),
+            settings=_settings(html_max_links_per_source=-1, article_batch_upsert_enabled=False),
+        ),
+        links,
     )
 
     assert fetched == 1
@@ -392,11 +398,13 @@ def test_process_html_links_two_stage_batch_mode(monkeypatch) -> None:
     repo = _Repo()
 
     fetched, new_count, duplicates, skipped, early_stop = _process_html_links_two_stage(
-        links=["https://example.com/one", "https://example.com/two"],
-        config=_html_source(),
-        db_source_id=1,
-        article_repo=repo,  # type: ignore[arg-type]
-        settings=_settings(article_batch_upsert_enabled=True),
+        SourceRun(
+            config=_html_source(),
+            db_source_id=1,
+            article_repo=repo,
+            settings=_settings(article_batch_upsert_enabled=True),
+        ),
+        ["https://example.com/one", "https://example.com/two"],
     )
 
     assert [len(rows) for rows in repo.batches] == [2]
@@ -462,19 +470,21 @@ def test_process_html_links_two_stage_excluded_item_is_logged_and_not_stored(
     )
     monkeypatch.setattr(
         "app.usecases.ingestion.pipeline.screening._screen_candidate",
-        lambda **_kwargs: pytest.fail("an excluded item is not screened"),
+        lambda *_args, **_kwargs: pytest.fail("an excluded item is not screened"),
     )
     repo = _Repo()
     flags: list[str] = []
 
     result = _process_html_links_two_stage(
-        links=[url],
-        config=_html_source(),
-        db_source_id=1,
-        article_repo=repo,  # type: ignore[arg-type]
-        settings=_settings(article_batch_upsert_enabled=False),
+        SourceRun(
+            config=_html_source(),
+            db_source_id=1,
+            article_repo=repo,
+            settings=_settings(article_batch_upsert_enabled=False),
+            admission_state=AdmissionState(enabled=True) if admission_enabled else None,
+        ),
+        [url],
         quality_flags=flags,
-        admission_state=AdmissionState(enabled=True) if admission_enabled else None,
     )
 
     assert result == (0, 0, 0, 0, False)
@@ -488,19 +498,22 @@ def test_process_html_links_two_stage_skips_item_without_row(monkeypatch) -> Non
     urls = ["https://example.com/news/a", "https://example.com/news/b"]
     _patch_html_stage(monkeypatch, lambda *, url, **_kwargs: _dated_article(url))
     monkeypatch.setattr(
-        "app.usecases.ingestion.pipeline.screening._build_article_row", lambda **_kwargs: None,
+        "app.usecases.ingestion.pipeline.screening._build_article_row",
+        lambda *_args, **_kwargs: None,
     )
     inserted: list[object] = []
     repo = _Repo()
-    repo.insert_article = lambda **row: inserted.append(row)  # type: ignore[method-assign]
+    repo.insert_article = inserted.append  # type: ignore[method-assign]
 
     for batch_mode in (False, True):
         result = _process_html_links_two_stage(
-            links=urls,
-            config=_html_source(),
-            db_source_id=1,
-            article_repo=repo,  # type: ignore[arg-type]
-            settings=_settings(article_batch_upsert_enabled=batch_mode),
+            SourceRun(
+                config=_html_source(),
+                db_source_id=1,
+                article_repo=repo,
+                settings=_settings(article_batch_upsert_enabled=batch_mode),
+            ),
+            urls,
         )
         assert result == (2, 0, 0, 0, False)
 
@@ -510,11 +523,13 @@ def test_process_html_links_two_stage_skips_item_without_row(monkeypatch) -> Non
 
 def _run_html_links(links: list[str], flags: list[str], **setting_overrides):
     return _process_html_links_two_stage(
-        links=links,
-        config=_html_source(),
-        db_source_id=1,
-        article_repo=_Repo(known={"known1", "known2"}),  # type: ignore[arg-type]
-        settings=_settings(article_batch_upsert_enabled=False, **setting_overrides),
+        SourceRun(
+            config=_html_source(),
+            db_source_id=1,
+            article_repo=_Repo(known={"known1", "known2"}),
+            settings=_settings(article_batch_upsert_enabled=False, **setting_overrides),
+        ),
+        links,
         quality_flags=flags,
     )
 

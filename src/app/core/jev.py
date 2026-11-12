@@ -61,24 +61,31 @@ class JevInputTooLarge(ValueError):
     """Source evidence exceeds the local request bound before provider dispatch."""
 
 
+@dataclass(frozen=True)
+class ScorerConfig:
+    """Model and question set of a scorer: category threshold, admission, daily enrichment."""
+
+    model: str
+    category_min_confidence: float = 0.7
+    semantic_admission_enabled: bool = False
+    daily_enrichment_enabled: bool = False
+
+
 class JevRelevanceScorer:  # pylint: disable=too-many-instance-attributes
     def __init__(
-        self, client: httpx.Client, model: str, logger: Logger,
-        category_min_confidence: float = 0.7,
-        semantic_admission_enabled: bool = False,
-        *, daily_enrichment_enabled: bool = False,
+        self, client: httpx.Client, logger: Logger, config: ScorerConfig, *,
         payment_journal=None,
     ) -> None:
         self.client = client
-        self.model = model
+        self.model = config.model
         self.logger = logger
         self.failed = False
         self.input_held = False
         self.consecutive_transport_failures = 0
         self.cache: dict[str, JevAssessment] = {}
-        self.category_min_confidence = category_min_confidence
-        self.semantic_admission_enabled = semantic_admission_enabled
-        self.daily_enrichment_enabled = daily_enrichment_enabled
+        self.category_min_confidence = config.category_min_confidence
+        self.semantic_admission_enabled = config.semantic_admission_enabled
+        self.daily_enrichment_enabled = config.daily_enrichment_enabled
         self.payment_journal = payment_journal
         if payment_journal is not None and payment_journal.transport_review_reason:
             # A failed row of an older version would block every other candidate's reservation.

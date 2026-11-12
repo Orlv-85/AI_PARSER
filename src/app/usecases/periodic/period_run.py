@@ -26,9 +26,10 @@ from app.core.periodic.period_model import (
     period_bounds,
     previous_start,
 )
+from app.storage.daily_signals_ledger import RunEnv
 from app.storage.period_signals import PeriodContext, PeriodSignalRepo
 from app.usecases.daily.signals_recompute import digest_text
-from app.usecases.periodic.period_brief_run import run_briefs
+from app.usecases.periodic.period_brief_run import BriefBudget, run_briefs
 
 LOGGER = logging.getLogger(__name__)
 BRIEF_MAX_SECONDS = 300
@@ -169,9 +170,9 @@ def run_periods(session: Session, settings: Any, options: PeriodRunOptions, *,
         else:
             report["unchanged"] += 1
     if options.with_brief or settings.period_signals_brief_enabled:
-        report["brief"] = _brief_step(session, settings, options, repo,
+        report["brief"] = _brief_step(repo, settings, options,
                                       brief_targets(options, weeks, today=moment.date()),
-                                      transport=transport)
+                                      transport)
     report["seconds"] = round(time.monotonic() - started, 1)
     return report
 
@@ -190,15 +191,16 @@ def run_week_and_month(session: Session, settings: Any, options: PeriodRunOption
     return report
 
 
-def _brief_step(session: Session, settings: Any, options: PeriodRunOptions,
-                repo: PeriodSignalRepo, weeks: list[date], *,
-                transport: httpx.BaseTransport | None) -> dict[str, Any]:
+def _brief_step(repo: PeriodSignalRepo, settings: Any, options: PeriodRunOptions,
+                weeks: list[date], transport: httpx.BaseTransport | None) -> dict[str, Any]:
     """The paid step; a failure never changes the stored numbers or the run result."""
+    session = repo.session
+    budget = BriefBudget(options.max_usd or settings.period_signals_max_usd, options.cache_dir,
+                         options.max_seconds)
     try:
         result: dict[str, Any] = run_briefs(
-            session, repo, settings, [(options.kind, w) for w in weeks],
-            max_usd=options.max_usd or settings.period_signals_max_usd,
-            cache_dir=options.cache_dir, max_seconds=options.max_seconds, transport=transport)
+            repo, settings, [(options.kind, w) for w in weeks], budget,
+            RunEnv(transport=transport))
         return result
     except Exception as error:  # pylint: disable=broad-exception-caught
         session.rollback()

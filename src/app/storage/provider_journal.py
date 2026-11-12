@@ -8,6 +8,8 @@ import os
 import sqlite3
 import time
 from collections import Counter
+from dataclasses import dataclass
+from typing import Any
 
 import httpx
 
@@ -74,20 +76,31 @@ def _report_tokens(selected):
     return dict(tokens)
 
 
+@dataclass(frozen=True)
+class JournalPolicy:
+    """How a journal keys and reserves calls and retries transport failures."""
+
+    key_function: Any = request_key
+    reservation_function: Any = reservation
+    transport_review_reason: str | None = None
+    transport_retry_delays: Any = (0,)
+
+
+DEFAULT_POLICY = JournalPolicy()
+
+
 class PilotJournal:
-    def __init__(self, path, identity, caps, *, key_function=request_key,
-                 reservation_function=reservation, transport_review_reason=None,
-                 transport_retry_delays=(0,)):
+    def __init__(self, path, identity, caps, policy: JournalPolicy = DEFAULT_POLICY):
         if set(caps) != {"total", "jev", "deepseek"}:
             raise ValueError("All three caps required")
-        if not transport_retry_delays:
+        if not policy.transport_retry_delays:
             raise ValueError("At least one transport retry delay required")
         self.caps = {k: microdollars(v) for k, v in caps.items()}
-        self.key_function = key_function
-        self.reservation_function = reservation_function
-        self.transport_review_reason = transport_review_reason
+        self.key_function = policy.key_function
+        self.reservation_function = policy.reservation_function
+        self.transport_review_reason = policy.transport_review_reason
         # One reviewed retry per delay; each attempt keeps its own conservative reservation.
-        self.transport_retry_delays = tuple(transport_retry_delays)
+        self.transport_retry_delays = tuple(policy.transport_retry_delays)
         if self.caps["jev"] + self.caps["deepseek"] > self.caps["total"]:
             raise ValueError("Provider caps exceed total cap")
         fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)

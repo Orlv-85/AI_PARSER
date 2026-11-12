@@ -3,6 +3,7 @@ derived entities, overrides and stored snapshots."""
 import json
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Any
 from urllib.parse import urlsplit
@@ -53,6 +54,49 @@ def publisher_group(url: str, overrides: Mapping[str, str]) -> str:
     suffixes = {"co.uk", "org.uk", "com.au", "co.jp", "com.br", "co.nz", "co.in"}
     domain = ".".join(parts[-3:] if ".".join(parts[-2:]) in suffixes else parts[-2:])
     return overrides.get(domain, domain)
+
+
+@dataclass(frozen=True)
+class BriefRecord:
+    """One generated brief (daily or period) as stored: `status` is "ok" or "invalid"."""
+
+    brief_version: str
+    model: str
+    input_hash: str
+    status: str
+    payload: Mapping[str, Any]
+    reason: str | None = None
+
+    def values(self) -> dict[str, Any]:
+        if self.status not in ("ok", "invalid"):
+            raise ValueError(self.status)
+        return {"brief_version": self.brief_version, "model": self.model,
+                "input_hash": self.input_hash, "status": self.status, "reason": self.reason,
+                "payload": json.dumps(dict(self.payload), sort_keys=True), "updated_at": _now()}
+
+
+@dataclass(frozen=True)
+class SignalFailure:
+    """A failed or skipped extraction: `status` is "failed" or "skipped"."""
+
+    status: str
+    reason: str
+    retry_used: bool = False
+
+
+@dataclass(frozen=True)
+class NewOverride:  # pylint: disable=too-many-instance-attributes
+    """An operator override before it is stored; no `target_entity_key` means a new manual
+    entity (`add_override` first reuses the one that owns the target selector)."""
+
+    kind: str
+    type_group: str
+    match_key: str
+    target_base_key: str
+    vendor_class: str = ""
+    target_vendor_class: str = ""
+    target_entity_key: str | None = None
+    note: str | None = None
 
 
 class OverrideConflict(ValueError):
@@ -211,14 +255,14 @@ class DailySignalRepo:  # pylint: disable=too-many-public-methods
         self.session.flush()
         return row
 
-    def save_failure(self, article: Article, *, content_hash: str, status: str, reason: str,
-                     version: str = EXTRACTION_VERSION, retry_used: bool = False) -> ArticleSignal:
-        if status not in ("failed", "skipped"):
-            raise ValueError(status)
+    def save_failure(self, article: Article, failure: SignalFailure, *, content_hash: str,
+                     version: str = EXTRACTION_VERSION) -> ArticleSignal:
+        if failure.status not in ("failed", "skipped"):
+            raise ValueError(failure.status)
         row = self._signal_row(article, version, content_hash)
-        row.status, row.reason = status, reason[:255]
+        row.status, row.reason = failure.status, failure.reason[:255]
         row.attempts += 1
-        row.retry_used = row.retry_used or retry_used
+        row.retry_used = row.retry_used or failure.retry_used
         self.session.flush()
         return row
 
@@ -343,23 +387,22 @@ class DailySignalRepo:  # pylint: disable=too-many-public-methods
                 for o in self.session.scalars(
                     select(AIEntityOverride).order_by(AIEntityOverride.id))]
 
-    def insert_override(self, *, kind: str, type_group_: str, match_key: str,
-                        target_base_key: str, vendor_class: str, target_vendor_class: str,
-                        target_entity_key: str | None, note: str | None) -> AIEntityOverride:
+    def insert_override(self, new: NewOverride) -> AIEntityOverride:
         """Insert one checked override (usecases/daily/signals.py, `add_override`); a new manual
         entity gets the key `manual:<id>`. OverrideConflict when the selector row exists."""
-        row = AIEntityOverride(kind=kind, type_group=type_group_, match_key=match_key,
-                               vendor_class=vendor_class, target_base_key=target_base_key,
-                               target_vendor_class=target_vendor_class,
-                               target_entity_key=target_entity_key or "manual:pending",
-                               note=note)
+        row = AIEntityOverride(kind=new.kind, type_group=new.type_group, match_key=new.match_key,
+                               vendor_class=new.vendor_class,
+                               target_base_key=new.target_base_key,
+                               target_vendor_class=new.target_vendor_class,
+                               target_entity_key=new.target_entity_key or "manual:pending",
+                               note=new.note)
         try:
             with self.session.begin_nested():
                 self.session.add(row)
                 self.session.flush()
         except IntegrityError as error:
             raise OverrideConflict("an override with this selector exists") from error
-        if target_entity_key is None:
+        if new.target_entity_key is None:
             row.target_entity_key = f"manual:{row.id}"
             self.session.flush()
         return row
@@ -480,15 +523,9 @@ class DailySignalRepo:  # pylint: disable=too-many-public-methods
         return self.session.scalar(select(DailySignalBrief).where(
             DailySignalBrief.report_date == day))
 
-    def save_brief(self, day: date, *, brief_version: str, model: str, input_hash: str,
-                   status: str, payload: Mapping[str, Any],
-                   reason: str | None = None) -> DailySignalBrief:
+    def save_brief(self, day: date, brief: BriefRecord) -> DailySignalBrief:
         """Insert or replace the day's brief row (same upsert pattern as `save_report`)."""
-        if status not in ("ok", "invalid"):
-            raise ValueError(status)
-        values = {"brief_version": brief_version, "model": model, "input_hash": input_hash,
-                  "status": status, "reason": reason,
-                  "payload": json.dumps(dict(payload), sort_keys=True), "updated_at": _now()}
+        values = brief.values()
         row = self.get_brief(day)
         if row is None:
             try:

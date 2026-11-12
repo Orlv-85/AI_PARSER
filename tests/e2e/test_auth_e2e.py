@@ -28,7 +28,7 @@ def test_e2e_login_protected_logout_denied(monkeypatch, tmp_path) -> None:
         def __init__(self, _session) -> None:
             pass
 
-        def list_for_view(self, **_kwargs):
+        def list_for_view(self, *_args, **_kwargs):
             row = SimpleNamespace(
                 title="E2E Auth Item",
                 published_at=datetime(2026, 2, 21, 15, 0, tzinfo=UTC),
@@ -94,7 +94,7 @@ def test_e2e_second_login_immediately_invalidates_previous_session_token(
         def __init__(self, _session) -> None:
             pass
 
-        def list_for_view(self, **_kwargs):
+        def list_for_view(self, *_args, **_kwargs):
             row = SimpleNamespace(
                 title="E2E Rotation Item",
                 published_at=datetime(2026, 2, 21, 15, 10, tzinfo=UTC),
@@ -154,7 +154,7 @@ def test_e2e_auth_disabled_default_routes_are_open(monkeypatch, tmp_path) -> Non
         def __init__(self, _session) -> None:
             pass
 
-        def list_for_view(self, **_kwargs):
+        def list_for_view(self, *_args, **_kwargs):
             row = SimpleNamespace(
                 title="Open Access Item",
                 published_at=datetime(2026, 2, 21, 16, 0, tzinfo=UTC),
@@ -194,7 +194,7 @@ def test_e2e_login_grants_access_to_admin_shell(monkeypatch, tmp_path) -> None:
         def __init__(self, _session) -> None:
             pass
 
-        def list_for_view(self, **_kwargs):
+        def list_for_view(self, *_args, **_kwargs):
             row = SimpleNamespace(
                 title="Admin Shell Item",
                 published_at=datetime(2026, 2, 21, 17, 0, tzinfo=UTC),
@@ -250,7 +250,7 @@ def test_e2e_public_digest_apis_stay_open_while_admin_apis_require_auth(
         def __init__(self, _session) -> None:
             pass
 
-        def list_for_agent(self, **_kwargs):
+        def list_for_agent(self, *_args, **_kwargs):
             row = SimpleNamespace(
                 id=55,
                 title="Public Feed Item",

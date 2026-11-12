@@ -8,6 +8,7 @@ import shutil
 import time
 from collections import Counter
 from collections.abc import Callable, Collection, Iterable, Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -18,9 +19,16 @@ from sqlalchemy import create_engine, inspect, make_url, select
 from sqlalchemy.orm import Session
 
 from app.observability.logging import log_event
-from app.storage.archive import STATE_ARCHIVED, STATE_PENDING, ArchiveRepo
+from app.storage.archive import (
+    STATE_ARCHIVED,
+    STATE_PENDING,
+    ArchiveRepo,
+    DocumentMeta,
+    TextVersion,
+)
 from app.storage.article_evidence_cache import (
     EXTRACTION_VERSION,
+    DownloadLimits,
     PageCache,
     SourcePageDownloader,
     make_http_client,
@@ -52,6 +60,41 @@ OUTAGE_ISSUES = frozenset({"download_outage", "ConnectError", "ConnectTimeout", 
 ROBOTS_ANSWERED = frozenset({200, 404, 410})
 
 
+def _archive_client() -> httpx.AsyncClient:
+    client: httpx.AsyncClient = make_http_client(ARCHIVE_DOWNLOAD_CONCURRENCY)
+    return client
+
+
+@dataclass(frozen=True)
+class PageFetch:
+    """Where and how pages are downloaded: caches, HTTP client, per-host pause, clock."""
+
+    cache_root: Path = ARCHIVE_CACHE_ROOT
+    daily_cache_root: Path = DAILY_CACHE_ROOT
+    client_factory: Callable[[], httpx.AsyncClient] = _archive_client
+    host_interval: float = 1.0
+    clock: Callable[[], float] = time.monotonic
+
+
+@dataclass(frozen=True)
+class CaptureOptions:
+    """What one capture run does: the window or every article, downloads or not, a time cap."""
+
+    scope_all: bool = False
+    no_download: bool = False
+    max_seconds: int | None = None
+
+
+DEFAULT_CAPTURE = CaptureOptions()
+
+
+@dataclass(frozen=True)
+class _DueQuery:
+    since: datetime | None
+    now: datetime
+    only: Collection[int] | None = None
+
+
 def url_host(url: str) -> str:
     return (urlsplit(url).hostname or "").lower().removeprefix("www.")
 
@@ -71,18 +114,17 @@ def archive_articles(session: Session, articles: Iterable[Article],
     repo = ArchiveRepo(session)
     added = 0
     for row in rows:
-        document = repo.upsert_document(
+        document = repo.upsert_document(DocumentMeta(
             url_canonical_hash=row.url_canonical_hash, url=row.url,
             url_canonical=row.url_canonical,
             source_key=source_keys.get(row.source_id) if row.source_id is not None else None,
             host=url_host(row.url_canonical or row.url), title=row.title,
             published_at=row.published_at, publication_day=row.publication_day,
             publication_status=row.publication_status, article_id=row.id,
-            first_seen_at=row.discovered_at)
+            first_seen_at=row.discovered_at))
         content = row.content or ""
         if len(content.strip()) >= ARCHIVE_MIN_TEXT_CHARS and repo.add_version(
-                document, text=content, origin=ORIGIN_ARTICLE_CONTENT,
-                extraction_version=ARTICLE_CONTENT_VERSION):
+                document, TextVersion(content, ORIGIN_ARTICLE_CONTENT, ARTICLE_CONTENT_VERSION)):
             added += 1
     return len(rows), added
 
@@ -102,16 +144,14 @@ def _coverage(states: list[tuple[datetime, str]]) -> tuple[int, int, float | Non
     return len(states), archived, pct
 
 
-def capture(session: Session, *, scope_all: bool = False, no_download: bool = False,  # pylint: disable=too-many-arguments
-            max_seconds: int | None = None, logger: logging.Logger | None = None,
-            now: datetime | None = None, cache_root: Path = ARCHIVE_CACHE_ROOT,
-            daily_cache_root: Path = DAILY_CACHE_ROOT,
-            client_factory: Callable[[], httpx.AsyncClient] | None = None,
-            host_interval: float = 1.0,
-            clock: Callable[[], float] = time.monotonic) -> dict[str, Any]:
+def capture(session: Session, options: CaptureOptions = DEFAULT_CAPTURE, *,
+            logger: logging.Logger | None = None, now: datetime | None = None,
+            fetch: PageFetch | None = None) -> dict[str, Any]:
     """Sync the window (or every article with `scope_all`), then, unless `no_download`, reuse or
     download pages of due documents without text; summarize."""
-    deadline = clock() + max_seconds if max_seconds is not None else float("inf")
+    fetch = fetch or PageFetch()
+    scope_all, max_seconds = options.scope_all, options.max_seconds
+    deadline = fetch.clock() + max_seconds if max_seconds is not None else float("inf")
     started = now or datetime.now(UTC)
     since = None if scope_all else started - timedelta(days=ARCHIVE_LOOKBACK_DAYS)
     ids_stmt = select(Article.id).order_by(Article.id)
@@ -128,13 +168,9 @@ def capture(session: Session, *, scope_all: bool = False, no_download: bool = Fa
     downloads: dict[str, Any] = {
         "cache_reused": 0, "downloads": 0, "failed": {}, "gave_up": 0, "skipped_cap": 0,
         "skipped_time": 0, "outage": False, "outage_kept": 0, "raw_dirs_deleted": 0}
-    if not no_download:
-        downloads = _download_step(
-            session, since=since, now=started, deadline=deadline, clock=clock,
-            cache_root=cache_root, daily_cache_root=daily_cache_root,
-            client_factory=client_factory or (
-                lambda: make_http_client(ARCHIVE_DOWNLOAD_CONCURRENCY)),
-            host_interval=host_interval)
+    if not options.no_download:
+        downloads = _download_step(session, _DueQuery(since, started), deadline=deadline,
+                                   fetch=fetch)
     repo = ArchiveRepo(session)
     documents, archived, pct = _coverage(repo.window_states(since))
     size = repo.size_bytes()
@@ -219,9 +255,9 @@ async def _dispatch(downloader: SourcePageDownloader, urls: list[str], deadline:
 
 
 def _add_page_version(repo: ArchiveRepo, document: ArchiveDocument, page: dict[str, Any]) -> None:
-    repo.add_version(document, text=page["text"], origin=ORIGIN_SOURCE_PAGE,
-                     extraction_version=EXTRACTION_VERSION, final_url=page["final_url"],
-                     http_status=page["http_status"])
+    repo.add_version(document, TextVersion(page["text"], ORIGIN_SOURCE_PAGE, EXTRACTION_VERSION,
+                                           final_url=page["final_url"],
+                                           http_status=page["http_status"]))
 
 
 def _sort_due(repo: ArchiveRepo, documents: list[ArchiveDocument], *, cache_root: Path,
@@ -265,19 +301,17 @@ def _cap_downloads(targets: list[ArchiveDocument]) -> tuple[list[ArchiveDocument
 
 
 def _run_downloads(dispatch: list[ArchiveDocument], *, cache: PageCache, deadline: float,
-                   clock: Callable[[], float], client_factory: Callable[[], httpx.AsyncClient],
-                   host_interval: float) -> tuple[bool, set[str]]:
+                   fetch: PageFetch) -> tuple[bool, set[str]]:
     """Download the dispatched pages; returns (outage, urls started before the deadline)."""
     if not dispatch:
         return False, set()
 
     async def run() -> tuple[bool, list[str]]:
-        async with client_factory() as client:
-            downloader = SourcePageDownloader(cache, client,
-                                              concurrency=ARCHIVE_DOWNLOAD_CONCURRENCY,
-                                              host_interval=host_interval)
+        async with fetch.client_factory() as client:
+            downloader = SourcePageDownloader(cache, client, DownloadLimits(
+                concurrency=ARCHIVE_DOWNLOAD_CONCURRENCY, host_interval=fetch.host_interval))
             urls = list(dict.fromkeys(document.url for document in dispatch))
-            return_started = await _dispatch(downloader, urls, deadline, clock)
+            return_started = await _dispatch(downloader, urls, deadline, fetch.clock)
             return downloader.outage, return_started
     outage, started_urls = asyncio.run(run())
     return outage, set(started_urls)
@@ -327,18 +361,17 @@ def _record_downloads(repo: ArchiveRepo, documents: list[ArchiveDocument], *, ca
     return outage_kept, gave_up_count, failed
 
 
-def _download_step(session: Session, *, since: datetime | None, now: datetime,
-                   deadline: float, clock: Callable[[], float], cache_root: Path,
-                   daily_cache_root: Path, client_factory: Callable[[], httpx.AsyncClient],
-                   host_interval: float, only: Collection[int] | None = None) -> dict[str, Any]:
+def _download_step(session: Session, due: _DueQuery, *, deadline: float,
+                   fetch: PageFetch) -> dict[str, Any]:
     repo = ArchiveRepo(session)
+    now = due.now
+    cache_root = fetch.cache_root
     cache = PageCache(cache_root)
-    reused, resumed, targets = _sort_due(repo, repo.due(since, now, ids=only),
-                                         cache_root=cache_root, daily_cache_root=daily_cache_root)
+    reused, resumed, targets = _sort_due(repo, repo.due(due.since, now, ids=due.only),
+                                         cache_root=cache_root,
+                                         daily_cache_root=fetch.daily_cache_root)
     dispatch, skipped_cap = _cap_downloads(targets)
-    outage, started = _run_downloads(dispatch, cache=cache, deadline=deadline,
-                                     clock=clock, client_factory=client_factory,
-                                     host_interval=host_interval)
+    outage, started = _run_downloads(dispatch, cache=cache, deadline=deadline, fetch=fetch)
     outage_kept, gave_up, failed = _record_downloads(
         repo, resumed + [d for d in dispatch if d.url in started], cache_root=cache_root,
         now=now, outage=outage)
@@ -350,17 +383,12 @@ def _download_step(session: Session, *, since: datetime | None, now: datetime,
 
 
 def download_documents(session: Session, document_ids: Collection[int], *,
-                       now: datetime | None = None, cache_root: Path = ARCHIVE_CACHE_ROOT,
-                       daily_cache_root: Path = DAILY_CACHE_ROOT,
-                       client_factory: Callable[[], httpx.AsyncClient] | None = None,
-                       host_interval: float = 1.0) -> dict[str, Any]:
+                       now: datetime | None = None,
+                       fetch: PageFetch | None = None) -> dict[str, Any]:
     """Reuse or download the pages of the given due documents only, with every rule of the
     capture; returns its download counters (`downloads`, `failed`, `outage`, ...)."""
-    return _download_step(
-        session, since=None, now=now or datetime.now(UTC), deadline=float("inf"),
-        clock=time.monotonic, cache_root=cache_root, daily_cache_root=daily_cache_root,
-        client_factory=client_factory or (lambda: make_http_client(ARCHIVE_DOWNLOAD_CONCURRENCY)),
-        host_interval=host_interval, only=document_ids)
+    return _download_step(session, _DueQuery(None, now or datetime.now(UTC), document_ids),
+                          deadline=float("inf"), fetch=fetch or PageFetch())
 
 
 def dedupe_page_cache(roots: Iterable[Path], *, apply: bool = False) -> dict[str, int]:

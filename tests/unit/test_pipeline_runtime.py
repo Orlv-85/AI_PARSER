@@ -3,7 +3,7 @@
 from contextlib import nullcontext
 from datetime import UTC, date, datetime
 from types import SimpleNamespace
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar, Literal, cast
 from zlib import crc32
 
 import httpx
@@ -13,6 +13,7 @@ from app.config.settings import Settings
 from app.config.sources import SourceConfig
 from app.core.models import Article
 from app.ingest import rss as rss_module
+from app.ingest.fetcher import Validators
 from app.ingest.html import HtmlListPageResult
 from app.ingest.rss import RssFetchResult, _with_rss_metadata
 from app.usecases.ingestion.pipeline import run_fetch_cycle
@@ -114,7 +115,7 @@ class _ArticleRepo:
         self.known_batches.append(list(canonical_hashes))
         return {value for value in canonical_hashes if value in self.known}
 
-    def insert_article(self, **row):
+    def insert_article(self, row):
         self.inserts.append(row)
         return SimpleNamespace(id=len(self.inserts)), True
 
@@ -143,12 +144,23 @@ def _settings(**overrides) -> Settings:
     return Settings(**values)
 
 
+def _sent(kwargs: dict[str, Any]) -> Validators:
+    """Validators a fake fetch function received, directly or inside RssOptions."""
+    if "validators" in kwargs:
+        return cast(Validators, kwargs["validators"])
+    options = kwargs.get("options")
+    return options.validators if options is not None else Validators()
+
+
 def _run(
     monkeypatch, configs: list[SourceConfig], *, settings: Settings | None = None,
-    source_repo: type = _SourceRepo, article_repo: type = _ArticleRepo,
-    session: _Session | None = None, logger: _Logger | None = None, **patches: object,
+    source_repo: type = _SourceRepo, **patches: Any,
 ) -> FetchSummary:
-    """Run one cycle; `patches` replace fetch functions (pipeline.fetch, pipeline.html_links)."""
+    """Run one cycle; `patches` replace fetch functions (pipeline.fetch, pipeline.html_links)
+    and may also set `article_repo`, `session` and `logger`."""
+    article_repo: type = patches.pop("article_repo", _ArticleRepo)
+    session: _Session | None = patches.pop("session", None)
+    logger: _Logger | None = patches.pop("logger", None)
     current = session or _Session()
     fetchers = {name: patches.get(name) or _no_fetch(name) for name in (
         "fetch_rss", "fetch_html_links", "fetch_html_links_with_metadata", "fetch_html_article",
@@ -204,7 +216,8 @@ def _inline_fetches(monkeypatch) -> tuple[list[str], list[int]]:
         def submit(self, fn, **kwargs):
             return _Future(fn(**kwargs))
 
-    def fetch(*, config, **_kwargs):
+    def fetch(*, source, **_kwargs):
+        config = source[1]
         order.append(config.id)
         return _rss_result([]) if config.type == "rss" else HtmlListPageResult(links=[])
 
@@ -280,7 +293,7 @@ def test_run_fetch_cycle_counts_new_duplicates_and_errors(monkeypatch) -> None:
     ]
 
     class _FirstNewArticleRepo(_ArticleRepo):
-        def insert_article(self, **row):
+        def insert_article(self, row):
             self.inserts.append(row)
             return SimpleNamespace(id=len(self.inserts)), len(self.inserts) == 1
 
@@ -641,7 +654,7 @@ def _rss_result(
 
 
 class _NoInsertArticleRepo(_ArticleRepo):
-    def insert_article(self, **row):
+    def insert_article(self, row):
         pytest.fail("a not-modified source must not insert articles")
 
 
@@ -653,8 +666,8 @@ def test_run_fetch_cycle_uses_rss_validators_and_handles_not_modified(monkeypatc
 
     def fetch_rss(source_key: str, url: str, *_args, **kwargs):
         rss_calls.append({"source_key": source_key, "url": url,
-                          "if_none_match": kwargs.get("if_none_match"),
-                          "if_modified_since": kwargs.get("if_modified_since")})
+                          "if_none_match": _sent(kwargs).if_none_match,
+                          "if_modified_since": _sent(kwargs).if_modified_since})
         return _rss_result([], 304, etag='"etag-new"',
                            last_modified="Mon, 23 Feb 2026 11:00:00 GMT")
 
@@ -689,8 +702,8 @@ def test_run_fetch_cycle_default_rss_path_persists_304_metadata_from_wrapper(mon
 
     def fetch_rss_with_metadata(source_key: str, url: str, *_args, **kwargs):
         wrapper_calls.append({"source_key": source_key, "url": url,
-                              "if_none_match": kwargs.get("if_none_match"),
-                              "if_modified_since": kwargs.get("if_modified_since")})
+                              "if_none_match": _sent(kwargs).if_none_match,
+                              "if_modified_since": _sent(kwargs).if_modified_since})
         return RssFetchResult(items=[], not_modified=True, status_code=304, etag='"etag-304"',
                               last_modified="Mon, 23 Feb 2026 11:00:00 GMT")
 
@@ -725,8 +738,8 @@ def test_run_fetch_cycle_persists_rss_fetch_state_metadata_for_200(monkeypatch) 
 
     def fetch_rss(source_key: str, url: str, *_args, **kwargs):
         rss_calls.append({"source_key": source_key, "url": url,
-                          "if_none_match": kwargs.get("if_none_match"),
-                          "if_modified_since": kwargs.get("if_modified_since")})
+                          "if_none_match": _sent(kwargs).if_none_match,
+                          "if_modified_since": _sent(kwargs).if_modified_since})
         return _rss_result(
             [_item(source_key, "https://example.com/fresh-rss-item", "Fresh RSS Item",
                    published_at=datetime(2026, 2, 23, 12, tzinfo=UTC))],
@@ -762,7 +775,7 @@ def test_run_fetch_cycle_rss_conditional_disabled_sends_no_validators(monkeypatc
         fetch_state: ClassVar[dict[str, object | None]] = OLD_VALIDATORS
 
     def fetch_rss(*_args, **kwargs):
-        rss_calls.append((kwargs.get("if_none_match"), kwargs.get("if_modified_since")))
+        rss_calls.append((_sent(kwargs).if_none_match, _sent(kwargs).if_modified_since))
         return _rss_result([], 200, etag='"etag-new"',
                            last_modified="Mon, 23 Feb 2026 10:00:00 GMT")
 
@@ -790,8 +803,8 @@ def test_run_fetch_cycle_html_304_uses_validators_and_skips_processing(monkeypat
         }
 
     def fetch_html_links_with_metadata(_source, *_args, **kwargs):
-        html_calls.append({"if_none_match": kwargs.get("if_none_match"),
-                           "if_modified_since": kwargs.get("if_modified_since")})
+        html_calls.append({"if_none_match": _sent(kwargs).if_none_match,
+                           "if_modified_since": _sent(kwargs).if_modified_since})
         return HtmlListPageResult(links=[], not_modified=True, status_code=304,
                                   etag='"html-etag-new"',
                                   last_modified="Mon, 23 Feb 2026 12:00:00 GMT")
@@ -959,7 +972,7 @@ def test_run_fetch_cycle_uses_batch_article_upsert_when_enabled(monkeypatch) -> 
             super().upsert_articles_batch(rows)
             return 1, 1
 
-        def insert_article(self, **row):
+        def insert_article(self, row):
             pytest.fail("insert_article must not be used when batch upsert is enabled")
 
     summary = _run(
@@ -985,7 +998,7 @@ def test_run_fetch_cycle_batch_upsert_does_not_advance_rss_known_streak_for_in_r
     ]
 
     class _BatchArticleRepo(_ArticleRepo):
-        def insert_article(self, **row):
+        def insert_article(self, row):
             pytest.fail("insert_article must not be used when batch upsert is enabled")
 
     summary = _run(

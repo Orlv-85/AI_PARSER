@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
 from app.storage.source_repo import SourceRepo
-from app.usecases.sources.onboarding import review_source_candidate
+from app.usecases.sources.onboarding import ReviewAction, ReviewRequest, review_source_candidate
 
 
 class SourceOnboardingCandidateView(BaseModel):
@@ -134,9 +134,9 @@ class SourceOnboardingService:
     def approve_candidate(self, candidate_id: int) -> SourceOnboardingApproveResponse:
         updated = review_source_candidate(
             candidate_id=candidate_id,
-            action="approve",
             candidate_repo=self._candidate_repo,
             managed_source_repo=self._source_repo,
+            request=ReviewRequest(action=ReviewAction.APPROVE),
         )
         return SourceOnboardingApproveResponse(
             candidate_id=updated.id,
@@ -155,10 +155,9 @@ class SourceOnboardingService:
     ) -> SourceOnboardingRejectResponse:
         updated = review_source_candidate(
             candidate_id=candidate_id,
-            action="reject",
             candidate_repo=self._candidate_repo,
             managed_source_repo=self._source_repo,
-            review_note=reason,
+            request=ReviewRequest(action=ReviewAction.REJECT, review_note=reason),
         )
         return SourceOnboardingRejectResponse(
             candidate_id=updated.id,
@@ -169,9 +168,9 @@ class SourceOnboardingService:
     def disable_candidate(self, candidate_id: int) -> SourceOnboardingDisableResponse:
         updated = review_source_candidate(
             candidate_id=candidate_id,
-            action="disable",
             candidate_repo=self._candidate_repo,
             managed_source_repo=self._source_repo,
+            request=ReviewRequest(action=ReviewAction.DISABLE),
         )
         approved_source_id = getattr(updated, "approved_source_id", None)
         if approved_source_id is None:
@@ -191,11 +190,13 @@ class SourceOnboardingService:
     ) -> SourceOnboardingDuplicateResponse:
         updated = review_source_candidate(
             candidate_id=candidate_id,
-            action="mark_duplicate",
             candidate_repo=self._candidate_repo,
             managed_source_repo=self._source_repo,
-            duplicate_of_candidate_id=duplicate_of_candidate_id,
-            review_note=reason,
+            request=ReviewRequest(
+                action=ReviewAction.MARK_DUPLICATE,
+                duplicate_of_candidate_id=duplicate_of_candidate_id,
+                review_note=reason,
+            ),
         )
         return SourceOnboardingDuplicateResponse(
             candidate_id=updated.id,
@@ -215,19 +216,21 @@ class SourceOnboardingService:
     ) -> SourceOnboardingEditResponse:
         updated = review_source_candidate(
             candidate_id=candidate_id,
-            action="edit",
             candidate_repo=self._candidate_repo,
             managed_source_repo=self._source_repo,
-            review_note=review_note,
-            updates={
-                key: value
-                for key, value in {
-                    "raw_input": raw_input,
-                    "normalized_url": normalized_url,
-                    "candidate_type": candidate_type,
-                }.items()
-                if value is not None
-            },
+            request=ReviewRequest(
+                action=ReviewAction.EDIT,
+                review_note=review_note,
+                updates={
+                    key: value
+                    for key, value in {
+                        "raw_input": raw_input,
+                        "normalized_url": normalized_url,
+                        "candidate_type": candidate_type,
+                    }.items()
+                    if value is not None
+                },
+            ),
         )
         return SourceOnboardingEditResponse(
             candidate_id=updated.id,

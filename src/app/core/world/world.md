@@ -669,7 +669,9 @@ flowchart LR
   file constants, `WORLD_RETENTION_DAYS`, `CLUSTER_KEY_CHARS`.
 - `storage/models_sql.py`: `WorldCandidate` (`world_candidates`), `WorldFile` (`world_files`);
   migration `c9f3a7e15b28_add_world_candidates_and_files.py`, after `b8e2d4f61a07`.
-- `gdelt.py` also has `scan_file` and `FileResult` (one file; `scan_day` is built on them).
+- `gdelt.py` also has `scan_file` and `FileResult` (one file; `scan_day` is built on them) and
+  `GdeltScan` (client, own domains, temp dir, timing), which `fetch_file`, `scan_file`, `scan_day`
+  and `collect_day` take instead of separate arguments.
 - `usecases/world_collect.py`: `collect_day`, `CollectSummary`, `yesterday_utc`; the only caller of
   `WorldRepo` besides tests.
 - `scripts/run_daily_world_job.sh`; `scripts/install_daily_timers.sh` writes the unit and timer

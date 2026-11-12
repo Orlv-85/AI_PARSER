@@ -2,6 +2,8 @@ import os
 import subprocess
 from pathlib import Path
 
+from fixture_options import options  # pylint: disable=import-error
+
 REPO = "ghcr.io/orlv-85/ai-parser"
 
 DOCKER_STUB = r"""#!/bin/sh
@@ -16,9 +18,8 @@ exit 0
 """
 
 
-def _run_deploy(
-    tmp_path, *, images, in_use, previous, fail_rmi="none", fail_prune="", extra_env=None
-):
+def _run_deploy(tmp_path, *, images, in_use, previous, **opts):
+    fail_rmi, fail_prune, extra_env = options(opts, fail_rmi="none", fail_prune="", extra_env=None)
     scripts = tmp_path / "scripts"
     scripts.mkdir()
     script = scripts / "deploy_prod.sh"

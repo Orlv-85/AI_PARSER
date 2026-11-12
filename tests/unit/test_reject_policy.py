@@ -11,7 +11,7 @@ def article(**overrides):
             "published_at": None, "rank_score": 0, **overrides}
 
 
-@pytest.mark.parametrize("choice,confidence,score,url,body,outcome", [
+@pytest.mark.parametrize("case", [
     ("accepted_ai_editorial", 0.7, 0.99, "/news", "AI news", "kept"),
     ("accepted_ai_editorial", None, 0.9, "/research", "AI research", "kept"),
     ("accepted_ai_editorial", 0.99, 1, "/tutorial", "AI evergreen guide", "kept"),
@@ -26,9 +26,8 @@ def article(**overrides):
     ("non_editorial", 0.99, 0.1, "/blog/article", "Article " * 30, "unresolved"),
     ("insufficient_evidence", 0.99, 0.01, "/about", "Unknown", "unresolved"),
 ])
-def test_conservative_policy(  # pylint: disable=too-many-positional-arguments
-    choice, confidence, score, url, body, outcome,
-):
+def test_conservative_policy(case):
+    choice, confidence, score, url, body, outcome = case
     row = article(url="https://example.com" + url, title="Topic", content=body)
     verdict = cleanup_verdict(row, JevAssessment(score, admission_choice=choice,
                                                 admission_confidence=confidence))

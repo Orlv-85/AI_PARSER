@@ -15,6 +15,7 @@ from app.core.jev import (
     ADMISSION_TRANSPORT_RETRY_DELAYS,
     ADMISSION_TRANSPORT_REVIEW_REASON,
     JevRelevanceScorer,
+    ScorerConfig,
 )
 from app.core.models import Article
 from app.ingest.html import HtmlListPageResult, fetch_html_article
@@ -27,7 +28,7 @@ from app.storage.models_sql import (
     Source,
 )
 from app.storage.models_sql import Article as StoredArticle
-from app.storage.provider_journal import PilotJournal
+from app.storage.provider_journal import JournalPolicy, PilotJournal
 from app.usecases.ingestion.pipeline import run_fetch_cycle
 from app.usecases.ingestion.pipeline.models import PENDING_REPLAY_LIMIT, PENDING_REPLAY_MAX_AGE_DAYS
 
@@ -101,8 +102,9 @@ class Scenario:  # pylint: disable=too-many-instance-attributes
 
         with httpx.Client(transport=httpx.MockTransport(respond)) as client:
             yield JevRelevanceScorer(
-                client, self.settings.jev_model, getLogger("semantic-test"),
-                semantic_admission_enabled=True,
+                client,
+                getLogger("semantic-test"),
+                ScorerConfig(self.settings.jev_model, semantic_admission_enabled=True),
             )
 
     def collect(self, **kwargs):
@@ -161,9 +163,16 @@ def test_oversized_journal_input_stays_pending_without_pausing_other_articles(
                                {"total": "2", "jev": "1", "deepseek": "1"})
         with httpx.Client(transport=httpx.MockTransport(respond),
                           headers={"Authorization": "Bearer test-key"}) as client:
-            yield JevRelevanceScorer(client, "jev-1.13.0", getLogger("semantic-test"),
-                semantic_admission_enabled=True, daily_enrichment_enabled=True,
-                payment_journal=journal)
+            yield JevRelevanceScorer(
+                client,
+                getLogger("semantic-test"),
+                ScorerConfig(
+                    "jev-1.13.0",
+                    semantic_admission_enabled=True,
+                    daily_enrichment_enabled=True,
+                ),
+                payment_journal=journal,
+            )
         assert journal.report()["providers"]["jev"]["calls"] == 2
         journal.close()
 
@@ -218,12 +227,19 @@ class AdmissionRig:
                  "transport_retry_delays": ADMISSION_TRANSPORT_RETRY_DELAYS
                  } if self.reviewed else {}
         journal = PilotJournal(self.path, {"version": "test"},
-                               {"total": "2", "jev": "1", "deepseek": "1"}, **extra)
+                               {"total": "2", "jev": "1", "deepseek": "1"}, JournalPolicy(**extra))
         with httpx.Client(transport=httpx.MockTransport(respond),
                           headers={"Authorization": "Bearer test-key"}) as client:
-            scorer = JevRelevanceScorer(client, "jev-1.13.0", getLogger("semantic-test"),
-                semantic_admission_enabled=True, daily_enrichment_enabled=True,
-                payment_journal=journal)
+            scorer = JevRelevanceScorer(
+                client,
+                getLogger("semantic-test"),
+                ScorerConfig(
+                    "jev-1.13.0",
+                    semantic_admission_enabled=True,
+                    daily_enrichment_enabled=True,
+                ),
+                payment_journal=journal,
+            )
             self.scorers.append(scorer)
             yield scorer
         self.reports.append(journal.report()["providers"]["jev"])
@@ -607,8 +623,15 @@ def test_confident_comparison_answer_sets_material_type(monkeypatch, tmp_path):
                 "comparison": {"choice": choice, "confidence": confidence}}})
 
         with httpx.Client(transport=httpx.MockTransport(respond)) as client:
-            yield JevRelevanceScorer(client, "jev-1.13.0", getLogger("semantic-test"),
-                semantic_admission_enabled=True, daily_enrichment_enabled=True)
+            yield JevRelevanceScorer(
+                client,
+                getLogger("semantic-test"),
+                ScorerConfig(
+                    "jev-1.13.0",
+                    semantic_admission_enabled=True,
+                    daily_enrichment_enabled=True,
+                ),
+            )
 
     monkeypatch.setattr("app.usecases.ingestion.pipeline.cycle.jev_relevance_scorer", scorer)
     assert scenario.run().new == 3
@@ -746,9 +769,15 @@ def test_cycle_cache_hit_after_rolled_back_assessment_keeps_notice(monkeypatch, 
             }})
 
         with httpx.Client(transport=httpx.MockTransport(respond)) as client:
-            yield JevRelevanceScorer(client, "jev-1.13.0", getLogger("semantic-test"),
-                                     semantic_admission_enabled=True,
-                                     daily_enrichment_enabled=daily)
+            yield JevRelevanceScorer(
+                client,
+                getLogger("semantic-test"),
+                ScorerConfig(
+                    "jev-1.13.0",
+                    semantic_admission_enabled=True,
+                    daily_enrichment_enabled=daily,
+                ),
+            )
 
     monkeypatch.setattr("app.usecases.ingestion.pipeline.cycle._collect_fetched_items", collect)
     monkeypatch.setattr("app.usecases.ingestion.pipeline.cycle.jev_relevance_scorer", scorer)

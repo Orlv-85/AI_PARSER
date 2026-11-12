@@ -39,8 +39,20 @@ def digest_text(observations: Mapping[date, list[ArticleObs]]) -> dict[date, lis
             for day, items in observations.items()}
 
 
-def recompute_reports(repo: DailySignalRepo, until: date, *, all_days: bool = False,
-                      since: date | None = None, now: datetime | None = None,
+@dataclass(frozen=True)
+class RecomputeScope:
+    """Which stored days a recompute may rewrite: every comparable day (`all_days`), or the
+    recent ones from `since` (the run's first day; default `until`)."""
+
+    all_days: bool = False
+    since: date | None = None
+
+
+RECENT_DAYS = RecomputeScope()
+
+
+def recompute_reports(repo: DailySignalRepo, until: date, scope: RecomputeScope = RECENT_DAYS, *,
+                      now: datetime | None = None,
                       thresholds: Thresholds | None = None) -> RecomputeResult:
     """Reconcile entities and recompute every comparable published day up to `until`;
     write only reports that are missing or whose payload hash changed.
@@ -52,6 +64,7 @@ def recompute_reports(repo: DailySignalRepo, until: date, *, all_days: bool = Fa
     result = reconcile(evidence, repo.overrides())
     ids = repo.apply_reconciliation(result, rows)
     coverage = repo.coverage()
+    all_days, since = scope.all_days, scope.since
     start = repo.comparable_from if all_days else \
         max(repo.comparable_from, until - timedelta(days=RECOMPUTE_DAYS))
     targets = sorted(d for d, c in coverage.items()

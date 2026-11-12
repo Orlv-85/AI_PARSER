@@ -18,7 +18,7 @@ from app.core.bulletin import world_change as wc
 from app.core.jev import CONTENT_LIMIT
 from app.core.world.gdelt import Candidate
 from app.ingest.fetcher import DEFAULT_USER_AGENT
-from app.storage.archive import WORLD_SOURCE_KEY, ArchiveRepo
+from app.storage.archive import WORLD_SOURCE_KEY, ArchiveRepo, DocumentMeta, TextVersion
 from app.storage.models_sql import (
     ArchiveDocument,
     ArchiveText,
@@ -35,7 +35,8 @@ from app.storage.world import (
     WorldRepo,
 )
 from app.usecases.archive import capture as capture_module
-from app.usecases.world_screen import rank_clusters, run_screen
+from app.usecases.archive.capture import PageFetch
+from app.usecases.world_screen import ScreenOptions, rank_clusters, run_screen
 from app.usecases.world_text import archive_text_source, run_texts
 
 DAY = date(2026, 10, 30)
@@ -110,9 +111,13 @@ class Web:
 
 
 def texts(session, tmp_path, web, **kwargs):
-    options = {"cache_root": tmp_path / "archive", "daily_cache_root": tmp_path / "daily",
-               "host_interval": 0, "client_factory": web.client}
-    return run_texts(session, DAY, **{**options, **kwargs})
+    return run_texts(session, DAY, fetch=page_fetch(tmp_path, web.client), **kwargs)
+
+
+def page_fetch(tmp_path, client_factory=None):
+    extra = {} if client_factory is None else {"client_factory": client_factory}
+    return PageFetch(cache_root=tmp_path / "archive", daily_cache_root=tmp_path / "daily",
+                     host_interval=0, **extra)
 
 
 def test_world_text_goes_through_archive_robots_and_bot_agent(session, tmp_path, monkeypatch):
@@ -126,8 +131,7 @@ def test_world_text_goes_through_archive_robots_and_bot_agent(session, tmp_path,
         return client
 
     monkeypatch.setattr(capture_module, "make_http_client", archive_client)
-    summary = run_texts(session, DAY, cache_root=tmp_path / "archive",
-                        daily_cache_root=tmp_path / "daily", host_interval=0)
+    summary = run_texts(session, DAY, fetch=page_fetch(tmp_path))
     assert [str(r.url) for r in web.requests] == [
         "https://site1.example.org/robots.txt", "https://site1.example.org/1"]
     assert {r.headers["user-agent"] for r in web.requests} == {DEFAULT_USER_AGENT}
@@ -186,10 +190,8 @@ def test_world_text_outage_marks_nothing(session, tmp_path):
     def refuse(request):
         raise httpx.ConnectError("DNS unavailable", request=request)
 
-    summary = run_texts(session, DAY, cache_root=tmp_path / "archive",
-                        daily_cache_root=tmp_path / "daily", host_interval=0,
-                        client_factory=lambda: httpx.AsyncClient(
-                            transport=httpx.MockTransport(refuse)))
+    summary = run_texts(session, DAY, fetch=page_fetch(tmp_path, lambda: httpx.AsyncClient(
+        transport=httpx.MockTransport(refuse))))
     assert summary["outage"] is True
     assert summary["no_text"] == 0 and summary["text_ready"] == 0
     assert summary["kept"] == 12
@@ -231,10 +233,24 @@ def test_world_text_reuses_stored_archive_text(session, tmp_path):
     item = row(session, "Known")
     repo = ArchiveRepo(session)
     document = repo.upsert_document(
-        url_canonical_hash=item.url_canonical_hash, url=item.url, url_canonical=item.url,
-        source_key=None, host="site1.example.org", title="Known", published_at=None,
-        publication_day=None, publication_status=None, article_id=None, first_seen_at=None)
-    repo.add_version(document, text=BODY, origin="source_page", extraction_version="x")
+        DocumentMeta(
+            url_canonical_hash=item.url_canonical_hash,
+            url=item.url,
+            url_canonical=item.url,
+            source_key=None,
+            host="site1.example.org",
+            title="Known",
+            published_at=None,
+            publication_day=None,
+            publication_status=None,
+            article_id=None,
+            first_seen_at=None,
+        ),
+    )
+    repo.add_version(
+        document,
+        TextVersion(text=BODY, origin="source_page", extraction_version="x"),
+    )
     session.commit()
     web = Web()
     summary = texts(session, tmp_path, web)
@@ -245,11 +261,11 @@ def test_world_text_reuses_stored_archive_text(session, tmp_path):
 
 def _real_document(session, item, **fields):
     repo = ArchiveRepo(session)
-    document = repo.upsert_document(**{
+    document = repo.upsert_document(DocumentMeta(**{
         "url_canonical_hash": item.url_canonical_hash, "url": item.url, "url_canonical": item.url,
         "source_key": "real-source", "host": item.source_domain, "title": "Real title",
         "published_at": None, "publication_day": date(2026, 10, 29),
-        "publication_status": "dated", "article_id": 42, "first_seen_at": None, **fields})
+        "publication_status": "dated", "article_id": 42, "first_seen_at": None, **fields}))
     session.commit()
     return document
 
@@ -364,8 +380,12 @@ def test_world_text_seam_feeds_step_b(session, tmp_path):
     seed(session, cand(1, title="With text"), cand(2, title="No page"))
     texts(session, tmp_path, Web({"https://site2.example.org/2": (404, "<html></html>")}))
     requests = []
-    summary = run_screen(session, make_assessor(jev_handler(requests=requests)), DAY,
-                         texts=archive_text_source(session))
+    summary = run_screen(
+        session,
+        make_assessor(jev_handler(requests=requests)),
+        DAY,
+        ScreenOptions(texts=archive_text_source(session)),
+    )
     assert (summary["asked"], summary["assessed"], summary["awaiting_text"]) == (1, 1, 0)
     assert summary["skipped_no_text"] == 0
     assert row(session, "With text").state == STATE_ASSESSED
@@ -424,8 +444,10 @@ def test_cli_world_screen_reads_archive_text(maker, monkeypatch, tmp_path):
 def test_world_text_downloads_only_pending_documents(session, tmp_path):
     seed(session, cand(1, title="Pending"), cand(2, title="Archived"), cand(3, title="Retry due"))
     archived = _real_document(session, row(session, "Archived"))
-    ArchiveRepo(session).add_version(archived, text=BODY, origin="source_page",
-                                     extraction_version="x")
+    ArchiveRepo(session).add_version(
+        archived,
+        TextVersion(text=BODY, origin="source_page", extraction_version="x"),
+    )
     retry = _real_document(session, row(session, "Retry due"))
     ArchiveRepo(session).record_attempt(
         retry, issue="http_500", gave_up=False,

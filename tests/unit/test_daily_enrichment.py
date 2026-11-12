@@ -19,16 +19,23 @@ from daily_fixtures import (  # pylint: disable=import-error,unused-import
     settings,
     write_report,
 )
+from fixture_options import options  # pylint: disable=import-error
 
 from app.config.sources import SourceConfig
 from app.core.canonical_json import encoded, fingerprint
-from app.core.jev import JevRelevanceScorer
+from app.core.jev import JevRelevanceScorer, ScorerConfig
 from app.core.models import Article as CoreArticle
 from app.storage.admission import set_collection_paused
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.provider_journal import PilotJournal
 from app.usecases.daily import enrichment as daily
+from app.usecases.ingestion.pipeline.models import AdmissionState, SourceRun
 from app.usecases.ingestion.pipeline.rows import _build_article_row
+
+
+def row_run(*, config, db_source_id, admission=False):
+    return SourceRun(config=config, db_source_id=db_source_id, article_repo=None, settings=None,
+                     admission_state=AdmissionState(enabled=admission))
 
 
 def test_complete_day_more_than_200_and_preserves_history(session, tmp_path, monkeypatch):
@@ -232,21 +239,40 @@ def test_ordinary_ingestion_uses_rubric_journal_and_reusable_admission(tmp_path,
     journal = PilotJournal(tmp_path / "admission.sqlite3", {"version": "test"}, daily.CAPS)
     with httpx.Client(transport=httpx.MockTransport(respond),
                       headers={"Authorization": "Bearer test-key"}) as client:
-        scorer = JevRelevanceScorer(client, "jev-1.13.0", getLogger(__name__),
-            semantic_admission_enabled=True, daily_enrichment_enabled=True,
-            payment_journal=journal)
+        scorer = JevRelevanceScorer(
+            client,
+            getLogger(__name__),
+            ScorerConfig(
+                "jev-1.13.0",
+                semantic_admission_enabled=True,
+                daily_enrichment_enabled=True,
+            ),
+            payment_journal=journal,
+        )
         assessment = scorer.classify(item)
         assert assessment.category == "AI Applications"
-        second = JevRelevanceScorer(client, "jev-1.13.0", getLogger(__name__),
-            semantic_admission_enabled=True, daily_enrichment_enabled=True,
-            payment_journal=journal)
+        second = JevRelevanceScorer(
+            client,
+            getLogger(__name__),
+            ScorerConfig(
+                "jev-1.13.0",
+                semantic_admission_enabled=True,
+                daily_enrichment_enabled=True,
+            ),
+            payment_journal=journal,
+        )
         assert second.classify(item) == assessment
     assert len(calls) == 1
     assert journal.report()["providers"]["jev"]["calls"] == 1
     journal.close()
     config = SourceConfig(id="test", name="Test", type="rss", url="https://example.org/feed")
-    values = _build_article_row(item=item, config=config, db_source_id=1,
-        canonical=item.url, canonical_hash="hash", assessment=assessment, admission_enabled=True)
+    values = _build_article_row(
+        row_run(config=config, db_source_id=1, admission=True),
+        item,
+        canonical=item.url,
+        canonical_hash="hash",
+        assessment=assessment,
+    )
     row = article(session)
     row.enrichment_provenance = values["enrichment_provenance"]
     data = daily.admission_from_proof(row, {"title": item.title, "content": SOURCE})
@@ -272,15 +298,27 @@ def test_feed_only_admission_is_reused_by_enrichment(tmp_path, session):
     journal = PilotJournal(tmp_path / "admission.sqlite3", {"version": "test"}, daily.CAPS)
     with httpx.Client(transport=httpx.MockTransport(respond),
                       headers={"Authorization": "Bearer test-key"}) as client:
-        assessment = JevRelevanceScorer(client, "jev-1.13.0", getLogger(__name__),
-            semantic_admission_enabled=True, daily_enrichment_enabled=True,
-            payment_journal=journal).classify(item)
+        assessment = JevRelevanceScorer(
+            client,
+            getLogger(__name__),
+            ScorerConfig(
+                "jev-1.13.0",
+                semantic_admission_enabled=True,
+                daily_enrichment_enabled=True,
+            ),
+            payment_journal=journal,
+        ).classify(item)
     journal.close()
     assert len(states) == 1
     assert "Summary: Feed line about AI" in states[0]
     config = SourceConfig(id="test", name="Test", type="rss", url="https://example.org/feed")
-    values = _build_article_row(item=item, config=config, db_source_id=1,
-        canonical=item.url, canonical_hash="hash", assessment=assessment, admission_enabled=True)
+    values = _build_article_row(
+        row_run(config=config, db_source_id=1, admission=True),
+        item,
+        canonical=item.url,
+        canonical_hash="hash",
+        assessment=assessment,
+    )
     row = article(session)
     row.enrichment_provenance = values["enrichment_provenance"]
     data = daily.admission_from_proof(row, {"title": item.title, "content": ""})
@@ -702,8 +740,16 @@ def _row_article(*, content=SOURCE, status="confirmed", published=True, proof=Fa
     return row
 
 
-def _evidence(cache, row, *, text=SOURCE, quality="extracted", published=None,
-              title="Page title", text_sha=None, write_text=True):
+def _evidence(cache, row, **opts):
+    text, quality, published, title, text_sha, write_text = options(
+        opts,
+        text=SOURCE,
+        quality="extracted",
+        published=None,
+        title="Page title",
+        text_sha=None,
+        write_text=True,
+    )
     directory = cache.page_dir(row.url)
     if write_text:
         (directory / "text.txt").write_text(text)
@@ -869,8 +915,8 @@ def test_enrich_fallback_bound_is_held_but_other_value_errors_propagate(
         raise ValueError(message)
 
     monkeypatch.setattr(daily, "fallback_topic", fail)
-    args = (row, {"url": row.url, "title": row.title, "content": SOURCE}, None, None,
-            {"deepseek": "test-key"})
+    args = (row, {"url": row.url, "title": row.title, "content": SOURCE},
+            daily.ProviderCalls(None, None, {"deepseek": "test-key"}))
     if held:
         assert daily.enrich(*args) == "source_input_too_large"
     else:

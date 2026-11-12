@@ -1,7 +1,7 @@
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
-from typing import Any, cast
+from typing import Any
 
 from sqlalchemy import Select, case, delete, desc, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
@@ -10,6 +10,22 @@ from sqlalchemy.orm import Session
 
 from app.core.categories import CATEGORY_ORDER
 from app.storage.models_sql import Article, ArticleAlias, FetchRun, Source
+
+_ROW_SCORES = ("ai_relevance_score", "freshness_score", "rank_score")
+
+
+@dataclass(frozen=True)
+class ViewFilter:  # pylint: disable=too-many-instance-attributes
+    """Which articles a list shows: a `hours` window, or `days` with a date range; text; order."""
+
+    hours: int | None
+    days: int
+    sort: str
+    query: str | None = None
+    min_ai_relevance: float = 0.0
+    date_from: date | None = None
+    date_to: date | None = None
+    category: str | None = None
 
 
 def _publication_since(moment: datetime):
@@ -153,7 +169,7 @@ class ArticleRepo:
         actual_new = 0
         actual_duplicates = 0
         for row in normalized_rows:
-            _, is_new = self.insert_article(**row)
+            _, is_new = self.insert_article(row)
             if is_new:
                 actual_new += 1
             else:
@@ -161,54 +177,24 @@ class ArticleRepo:
         actual_duplicates += input_duplicates
         return actual_new, actual_duplicates
 
-    def insert_article(
-        self,
-        *,
-        source_id: int | None,
-        title: str,
-        url: str,
-        url_canonical: str,
-        url_canonical_hash: str,
-        published_at: datetime | None,
-        summary: str | None = None,
-        content: str | None = None,
-        ai_relevance_score: float = 0.0,
-        freshness_score: float = 0.0,
-        rank_score: float = 0.0,
-        category: str | None = None,
-        category_confidence: float | None = None,
-        **evidence_fields: Any,
-    ) -> tuple[Article, bool]:
+    def insert_article(self, row: Mapping[str, Any]) -> tuple[Article, bool]:
+        """Insert `row` (`Article` columns) as a new article, or refresh the scores and category
+        of the article stored under its canonical hash; returns (article, is_new)."""
         existing_stmt: Select[tuple[Article]] = select(Article).where(
-            Article.url_canonical_hash == url_canonical_hash
+            Article.url_canonical_hash == row["url_canonical_hash"]
         )
         existing = self.session.execute(existing_stmt).scalar_one_or_none()
+        scores = {name: row.get(name, 0.0) for name in _ROW_SCORES}
         if existing is not None:
-            existing.ai_relevance_score = ai_relevance_score
-            existing.freshness_score = freshness_score
-            existing.rank_score = rank_score
-            if category is not None:
-                existing.category = category
-                existing.category_confidence = category_confidence
+            for name, value in scores.items():
+                setattr(existing, name, value)
+            if row.get("category") is not None:
+                existing.category = row["category"]
+                existing.category_confidence = row.get("category_confidence")
             return existing, False
 
-        article = Article(
-            source_id=source_id,
-            title=title[:self._TITLE_MAX_LEN],
-            summary=summary,
-            content=content,
-            url=url,
-            url_canonical=url_canonical,
-            url_canonical_hash=url_canonical_hash,
-            published_at=published_at,
-            discovered_at=datetime.now(UTC),
-            ai_relevance_score=ai_relevance_score,
-            freshness_score=freshness_score,
-            rank_score=rank_score,
-            category=category,
-            category_confidence=category_confidence,
-            **evidence_fields,
-        )
+        article = Article(**{**row, **scores, "title": row["title"][:self._TITLE_MAX_LEN],
+                             "discovered_at": datetime.now(UTC)})
         self.session.add(article)
         self.session.flush()
         return article, True
@@ -242,68 +228,30 @@ class ArticleRepo:
         return list(self.session.scalars(stmt).all())
 
     def list_for_view(
-        self,
-        *,
-        hours: int | None,
-        limit: int,
-        offset: int = 0,
-        query: str | None,
-        days: int,
-        sort: str,
-        min_ai_relevance: float = 0.0,
-        date_from: date | None = None,
-        date_to: date | None = None,
-        include_content: bool = False,
-        category: str | None = None,
+        self, view: ViewFilter, *, limit: int, offset: int = 0,
     ) -> list[tuple[Article, str | None, str | None]]:
-        del include_content
         base_stmt = (
             select(Article, Source.source_key, Source.name)
             .outerjoin(Source, Article.source_id == Source.id)
-            .where(Article.ai_relevance_score >= min_ai_relevance)
+            .where(Article.ai_relevance_score >= view.min_ai_relevance)
         )
-        if category is not None:
-            base_stmt = base_stmt.where(Article.category == category)
+        if view.category is not None:
+            base_stmt = base_stmt.where(Article.category == view.category)
         base_stmt = base_stmt.where(*_view_window(
-            hours=hours, days=days, query=query, date_from=date_from, date_to=date_to))
-        if query:
-            base_stmt = base_stmt.where(_text_match(query))
-        base_stmt = base_stmt.order_by(*_view_order(sort)).limit(limit).offset(offset)
+            hours=view.hours, days=view.days, query=view.query, date_from=view.date_from,
+            date_to=view.date_to))
+        if view.query:
+            base_stmt = base_stmt.where(_text_match(view.query))
+        base_stmt = base_stmt.order_by(*_view_order(view.sort)).limit(limit).offset(offset)
         return [
             (row[0], row[1], row[2])
             for row in self.session.execute(base_stmt).all()
         ]
 
     def list_for_agent(
-        self,
-        *,
-        hours: int | None,
-        limit: int,
-        offset: int = 0,
-        query: str | None,
-        days: int,
-        sort: str,
-        min_ai_relevance: float = 0.0,
-        date_from: date | None = None,
-        date_to: date | None = None,
-        include_content: bool = False,
+        self, view: ViewFilter, *, limit: int, offset: int = 0,
     ) -> list[tuple[Article, str | None, str | None]]:
-        kwargs: dict[str, Any] = {
-            "hours": hours,
-            "limit": limit,
-            "offset": offset,
-            "query": query,
-            "days": days,
-            "sort": sort,
-            "min_ai_relevance": min_ai_relevance,
-        }
-        if date_from is not None:
-            kwargs["date_from"] = date_from
-        if date_to is not None:
-            kwargs["date_to"] = date_to
-        if include_content:
-            kwargs["include_content"] = include_content
-        return self.list_for_view(**cast(Any, kwargs))
+        return self.list_for_view(view, limit=limit, offset=offset)
 
     def get_article_for_agent(
         self, *, article_id: int

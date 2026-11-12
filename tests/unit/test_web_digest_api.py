@@ -1,3 +1,4 @@
+from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from importlib import import_module
 from types import SimpleNamespace
@@ -38,8 +39,8 @@ def test_news_links_filters_to_requested_date_and_returns_article_metadata(
         def __init__(self, _session) -> None:
             pass
 
-        def list_for_agent(self, **kwargs):
-            captured.update(kwargs)
+        def list_for_agent(self, view, **kwargs):
+            captured.update(asdict(view), **kwargs)
             article = SimpleNamespace(
                 id=42,
                 title="Daily Link Feed",
@@ -73,6 +74,7 @@ def test_news_links_filters_to_requested_date_and_returns_article_metadata(
         "min_ai_relevance": 0.4,
         "date_from": datetime(2026, 3, 1, tzinfo=UTC).date(),
         "date_to": datetime(2026, 3, 1, tzinfo=UTC).date(),
+        "category": None,
     }
     assert response.json() == [
         {

@@ -21,7 +21,7 @@ class _ArticleRepo:
         self.session = session
         self._insert_calls = 0
 
-    def insert_article(self, **_kwargs):
+    def insert_article(self, _row):
         self._insert_calls += 1
         return SimpleNamespace(id=self._insert_calls), self._insert_calls == 1
 

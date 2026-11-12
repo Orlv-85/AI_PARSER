@@ -95,37 +95,37 @@ def test_ingest_persist_query_pipeline_is_deterministic() -> None:
             score = rank_score(relevance=relevance, freshness=freshness, source_weight=0.9)
 
             source_id = html_source.id if item.source_key == "html_source" else None
-            saved, is_new = article_repo.insert_article(
-                source_id=source_id,
-                title=item.title,
-                url=str(item.url),
-                url_canonical=canonical,
-                url_canonical_hash=canonical_hash,
-                published_at=item.published_at or (now - timedelta(hours=1)),
-                summary=item.summary,
-                content=item.content,
-                ai_relevance_score=relevance,
-                freshness_score=freshness,
-                rank_score=score,
-            )
+            saved, is_new = article_repo.insert_article({
+                "source_id": source_id,
+                "title": item.title,
+                "url": str(item.url),
+                "url_canonical": canonical,
+                "url_canonical_hash": canonical_hash,
+                "published_at": item.published_at or (now - timedelta(hours=1)),
+                "summary": item.summary,
+                "content": item.content,
+                "ai_relevance_score": relevance,
+                "freshness_score": freshness,
+                "rank_score": score,
+            })
             if is_new:
                 inserted_ids.append(saved.id)
 
         # Duplicate pass should not create extra rows.
         duplicate_item = articles[0]
-        _, is_new = article_repo.insert_article(
-            source_id=None,
-            title=duplicate_item.title,
-            url=str(duplicate_item.url),
-            url_canonical=canonicalize_url(str(duplicate_item.url)),
-            url_canonical_hash=canonical_url_hash(str(duplicate_item.url)),
-            published_at=duplicate_item.published_at or now,
-            summary=duplicate_item.summary,
-            content=duplicate_item.content,
-            ai_relevance_score=0.5,
-            freshness_score=0.5,
-            rank_score=0.5,
-        )
+        _, is_new = article_repo.insert_article({
+            "source_id": None,
+            "title": duplicate_item.title,
+            "url": str(duplicate_item.url),
+            "url_canonical": canonicalize_url(str(duplicate_item.url)),
+            "url_canonical_hash": canonical_url_hash(str(duplicate_item.url)),
+            "published_at": duplicate_item.published_at or now,
+            "summary": duplicate_item.summary,
+            "content": duplicate_item.content,
+            "ai_relevance_score": 0.5,
+            "freshness_score": 0.5,
+            "rank_score": 0.5,
+        })
         session.commit()
 
         assert is_new is False

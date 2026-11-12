@@ -2,27 +2,29 @@
 
 from collections.abc import Callable
 from datetime import date
-from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.storage.article_repo import ArticleDailyStats, ArticleRepo
+from app.storage.article_repo import ArticleDailyStats, ArticleRepo, ViewFilter
 from app.storage.models_sql import Article
 
 type ArticleRow = tuple[Article, str | None, str | None]
 
 
-def news_rows(session_factory: Callable[[], Session], **filters: Any) -> list[ArticleRow]:
+def news_rows(session_factory: Callable[[], Session], view: ViewFilter, *, limit: int
+              ) -> list[ArticleRow]:
     """Articles with source key and name for the list and the export."""
     with session_factory() as session:
-        rows: list[ArticleRow] = ArticleRepo(session).list_for_view(**filters)
+        rows: list[ArticleRow] = ArticleRepo(session).list_for_view(view, limit=limit)
         return rows
 
 
-def agent_rows(session_factory: Callable[[], Session], **filters: Any) -> list[ArticleRow]:
+def agent_rows(session_factory: Callable[[], Session], view: ViewFilter, *, limit: int,
+               offset: int) -> list[ArticleRow]:
     """Articles with source key and name for the daily links feed."""
     with session_factory() as session:
-        rows: list[ArticleRow] = ArticleRepo(session).list_for_agent(**filters)
+        rows: list[ArticleRow] = ArticleRepo(session).list_for_agent(
+            view, limit=limit, offset=offset)
         return rows
 
 

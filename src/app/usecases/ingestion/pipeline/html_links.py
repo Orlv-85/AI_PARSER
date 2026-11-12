@@ -1,25 +1,23 @@
 """HTML path: fetch and persist the articles behind a list page."""
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, NamedTuple
 
 from app.config.settings import Settings
-from app.config.sources import SourceConfig
 from app.core.canonicalize import canonical_url_hash, canonicalize_url
 from app.core.ingestion.page_filter import (
     log_exclusion,
     url_exclusion_reason,
 )
-from app.core.jev import JevRelevanceScorer
 from app.ingest.fetcher import Fetcher
 from app.ingest.html import (
     fetch_html_article,
 )
 from app.storage.admission import (
+    PendingCandidate,
     settle_pending,
     upsert_pending,
 )
-from app.storage.article_repo import ArticleRepo
-from app.usecases.ingestion.pipeline.models import AdmissionState, SourceRun
+from app.usecases.ingestion.pipeline.models import SourceRun
 from app.usecases.ingestion.pipeline.rows import (
     _item_exclusion_reason,
     _upsert_article_rows,
@@ -51,7 +49,7 @@ def _capped_links(
     return capped
 
 
-@dataclass
+@dataclass(kw_only=True)
 class _HtmlRun(SourceRun):
     quality_flags: list[str] | None
     fetcher: Fetcher
@@ -84,13 +82,15 @@ def _upsert_placeholders(
             continue
         upsert_pending(
             run.article_repo.session,
-            key=placeholder_keys[canonical_hash],
-            url_canonical_hash=canonical_hash,
-            source_id=run.db_source_id,
-            payload={"kind": "html_link", "url": link},
-            evidence_hash="",
-            policy_version=run.settings.semantic_admission_policy_version,
-            model=run.settings.jev_model,
+            PendingCandidate(
+                key=placeholder_keys[canonical_hash],
+                url_canonical_hash=canonical_hash,
+                source_id=run.db_source_id,
+                payload={"kind": "html_link", "url": link},
+                evidence_hash="",
+                policy_version=run.settings.semantic_admission_policy_version,
+                model=run.settings.jev_model,
+            ),
         )
 
 
@@ -146,28 +146,27 @@ def _store_row(run: _HtmlRun, tally: _HtmlTally, row: dict[str, object]) -> None
     if run.settings.article_batch_upsert_enabled:
         tally.queued_rows.append(row)
         return
-    _, is_new = run.article_repo.insert_article(**row)
+    _, is_new = run.article_repo.insert_article(row)
     if is_new:
         tally.new_count += 1
     else:
         tally.duplicate_count += 1
 
 
-def _process_link(
-    run: _HtmlRun,
-    tally: _HtmlTally,
-    *,
-    known_hashes: set[str],
-    link: str,
-    canonical: str,
-    canonical_hash: str,
-    ph_key: str,
-) -> bool:
+class _Link(NamedTuple):
+    url: str
+    canonical: str
+    canonical_hash: str
+    ph_key: str
+
+
+def _process_link(run: _HtmlRun, tally: _HtmlTally, link: _Link, known_hashes: set[str]) -> bool:
     """Persist one list-page link; True when the source loop stops (known streak or pause)."""
+    canonical, canonical_hash, ph_key = link.canonical, link.canonical_hash, link.ph_key
     if canonical_hash in known_hashes:
         return _count_known_link(run, tally, ph_key=ph_key)
     tally.known_streak = 0
-    item = _fetch_new_item(run, tally, link=link, ph_key=ph_key)
+    item = _fetch_new_item(run, tally, link=link.url, ph_key=ph_key)
     if item is None:
         return False
     assessed: tuple[str, dict[str, object] | None] = _assessed_row(
@@ -195,18 +194,11 @@ def _flush_queued_rows(run: _HtmlRun, tally: _HtmlTally) -> None:
 
 
 def _process_html_links_two_stage(
-    *,
-    links: list[str],
-    config: SourceConfig,
-    db_source_id: int,
-    article_repo: ArticleRepo,
-    settings: Settings,
-    relevance_scorer: JevRelevanceScorer | None = None,
-    quality_flags: list[str] | None = None,
-    admission_state: AdmissionState | None = None,
+    source: SourceRun, links: list[str], quality_flags: list[str] | None = None,
 ) -> tuple[int, int, int, int, bool]:
     tally = _HtmlTally()
-    admission_enabled = admission_state is not None and admission_state.enabled
+    settings, article_repo = source.settings, source.article_repo
+    admission_enabled = source.admission_enabled
     canonical_by_link: list[tuple[str, str, str]] = [
         (str(link), canonicalize_url(str(link)), canonical_url_hash(str(link)))
         for link in _capped_links(links, settings, quality_flags)
@@ -217,16 +209,7 @@ def _process_html_links_two_stage(
         canonical_hash: _html_placeholder_key(settings, canonical_hash)
         for _, _, canonical_hash in canonical_by_link
     } if admission_enabled else {}
-    run = _HtmlRun(
-        config=config,
-        db_source_id=db_source_id,
-        article_repo=article_repo,
-        settings=settings,
-        relevance_scorer=relevance_scorer,
-        admission_state=admission_state,
-        quality_flags=quality_flags,
-        fetcher=_make_fetcher(settings),
-    )
+    run = _HtmlRun(**vars(source), quality_flags=quality_flags, fetcher=_make_fetcher(settings))
 
     try:
         if admission_enabled:
@@ -237,10 +220,8 @@ def _process_html_links_two_stage(
                 placeholder_keys=placeholder_keys,
             )
         for link, canonical, canonical_hash in canonical_by_link:
-            if _process_link(
-                run, tally, known_hashes=known_hashes, link=link, canonical=canonical,
-                canonical_hash=canonical_hash, ph_key=placeholder_keys.get(canonical_hash, ""),
-            ):
+            entry = _Link(link, canonical, canonical_hash, placeholder_keys.get(canonical_hash, ""))
+            if _process_link(run, tally, entry, known_hashes):
                 break
         _flush_queued_rows(run, tally)
     finally:

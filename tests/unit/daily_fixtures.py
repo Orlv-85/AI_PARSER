@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
+from fixture_options import options  # pylint: disable=import-error
 from pydantic import SecretStr
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -72,9 +73,16 @@ def mock_client(monkeypatch, handler):
                         real_client(transport=httpx.MockTransport(handler)))
 
 
-def provider_response(request, *, truncate=False, supported=True, topic="AI Applications",
-                      category=("AI Applications", 0.99), comparison=("NotComparison", 0.99),
-                      reason=None):
+def provider_response(request, **opts):
+    truncate, supported, topic, category, comparison, reason = options(
+        opts,
+        truncate=False,
+        supported=True,
+        topic="AI Applications",
+        category=("AI Applications", 0.99),
+        comparison=("NotComparison", 0.99),
+        reason=None,
+    )
     body = json.loads(request.content)
     if "questions" in body:
         assert body["questions"] == QUESTIONS

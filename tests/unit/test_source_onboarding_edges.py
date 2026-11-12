@@ -58,9 +58,9 @@ def test_review_source_candidate_guard_and_fallback_paths() -> None:
     with pytest.raises(ValueError, match="candidate_repo must provide get_candidate"):
         source_onboarding.review_source_candidate(
             candidate_id=1,
-            action="approve",
             candidate_repo=object(),
             managed_source_repo=object(),
+            request=source_onboarding.ReviewRequest(action="approve"),
         )
 
     repo = SimpleNamespace(
@@ -69,26 +69,25 @@ def test_review_source_candidate_guard_and_fallback_paths() -> None:
     with pytest.raises(ValueError, match="source candidate not found: 4"):
         source_onboarding.review_source_candidate(
             candidate_id=4,
-            action="approve",
             candidate_repo=SimpleNamespace(get_candidate=lambda _candidate_id: None),
             managed_source_repo=object(),
+            request=source_onboarding.ReviewRequest(action="approve"),
         )
 
     with pytest.raises(ValueError, match="unsupported review action: archive"):
         source_onboarding.review_source_candidate(
             candidate_id=1,
-            action="archive",
             candidate_repo=repo,
             managed_source_repo=object(),
+            request=source_onboarding.ReviewRequest(action="archive"),
         )
 
     candidate = SimpleNamespace(id=1, status="draft")
     returned = source_onboarding.review_source_candidate(
         candidate_id=1,
-        action="reject",
         candidate_repo=SimpleNamespace(get_candidate=lambda _candidate_id: candidate),
         managed_source_repo=object(),
-        review_note="manual reject",
+        request=source_onboarding.ReviewRequest(action="reject", review_note="manual reject"),
     )
     assert returned is candidate
     assert candidate.status == "rejected"

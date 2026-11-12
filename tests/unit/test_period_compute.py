@@ -2,6 +2,7 @@ import json
 from dataclasses import replace
 from datetime import timedelta
 
+from fixture_options import options  # pylint: disable=import-error
 from period_fixtures import (  # pylint: disable=import-error
     WEEK,
     fixture_period_input,
@@ -27,7 +28,8 @@ def day(n):
     return WEEK + timedelta(days=n)
 
 
-def story(label, event, entities, publishers, *, articles=3, links=()):
+def story(label, event, entities, publishers, **opts):
+    articles, links = options(opts, articles=3, links=())
     return {"label": label, "event_type": event, "entities": list(entities),
             "publishers": publishers, "articles": articles, "spikes": [],
             "links": [{"title": label, "url": f"https://{p}/{label}", "publisher": p}

@@ -6,12 +6,17 @@ import typer
 from app.cli import deps
 from app.cli.common import day_within_cap, echo_json, parse_day
 from app.core.world.filter import load_own_domains
-from app.core.world.gdelt import DayStats, make_client, scan_day
+from app.core.world.gdelt import DayStats, GdeltScan, make_client, scan_day
 from app.core.world.screen import WORLD_JEV_MAX_USD_PER_DAY
 from app.observability import setup_json_logging
 from app.usecases.world_collect import collect_day, yesterday_utc
 from app.usecases.world_report import build_report
-from app.usecases.world_screen import open_world_assessor, run_screen, utc_today
+from app.usecases.world_screen import (
+    ScreenOptions,
+    open_world_assessor,
+    run_screen,
+    utc_today,
+)
 from app.usecases.world_text import archive_text_source, run_texts
 
 app = typer.Typer(help="World news stream (spec 018, item 5).")
@@ -28,7 +33,7 @@ def world_scan(
     stats = DayStats()
     with make_client() as client:
         for _candidate in scan_day(
-            target, client=client, stats=stats, own_domains=own, max_files=max_files
+            target, scan=GdeltScan(client, own_domains=own), stats=stats, max_files=max_files
         ):
             pass
     echo_json(stats.as_dict())
@@ -51,7 +56,8 @@ def world_collect(
     with make_client() as client, deps.SessionLocal() as session:
         for day in days:
             summary = collect_day(
-                session, day, client=client, own_domains=own, max_files=max_files, logger=logger
+                session, day, scan=GdeltScan(client, own_domains=own), max_files=max_files,
+                logger=logger,
             )
             echo_json(summary.as_dict())
 
@@ -71,11 +77,11 @@ def world_screen(
     with deps.SessionLocal() as session:
         try:
             if dry_run:
-                summary = run_screen(session, None, target, dry_run=True)
+                summary = run_screen(session, None, target, ScreenOptions(dry_run=True))
             else:
                 with open_world_assessor(deps.get_settings(), logger, utc_today()) as assessor:
-                    summary = run_screen(session, assessor, target, limit_usd=float(max_usd),
-                                         texts=archive_text_source(session))
+                    summary = run_screen(session, assessor, target, ScreenOptions(
+                        texts=archive_text_source(session), limit_usd=float(max_usd)))
         except ValueError as exc:
             typer.echo(f"world screen: {exc}", err=True)
             raise typer.Exit(2) from exc

@@ -5,7 +5,15 @@ import stat
 import httpx
 import pytest
 
-from app.storage.daily_signals_ledger import Dispatch, LedgerStop, SignalsLedger
+from app.storage.daily_signals_ledger import (
+    DEFAULT_PRICES,
+    CallTag,
+    Dispatch,
+    LedgerConfig,
+    LedgerProvider,
+    LedgerStop,
+    SignalsLedger,
+)
 
 BODY = {"model": "deepseek-flash", "messages": []}
 RESERVED = 6000
@@ -25,8 +33,7 @@ def ok_body(prompt=1000, completion=200):
             "usage": {"prompt_tokens": prompt, "completion_tokens": completion}}
 
 
-def ledger(tmp_path, handler, *, run_id="run-1", max_calls=10, max_usd_micro=100000,
-           deadline=10000.0, clock=None, **options):
+def ledger(tmp_path, handler, *, run_id="run-1", prices=DEFAULT_PRICES, **caps):
     calls = []
 
     def counted(request):
@@ -35,17 +42,18 @@ def ledger(tmp_path, handler, *, run_id="run-1", max_calls=10, max_usd_micro=100
         assert str(request.url) == "https://api.deepseek.com/chat/completions"
         return handler(request)
 
+    limits = {"max_calls": 10, "max_usd_micro": 100000, "deadline": 10000.0,
+              "clock": Clock()} | caps
+    provider = LedgerProvider(api_key="secret-key", prices=prices,
+                              transport=httpx.MockTransport(counted))
     value = SignalsLedger(tmp_path / "cache" / "ledger.sqlite3", run_id=run_id,
-                          api_key="secret-key", max_calls=max_calls,
-                          max_usd_micro=max_usd_micro, deadline=deadline,
-                          clock=clock or Clock(), transport=httpx.MockTransport(counted),
-                          **options)
+                          provider=provider, caps=LedgerConfig(**limits))
     return value, calls
 
 
 def send(value, key="k1", reserved=RESERVED):
-    return value.dispatch(BODY, request_key=key, reserved_micro=reserved, article_id=1,
-                          version="v", scope_day="2026-10-16")
+    return value.dispatch(BODY, request_key=key, reserved_micro=reserved,
+                          tag=CallTag(1, "v", "2026-10-16"))
 
 
 def test_one_post_per_dispatch_and_replay(tmp_path):

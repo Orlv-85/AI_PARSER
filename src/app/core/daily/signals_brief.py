@@ -289,15 +289,39 @@ def _span_ok(span: Any) -> bool:
         and len(span) <= 300
 
 
-def grounding_error(text: str, numbers: set[str], names: str, *,
-                    starters: frozenset[str] = STARTERS,
-                    canon: Callable[[str], str] = str,
-                    words: Collection[str] | None = None) -> str | None:
+@dataclass(frozen=True)
+class NameRules:
+    """How `grounding_error` reads names and numbers: sentence `starters` that are not names,
+    `canon` for numbers, and optional whole `words` a name must be one of."""
+
+    starters: frozenset[str] = STARTERS
+    canon: Callable[[str], str] = str
+    words: Collection[str] | None = None
+
+
+DEFAULT_NAME_RULES = NameRules()
+
+
+@dataclass(frozen=True)
+class BriefRules:
+    """Sentence count (low, high; the daily default depends on `quiet`) and whether failing
+    sentences are dropped (`keep_valid`) or fail the answer."""
+
+    counts: tuple[int, int] | None = None
+    keep_valid: bool = True
+
+
+DAILY_BRIEF = BriefRules()
+
+
+def grounding_error(text: str, numbers: set[str], names: str,
+                    rules: NameRules = DEFAULT_NAME_RULES) -> str | None:
     """Code of the first number not in `numbers` or name not in `names` (casefolded text), else
     None. A name is a capitalised word or a word with a digit, except sentence `starters`;
     `canon` maps a number before the comparison (the sets must hold canonical forms). With `words`
     (casefolded whole words) a name must be one of them; otherwise it may be a substring of
     `names`."""
+    starters, canon, words = rules.starters, rules.canon, rules.words
     if any(canon(n) not in numbers for n in NUMBER.findall(text)):
         return "unsupported_number"
     for word in WORD.findall(text):
@@ -351,8 +375,8 @@ def _sentence(raw: Any, ctx: _Context, seen: set[Any]) -> Sentence:
                     quote=quote["span"].strip())
 
 
-def parse_brief(data: Any, packet: Mapping[str, Any], model: str, *,
-                counts: tuple[int, int] | None = None, keep_valid: bool = True,
+def parse_brief(data: Any, packet: Mapping[str, Any], model: str,
+                rules: BriefRules = DAILY_BRIEF, *,
                 dropped: list[str] | None = None) -> list[Sentence]:
     """Validate one provider answer against the packet (plan validation rules 1-9).
 
@@ -362,7 +386,8 @@ def parse_brief(data: Any, packet: Mapping[str, Any], model: str, *,
     failing sentence or a count outside the range fails the answer. `dropped` collects the
     reasons of dropped sentences and the count of unread ones (`over_limit:<n>`)."""
     raw = _content(data, model)
-    low, high = counts or ((1, 2) if packet["quiet"] else (3, 5))
+    keep_valid = rules.keep_valid
+    low, high = rules.counts or ((1, 2) if packet["quiet"] else (3, 5))
     if len(raw) < low or (not keep_valid and len(raw) > high):
         raise BriefInvalid("sentence_count")
     ctx = _Context(packet)

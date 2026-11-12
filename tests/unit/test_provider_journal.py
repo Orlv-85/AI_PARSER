@@ -4,6 +4,7 @@ import sqlite3
 
 import httpx
 import pytest
+from fixture_options import options  # pylint: disable=import-error
 
 from app.core.canonical_json import encoded, fingerprint
 from app.core.daily.provider_requests import (
@@ -26,8 +27,16 @@ def journal_fixture(tmp_path):
     instance.close()
 
 
-def saved_call(journal, key="saved", *, provider="jev", state="failed", error="ReadError",
-               actual=None, received=None, committed=100):
+def saved_call(journal, key="saved", **opts):
+    provider, state, error, actual, received, committed = options(
+        opts,
+        provider="jev",
+        state="failed",
+        error="ReadError",
+        actual=None,
+        received=None,
+        committed=100,
+    )
     journal.db.execute(
         "INSERT INTO calls(key,provider,committed,actual,state,response,error_type) "
         "VALUES (?,?,?,?,?,?,?)", (key, provider, committed, actual, state,
@@ -41,15 +50,14 @@ def snapshot(journal):
         "SELECT key,committed,actual,state,response,error_type FROM calls ORDER BY key").fetchall()
 
 
-@pytest.mark.parametrize("options,message", [
-    ({"caps": {"total": "2"}}, "All three caps required"),
-    ({"caps": {**CAPS, "total": "1"}}, "Provider caps exceed total cap"),
-    ({"transport_retry_delays": ()}, "At least one transport retry delay required"),
+@pytest.mark.parametrize("caps,policy,message", [
+    ({"total": "2"}, {}, "All three caps required"),
+    ({**CAPS, "total": "1"}, {}, "Provider caps exceed total cap"),
+    (CAPS, {"transport_retry_delays": ()}, "At least one transport retry delay required"),
 ])
-def test_journal_configuration_guards(tmp_path, options, message):
-    args = {"caps": CAPS, **options}
+def test_journal_configuration_guards(tmp_path, caps, policy, message):
     with pytest.raises(ValueError, match=f"^{message}$"):
-        pj.PilotJournal(tmp_path / "j.sqlite3", {}, **args)
+        pj.PilotJournal(tmp_path / "j.sqlite3", {}, caps, pj.JournalPolicy(**policy))
 
 
 @pytest.mark.parametrize("reason", [None, 1, "", " \t"])
@@ -309,7 +317,7 @@ def test_saved_response_guards(journal, actual, received, message, error):
     assert snapshot(journal)[0][-1] == error
 
 
-@pytest.mark.parametrize("status,data,text,message,actual,state,error", [
+@pytest.mark.parametrize("case", [
     (200, GOOD, None, None, 42, "response", None),
     (200, {"usage": {"input_tokens": 64000}}, None, None, 2688, "response", None),
     (200, {"usage": None}, None, "missing_usage_reservation_retained", None, "response", None),
@@ -319,7 +327,8 @@ def test_saved_response_guards(journal, actual, received, message, error):
     (200, [], None, "provider_response_failed", None, "failed", "HTTPOrJSONError"),
     (200, None, "not JSON", "provider_response_failed", None, "failed", "HTTPOrJSONError"),
 ])
-def test_received_response_guards(journal, *, status, data, text, message, actual, state, error):
+def test_received_response_guards(journal, case):
+    status, data, text, message, actual, state, error = case
     response = httpx.Response(status, text=text) if text else httpx.Response(status, json=data)
     with httpx.Client(transport=httpx.MockTransport(lambda _r: response)) as client:
         if message:
@@ -364,9 +373,9 @@ def test_transient_retry_order_and_release(journal, monkeypatch):
 ])
 def test_transient_release_guards(journal, changes):
     assert not journal._release_unbilled_transient("absent")  # pylint: disable=protected-access
-    options = {"error": "HTTPOrJSONError", "received": {
+    fields = {"error": "HTTPOrJSONError", "received": {
         "status_code": 503, "body": {"error": "busy"}}, **changes}
-    key = saved_call(journal, **options)
+    key = saved_call(journal, **fields)
     before = snapshot(journal)
     assert journal._release_unbilled_transient(key) is False  # pylint: disable=protected-access
     assert snapshot(journal) == before

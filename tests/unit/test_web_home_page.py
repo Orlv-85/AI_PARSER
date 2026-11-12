@@ -109,11 +109,13 @@ def test_legacy_weekly_redirects_stay_hidden_from_openapi(client):
     assert "/weekly-ai-analytics/reports" not in paths
 
 
-@pytest.mark.parametrize("switched,ready,path", [
-    (False, False, "/"), (True, False, "/"), (True, True, "/"), (True, True, "/daily")])
-@pytest.mark.parametrize("failed", [False, True])
-def test_page_views_runs_after_response(client, maker, monkeypatch, caplog, *,
-                                       switched, ready, path, failed):
+@pytest.mark.parametrize("case", [
+    (*page, failed)
+    for failed in (False, True)
+    for page in ((False, False, "/"), (True, False, "/"), (True, True, "/"), (True, True, "/daily"))
+])
+def test_page_views_runs_after_response(client, maker, monkeypatch, caplog, case):
+    switched, ready, path, failed = case
     events = []
     import_module("app.web.app").get_settings().bulletin_home_page = switched
     if ready:
