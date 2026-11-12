@@ -5,13 +5,13 @@ from threading import BoundedSemaphore
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
-from app.ingest.fetcher import Fetcher
+from app.ingest.fetcher import NO_VALIDATORS, Fetcher, Validators
 from app.ingest.html import (
     HtmlListPageResult,
     fetch_html_links,
     fetch_html_links_with_metadata,
 )
-from app.ingest.rss import fetch_rss
+from app.ingest.rss import RssOptions, fetch_rss
 from app.usecases.ingestion.pipeline.models import EnabledSource, FetchResult
 
 
@@ -37,8 +37,7 @@ def _fetch_source_items(
         settings.fetch_conditional_rss_enabled if config.type == "rss"
         else settings.fetch_conditional_html_list_enabled
     )
-    if_none_match, if_modified_since = (
-        _stored_validators(fetch_state) if conditional else (None, None))
+    validators = Validators(*_stored_validators(fetch_state)) if conditional else NO_VALIDATORS
     fetcher = Fetcher(
         timeout_seconds=settings.request_timeout_seconds,
         max_retries=settings.max_retries,
@@ -62,11 +61,11 @@ def _fetch_source_items(
                 str(config.url),
                 settings.request_timeout_seconds,
                 fetcher=fetcher,
-                extract_full_text=settings.rss_extract_full_text,
-                full_text_max_items=settings.rss_full_text_max_items_per_source,
-                full_text_semaphore=full_text_semaphore,
-                if_none_match=if_none_match,
-                if_modified_since=if_modified_since,
+                options=RssOptions(
+                    extract_full_text=settings.rss_extract_full_text,
+                    full_text_max_items=settings.rss_full_text_max_items_per_source,
+                    full_text_semaphore=full_text_semaphore, validators=validators,
+                ),
             )
         if conditional:
             return fetch_html_links_with_metadata(
@@ -74,8 +73,7 @@ def _fetch_source_items(
                 settings.request_timeout_seconds,
                 fetcher=fetcher,
                 link_parser=settings.html_link_parser,
-                if_none_match=if_none_match,
-                if_modified_since=if_modified_since,
+                validators=validators,
             )
         return HtmlListPageResult(links=fetch_html_links(
             config,

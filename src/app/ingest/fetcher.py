@@ -8,6 +8,17 @@ import httpx
 from app.core.bot_identity import DEFAULT_USER_AGENT
 
 
+@dataclass(frozen=True)
+class Validators:
+    """Conditional request headers from the source's last fetch."""
+
+    if_none_match: str | None = None
+    if_modified_since: str | None = None
+
+
+NO_VALIDATORS = Validators()
+
+
 # pylint: disable=too-many-instance-attributes
 @dataclass
 class Fetcher:

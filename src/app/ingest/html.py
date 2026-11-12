@@ -18,7 +18,7 @@ from app.core.ingestion.page_filter import (
 )
 from app.core.models import Article
 from app.ingest.date_evidence import extract_date_evidence
-from app.ingest.fetcher import Fetcher
+from app.ingest.fetcher import NO_VALIDATORS, Fetcher, Validators
 
 try:
     _selectolax_parser = import_module("selectolax.parser")
@@ -252,9 +252,9 @@ def fetch_html_links_with_metadata(
     fetcher: Fetcher | None = None,
     link_parser: str | None = None,
     *,
-    if_none_match: str | None = None,
-    if_modified_since: str | None = None,
+    validators: Validators = NO_VALIDATORS,
 ) -> HtmlListPageResult:
+    if_none_match, if_modified_since = validators.if_none_match, validators.if_modified_since
     if source.type != "html" or source.html is None:
         return HtmlListPageResult(links=[])
 

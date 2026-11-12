@@ -17,7 +17,7 @@ from app.core.ingestion.page_filter import (
     text_exclusion_reason,
 )
 from app.core.models import Article
-from app.ingest.fetcher import Fetcher
+from app.ingest.fetcher import NO_VALIDATORS, Fetcher, Validators
 from app.ingest.html import extract_article_text
 
 _LOGGER = logging.getLogger(__name__)
@@ -135,15 +135,28 @@ def _extract_linked_article_text(
     return _normalize_plain_text(extracted)
 
 
+@dataclass(frozen=True)
+class RssOptions:
+    """Full-text extraction of linked articles and conditional headers of one RSS fetch."""
+
+    extract_full_text: bool = False
+    full_text_max_items: int = 20
+    full_text_semaphore: Semaphore | None = None
+    validators: Validators = NO_VALIDATORS
+
+
+DEFAULT_RSS = RssOptions()
+
+
 def fetch_rss_with_metadata(
     source_key: str,
     url: str,
     timeout_seconds: float = 15.0,
     fetcher: Fetcher | None = None,
     *,
-    if_none_match: str | None = None,
-    if_modified_since: str | None = None,
+    validators: Validators = NO_VALIDATORS,
 ) -> RssFetchResult:
+    if_none_match, if_modified_since = validators.if_none_match, validators.if_modified_since
     if fetcher is not None:
         request_method = getattr(fetcher, "request", None)
         if callable(request_method):
@@ -200,32 +213,26 @@ def fetch_rss_with_metadata(
         coverage_complete=getattr(items, "coverage_complete", False),
     )
 
-# pylint: disable=too-many-positional-arguments
-def fetch_rss(  # pylint: disable=too-many-arguments
+def fetch_rss(
     source_key: str,
     url: str,
     timeout_seconds: float = 15.0,
     fetcher: Fetcher | None = None,
-    extract_full_text: bool = False,
-    full_text_max_items: int = 20,
-    full_text_semaphore: Semaphore | None = None,
-    *,
-    if_none_match: str | None = None,
-    if_modified_since: str | None = None,
+    options: RssOptions = DEFAULT_RSS,
 ) -> RssItemList:
     result = fetch_rss_with_metadata(
         source_key=source_key,
         url=url,
         timeout_seconds=timeout_seconds,
         fetcher=fetcher,
-        if_none_match=if_none_match,
-        if_modified_since=if_modified_since,
+        validators=options.validators,
     )
     items = result.items
-    if not extract_full_text:
+    if not options.extract_full_text:
         return _with_rss_metadata(items, result)
+    full_text_semaphore = options.full_text_semaphore
 
-    for item in items[: max(0, full_text_max_items)]:
+    for item in items[: max(0, options.full_text_max_items)]:
         try:
             if full_text_semaphore is not None:
                 full_text_semaphore.acquire()

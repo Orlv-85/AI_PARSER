@@ -5,7 +5,9 @@ import pytest
 
 import app.ingest.rss as rss_module
 from app.core.models import Article
+from app.ingest.fetcher import Validators
 from app.ingest.rss import (
+    RssOptions,
     _extract_linked_article_text,
     _normalize_plain_text,
     _to_datetime,
@@ -129,8 +131,10 @@ def test_fetch_rss_httpx_branch_sends_conditional_headers_and_handles_304(monkey
         "https://example.com/feed",
         timeout_seconds=3.0,
         fetcher=None,
-        if_none_match='"etag-1"',
-        if_modified_since="Mon, 01 Jan 2024 00:00:00 GMT",
+        validators=Validators(
+            if_none_match='"etag-1"',
+            if_modified_since="Mon, 01 Jan 2024 00:00:00 GMT",
+        ),
     )
 
     assert result.not_modified is True
@@ -171,8 +175,7 @@ def test_fetch_rss_extract_full_text_enriches_only_first_n(monkeypatch) -> None:
         "s",
         "https://example.com/feed",
         fetcher=_Fetcher(b"<rss></rss>"),
-        extract_full_text=True,
-        full_text_max_items=2,
+        options=RssOptions(extract_full_text=True, full_text_max_items=2),
     )
 
     assert len(result) == 3
@@ -207,7 +210,7 @@ def test_fetch_rss_extract_full_text_fail_soft_logs_and_continues(monkeypatch, c
         "s",
         "https://example.com/feed",
         fetcher=_Fetcher(b"<rss></rss>"),
-        extract_full_text=True,
+        options=RssOptions(extract_full_text=True),
     )
 
     assert result[0].content is None
@@ -236,7 +239,7 @@ def test_fetch_rss_extract_full_text_disabled(monkeypatch) -> None:
         "s",
         "https://example.com/feed",
         fetcher=_Fetcher(b"<rss></rss>"),
-        extract_full_text=False,
+        options=RssOptions(extract_full_text=False),
     )
 
     assert result[0].content is None
@@ -308,7 +311,7 @@ def test_fetch_rss_extract_full_text_ignores_empty_extracted_text(monkeypatch) -
         "s",
         "https://example.com/feed",
         fetcher=_Fetcher(b"<rss></rss>"),
-        extract_full_text=True,
+        options=RssOptions(extract_full_text=True),
     )
 
     assert result[0].content is None
@@ -336,8 +339,7 @@ def test_fetch_rss_extract_full_text_uses_semaphore_acquire_and_release(monkeypa
         "s",
         "https://example.com/feed",
         fetcher=_Fetcher(b"<rss></rss>"),
-        extract_full_text=True,
-        full_text_semaphore=semaphore,
+        options=RssOptions(extract_full_text=True, full_text_semaphore=semaphore),
     )
 
     assert result[0].content == "ok text"
@@ -390,8 +392,10 @@ def test_fetch_rss_with_metadata_304_skips_parse_and_reports_not_modified(monkey
         "s",
         "https://example.com/feed.xml",
         fetcher=fetcher,
-        if_none_match='"etag-old"',
-        if_modified_since="Mon, 01 Jan 2024 00:00:00 GMT",
+        validators=Validators(
+            if_none_match='"etag-old"',
+            if_modified_since="Mon, 01 Jan 2024 00:00:00 GMT",
+        ),
     )
 
     assert result.not_modified is True
@@ -409,8 +413,10 @@ def test_fetch_rss_with_metadata_passes_conditional_validators_to_fetcher_reques
         "s",
         "https://example.com/feed.xml",
         fetcher=fetcher,
-        if_none_match='"etag-123"',
-        if_modified_since="Tue, 02 Jan 2024 00:00:00 GMT",
+        validators=Validators(
+            if_none_match='"etag-123"',
+            if_modified_since="Tue, 02 Jan 2024 00:00:00 GMT",
+        ),
     )
 
     assert fetcher.calls == [

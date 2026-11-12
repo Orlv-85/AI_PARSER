@@ -16,7 +16,7 @@ from app.ingest.html import (
     extract_links_from_html,
     fetch_html_article,
 )
-from app.ingest.rss import RssFetchResult, fetch_rss, parse_rss
+from app.ingest.rss import RssFetchResult, RssOptions, fetch_rss, parse_rss
 from app.storage.article_repo import ArticleRepo
 from app.storage.models_sql import Article as StoredArticle
 from app.storage.models_sql import Base
@@ -246,8 +246,12 @@ def test_rss_linked_landing_is_removed_before_text_extraction(monkeypatch) -> No
                         lambda **_kwargs: pytest.fail("Landing extraction was attempted"))
     fetcher = SimpleNamespace(fetch_text=lambda **_kwargs:
                               "<h1>Platform</h1><p>Features</p><a>Request a demo</a>")
-    assert not fetch_rss("example", "https://example.com/feed", fetcher=fetcher,
-                         extract_full_text=True)
+    assert not fetch_rss(
+        "example",
+        "https://example.com/feed",
+        fetcher=fetcher,
+        options=RssOptions(extract_full_text=True),
+    )
 
 
 def test_rss_item_without_row_is_skipped_without_counting(monkeypatch) -> None:

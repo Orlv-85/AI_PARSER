@@ -3,6 +3,7 @@ from typing import Any, cast
 import httpx
 
 from app.config.sources import SourceConfig
+from app.ingest.fetcher import Validators
 from app.ingest.html import (
     _build_html_article,
     _extract_links_with_selectolax,
@@ -356,8 +357,10 @@ def test_fetch_html_links_with_metadata_httpx_not_modified_and_success(monkeypat
     not_modified = fetch_html_links_with_metadata(
         source,
         fetcher=None,
-        if_none_match='"etag-1"',
-        if_modified_since="Mon, 01 Jan 2024 00:00:00 GMT",
+        validators=Validators(
+            if_none_match='"etag-1"',
+            if_modified_since="Mon, 01 Jan 2024 00:00:00 GMT",
+        ),
     )
 
     assert not_modified.not_modified is True
@@ -396,8 +399,10 @@ def test_fetch_html_links_with_metadata_uses_fetcher_request_branch() -> None:
     result = fetch_html_links_with_metadata(
         source,
         fetcher=_FetcherWithRequest(),
-        if_none_match='"etag-old"',
-        if_modified_since="Tue, 02 Jan 2024 00:00:00 GMT",
+        validators=Validators(
+            if_none_match='"etag-old"',
+            if_modified_since="Tue, 02 Jan 2024 00:00:00 GMT",
+        ),
     )
 
     assert result.not_modified is False
