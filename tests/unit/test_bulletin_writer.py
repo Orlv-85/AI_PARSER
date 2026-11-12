@@ -971,3 +971,9 @@ def test_cli_write_skipped_day_makes_no_call(cli, maker):
     result = cli("--dry-run", "--write")
     assert result.exit_code == 0 and cli.requests == []
     assert "signals_partial" in result.output
+
+
+def test_evidence_reads_missing_article_fields_as_empty():
+    story = {"outlets": [], "articles": [{}]}
+    evidence = writer_module._evidence  # pylint: disable=protected-access
+    assert evidence(story) == "\n\n"  # type: ignore[arg-type]

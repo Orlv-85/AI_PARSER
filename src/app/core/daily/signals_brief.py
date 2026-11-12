@@ -8,7 +8,7 @@ import re
 import unicodedata
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, NotRequired, TypedDict
+from typing import Any, Literal, NotRequired, Required, TypedDict
 
 from app.core.canonical_json import encoded, fingerprint
 from app.core.daily.signals_entities import QUOTES
@@ -100,7 +100,7 @@ class PacketItem(TypedDict, total=False):
     what: str
     today: int
     usual_per_day: float | None
-    articles: list[str]
+    articles: Required[list[str]]
 
 
 class Packet(TypedDict):
@@ -305,6 +305,10 @@ def _content(data: object, model: str) -> list[object]:
     return content["sentences"]
 
 
+_GROUPS: tuple[Literal["stories", "new", "spikes", "risers"], ...] = (
+    "stories", "new", "spikes", "risers")
+
+
 class _Context:
     """Per-article grounding text built once per packet."""
 
@@ -314,10 +318,8 @@ class _Context:
         self.whats: dict[str, list[str]] = {}
         self.names: dict[str, list[str]] = {}
         self.outlets: dict[str, set[str]] = {}
-        groups = {"stories": packet["stories"], "new": packet["new"],
-                  "spikes": packet.get("spikes", []), "risers": packet.get("risers", [])}
-        for group, items in groups.items():
-            for item in items:
+        for group in _GROUPS:
+            for item in packet.get(group) or []:
                 for a in item["articles"]:
                     if item.get("what"):
                         self.whats.setdefault(a, []).append(norm(item["what"]))

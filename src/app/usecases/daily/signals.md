@@ -174,7 +174,7 @@ that check it.
 | Quiet-day opening line is a template, not model output | counts are our facts |
 | Chips are display only | filtering the digest was deferred (OD4) |
 | Signals run only after a successful publication; failure never changes the job result | the digest job must not depend on the signals block |
-| Payload shape is `TypedDict`s (`signals_payload.py`); working fields of an item (entity key, article ids, unit, delta) live in dataclasses beside it, not in `_`-keys | decided 2026-11-12 (agent): mypy checks the keys; the stored JSON stays byte-identical, so no methodology bump |
+| Payload shape is `TypedDict`s (`signals_payload.py`); working fields of an item (entity key, article ids, unit, delta) live in dataclasses beside it, not in `_`-keys; keys methodology v1 did not write are `NotRequired` | decided 2026-11-12 (agent): mypy checks the keys and the reads of stored v1 payloads; the stored JSON stays byte-identical, so no methodology bump |
 
 ## Invariants
 

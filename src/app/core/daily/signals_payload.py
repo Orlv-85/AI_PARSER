@@ -1,6 +1,7 @@
 """Shape of the stored daily AI Signals payload (feature doc: src/app/usecases/daily/signals.md).
 
 `compute_snapshot` builds it; the brief and the period computation read it back from JSON.
+Keys that methodology v1 did not write are `NotRequired`: stored v1 payloads are read too.
 """
 from typing import NotRequired, TypedDict
 
@@ -35,8 +36,8 @@ class NewItem(TypedDict):
     variant_of: str | None
     variants: list[str]
     novelty_quote: str
-    one_liner: str | None
-    one_liner_source: str | None
+    one_liner: NotRequired[str | None]
+    one_liner_source: NotRequired[str | None]
     articles: int
     publishers: int
     links: list[Link]
@@ -67,7 +68,7 @@ class TopStory(TypedDict):
     articles: int
     publishers: int
     entities: list[str]
-    spikes: list[str]
+    spikes: NotRequired[list[str]]
     links: list[Link]
 
 
@@ -111,13 +112,13 @@ class SnapshotPayload(TypedDict):
     notes: list[str]
     sections: dict[str, Section]
     thresholds: dict[str, object]
-    quiet: bool
+    quiet: NotRequired[bool]
     new: list[NewItem]
-    new_suppressed: list[Suppressed]
-    new_hidden: list[Hidden]
+    new_suppressed: NotRequired[list[Suppressed]]
+    new_hidden: NotRequired[list[Hidden]]
     top_stories: list[TopStory]
     rising: list[TrendItem]
-    spikes_folded: list[Folded]
+    spikes_folded: NotRequired[list[Folded]]
     cooling: list[TrendItem]
     event_counts: list[EventCount]
     article_event_types: dict[str, str]

@@ -199,7 +199,8 @@ def writer_body(packet: WriterPacket, model: str) -> dict[str, Any]:
 def _evidence(story: PacketStory) -> str:
     parts = list(story["outlets"])
     for article in story["articles"]:
-        parts.extend((article["title"], article.get("summary", ""), article.get("text", "")))
+        parts.extend((article.get("title", ""), article.get("summary", ""),
+                      article.get("text", "")))
     return "\n".join(parts)
 
 

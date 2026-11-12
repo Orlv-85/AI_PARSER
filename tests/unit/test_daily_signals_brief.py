@@ -363,3 +363,10 @@ def test_empty_or_none_digest_summary_reads_as_empty():
              for i, value in enumerate(["None", "  ", None, "Real text."])]
     packet, _ = brief_packet(payload("2026-10-18"), items)
     assert [a["summary"] for a in packet["articles"].values()] == ["", "", "", "Real text."]
+
+
+def test_context_treats_missing_or_null_groups_as_empty():
+    packet = {"stories": [{"label": "L", "outlets": 2, "articles": ["a1"]}], "spikes": None,
+              "articles": {"a1": {"title": "T", "summary": "S"}}}
+    ctx = brief._Context(packet)  # type: ignore[arg-type]  # pylint: disable=protected-access
+    assert ctx.outlets == {"a1": {"2"}}
