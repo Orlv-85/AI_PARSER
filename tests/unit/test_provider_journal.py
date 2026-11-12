@@ -41,15 +41,14 @@ def snapshot(journal):
         "SELECT key,committed,actual,state,response,error_type FROM calls ORDER BY key").fetchall()
 
 
-@pytest.mark.parametrize("options,message", [
-    ({"caps": {"total": "2"}}, "All three caps required"),
-    ({"caps": {**CAPS, "total": "1"}}, "Provider caps exceed total cap"),
-    ({"transport_retry_delays": ()}, "At least one transport retry delay required"),
+@pytest.mark.parametrize("caps,policy,message", [
+    ({"total": "2"}, {}, "All three caps required"),
+    ({**CAPS, "total": "1"}, {}, "Provider caps exceed total cap"),
+    (CAPS, {"transport_retry_delays": ()}, "At least one transport retry delay required"),
 ])
-def test_journal_configuration_guards(tmp_path, options, message):
-    args = {"caps": CAPS, **options}
+def test_journal_configuration_guards(tmp_path, caps, policy, message):
     with pytest.raises(ValueError, match=f"^{message}$"):
-        pj.PilotJournal(tmp_path / "j.sqlite3", {}, **args)
+        pj.PilotJournal(tmp_path / "j.sqlite3", {}, caps, pj.JournalPolicy(**policy))
 
 
 @pytest.mark.parametrize("reason", [None, 1, "", " \t"])

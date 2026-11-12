@@ -231,7 +231,6 @@ def cli_collect(engine, monkeypatch, files, calls=None, args=()):
     monkeypatch.setattr(cli_deps, "SessionLocal", sessionmaker(engine))
     monkeypatch.setattr(cli_deps, "create_all", lambda: None)
     monkeypatch.setattr(cli_world, "yesterday_utc", lambda: DAY)
-    monkeypatch.setattr("app.usecases.world_collect.PAUSE_SECONDS", 0)
     result = CliRunner().invoke(cli_main.app, ["world", "collect", "--max-files", "1", *args])
     assert result.exit_code == 0, result.output
     return [json.loads(line) for line in result.output.splitlines()

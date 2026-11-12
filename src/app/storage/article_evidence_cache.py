@@ -6,6 +6,7 @@ import json
 import re
 import time
 from collections import Counter
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -207,24 +208,36 @@ class PageCache:
 OUTAGE_HOSTS = 10  # distinct hosts failing to connect, no success between
 
 
+@dataclass(frozen=True)
+class DownloadLimits:
+    """Parallel downloads, pause per host, body size cap, robots.txt check."""
+
+    concurrency: int = 8
+    host_interval: float = 1.0
+    max_bytes: int = 10 * 1024 * 1024
+    respect_robots: bool = True
+
+
+DEFAULT_LIMITS = DownloadLimits()
+
+
 class SourcePageDownloader:  # pylint: disable=too-many-instance-attributes
     """Bounded downloads with per-host pacing, manual redirects and no retry loop."""
 
-    def __init__(self, cache: PageCache, client: httpx.AsyncClient, *, concurrency: int = 8,
-                 host_interval: float = 1.0, max_bytes: int = 10 * 1024 * 1024,
-                 respect_robots: bool = True):
+    def __init__(self, cache: PageCache, client: httpx.AsyncClient,
+                 limits: DownloadLimits = DEFAULT_LIMITS):
         self.cache = cache
         self.client = client
-        self.slots = asyncio.Semaphore(concurrency)
-        self.host_interval = host_interval
-        self.max_bytes = max_bytes
+        self.slots = asyncio.Semaphore(limits.concurrency)
+        self.host_interval = limits.host_interval
+        self.max_bytes = limits.max_bytes
         self.locks: dict[str, asyncio.Lock] = {}
         self.next_allowed: dict[str, float] = {}
         self.outage = False
         self.connection_failures: set[str] = set()
         self.blocked_hosts: set[str] = set()
         self.service_failures: Counter[str] = Counter()
-        self.respect_robots = respect_robots
+        self.respect_robots = limits.respect_robots
         self.robot_locks: dict[str, asyncio.Lock] = {}
         self.robots: dict[str, RobotFileParser] = {}
 

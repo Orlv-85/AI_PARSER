@@ -18,7 +18,7 @@ from app.core.bulletin.world_change import (
     WorldChangeAssessor,
 )
 from app.core.provider_costs import microdollars
-from app.storage.provider_journal import PilotJournal
+from app.storage.provider_journal import JournalPolicy, PilotJournal
 
 
 @contextmanager
@@ -41,8 +41,8 @@ def open_assessor(settings, logger: Logger, target: date, max_usd: str, *,
     caps = {"total": str((cap + 1) / 1e6), "jev": str(cap / 1e6), "deepseek": "0.000001"}
     journal = PilotJournal(root / (file_name or f"journal-{version}-{cap}.sqlite3"),
                          {"version": version, "day": target.isoformat()}, caps,
-                         transport_review_reason=TRANSPORT_REVIEW_REASON,
-                         transport_retry_delays=TRANSPORT_RETRY_DELAYS)
+                         JournalPolicy(transport_review_reason=TRANSPORT_REVIEW_REASON,
+                                       transport_retry_delays=TRANSPORT_RETRY_DELAYS))
     try:
         with httpx.Client(timeout=ASSESS_TIMEOUT_SECONDS) as client:
             yield WorldChangeAssessor(client, settings.jev_model, logger,

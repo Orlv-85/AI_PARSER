@@ -32,11 +32,16 @@ from app.core.daily.rubric import QUESTIONS, RUBRIC_VERSION
 from app.core.daily.titles import digest_title
 from app.core.jev import JevInputTooLarge, _probability
 from app.storage.admission import read_collection_status
-from app.storage.article_evidence_cache import PageCache, SourcePageDownloader, make_http_client
+from app.storage.article_evidence_cache import (
+    DownloadLimits,
+    PageCache,
+    SourcePageDownloader,
+    make_http_client,
+)
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.journal_files import private_write
 from app.storage.models_sql import Article
-from app.storage.provider_journal import PilotJournal, PilotStopped
+from app.storage.provider_journal import JournalPolicy, PilotJournal, PilotStopped
 
 DAILY_VERSION = "daily-publication-1"
 SUMMARY_PROMPT_VERSION = "daily-summary-details-1"
@@ -98,7 +103,7 @@ def _source_content_matches(proof, article):
 
 async def acquire(cache, articles):
     async with make_http_client(4) as client:
-        downloader = SourcePageDownloader(cache, client, concurrency=4)
+        downloader = SourcePageDownloader(cache, client, DownloadLimits(concurrency=4))
         await asyncio.gather(*(downloader.fetch_one(a.url) for a in articles))
 
 
@@ -560,8 +565,8 @@ def publish_day(session, settings, target: date, root: Path):
     cache = PageCache(root / "source-cache")
     journal = PilotJournal(run / "journal.sqlite3",
                            {"version": DAILY_VERSION, "day": target.isoformat()}, CAPS,
-                           transport_review_reason=TRANSPORT_REVIEW_REASON,
-                           transport_retry_delays=TRANSPORT_RETRY_DELAYS)
+                           JournalPolicy(transport_review_reason=TRANSPORT_REVIEW_REASON,
+                                         transport_retry_delays=TRANSPORT_RETRY_DELAYS))
     progress = _Progress(run)
     counts, held = progress.counts, progress.held
     try:

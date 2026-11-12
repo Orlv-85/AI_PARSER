@@ -27,7 +27,7 @@ from app.storage.models_sql import (
     Source,
 )
 from app.storage.models_sql import Article as StoredArticle
-from app.storage.provider_journal import PilotJournal
+from app.storage.provider_journal import JournalPolicy, PilotJournal
 from app.usecases.ingestion.pipeline import run_fetch_cycle
 from app.usecases.ingestion.pipeline.models import PENDING_REPLAY_LIMIT, PENDING_REPLAY_MAX_AGE_DAYS
 
@@ -218,7 +218,7 @@ class AdmissionRig:
                  "transport_retry_delays": ADMISSION_TRANSPORT_RETRY_DELAYS
                  } if self.reviewed else {}
         journal = PilotJournal(self.path, {"version": "test"},
-                               {"total": "2", "jev": "1", "deepseek": "1"}, **extra)
+                               {"total": "2", "jev": "1", "deepseek": "1"}, JournalPolicy(**extra))
         with httpx.Client(transport=httpx.MockTransport(respond),
                           headers={"Authorization": "Bearer test-key"}) as client:
             scorer = JevRelevanceScorer(client, "jev-1.13.0", getLogger("semantic-test"),

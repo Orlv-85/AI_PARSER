@@ -14,8 +14,13 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from app.core.categories import READABLE_CATEGORIES
-from app.storage.article_repo import ViewFilter
-from app.usecases.news_reads import ArticleRow, agent_article, agent_rows, news_rows
+from app.usecases.news_reads import (
+    ArticleRow,
+    ViewFilter,
+    agent_article,
+    agent_rows,
+    news_rows,
+)
 from app.web.models import DigestLinkFeedItem, NewsArticleDetail, NewsItem
 from app.web.routes import WebDeps
 from app.web.routes.common import _http_errors

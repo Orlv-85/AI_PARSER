@@ -28,6 +28,7 @@ from app.storage.archive import (
 )
 from app.storage.article_evidence_cache import (
     EXTRACTION_VERSION,
+    DownloadLimits,
     PageCache,
     SourcePageDownloader,
     make_http_client,
@@ -307,9 +308,8 @@ def _run_downloads(dispatch: list[ArchiveDocument], *, cache: PageCache, deadlin
 
     async def run() -> tuple[bool, list[str]]:
         async with fetch.client_factory() as client:
-            downloader = SourcePageDownloader(cache, client,
-                                              concurrency=ARCHIVE_DOWNLOAD_CONCURRENCY,
-                                              host_interval=fetch.host_interval)
+            downloader = SourcePageDownloader(cache, client, DownloadLimits(
+                concurrency=ARCHIVE_DOWNLOAD_CONCURRENCY, host_interval=fetch.host_interval))
             urls = list(dict.fromkeys(document.url for document in dispatch))
             return_started = await _dispatch(downloader, urls, deadline, fetch.clock)
             return downloader.outage, return_started

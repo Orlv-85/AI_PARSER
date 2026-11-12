@@ -16,7 +16,7 @@ from app.core.jev import (
     ADMISSION_TRANSPORT_REVIEW_REASON,
     JevRelevanceScorer,
 )
-from app.storage.provider_journal import PilotJournal
+from app.storage.provider_journal import JournalPolicy, PilotJournal
 
 
 @contextmanager
@@ -42,8 +42,9 @@ def jev_relevance_scorer(
             root.mkdir(parents=True, exist_ok=True, mode=0o700)
             journal = PilotJournal(root / "journal.sqlite3", {"version": "daily-admission-1"},
                                    {"total": "2", "jev": "1", "deepseek": "1"},
-                                   transport_review_reason=ADMISSION_TRANSPORT_REVIEW_REASON,
-                                   transport_retry_delays=ADMISSION_TRANSPORT_RETRY_DELAYS)
+                                   JournalPolicy(
+                                       transport_review_reason=ADMISSION_TRANSPORT_REVIEW_REASON,
+                                       transport_retry_delays=ADMISSION_TRANSPORT_RETRY_DELAYS))
         try:
             yield JevRelevanceScorer(
                 client, settings.jev_model, logger, settings.jev_category_min_confidence,

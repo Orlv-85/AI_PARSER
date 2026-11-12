@@ -9,7 +9,12 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from app.storage.archive import WORLD_SOURCE_KEY, ArchiveRepo, DocumentMeta
-from app.storage.article_evidence_cache import EXTRACTION_VERSION, PageCache, url_key
+from app.storage.article_evidence_cache import (
+    EXTRACTION_VERSION,
+    DownloadLimits,
+    PageCache,
+    url_key,
+)
 from app.storage.models_sql import ArchiveDocument, ArchiveText, Article, Base
 from app.usecases.archive import capture as capture_module
 from app.usecases.archive.capture import (
@@ -59,6 +64,9 @@ def _transport(routes, calls):
     return handle
 
 
+NO_PAUSE = DownloadLimits(host_interval=0, respect_robots=False)
+
+
 def _capture(session, tmp_path, routes=None, calls=None, **kwargs):
     calls = [] if calls is None else calls
     transport = httpx.MockTransport(_transport(routes or {}, calls))
@@ -90,8 +98,7 @@ def test_capture_reuses_daily_publish_page(tmp_path) -> None:
 
     async def seed():
         async with httpx.AsyncClient(transport=httpx.MockTransport(_transport({}, []))) as client:
-            await capture_module.SourcePageDownloader(daily, client, host_interval=0,
-                                                      respect_robots=False).fetch_one(url)
+            await capture_module.SourcePageDownloader(daily, client, NO_PAUSE).fetch_one(url)
     asyncio.run(seed())
     before = {p.relative_to(tmp_path): p.stat().st_mtime_ns
               for p in (tmp_path / "daily").rglob("*")}
@@ -205,8 +212,7 @@ def test_capture_resumes_attempt_of_killed_run(tmp_path) -> None:
     async def download():
         transport = httpx.MockTransport(_transport({}, []))
         async with httpx.AsyncClient(transport=transport) as client:
-            await capture_module.SourcePageDownloader(cache, client, host_interval=0,
-                                                      respect_robots=False).fetch_one(url)
+            await capture_module.SourcePageDownloader(cache, client, NO_PAUSE).fetch_one(url)
     asyncio.run(download())
     calls: list[str] = []
     _capture(session, tmp_path, calls=calls)

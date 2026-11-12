@@ -16,7 +16,12 @@ import httpx
 from app.core.bulletin.writer import WRITER_VERSION
 from app.core.daily.signals_brief import request_key
 from app.core.provider_costs import PRICES, microdollars
-from app.storage.provider_journal import PilotJournal, PilotStopped, TransportAttemptsExhausted
+from app.storage.provider_journal import (
+    JournalPolicy,
+    PilotJournal,
+    PilotStopped,
+    TransportAttemptsExhausted,
+)
 
 WRITER_MAX_USD_PER_DAY = "0.10"  # FR-012
 WRITER_JOURNAL_VERSION = "bulletin-writer-1"
@@ -100,9 +105,9 @@ def open_writer(settings: Any, today: date, *, max_usd: float | None = None,
     journal = PilotJournal(
         folder / f"journal-{WRITER_JOURNAL_VERSION}.sqlite3",
         {"version": WRITER_JOURNAL_VERSION, "day": today.isoformat()}, caps,
-        key_function=_key, reservation_function=_reservation,
-        transport_review_reason=TRANSPORT_REVIEW_REASON,
-        transport_retry_delays=TRANSPORT_RETRY_DELAYS)
+        JournalPolicy(key_function=_key, reservation_function=_reservation,
+                      transport_review_reason=TRANSPORT_REVIEW_REASON,
+                      transport_retry_delays=TRANSPORT_RETRY_DELAYS))
     try:
         with httpx.Client(timeout=WRITER_TIMEOUT_SECONDS, transport=transport) as client:
             yield Writer(journal, client, secret, limit)
