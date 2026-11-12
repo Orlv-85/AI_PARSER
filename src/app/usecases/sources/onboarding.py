@@ -6,6 +6,7 @@ Behavior, decisions, invariants and code map: onboarding.md next to this file.
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 import yaml
@@ -118,6 +119,16 @@ def candidate_overlaps(
         )
 
 
+class ReviewAction(StrEnum):
+    """What an operator does with a source candidate."""
+
+    APPROVE = "approve"
+    DISABLE = "disable"
+    REJECT = "reject"
+    MARK_DUPLICATE = "mark_duplicate"
+    EDIT = "edit"
+
+
 @dataclass(frozen=True)
 class ReviewRequest:
     """An operator's review of one candidate: the action and what it needs."""
@@ -146,28 +157,28 @@ def review_source_candidate(
 
     normalized_action = action.strip().lower()
     handlers = {
-        "approve": lambda: _approve_candidate(
+        ReviewAction.APPROVE: lambda: _approve_candidate(
             candidate=candidate,
             managed_source_repo=managed_source_repo,
             review_note=review_note,
         ),
-        "disable": lambda: _disable_candidate(
+        ReviewAction.DISABLE: lambda: _disable_candidate(
             candidate=candidate,
             managed_source_repo=managed_source_repo,
             review_note=review_note,
         ),
-        "reject": lambda: _reject_candidate(
+        ReviewAction.REJECT: lambda: _reject_candidate(
             candidate=candidate,
             managed_source_repo=managed_source_repo,
             review_note=review_note,
         ),
-        "mark_duplicate": lambda: _mark_duplicate_candidate(
+        ReviewAction.MARK_DUPLICATE: lambda: _mark_duplicate_candidate(
             candidate=candidate,
             candidate_repo=candidate_repo,
             duplicate_of_candidate_id=duplicate_of_candidate_id,
             review_note=review_note,
         ),
-        "edit": lambda: _edit_candidate(
+        ReviewAction.EDIT: lambda: _edit_candidate(
             candidate=candidate,
             candidate_id=candidate_id,
             candidate_repo=candidate_repo,
@@ -175,9 +186,9 @@ def review_source_candidate(
             review_note=review_note,
         ),
     }
-    handler = handlers.get(normalized_action)
-    if handler is None:
+    if normalized_action not in ReviewAction:
         raise ValueError(f"unsupported review action: {action}")
+    handler = handlers[ReviewAction(normalized_action)]
     handler()
 
     save_review_update = getattr(candidate_repo, "save_review_update", None)

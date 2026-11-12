@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
 from app.storage.source_repo import SourceRepo
-from app.usecases.sources.onboarding import ReviewRequest, review_source_candidate
+from app.usecases.sources.onboarding import ReviewAction, ReviewRequest, review_source_candidate
 
 
 class SourceOnboardingCandidateView(BaseModel):
@@ -136,7 +136,7 @@ class SourceOnboardingService:
             candidate_id=candidate_id,
             candidate_repo=self._candidate_repo,
             managed_source_repo=self._source_repo,
-            request=ReviewRequest(action="approve"),
+            request=ReviewRequest(action=ReviewAction.APPROVE),
         )
         return SourceOnboardingApproveResponse(
             candidate_id=updated.id,
@@ -157,7 +157,7 @@ class SourceOnboardingService:
             candidate_id=candidate_id,
             candidate_repo=self._candidate_repo,
             managed_source_repo=self._source_repo,
-            request=ReviewRequest(action="reject", review_note=reason),
+            request=ReviewRequest(action=ReviewAction.REJECT, review_note=reason),
         )
         return SourceOnboardingRejectResponse(
             candidate_id=updated.id,
@@ -170,7 +170,7 @@ class SourceOnboardingService:
             candidate_id=candidate_id,
             candidate_repo=self._candidate_repo,
             managed_source_repo=self._source_repo,
-            request=ReviewRequest(action="disable"),
+            request=ReviewRequest(action=ReviewAction.DISABLE),
         )
         approved_source_id = getattr(updated, "approved_source_id", None)
         if approved_source_id is None:
@@ -193,7 +193,7 @@ class SourceOnboardingService:
             candidate_repo=self._candidate_repo,
             managed_source_repo=self._source_repo,
             request=ReviewRequest(
-                action="mark_duplicate",
+                action=ReviewAction.MARK_DUPLICATE,
                 duplicate_of_candidate_id=duplicate_of_candidate_id,
                 review_note=reason,
             ),
@@ -219,7 +219,7 @@ class SourceOnboardingService:
             candidate_repo=self._candidate_repo,
             managed_source_repo=self._source_repo,
             request=ReviewRequest(
-                action="edit",
+                action=ReviewAction.EDIT,
                 review_note=review_note,
                 updates={
                     key: value
