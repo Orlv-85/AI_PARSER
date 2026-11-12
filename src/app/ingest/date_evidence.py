@@ -87,52 +87,76 @@ def resolve_dates(candidates: list[dict[str, Any]], kind: str) -> dict[str, Any]
     return {"status": "confirmed", "selected": selected}
 
 
-def extract_date_evidence(  # pylint: disable=too-many-branches
-    page_html: str, url: str,
-) -> dict[str, Any]:
-    """Read metadata before scripts are stripped; keep unknowns and conflicts explicit."""
-    result: dict[str, Any] = {"version": DATE_EVIDENCE_VERSION, "candidates": [],
-                              "literal_labels": [], "invalid_jsonld": 0}
-    if not page_html.strip():
-        return {**result, "published": resolve_dates([], "published"),
-                "modified": resolve_dates([], "modified")}
-    tree = lxml_html.fromstring(page_html)
-    candidates = result["candidates"]
+def _in_chrome(node) -> bool:
+    return any(parent.tag in {"nav", "footer"} for parent in node.iterancestors())
+
+
+def _jsonld_candidates(tree, url: str) -> tuple[list[dict[str, Any]], int]:
+    """(article date candidates, count of unparsable JSON-LD scripts)."""
+    candidates: list[dict[str, Any]] = []
+    invalid = 0
     for index, script in enumerate(tree.xpath('//script[@type="application/ld+json"]')):
         try:
             data = json.loads(script.text or "")
         except (ValueError, TypeError):
-            result["invalid_jsonld"] += 1
+            invalid += 1
             continue
         for item in _objects(data):
-            if not _is_article(item) or not _page_matches(item, url):
-                continue
-            for field, kind in _FIELDS.items():
-                if isinstance(item.get(field), str):
-                    candidates.append(date_candidate(
-                        item[field], kind=kind, source="jsonld",
-                        locator=f"script[{index}].{field}"))
+            if _is_article(item) and _page_matches(item, url):
+                candidates.extend(
+                    date_candidate(item[field], kind=kind, source="jsonld",
+                                   locator=f"script[{index}].{field}")
+                    for field, kind in _FIELDS.items() if isinstance(item.get(field), str))
+    return candidates, invalid
+
+
+def _meta_candidates(tree) -> list[dict[str, Any]]:
+    candidates = []
     for index, node in enumerate(tree.xpath('//meta[@property or @name]')):
         name = (node.get("property") or node.get("name") or "").lower()
         if name in _META and node.get("content"):
             candidates.append(date_candidate(node.get("content"), kind=_META[name],
                                              source="meta", locator=f"meta[{index}].{name}"))
+    return candidates
+
+
+def _microdata_candidates(tree) -> list[dict[str, Any]]:
+    candidates = []
     for index, node in enumerate(tree.xpath('//*[@itemprop]')):
-        if any(parent.tag in {"nav", "footer"} for parent in node.iterancestors()):
+        if _in_chrome(node):
             continue
         for field in (node.get("itemprop") or "").split():
             if field in _FIELDS:
                 literal = node.get("content") or node.get("datetime") or node.text_content().strip()
                 candidates.append(date_candidate(literal, kind=_FIELDS[field], source="microdata",
                                                  locator=f"itemprop[{index}].{field}"))
-    # Visible labels are evidence for later literal parsing, never a guessed publication.
+    return candidates
+
+
+def _time_labels(tree) -> list[dict[str, Any]]:
+    """Visible labels are evidence for later literal parsing, never a guessed publication."""
+    labels = []
     for node in tree.xpath('//article//time | //main//time | //header//time'):
-        if any(parent.tag in {"nav", "footer"} for parent in node.iterancestors()):
+        if _in_chrome(node):
             continue
         parent = node.getparent()
         label = " ".join(parent.text_content().split())[:500] if parent is not None else ""
-        result["literal_labels"].append({"datetime": node.get("datetime"),
-                                         "text": node.text_content().strip(), "context": label})
-    result["published"] = resolve_dates(candidates, "published")
-    result["modified"] = resolve_dates(candidates, "modified")
-    return result
+        labels.append({"datetime": node.get("datetime"),
+                       "text": node.text_content().strip(), "context": label})
+    return labels
+
+
+def extract_date_evidence(page_html: str, url: str) -> dict[str, Any]:
+    """Read metadata before scripts are stripped; keep unknowns and conflicts explicit."""
+    candidates: list[dict[str, Any]] = []
+    labels: list[dict[str, Any]] = []
+    invalid = 0
+    if page_html.strip():
+        tree = lxml_html.fromstring(page_html)
+        candidates, invalid = _jsonld_candidates(tree, url)
+        candidates += _meta_candidates(tree) + _microdata_candidates(tree)
+        labels = _time_labels(tree)
+    return {"version": DATE_EVIDENCE_VERSION, "candidates": candidates,
+            "literal_labels": labels, "invalid_jsonld": invalid,
+            "published": resolve_dates(candidates, "published"),
+            "modified": resolve_dates(candidates, "modified")}

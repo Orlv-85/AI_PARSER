@@ -173,83 +173,106 @@ def parse_source_candidates(raw_text: str) -> tuple[list[NormalizedSourceCandida
 
     return normalized_candidates, len(extracted_urls), rejected_count
 
-def group_candidate_overlaps(  # pylint: disable=too-many-branches
+def group_candidate_overlaps(
     candidates: Sequence[object],
 ) -> list[CandidateOverlapGroup]:
+    groups: list[CandidateOverlapGroup] = []
+    for host_candidates in _candidates_by_host(candidates).values():
+        groups.extend(_host_overlap_groups(host_candidates))
+    return groups
+
+def _candidates_by_host(candidates: Sequence[object]) -> dict[str, list[object]]:
     grouped_by_host: dict[str, list[object]] = {}
     for candidate in candidates:
         normalized_url = read_str(candidate, "normalized_url")
         hostname = (urlsplit(normalized_url).hostname or "").lower()
-        if not hostname:
-            continue
-        grouped_by_host.setdefault(hostname, []).append(candidate)
+        if hostname:
+            grouped_by_host.setdefault(hostname, []).append(candidate)
+    return grouped_by_host
 
+def _host_overlap_groups(host_candidates: list[object]) -> list[CandidateOverlapGroup]:
+    """One group per connected set of overlapping candidates of one host."""
+    if len(host_candidates) < 2:
+        return []
+    overlaps_by_id, reasons_by_pair = _overlap_graph(host_candidates)
+    if len(overlaps_by_id) < 2:
+        return []
+    candidate_by_id = {
+        int(read_str(candidate, "id")): candidate for candidate in host_candidates
+    }
     groups: list[CandidateOverlapGroup] = []
-    for host_candidates in grouped_by_host.values():
-        if len(host_candidates) < 2:
+    visited: set[int] = set()
+    for candidate_id in sorted(overlaps_by_id):
+        if candidate_id in visited:
             continue
-        overlaps_by_id: dict[int, set[int]] = {}
-        reasons_by_pair: dict[frozenset[int], str] = {}
-        for index, left in enumerate(host_candidates):
-            left_id = int(read_str(left, "id"))
-            for right in host_candidates[index + 1 :]:
-                reason = _overlap_reason(left, right)
-                if reason is None:
-                    continue
-                right_id = int(read_str(right, "id"))
-                overlaps_by_id.setdefault(left_id, set()).add(right_id)
-                overlaps_by_id.setdefault(right_id, set()).add(left_id)
-                pair_key = frozenset({left_id, right_id})
-                reasons_by_pair[pair_key] = _prefer_reason(reasons_by_pair.get(pair_key), reason)
-        if len(overlaps_by_id) < 2:
+        component_ids, strongest_reason = _overlap_component(
+            candidate_id, overlaps_by_id, reasons_by_pair, visited
+        )
+        # Defensive guard: graph construction should make this unreachable.
+        if len(component_ids) < 2:  # pragma: no cover
             continue
-
-        candidate_by_id = {
-            int(read_str(candidate, "id")): candidate for candidate in host_candidates
-        }
-        visited: set[int] = set()
-        for candidate_id in sorted(overlaps_by_id):
-            if candidate_id in visited:
-                continue
-            component_ids: set[int] = set()
-            pending = [candidate_id]
-            strongest_reason: str | None = None
-            while pending:
-                current_id = pending.pop()
-                if current_id in visited:
-                    continue
-                visited.add(current_id)
-                component_ids.add(current_id)
-                for neighbor_id in overlaps_by_id.get(current_id, ()):
-                    pair_key = frozenset({current_id, neighbor_id})
-                    strongest_reason = _prefer_reason(
-                        strongest_reason,
-                        reasons_by_pair.get(pair_key, "same_host_family"),
-                    )
-                    if neighbor_id not in visited:
-                        pending.append(neighbor_id)
-            # Defensive guard: graph construction should make this unreachable.
-            if len(component_ids) < 2:  # pragma: no cover
-                continue
-
-            members = [candidate_by_id[member_id] for member_id in sorted(component_ids)]
-            preferred_candidate_id = int(read_str(_pick_preferred_candidate(members), "id"))
-            groups.append(
-                CandidateOverlapGroup(
-                    candidate_ids=sorted(component_ids),
-                    reason=strongest_reason or "same_host_family",
-                    preferred_candidate_id=preferred_candidate_id,
-                    candidate_urls=[
-                        read_str(candidate_by_id[member_id], "normalized_url")
-                        for member_id in sorted(component_ids)
-                    ],
-                    preferred_url=read_str(
-                        candidate_by_id[preferred_candidate_id],
-                        "normalized_url",
-                    ),
-                )
-            )
+        groups.append(_overlap_group(sorted(component_ids), strongest_reason, candidate_by_id))
     return groups
+
+def _overlap_graph(
+    host_candidates: list[object],
+) -> tuple[dict[int, set[int]], dict[frozenset[int], str]]:
+    """(candidate id -> overlapping ids, id pair -> overlap reason)."""
+    overlaps_by_id: dict[int, set[int]] = {}
+    reasons_by_pair: dict[frozenset[int], str] = {}
+    for index, left in enumerate(host_candidates):
+        left_id = int(read_str(left, "id"))
+        for right in host_candidates[index + 1 :]:
+            reason = _overlap_reason(left, right)
+            if reason is None:
+                continue
+            right_id = int(read_str(right, "id"))
+            overlaps_by_id.setdefault(left_id, set()).add(right_id)
+            overlaps_by_id.setdefault(right_id, set()).add(left_id)
+            pair_key = frozenset({left_id, right_id})
+            reasons_by_pair[pair_key] = _prefer_reason(reasons_by_pair.get(pair_key), reason)
+    return overlaps_by_id, reasons_by_pair
+
+def _overlap_component(
+    start_id: int,
+    overlaps_by_id: dict[int, set[int]],
+    reasons_by_pair: dict[frozenset[int], str],
+    visited: set[int],
+) -> tuple[set[int], str | None]:
+    """(ids connected to `start_id`, strongest reason on their edges); marks them visited."""
+    component_ids: set[int] = set()
+    pending = [start_id]
+    strongest_reason: str | None = None
+    while pending:
+        current_id = pending.pop()
+        if current_id in visited:
+            continue
+        visited.add(current_id)
+        component_ids.add(current_id)
+        for neighbor_id in overlaps_by_id.get(current_id, ()):
+            pair_key = frozenset({current_id, neighbor_id})
+            strongest_reason = _prefer_reason(
+                strongest_reason,
+                reasons_by_pair.get(pair_key, "same_host_family"),
+            )
+            if neighbor_id not in visited:
+                pending.append(neighbor_id)
+    return component_ids, strongest_reason
+
+def _overlap_group(
+    component_ids: list[int],
+    strongest_reason: str | None,
+    candidate_by_id: dict[int, object],
+) -> CandidateOverlapGroup:
+    members = [candidate_by_id[member_id] for member_id in component_ids]
+    preferred_candidate_id = int(read_str(_pick_preferred_candidate(members), "id"))
+    return CandidateOverlapGroup(
+        candidate_ids=component_ids,
+        reason=strongest_reason or "same_host_family",
+        preferred_candidate_id=preferred_candidate_id,
+        candidate_urls=[read_str(member, "normalized_url") for member in members],
+        preferred_url=read_str(candidate_by_id[preferred_candidate_id], "normalized_url"),
+    )
 
 def _normalize_candidate_type(candidate_type: str) -> str:
     normalized_candidate_type = candidate_type.strip().lower()
