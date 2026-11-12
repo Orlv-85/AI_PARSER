@@ -8,7 +8,7 @@ from app.storage.models_sql import Base, Source
 from app.storage.source_candidate_repo import SourceCandidateRepo, SourceImportBatchRepo
 from app.storage.source_repo import SourceRepo
 from app.usecases.sources.candidate_review import SourceOnboardingService
-from app.usecases.sources.onboarding import review_source_candidate
+from app.usecases.sources.onboarding import ReviewRequest, review_source_candidate
 
 
 def _build_session():
@@ -52,9 +52,9 @@ def test_review_source_candidate_approve_promotes_validated_draft() -> None:
 
         updated = review_source_candidate(
             candidate_id=candidate.id,
-            action="approve",
             candidate_repo=candidate_repo,
             managed_source_repo=source_repo,
+            request=ReviewRequest(action="approve"),
         )
 
         assert updated.status == "approved"
@@ -83,9 +83,9 @@ def test_review_source_candidate_rejects_approval_when_validation_failed() -> No
         try:
             review_source_candidate(
                 candidate_id=candidate.id,
-                action="approve",
                 candidate_repo=SourceCandidateRepo(session),
                 managed_source_repo=SourceRepo(session),
+                request=ReviewRequest(action="approve"),
             )
         except ValueError as exc:
             assert "validated" in str(exc).lower()
@@ -115,10 +115,9 @@ def test_review_source_candidate_mark_duplicate_sets_duplicate_relationship() ->
 
         updated = review_source_candidate(
             candidate_id=duplicate.id,
-            action="mark_duplicate",
-            duplicate_of_candidate_id=primary.id,
             candidate_repo=candidate_repo,
             managed_source_repo=SourceRepo(session),
+            request=ReviewRequest(action="mark_duplicate", duplicate_of_candidate_id=primary.id),
         )
 
         assert updated.status == "duplicate"
@@ -144,9 +143,9 @@ def test_review_source_candidate_mark_duplicate_keeps_draft_source_unowned() -> 
         )
         approved_primary = review_source_candidate(
             candidate_id=primary.id,
-            action="approve",
             candidate_repo=candidate_repo,
             managed_source_repo=source_repo,
+            request=ReviewRequest(action="approve"),
         )
         duplicate = _create_candidate(
             session,
@@ -157,10 +156,9 @@ def test_review_source_candidate_mark_duplicate_keeps_draft_source_unowned() -> 
 
         updated = review_source_candidate(
             candidate_id=duplicate.id,
-            action="mark_duplicate",
-            duplicate_of_candidate_id=primary.id,
             candidate_repo=candidate_repo,
             managed_source_repo=source_repo,
+            request=ReviewRequest(action="mark_duplicate", duplicate_of_candidate_id=primary.id),
         )
 
         assert approved_primary.approved_source_id is not None
@@ -190,15 +188,15 @@ def test_review_source_candidate_mark_duplicate_preserves_approved_source_id() -
         )
         approved_primary = review_source_candidate(
             candidate_id=primary.id,
-            action="approve",
             candidate_repo=candidate_repo,
             managed_source_repo=source_repo,
+            request=ReviewRequest(action="approve"),
         )
         approved_duplicate = review_source_candidate(
             candidate_id=duplicate.id,
-            action="approve",
             candidate_repo=candidate_repo,
             managed_source_repo=source_repo,
+            request=ReviewRequest(action="approve"),
         )
         primary_source_id = approved_primary.approved_source_id
         duplicate_source_id = approved_duplicate.approved_source_id
@@ -208,10 +206,9 @@ def test_review_source_candidate_mark_duplicate_preserves_approved_source_id() -
 
         updated = review_source_candidate(
             candidate_id=duplicate.id,
-            action="mark_duplicate",
-            duplicate_of_candidate_id=primary.id,
             candidate_repo=candidate_repo,
             managed_source_repo=source_repo,
+            request=ReviewRequest(action="mark_duplicate", duplicate_of_candidate_id=primary.id),
         )
 
         assert updated.status == "duplicate"
@@ -240,18 +237,17 @@ def test_review_source_candidate_disable_duplicate_keeps_target_enabled() -> Non
         )
         approved_primary = review_source_candidate(
             candidate_id=primary.id,
-            action="approve",
             candidate_repo=candidate_repo,
             managed_source_repo=source_repo,
+            request=ReviewRequest(action="approve"),
         )
         source_id = approved_primary.approved_source_id
         assert source_id is not None
         review_source_candidate(
             candidate_id=duplicate.id,
-            action="mark_duplicate",
-            duplicate_of_candidate_id=primary.id,
             candidate_repo=candidate_repo,
             managed_source_repo=source_repo,
+            request=ReviewRequest(action="mark_duplicate", duplicate_of_candidate_id=primary.id),
         )
 
         with pytest.raises(
@@ -260,9 +256,9 @@ def test_review_source_candidate_disable_duplicate_keeps_target_enabled() -> Non
         ):
             review_source_candidate(
                 candidate_id=duplicate.id,
-                action="disable",
                 candidate_repo=candidate_repo,
                 managed_source_repo=source_repo,
+                request=ReviewRequest(action="disable"),
             )
 
         stored_source = session.get(Source, source_id)
@@ -287,9 +283,9 @@ def test_review_source_candidate_reuses_existing_source_for_reapproval() -> None
 
         first = review_source_candidate(
             candidate_id=candidate.id,
-            action="approve",
             candidate_repo=candidate_repo,
             managed_source_repo=source_repo,
+            request=ReviewRequest(action="approve"),
         )
         source_id = first.approved_source_id
         assert source_id is not None
@@ -299,9 +295,9 @@ def test_review_source_candidate_reuses_existing_source_for_reapproval() -> None
 
         second = review_source_candidate(
             candidate_id=candidate.id,
-            action="approve",
             candidate_repo=candidate_repo,
             managed_source_repo=source_repo,
+            request=ReviewRequest(action="approve"),
         )
 
         assert second.approved_source_id == source_id
@@ -326,18 +322,18 @@ def test_review_source_candidate_disable_turns_off_previously_approved_managed_s
 
         approved = review_source_candidate(
             candidate_id=candidate.id,
-            action="approve",
             candidate_repo=candidate_repo,
             managed_source_repo=source_repo,
+            request=ReviewRequest(action="approve"),
         )
         approved_source_id = approved.approved_source_id
         assert approved_source_id is not None
 
         disabled = review_source_candidate(
             candidate_id=candidate.id,
-            action="disable",
             candidate_repo=candidate_repo,
             managed_source_repo=source_repo,
+            request=ReviewRequest(action="disable"),
         )
 
         assert disabled.status == "disabled"
@@ -368,33 +364,31 @@ def test_review_source_candidate_reject_disables_approved_managed_source() -> No
         )
         approved = review_source_candidate(
             candidate_id=primary.id,
-            action="approve",
             candidate_repo=candidate_repo,
             managed_source_repo=source_repo,
+            request=ReviewRequest(action="approve"),
         )
         source_id = approved.approved_source_id
         review_source_candidate(
             candidate_id=duplicate.id,
-            action="mark_duplicate",
-            duplicate_of_candidate_id=primary.id,
             candidate_repo=candidate_repo,
             managed_source_repo=source_repo,
+            request=ReviewRequest(action="mark_duplicate", duplicate_of_candidate_id=primary.id),
         )
 
         review_source_candidate(
             candidate_id=duplicate.id,
-            action="reject",
             candidate_repo=candidate_repo,
             managed_source_repo=source_repo,
+            request=ReviewRequest(action="reject"),
         )
         assert session.get(Source, source_id).enabled is True
 
         rejected = review_source_candidate(
             candidate_id=primary.id,
-            action="reject",
             candidate_repo=candidate_repo,
             managed_source_repo=source_repo,
-            review_note="off-topic",
+            request=ReviewRequest(action="reject", review_note="off-topic"),
         )
         assert rejected.status == "rejected"
         assert session.get(Source, source_id).enabled is False
@@ -421,10 +415,12 @@ def test_review_source_candidate_rejects_invalid_duplicate_targets() -> None:
             try:
                 review_source_candidate(
                     candidate_id=candidate.id,
-                    action="mark_duplicate",
-                    duplicate_of_candidate_id=duplicate_target,
                     candidate_repo=SourceCandidateRepo(session),
                     managed_source_repo=SourceRepo(session),
+                    request=ReviewRequest(
+                        action="mark_duplicate",
+                        duplicate_of_candidate_id=duplicate_target,
+                    ),
                 )
             except ValueError as exc:
                 assert expected_fragment in str(exc).lower()
@@ -460,10 +456,9 @@ def test_review_source_candidate_rejects_invalid_edit_payloads() -> None:
             try:
                 review_source_candidate(
                     candidate_id=candidate.id,
-                    action="edit",
                     candidate_repo=SourceCandidateRepo(session),
                     managed_source_repo=SourceRepo(session),
-                    updates=updates,
+                    request=ReviewRequest(action="edit", updates=updates),
                 )
             except ValueError as exc:
                 assert expected_fragment in str(exc).lower()

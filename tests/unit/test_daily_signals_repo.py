@@ -450,7 +450,8 @@ def test_recompute_bound_and_all_days(session, repo):
         repo.replace_membership(day)
         repo.save_extraction(article, extraction(model("Atlas")), content_hash="h")
     assert recompute_reports(repo, days[1], now=NOW).written == [days[1]]
-    assert recompute_reports(repo, days[1], RecomputeScope(all_days=True), now=NOW).written == [days[0]]
+    every_day = RecomputeScope(all_days=True)
+    assert recompute_reports(repo, days[1], every_day, now=NOW).written == [days[0]]
 
 
 def _settled_day_with_new_item(session, repo):

@@ -179,23 +179,15 @@ def run_source_validation_batch(
     session: Session,
     batch_id: int | None = None,
     candidate_ids: list[int] | None = None,
-    fetch_feed: Any | None = None,
-    fetch_html: Any | None = None,
-    extract_links: Any | None = None,
 ) -> list[ValidationResult]:
+    """Validate each candidate of a batch (or of `candidate_ids`) with the default fetchers."""
     if batch_id is None and not candidate_ids:
         raise ValueError("batch_id or candidate_ids is required")
 
     repo = SourceCandidateRepo(session)
     candidates = repo.list_candidates(batch_id=batch_id, candidate_ids=candidate_ids)
     return [
-        run_source_validation(
-            candidate_id=candidate.id,
-            session=session,
-            fetch_feed=fetch_feed,
-            fetch_html=fetch_html,
-            extract_links=extract_links,
-        )
+        run_source_validation(candidate_id=candidate.id, session=session)
         for candidate in candidates
     ]
 

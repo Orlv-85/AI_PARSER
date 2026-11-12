@@ -118,16 +118,25 @@ def candidate_overlaps(
         )
 
 
+@dataclass(frozen=True)
+class ReviewRequest:
+    """An operator's review of one candidate: the action and what it needs."""
+
+    action: str
+    duplicate_of_candidate_id: int | None = None
+    review_note: str | None = None
+    updates: dict[str, str] | None = None
+
+
 def review_source_candidate(
     *,
     candidate_id: int,
-    action: str,
+    request: ReviewRequest,
     candidate_repo: object,
     managed_source_repo: object,
-    duplicate_of_candidate_id: int | None = None,
-    review_note: str | None = None,
-    updates: dict[str, str] | None = None,
 ) -> Any:
+    action, review_note = request.action, request.review_note
+    duplicate_of_candidate_id, updates = request.duplicate_of_candidate_id, request.updates
     get_candidate = getattr(candidate_repo, "get_candidate", None)
     if not callable(get_candidate):
         raise ValueError("candidate_repo must provide get_candidate")
