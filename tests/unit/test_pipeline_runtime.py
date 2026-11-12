@@ -3,7 +3,7 @@
 from contextlib import nullcontext
 from datetime import UTC, date, datetime
 from types import SimpleNamespace
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar, Literal, cast
 from zlib import crc32
 
 import httpx
@@ -13,6 +13,7 @@ from app.config.settings import Settings
 from app.config.sources import SourceConfig
 from app.core.models import Article
 from app.ingest import rss as rss_module
+from app.ingest.fetcher import Validators
 from app.ingest.html import HtmlListPageResult
 from app.ingest.rss import RssFetchResult, _with_rss_metadata
 from app.usecases.ingestion.pipeline import run_fetch_cycle
@@ -141,6 +142,14 @@ def _settings(**overrides) -> Settings:
     }
     values.update(overrides)
     return Settings(**values)
+
+
+def _sent(kwargs: dict[str, Any]) -> Validators:
+    """Validators a fake fetch function received, directly or inside RssOptions."""
+    if "validators" in kwargs:
+        return cast(Validators, kwargs["validators"])
+    options = kwargs.get("options")
+    return options.validators if options is not None else Validators()
 
 
 def _run(
@@ -657,8 +666,8 @@ def test_run_fetch_cycle_uses_rss_validators_and_handles_not_modified(monkeypatc
 
     def fetch_rss(source_key: str, url: str, *_args, **kwargs):
         rss_calls.append({"source_key": source_key, "url": url,
-                          "if_none_match": kwargs.get("if_none_match"),
-                          "if_modified_since": kwargs.get("if_modified_since")})
+                          "if_none_match": _sent(kwargs).if_none_match,
+                          "if_modified_since": _sent(kwargs).if_modified_since})
         return _rss_result([], 304, etag='"etag-new"',
                            last_modified="Mon, 23 Feb 2026 11:00:00 GMT")
 
@@ -693,8 +702,8 @@ def test_run_fetch_cycle_default_rss_path_persists_304_metadata_from_wrapper(mon
 
     def fetch_rss_with_metadata(source_key: str, url: str, *_args, **kwargs):
         wrapper_calls.append({"source_key": source_key, "url": url,
-                              "if_none_match": kwargs.get("if_none_match"),
-                              "if_modified_since": kwargs.get("if_modified_since")})
+                              "if_none_match": _sent(kwargs).if_none_match,
+                              "if_modified_since": _sent(kwargs).if_modified_since})
         return RssFetchResult(items=[], not_modified=True, status_code=304, etag='"etag-304"',
                               last_modified="Mon, 23 Feb 2026 11:00:00 GMT")
 
@@ -729,8 +738,8 @@ def test_run_fetch_cycle_persists_rss_fetch_state_metadata_for_200(monkeypatch) 
 
     def fetch_rss(source_key: str, url: str, *_args, **kwargs):
         rss_calls.append({"source_key": source_key, "url": url,
-                          "if_none_match": kwargs.get("if_none_match"),
-                          "if_modified_since": kwargs.get("if_modified_since")})
+                          "if_none_match": _sent(kwargs).if_none_match,
+                          "if_modified_since": _sent(kwargs).if_modified_since})
         return _rss_result(
             [_item(source_key, "https://example.com/fresh-rss-item", "Fresh RSS Item",
                    published_at=datetime(2026, 2, 23, 12, tzinfo=UTC))],
@@ -766,7 +775,7 @@ def test_run_fetch_cycle_rss_conditional_disabled_sends_no_validators(monkeypatc
         fetch_state: ClassVar[dict[str, object | None]] = OLD_VALIDATORS
 
     def fetch_rss(*_args, **kwargs):
-        rss_calls.append((kwargs.get("if_none_match"), kwargs.get("if_modified_since")))
+        rss_calls.append((_sent(kwargs).if_none_match, _sent(kwargs).if_modified_since))
         return _rss_result([], 200, etag='"etag-new"',
                            last_modified="Mon, 23 Feb 2026 10:00:00 GMT")
 
@@ -794,8 +803,8 @@ def test_run_fetch_cycle_html_304_uses_validators_and_skips_processing(monkeypat
         }
 
     def fetch_html_links_with_metadata(_source, *_args, **kwargs):
-        html_calls.append({"if_none_match": kwargs.get("if_none_match"),
-                           "if_modified_since": kwargs.get("if_modified_since")})
+        html_calls.append({"if_none_match": _sent(kwargs).if_none_match,
+                           "if_modified_since": _sent(kwargs).if_modified_since})
         return HtmlListPageResult(links=[], not_modified=True, status_code=304,
                                   etag='"html-etag-new"',
                                   last_modified="Mon, 23 Feb 2026 12:00:00 GMT")

@@ -4,12 +4,14 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from threading import BoundedSemaphore
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
 from app.core.models import Article
+from app.ingest.fetcher import Validators
 from app.ingest.html import HtmlListPageResult
 from app.usecases.ingestion.pipeline.cycle import _full_text_semaphore
 from app.usecases.ingestion.pipeline.fetch import (
@@ -166,8 +168,9 @@ def test_fetch_source_items_html_conditional_default_path(monkeypatch) -> None:
     assert isinstance(conditional, HtmlListPageResult)
     assert conditional.links == ["https://example.com/news/3"]
     assert conditional.etag == '"etag-3"'
-    assert captured[0]["if_none_match"] == '"etag-old"'
-    assert captured[0]["if_modified_since"] == "Tue, 02 Jan 2024 00:00:00 GMT"
+    sent = cast(Validators, captured[0]["validators"])
+    assert sent.if_none_match == '"etag-old"'
+    assert sent.if_modified_since == "Tue, 02 Jan 2024 00:00:00 GMT"
 
 
 def test_fetch_source_items_html_two_stage_default_nonconditional_path(monkeypatch) -> None:
@@ -202,8 +205,9 @@ def test_fetch_source_items_html_two_stage_default_nonconditional_path(monkeypat
     _fetch(_settings(fetch_conditional_html_list_enabled=True))
 
     assert captured
-    assert captured[0]["if_none_match"] is None
-    assert captured[0]["if_modified_since"] is None
+    sent = cast(Validators, captured[0]["validators"])
+    assert sent.if_none_match is None
+    assert sent.if_modified_since is None
 
 
 class _SpyFetcher:
