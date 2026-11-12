@@ -301,7 +301,7 @@ flowchart LR
   cluster is its assessed member, else a `text_ready` one, else the oldest (lowest
   `first_seen_at`, then id). Tests: `test_rank_representative_prefers_assessed_then_text_ready_then_oldest`. The priority is stored
   in `priority` of the representative. Tests: `test_rank_orders_by_confidence_times_outlets`,
-  `test_rank_assessed_keep_their_place`.
+  `test_rank_assessed_keep_their_place`, `test_assessed_representative_priority_is_committed`.
 - Step B asks the four FR-001 questions of `world_change` (the same questions, validation and
   storage as `bulletin assess`: `WorldChangeAssessor`, `WorldChangeRepo`, `WORLD_CHANGE_VERSION`),
   keyed by `url_canonical_hash` and with no `article_id`, only for top candidates in state
@@ -343,7 +343,8 @@ flowchart LR
   not a failure of the candidate but a journal stop: nothing is marked `failed`, `attempts` stays,
   the run ends and the rest counts in `not_attempted`. Tests:
   `test_world_jev_failure_leaves_candidates_pending`,
-  `test_world_wedged_journal_marks_nothing_failed`.
+  `test_world_wedged_journal_marks_nothing_failed`,
+  `test_world_wedged_journal_during_step_b_marks_nothing_failed`.
 - A call that failed in transit may have been billed, so the journal refuses every further request
   (`unknown_or_failed_previous_call_requires_review`), also in later runs of the same real day.
   Operator step: read the `world_screen_usage` log line and the journal file of that day, decide

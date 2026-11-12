@@ -570,6 +570,31 @@ def test_world_run_limit_also_stops_step_b(session, tmp_path):
     assert (summary["assessed"], summary["not_attempted"]) == (0, 1)
 
 
+def test_world_wedged_journal_during_step_b_marks_nothing_failed(session, tmp_path):
+    seed(session, cand(1, title="Ready but wedged"))
+    force(session, "Ready but wedged", STATE_TEXT_READY, 0.9)
+    journal = journal_for(tmp_path, 100000)
+    assessor = make_assessor(lambda _r: httpx.Response(500, json={"detail": "down"}), journal)
+    try:
+        summary = run_screen(session, assessor, DAY, ScreenOptions(texts=lambda c: "body"))
+    finally:
+        journal.close()
+        assessor.client.close()
+    assert assessor.stopped is not None
+    item = row(session, "Ready but wedged")
+    assert (item.state, item.attempts, item.last_error) == (STATE_TEXT_READY, 0, None)
+    assert (summary["asked"], summary["not_attempted"], summary["failed"]) == (1, 1, 0)
+    assert session.scalars(select(WorldChangeAssessment)).first() is None
+
+
+def test_assessed_representative_priority_is_committed(session, engine):
+    seed(session, cand(1, title="Already assessed"))
+    force(session, "Already assessed", STATE_ASSESSED, 0.7, priority=0.1)
+    screen(session, jev_handler())
+    with Session(engine) as fresh:
+        assert row(fresh, "Already assessed").priority == pytest.approx(0.7)
+
+
 def test_late_outlet_follows_oldest_screened_member(session):
     story = "Courts rule on AI evidence"
     seed(session, cand(1, title=story, domain="a.org"), cand(2, title=story, domain="b.org"),

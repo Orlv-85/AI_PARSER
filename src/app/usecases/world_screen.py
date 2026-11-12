@@ -14,7 +14,11 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.core.bulletin.world_change import WORLD_CHANGE_VERSION, WorldChangeAssessor
+from app.core.bulletin.world_change import (
+    WORLD_CHANGE_VERSION,
+    WorldChange,
+    WorldChangeAssessor,
+)
 from app.core.world.screen import (
     MAX_ATTEMPTS,
     SCREEN_QUESTIONS,
@@ -217,34 +221,56 @@ def _screen(repo: WorldRepo, assessor: WorldChangeAssessor, pending: list[WorldC
         repo.session.commit()
 
 
+@dataclass(frozen=True)
+class _Fate:
+    """Step B outcome of one top representative: the summary counter it adds (None adds
+    nothing), the item sent to Jev if one was, and the answer if one came."""
+    counter: str | None
+    sent: WorldItem | None = None
+    answer: WorldChange | None = None
+
+
+def _fate(assessor: WorldChangeAssessor, rep: WorldCandidate, options: ScreenOptions) -> _Fate:
+    if rep.state == STATE_SCREENED_IN:
+        return _Fate("awaiting_text")
+    if rep.state != STATE_TEXT_READY:
+        return _Fate(None)
+    if _halted(assessor, options.limit_usd):
+        return _Fate("not_attempted")
+    text = options.texts(rep)
+    if not text:
+        return _Fate("skipped_no_text")
+    sent = WorldItem(rep.url_canonical_hash, rep.title, text)
+    answer = assessor.assess(sent)
+    if answer is not None:
+        return _Fate("assessed", sent, answer)
+    return _Fate("not_attempted" if assessor.stopped else "failed", sent)
+
+
+def _record(repo: WorldRepo, saver: WorldChangeRepo, rep: WorldCandidate, fate: _Fate,
+            model: str) -> None:
+    if fate.counter == "failed":
+        repo.transition(rep, STATE_FAILED, error=f"{STEP_ASSESS}: jev_failed")
+    elif fate.sent is not None and fate.answer is not None:
+        saver.save(fate.sent, fate.answer, version=WORLD_CHANGE_VERSION, model=model)
+        repo.transition(rep, STATE_ASSESSED)
+
+
+def _count(summary: dict[str, Any], fate: _Fate) -> None:
+    if fate.sent is not None:
+        summary["asked"] += 1
+    if fate.counter is not None:
+        summary[fate.counter] += 1
+
+
 def _assess(repo: WorldRepo, assessor: WorldChangeAssessor, top: list[RankedCluster],
             summary: dict[str, Any], options: ScreenOptions) -> None:
-    texts, limit_usd = options.texts, options.limit_usd
     saver = WorldChangeRepo(repo.session)
     for item in top:
-        rep = item.rep
-        repo.set_priority(rep, item.priority)
-        if rep.state == STATE_SCREENED_IN:
-            summary["awaiting_text"] += 1
-        elif rep.state != STATE_TEXT_READY:
-            continue
-        elif _halted(assessor, limit_usd):
-            summary["not_attempted"] += 1
-        elif not (text := texts(rep)):
-            summary["skipped_no_text"] += 1
-        else:
-            summary["asked"] += 1
-            thing = WorldItem(rep.url_canonical_hash, rep.title, text)
-            answer = assessor.assess(thing)
-            if answer is None and assessor.stopped:
-                summary["not_attempted"] += 1
-            elif answer is None:
-                repo.transition(rep, STATE_FAILED, error=f"{STEP_ASSESS}: jev_failed")
-                summary["failed"] += 1
-            else:
-                saver.save(thing, answer, version=WORLD_CHANGE_VERSION, model=assessor.model)
-                repo.transition(rep, STATE_ASSESSED)
-                summary["assessed"] += 1
+        repo.set_priority(item.rep, item.priority)
+        fate = _fate(assessor, item.rep, options)
+        _record(repo, saver, item.rep, fate, assessor.model)
+        _count(summary, fate)
         repo.session.commit()
 
 
