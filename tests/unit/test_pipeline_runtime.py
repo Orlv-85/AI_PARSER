@@ -188,7 +188,7 @@ def _run(
     mp.setattr("app.usecases.ingestion.pipeline.rows.ai_relevance_score", lambda _item: 0.5)
     mp.setattr("app.usecases.ingestion.pipeline.rows.freshness_score", lambda _dt: 0.5)
     mp.setattr("app.usecases.ingestion.pipeline.rows.rank_score", lambda **_kwargs: 0.5)
-    return run_fetch_cycle(settings=settings or _settings(), logger=logger or _Logger())
+    return run_fetch_cycle(settings=settings or _settings(), logger=cast(Any, logger or _Logger()))
 
 
 def _inline_fetches(monkeypatch) -> tuple[list[str], list[int]]:

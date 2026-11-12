@@ -1,5 +1,6 @@
 """Storage of Jev world_change answers and the digest scope they are asked for."""
 from datetime import date
+from typing import Protocol
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -13,6 +14,16 @@ from app.storage.models_sql import (
     NewsDigestReport,
     WorldChangeAssessment,
 )
+
+
+class AssessedItem(Protocol):
+    """What `WorldChangeRepo.save` reads: an `Article` or a world candidate with text."""
+
+    @property
+    def url_canonical_hash(self) -> str: ...
+
+    @property
+    def id(self) -> int | None: ...
 
 
 class WorldChangeRepo:
@@ -50,7 +61,7 @@ class WorldChangeRepo:
             WorldChangeAssessment.url_canonical_hash == url_hash,
             WorldChangeAssessment.question_version == version))
 
-    def save(self, article: Article, answer: WorldChange, *, version: str, model: str) -> bool:
+    def save(self, article: AssessedItem, answer: WorldChange, *, version: str, model: str) -> bool:
         """Store the answers; False (nothing changed) when the pair already has a row."""
         if self.get(article.url_canonical_hash, version) is not None:
             return False

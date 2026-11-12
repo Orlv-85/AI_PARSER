@@ -398,7 +398,7 @@ def test_fetch_html_links_with_metadata_uses_fetcher_request_branch() -> None:
 
     result = fetch_html_links_with_metadata(
         source,
-        fetcher=_FetcherWithRequest(),
+        fetcher=cast(Any, _FetcherWithRequest()),
         validators=Validators(
             if_none_match='"etag-old"',
             if_modified_since="Tue, 02 Jan 2024 00:00:00 GMT",

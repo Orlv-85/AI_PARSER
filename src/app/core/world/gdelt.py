@@ -11,7 +11,7 @@ import time
 import zipfile
 import zlib
 from collections import Counter
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Generator, Iterable, Iterator
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -259,7 +259,7 @@ def scan_day(
     stats: DayStats,
     kinds: tuple[str, ...] = KINDS,
     max_files: int | None = None,
-) -> Iterator[Candidate]:
+) -> Generator[Candidate]:
     """Read the files of a UTC day one at a time and yield the rows kept by the filter.
 
     `stats` is filled while the iterator is consumed. Nothing is stored.

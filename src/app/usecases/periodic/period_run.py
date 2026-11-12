@@ -154,8 +154,9 @@ def run_periods(session: Session, settings: Any, options: PeriodRunOptions, *,
     report["skipped_before_first"] = [w.isoformat() for w in early]
     repo = PeriodSignalRepo(session, comparable_from=settings.daily_signals_comparable_from,
                             publisher_overrides=settings.weekly_publisher_overrides)
-    ctx = _context(repo) if weeks else None
+    ctx: PeriodContext | None = None
     for start in weeks:
+        ctx = ctx or _context(repo)
         # Oldest first: the next period reads this one as its previous period.
         period_input = repo.load_input(options.kind, start, ctx=ctx, generated_at=moment)
         payload = compute_period(replace(period_input,

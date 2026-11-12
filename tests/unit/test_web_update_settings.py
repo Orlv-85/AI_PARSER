@@ -1,6 +1,6 @@
 from pathlib import Path
 from types import SimpleNamespace
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
@@ -36,11 +36,11 @@ def test_update_settings_store_round_trips_extended_optimization_fields(tmp_path
 
 def test_update_run_service_propagates_extended_runtime_settings(monkeypatch) -> None:
     service = UpdateRunService(
-        logger=SimpleNamespace(
+        logger=cast(Any, SimpleNamespace(
             info=lambda *_a, **_k: None,
             warning=lambda *_a, **_k: None,
             error=lambda *_a, **_k: None,
-        )
+        ))
     )
     captured: dict[str, SimpleNamespace] = {}
 

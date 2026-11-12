@@ -2,6 +2,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from logging import getLogger
 from types import SimpleNamespace
+from typing import Any
 
 import httpx
 import pytest
@@ -168,7 +169,7 @@ def _sqlite_run(monkeypatch, tmp_path, configs, *, collect=None, fetch_article=N
 
 
 def _settings(**overrides) -> Settings:
-    values = {
+    values: dict[str, Any] = {
         "_env_file": None, "respect_robots_txt": False, "rss_known_streak_stop": 0,
         "rss_extract_full_text": False, "article_batch_upsert_enabled": False,
     }

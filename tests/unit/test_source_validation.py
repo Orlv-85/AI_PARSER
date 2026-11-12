@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from typing import Any, cast
 
 from app.core.sources import candidates as source_candidates
 from app.usecases.sources import onboarding as source_onboarding
@@ -122,7 +123,7 @@ def test_run_source_validation_rejects_missing_candidate(monkeypatch) -> None:
     monkeypatch.setattr(source_validation, "SourceCandidateRepo", _Repo)
 
     try:
-        source_validation.run_source_validation(candidate_id=77, session=object())
+        source_validation.run_source_validation(candidate_id=77, session=cast(Any, object()))
     except ValueError as exc:
         assert "source candidate not found: 77" in str(exc)
     else:  # pragma: no cover - exercised when the guard is implemented incorrectly
@@ -156,7 +157,7 @@ def test_run_source_validation_infers_unknown_candidate_type_and_records_result(
 
     result = source_validation.run_source_validation(
         candidate_id=9,
-        session=object(),
+        session=cast(Any, object()),
         fetch_feed=lambda _url: {"entries": [{"title": "Post"}]},
     )
 
@@ -191,7 +192,7 @@ def test_run_source_validation_returns_failed_result_for_unsupported_candidate_t
 
     monkeypatch.setattr(source_validation, "SourceCandidateRepo", _Repo)
 
-    result = source_validation.run_source_validation(candidate_id=12, session=object())
+    result = source_validation.run_source_validation(candidate_id=12, session=cast(Any, object()))
 
     assert result.status == "failed"
     assert result.detected_type == "unknown"
@@ -202,7 +203,7 @@ def test_run_source_validation_returns_failed_result_for_unsupported_candidate_t
 
 def test_run_source_validation_batch_requires_scope() -> None:
     try:
-        source_validation.run_source_validation_batch(session=object())
+        source_validation.run_source_validation_batch(session=cast(Any, object()))
     except ValueError as exc:
         assert "batch_id or candidate_ids is required" in str(exc)
     else:  # pragma: no cover - exercised when the guard is implemented incorrectly
@@ -228,7 +229,7 @@ def test_review_candidate_overlaps_filters_non_group_results(monkeypatch) -> Non
     monkeypatch.setattr(source_onboarding, "SourceCandidateRepo", _Repo)
 
     groups = source_onboarding.review_candidate_overlaps(
-        session=object(),
+        session=cast(Any, object()),
         batch_id=5,
         candidate_ids=[1, 2],
     )
@@ -267,7 +268,7 @@ def test_run_source_validation_executes_html_path_and_batch_wrapper(monkeypatch)
 
     html_result = source_validation.run_source_validation(
         candidate_id=21,
-        session=object(),
+        session=cast(Any, object()),
         fetch_html=lambda _url: _ARTICLE,
         extract_links=lambda _html, base_url: [f"{base_url}/a", f"{base_url}/b"],
     )
@@ -283,7 +284,7 @@ def test_run_source_validation_executes_html_path_and_batch_wrapper(monkeypatch)
 
     monkeypatch.setattr(source_validation, "run_source_validation", _run_source_validation)
 
-    results = source_validation.run_source_validation_batch(session=object(), batch_id=8)
+    results = source_validation.run_source_validation_batch(session=cast(Any, object()), batch_id=8)
 
     assert calls == [21, 22]
     assert [result.candidate_id for result in results] == [21, 22]

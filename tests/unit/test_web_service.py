@@ -1,6 +1,7 @@
 # pylint: disable=protected-access,unnecessary-lambda
 from queue import Empty
 from types import SimpleNamespace
+from typing import Any, cast
 
 from app.web.models import WebUpdateSettings
 from app.web.service import UpdateRunService, _coerce_int, _run_offloaded_fetch_cycle
@@ -23,7 +24,7 @@ class _Logger:
 
 def test_run_failure_sets_failed_status(monkeypatch) -> None:
     logger = _Logger()
-    service = UpdateRunService(logger=logger)
+    service = UpdateRunService(logger=cast(Any, logger))
 
     class _ImmediateThread:
         def __init__(self, *, target, args, daemon):
@@ -58,11 +59,11 @@ def test_run_failure_sets_failed_status(monkeypatch) -> None:
 
 def test_process_mode_harvests_offloaded_worker_result(monkeypatch, tmp_path) -> None:
     service = UpdateRunService(
-        logger=SimpleNamespace(
+        logger=cast(Any, SimpleNamespace(
             info=lambda *_a, **_k: None,
             warning=lambda *_a, **_k: None,
             error=lambda *_a, **_k: None,
-        )
+        ))
     )
     started_processes: list[object] = []
     process_targets: list[tuple[object, tuple[object, ...]]] = []
@@ -122,7 +123,7 @@ def test_process_mode_stays_running_until_current_status_harvests_finished_resul
     monkeypatch,
 ) -> None:
     logger = _Logger()
-    service = UpdateRunService(logger=logger)
+    service = UpdateRunService(logger=cast(Any, logger))
     process_starts: list[tuple[object, tuple[object, ...], bool]] = []
     queue_messages = [
         {
@@ -199,7 +200,7 @@ def test_process_mode_stays_running_until_current_status_harvests_failed_result(
     monkeypatch,
 ) -> None:
     logger = _Logger()
-    service = UpdateRunService(logger=logger)
+    service = UpdateRunService(logger=cast(Any, logger))
     process_starts: list[tuple[object, tuple[object, ...], bool]] = []
     queue_messages = [
         {
@@ -413,7 +414,7 @@ def test_run_offloaded_fetch_cycle_ignores_queue_without_put_methods(
 
 def test_start_rejects_when_process_run_is_already_running(monkeypatch) -> None:
     logger = _Logger()
-    service = UpdateRunService(logger=logger)
+    service = UpdateRunService(logger=cast(Any, logger))
 
     class _FakeQueue:
         def empty(self) -> bool:
@@ -448,11 +449,11 @@ def test_start_rejects_when_process_run_is_already_running(monkeypatch) -> None:
 
 def test_process_mode_without_result_stays_running(monkeypatch) -> None:
     service = UpdateRunService(
-        logger=SimpleNamespace(
+        logger=cast(Any, SimpleNamespace(
             info=lambda *_a, **_k: None,
             warning=lambda *_a, **_k: None,
             error=lambda *_a, **_k: None,
-        )
+        ))
     )
 
     class _EmptyQueue:
@@ -491,11 +492,11 @@ def test_process_mode_without_result_stays_running(monkeypatch) -> None:
 
 def test_worker_helper_methods_handle_edge_cases() -> None:
     service = UpdateRunService(
-        logger=SimpleNamespace(
+        logger=cast(Any, SimpleNamespace(
             info=lambda *_a, **_k: None,
             warning=lambda *_a, **_k: None,
             error=lambda *_a, **_k: None,
-        )
+        ))
     )
 
     assert service._read_worker_queue_locked() is None
@@ -528,7 +529,7 @@ def test_worker_helper_methods_handle_edge_cases() -> None:
             _ = encoding
             return "{not-json"
 
-    service._worker_result_path = _BadJsonPath()
+    service._worker_result_path = cast(Any, _BadJsonPath())
     assert service._read_worker_result_path_locked() is None
 
     class _UnlinkFailPath:
@@ -543,7 +544,7 @@ def test_worker_helper_methods_handle_edge_cases() -> None:
             _ = missing_ok
             raise OSError("unlink blocked")
 
-    service._worker_result_path = _UnlinkFailPath()
+    service._worker_result_path = cast(Any, _UnlinkFailPath())
     assert service._read_worker_result_path_locked() == {"status": "finished"}
 
 

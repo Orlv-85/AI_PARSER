@@ -122,9 +122,9 @@ the Troubleshooting section of `README.md`.
       "area": "make lint (mypy)",
       "symptom": "mypy reports `Returning Any from function declared to return \"str\"` [no-any-return] (or int, tuple[int, int]) on a line that returns the result of a typed project function or a Settings field, e.g. `return jev_state(article)` in src/app/core/ingestion/admission.py.",
       "evidence": ["mypy names project modules `src.app.usecases.ingestion.pipeline` in its messages, so `from app... import ...` does not resolve and falls under ignore_missing_imports", "pyproject.toml [tool.mypy]: files = [src, tests], explicit_package_bases, ignore_missing_imports and warn_return_any are on"],
-      "cause": "Under this config every name imported from `app.*` is Any, and warn_return_any flags returning it from a function with a typed return.",
-      "fix": "Follow the existing idiom: `cast(str, ...)` (see `_html_placeholder_key` in src/app/usecases/ingestion/pipeline/screening.py) or assign to a typed local (`counts: tuple[int, int] = ...; return counts`). Do not add `# type: ignore`.",
-      "verification": "make lint passes after the cast or typed local (branch refactor/pipeline-cleanup-20261020)."
+      "cause": "Until 2026-11-12 every name imported from `app.*` was Any under this config, and warn_return_any flagged returning it from a function with a typed return. Fixed on 2026-11-12: `mypy_path = \"src\"` makes `app.*` resolve and the `pydantic.mypy` plugin types model constructors, so types across modules are checked.",
+      "fix": "If it recurs, check that pyproject [tool.mypy] still has `mypy_path = \"src\"`: `reveal_type` on a name imported from `app.*` must show its real type, not Any. The `cast(str, ...)` and typed-local workarounds added before the fix are harmless. Do not add `# type: ignore`.",
+      "verification": "Branch refactor/mypy-app-imports (2026-11-12): `reveal_type(ArticleRepo)` was Any before and the real signature after; the 329 errors that surfaced were fixed and make lint passes."
     },
     {
       "id": "testclient-cookie-override-httpx2",
@@ -222,8 +222,8 @@ the Troubleshooting section of `README.md`.
       "evidence": [
         "T2 PR3 (#172): `reveal_type(read_str)` in src/app/storage/source_repo.py showed Any locally; with MYPYPATH=src it showed the real signature"
       ],
-      "cause": "The main folder venv (.venv, formerly venv1) has an editable install of ai-news-collector (`__editable__.ai_news_collector-0.1.0.pth`) pointing at the main folder, which is on an older master. mypy resolves `app.*` through it; a module missing there is silently Any because `ignore_missing_imports = true`.",
-      "fix": "CI reports the same `no-any-return` (names imported from `app.*` are Any there too, see the case citing `src.app.usecases.ingestion.pipeline`): use that case's idiom, `cast(T, ...)` or a typed local, never `# type: ignore`. Locally, a branch-only module may also be Any through the stale editable install; CI decides. Corrected 2026-11-01 after T2 PRs #183 and #184 failed CI lint.",
+      "cause": "The main folder venv (.venv, formerly venv1) has an editable install of ai-news-collector (`__editable__.ai_news_collector-0.1.0.pth`) pointing at the main folder, which is on an older master. Until 2026-11-12 mypy resolved `app.*` through it; a module missing there was silently Any because `ignore_missing_imports = true`. Since `mypy_path = \"src\"` (2026-11-12) mypy reads the worktree's src first; pylint and pytest still import through the editable install (cases below), so run them with PYTHONPATH=src.",
+      "fix": "With `mypy_path = \"src\"` in pyproject this mypy symptom should not recur; if it does, check that setting first (see mypy-app-imports-are-any). Never `# type: ignore`.",
       "verification": "Reproduced by the PR #172 reviewer locally; CI lint of #183 (rows.py:102) and #184 (rss.py:98) failed with the same error, so the typed local is required, not a workaround.",
       "if_it_recurs": "If CI itself reports Any for a new module, check pyproject mypy settings (files, explicit_package_bases, mypy_path) rather than the venv."
     },

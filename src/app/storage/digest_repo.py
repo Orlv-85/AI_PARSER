@@ -45,7 +45,7 @@ class NewsDigestRepo:
             return report
 
     def get_digest(self, *, report_date: date) -> NewsDigestReport | None:
-        stmt: Select[tuple[NewsDigestReport]] = (
+        stmt: Select[NewsDigestReport] = (
             select(NewsDigestReport)
             .options(
                 selectinload(NewsDigestReport.groups).selectinload(NewsDigestGroup.items)

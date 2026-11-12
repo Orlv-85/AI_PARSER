@@ -7,7 +7,7 @@ from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import asdict, dataclass, field, replace
 from datetime import date
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from app.core.daily.signals_brief import HARD_EVENTS
 from app.core.daily.signals_compute import METHODOLOGY_VERSION, payload_hash
@@ -242,7 +242,8 @@ def _risers_from_helper(data: PeriodInput) -> Trend:
 
 def _month_thresholds(data: PeriodInput) -> Thresholds:
     """The daily rule with the month minimums of `PeriodThresholds` (counts are month totals)."""
-    t = data.limits
+    # Any: the month_* fields are None only for a week (`PeriodThresholds.for_kind`).
+    t: Any = data.limits
     return replace(
         data.daily, rising_min_current=t.month_rising_min_current,
         rising_min_delta=t.month_rising_min_delta, rising_ratio=t.month_rising_ratio,

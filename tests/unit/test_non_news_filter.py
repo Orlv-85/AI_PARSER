@@ -1,6 +1,7 @@
 import json
 from logging import getLogger
 from types import SimpleNamespace
+from typing import Any, cast
 
 import httpx
 import pytest
@@ -53,7 +54,7 @@ def test_known_non_news_never_downloads_or_extracts(url, monkeypatch) -> None:
         pytest.fail("Rejected page was downloaded or extracted")
     monkeypatch.setattr("app.ingest.html.extract_article_text", forbidden)
     fetcher = SimpleNamespace(fetch_text=forbidden)
-    assert fetch_html_article(source=_source(), url=url, fetcher=fetcher) is None
+    assert fetch_html_article(source=_source(), url=url, fetcher=cast(Any, fetcher)) is None
     assert _build_html_article(source=_source(), url=url, article_html="<h1>AI</h1>") is None
 
 
@@ -129,7 +130,7 @@ def test_all_pipeline_item_paths_filter_before_models_and_preserve_dedupe(batch,
                     db_source_id=db_source.id,
                     article_repo=repo,
                     settings=settings,
-                    relevance_scorer=SimpleNamespace(classify=classify),
+                    relevance_scorer=cast(Any, SimpleNamespace(classify=classify)),
                 ),
                 items,
             )
@@ -178,6 +179,7 @@ def test_managed_source_selector_is_targeted() -> None:
                              url="https://autify.com/blog", enabled=True,
                              fetch_interval_minutes=30, source_weight=1.0)
     config = _managed_source_to_config(source)
+    assert config.html is not None
     assert config.html.link_selector == (
         'a[href^="/blog/"], a[href^="https://autify.com/blog/"]')
 
@@ -249,7 +251,7 @@ def test_rss_linked_landing_is_removed_before_text_extraction(monkeypatch) -> No
     assert not fetch_rss(
         "example",
         "https://example.com/feed",
-        fetcher=fetcher,
+        fetcher=cast(Any, fetcher),
         options=RssOptions(extract_full_text=True),
     )
 
@@ -301,7 +303,7 @@ def test_rss_disabled_admission_state_uses_scorer_not_screening(monkeypatch) -> 
                 db_source_id=db_source.id,
                 article_repo=ArticleRepo(session),
                 settings=Settings(article_batch_upsert_enabled=False, rss_known_streak_stop=0),
-                relevance_scorer=SimpleNamespace(classify=scored.append),
+                relevance_scorer=cast(Any, SimpleNamespace(classify=scored.append)),
                 admission_state=AdmissionState(enabled=False),
             ),
             [item],
@@ -329,7 +331,7 @@ def test_rss_batch_duplicate_hash_merges_scores_and_category(
         SourceRun(
             config=_source("rss"),
             db_source_id=1,
-            article_repo=SimpleNamespace(),
+            article_repo=cast(Any, SimpleNamespace()),
             settings=Settings(article_batch_upsert_enabled=True, rss_known_streak_stop=0),
         ),
         items,

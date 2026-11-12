@@ -2,7 +2,7 @@
 import json
 from logging import Logger
 from math import isfinite
-from typing import Any, cast
+from typing import Any, TypeIs, cast
 
 from app.config.settings import Settings
 from app.core.categories import READABLE_CATEGORIES
@@ -13,6 +13,7 @@ from app.core.ingestion.admission import (
     evidence_hash,
 )
 from app.core.jev import JevAssessment, JevRelevanceScorer
+from app.core.models import Article as CoreArticle
 from app.storage.admission import (
     PendingCandidate,
     get_cached_decision,
@@ -65,7 +66,7 @@ def _resolve_cached(
 
 
 def _score_and_record(
-    run: SourceRun, item: object, key: str, logger: Logger | None,
+    run: SourceRun, item: CoreArticle, key: str, logger: Logger | None,
 ) -> tuple[str, JevAssessment | None]:
     """Screen with the provider; the caller has checked that the scorer and admission exist."""
     relevance_scorer = cast(JevRelevanceScorer, run.relevance_scorer)
@@ -101,7 +102,7 @@ def _score_and_record(
 
 
 def _screen_candidate(
-    run: SourceRun, item: object, *, canonical_hash: str, logger: Logger | None = None,
+    run: SourceRun, item: CoreArticle, *, canonical_hash: str, logger: Logger | None = None,
     canonical_url: str | None = None,
 ) -> tuple[str, JevAssessment | None]:
     settings, article_repo = run.settings, run.article_repo
@@ -190,7 +191,7 @@ def _restore_admission(
     state.fresh_success = snapshot[4]
 
 
-def _valid_cached_probability(value: object) -> bool:
+def _valid_cached_probability(value: object) -> TypeIs[float]:
     return (
         not isinstance(value, bool) and isinstance(value, (int, float))
         and isfinite(value) and 0.0 <= value <= 1.0
@@ -207,7 +208,7 @@ def _cached_score(assessment: dict) -> float | None:
     return value
 
 
-def _cached_category(assessment: dict) -> tuple[str | None, object]:
+def _cached_category(assessment: dict) -> tuple[str | None, float | None]:
     category = assessment.get("category")
     confidence = assessment.get("category_confidence")
     if (

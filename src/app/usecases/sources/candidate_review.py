@@ -3,7 +3,7 @@
 Behavior, decisions, invariants and code map: onboarding.md next to this file.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import datetime
 from typing import Any, cast
 
@@ -283,7 +283,7 @@ class SourceOnboardingService:
         )
 
     @staticmethod
-    def _first_batch_id(candidates: list[object]) -> int | None:
+    def _first_batch_id(candidates: Sequence[object]) -> int | None:
         if not candidates:
             return None
         first_candidate: Any = candidates[0]

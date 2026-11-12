@@ -1,6 +1,7 @@
 # pylint: disable=protected-access,too-many-statements
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from sqlalchemy import create_engine, func, select
@@ -309,7 +310,7 @@ def test_source_repo_fallback_upsert_and_fetch_state_edge_cases() -> None:
             return self._existing
 
     session = _Session()
-    repo = SourceRepo(session)
+    repo = SourceRepo(cast(Any, session))
 
     created = repo.upsert_source(source_cfg)
     session._existing = created
@@ -396,7 +397,7 @@ def test_article_repo_batch_fallback_and_empty_hashes() -> None:
             _ = stmt
             return _ExecResult()
 
-    article_repo = ArticleRepo(_Session())
+    article_repo = ArticleRepo(cast(Any, _Session()))
     insert_calls: list[dict[str, object]] = []
     insert_results = iter(
         [
@@ -483,7 +484,8 @@ def test_prune_older_than_calls_archive_before_delete() -> None:
     assert repo.prune_older_than(older_than_days=100, archive=archive) == (1, 0)
     assert seen == [(["old"], 2)]
     with pytest.raises(TypeError):
-        repo.prune_older_than(older_than_days=100)  # pylint: disable=missing-kwoa
+        # The missing keyword is the case under test.
+        repo.prune_older_than(older_than_days=100)  # type: ignore[call-arg]  # pylint: disable=missing-kwoa
 
 
 def test_prune_older_than_and_count() -> None:

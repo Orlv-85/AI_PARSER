@@ -1,5 +1,6 @@
 import logging
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from datetime import UTC, date, datetime, time, timedelta
@@ -53,9 +54,9 @@ class WeeklyDraft:
     date_from: date | None = None
     date_to: date | None = None
     summary: str | None = None
-    new: list[dict[str, str] | WeeklyAnalyticsItem] | None = None
-    trending_up: list[dict[str, str] | WeeklyAnalyticsItem] | None = None
-    trending_down: list[dict[str, str] | WeeklyAnalyticsItem] | None = None
+    new: Sequence[dict[str, str] | WeeklyAnalyticsItem] | None = None
+    trending_up: Sequence[dict[str, str] | WeeklyAnalyticsItem] | None = None
+    trending_down: Sequence[dict[str, str] | WeeklyAnalyticsItem] | None = None
 
 
 class WeeklyAnalyticsRepo:
@@ -125,7 +126,7 @@ class WeeklyAnalyticsRepo:
         raise TypeError(f"Expected date or None for report_date, got {type(value)!r}")
 
     def list_stored_reports(self, *, limit: int = 52) -> list[WeeklyAnalyticsReportIndexEntry]:
-        stmt: Select[tuple[WeeklyAnalyticsStoredReport]] = (
+        stmt: Select[WeeklyAnalyticsStoredReport] = (
             select(WeeklyAnalyticsStoredReport)
             .order_by(WeeklyAnalyticsStoredReport.report_date.desc())
             .limit(limit)
@@ -217,7 +218,7 @@ class WeeklyAnalyticsRepo:
         return fallback_report
 
     def _get_stored_report(self, *, report_date: date) -> WeeklyAnalyticsStoredReport | None:
-        stmt: Select[tuple[WeeklyAnalyticsStoredReport]] = (
+        stmt: Select[WeeklyAnalyticsStoredReport] = (
             select(WeeklyAnalyticsStoredReport)
             .where(WeeklyAnalyticsStoredReport.report_date == report_date)
             .options(selectinload(WeeklyAnalyticsStoredReport.items))
@@ -288,7 +289,7 @@ class WeeklyAnalyticsRepo:
     ) -> list[Article]:
         start_at = datetime.combine(date_from, time.min, tzinfo=UTC)
         end_at = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=UTC)
-        stmt: Select[tuple[Article]] = (
+        stmt: Select[Article] = (
             select(Article)
             .where(Article.published_at >= start_at)
             .where(Article.published_at < end_at)
@@ -482,7 +483,7 @@ class WeeklyAnalyticsRepo:
 
     @staticmethod
     def _coerce_items(
-        raw_items: list[dict[str, str] | WeeklyAnalyticsItem],
+        raw_items: Sequence[dict[str, str] | WeeklyAnalyticsItem],
     ) -> list[WeeklyAnalyticsItem]:
         items: list[WeeklyAnalyticsItem] = []
         for raw_item in raw_items:

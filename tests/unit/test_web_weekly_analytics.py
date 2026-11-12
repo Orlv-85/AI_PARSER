@@ -1,6 +1,7 @@
 from datetime import UTC, date, datetime
 from importlib import import_module
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -871,7 +872,7 @@ def test_missing_weekly_report_covers_the_seven_days_up_to_the_date() -> None:
 
 
 def test_weekly_items_without_title_or_summary_are_dropped() -> None:
-    def item(title: str, summary: str) -> SimpleNamespace:
+    def item(title: str, summary: str) -> Any:
         return SimpleNamespace(title=title, summary=summary, url="https://example.com/a")
 
     kept = _item_payloads(

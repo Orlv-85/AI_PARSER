@@ -1,5 +1,6 @@
 import logging
 from time import struct_time
+from typing import Any, cast
 
 import pytest
 
@@ -93,7 +94,7 @@ def test_fetch_rss_uses_fetcher_and_httpx_branches(monkeypatch) -> None:
     content = b"<rss></rss>"
     monkeypatch.setattr("app.ingest.rss.parse_rss", lambda source_key, content: ["ok"])
 
-    via_fetcher = fetch_rss("s", "https://example.com/feed", fetcher=_Fetcher(content))
+    via_fetcher = fetch_rss("s", "https://example.com/feed", fetcher=cast(Any, _Fetcher(content)))
     monkeypatch.setattr("app.ingest.rss.httpx.Client", lambda **kwargs: _Client(content))
     via_httpx = fetch_rss("s", "https://example.com/feed", timeout_seconds=3.0, fetcher=None)
 
@@ -174,7 +175,7 @@ def test_fetch_rss_extract_full_text_enriches_only_first_n(monkeypatch) -> None:
     result = fetch_rss(
         "s",
         "https://example.com/feed",
-        fetcher=_Fetcher(b"<rss></rss>"),
+        fetcher=cast(Any, _Fetcher(b"<rss></rss>")),
         options=RssOptions(extract_full_text=True, full_text_max_items=2),
     )
 
@@ -209,7 +210,7 @@ def test_fetch_rss_extract_full_text_fail_soft_logs_and_continues(monkeypatch, c
     result = fetch_rss(
         "s",
         "https://example.com/feed",
-        fetcher=_Fetcher(b"<rss></rss>"),
+        fetcher=cast(Any, _Fetcher(b"<rss></rss>")),
         options=RssOptions(extract_full_text=True),
     )
 
@@ -238,7 +239,7 @@ def test_fetch_rss_extract_full_text_disabled(monkeypatch) -> None:
     result = fetch_rss(
         "s",
         "https://example.com/feed",
-        fetcher=_Fetcher(b"<rss></rss>"),
+        fetcher=cast(Any, _Fetcher(b"<rss></rss>")),
         options=RssOptions(extract_full_text=False),
     )
 
@@ -263,7 +264,7 @@ def test_extract_linked_article_text_uses_fetcher(monkeypatch) -> None:
         source_id="src",
         link="https://example.com/a",
         timeout_seconds=3.0,
-        fetcher=fetcher,
+        fetcher=cast(Any, fetcher),
     )
 
     assert text == "extracted value"
@@ -310,7 +311,7 @@ def test_fetch_rss_extract_full_text_ignores_empty_extracted_text(monkeypatch) -
     result = fetch_rss(
         "s",
         "https://example.com/feed",
-        fetcher=_Fetcher(b"<rss></rss>"),
+        fetcher=cast(Any, _Fetcher(b"<rss></rss>")),
         options=RssOptions(extract_full_text=True),
     )
 
@@ -338,8 +339,8 @@ def test_fetch_rss_extract_full_text_uses_semaphore_acquire_and_release(monkeypa
     result = fetch_rss(
         "s",
         "https://example.com/feed",
-        fetcher=_Fetcher(b"<rss></rss>"),
-        options=RssOptions(extract_full_text=True, full_text_semaphore=semaphore),
+        fetcher=cast(Any, _Fetcher(b"<rss></rss>")),
+        options=RssOptions(extract_full_text=True, full_text_semaphore=cast(Any, semaphore)),
     )
 
     assert result[0].content == "ok text"

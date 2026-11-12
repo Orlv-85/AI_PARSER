@@ -90,6 +90,8 @@ ignore_missing_imports = true
 namespace_packages = true
 explicit_package_bases = true
 files = ["src", "tests"]
+mypy_path = "src"
+plugins = ["pydantic.mypy"]
 
 [tool.pylint.main]
 py-version = "3.14"

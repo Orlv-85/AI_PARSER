@@ -439,11 +439,11 @@ class DailySignalRepo:  # pylint: disable=too-many-public-methods
         counts: dict[date, dict[str, int]] = defaultdict(lambda: defaultdict(int))
         for day, article_id, url_hash in scope:
             counts[day]["matched"] += 1
-            status = statuses.get((article_id, url_hash))
-            if status == "ok":
+            best_status = statuses.get((article_id, url_hash))
+            if best_status == "ok":
                 counts[day]["extracted"] += 1
-            elif status in ("failed", "skipped"):
-                counts[day][status] += 1
+            elif best_status in ("failed", "skipped"):
+                counts[day][best_status] += 1
         return {day: DayCoverage(day=day, kind=self.kind(day), published=True, items=int(n),
                                  matched=counts[day]["matched"],
                                  extracted=counts[day]["extracted"],

@@ -1,5 +1,5 @@
 """Recompute of the stored Daily AI Signals reports; behavior in usecases/daily/signals.md."""
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 
@@ -32,7 +32,7 @@ class RecomputeResult:
     lost_articles: tuple[date, ...] = ()
 
 
-def digest_text(observations: Mapping[date, list[ArticleObs]]) -> dict[date, list[ArticleObs]]:
+def digest_text(observations: Mapping[date, Sequence[ArticleObs]]) -> dict[date, list[ArticleObs]]:
     """The stored observations with the digest title and the digest summary."""
     return {day: [replace(obs, title=str(digest_title(obs.title)),
                           summary=digest_summary(obs.summary)) for obs in items]

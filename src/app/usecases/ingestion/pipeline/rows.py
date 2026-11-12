@@ -97,7 +97,7 @@ def _assessment_payload(assessment: JevAssessment) -> dict[str, object]:
     }
 
 
-def _row_relevance(item: object, assessment: JevAssessment | None) -> float:
+def _row_relevance(item: CoreArticle, assessment: JevAssessment | None) -> float:
     if assessment is not None:
         return cast(float, assessment.relevance_score)
     return cast(float, ai_relevance_score(item))
@@ -140,7 +140,7 @@ def _assessment_fields(item: object, assessment: JevAssessment | None) -> dict[s
 
 
 def _build_article_row(
-    run: SourceRun, item: object, *, canonical: str, canonical_hash: str,
+    run: SourceRun, item: CoreArticle, *, canonical: str, canonical_hash: str,
     assessment: JevAssessment | None,
 ) -> dict[str, object] | None:
     """Article row of an item; None when admission is on and the item has no assessment."""

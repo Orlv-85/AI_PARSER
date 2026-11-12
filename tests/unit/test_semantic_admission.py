@@ -21,19 +21,17 @@ def _article(index: int = 1) -> Article:
     )
 
 
+def _status(choice: str) -> str:
+    decision = decision_from_assessment(JevAssessment(0.5, admission_choice=choice))
+    assert decision is not None
+    return decision.status
+
+
 def test_admission_choice_mapping() -> None:
-    assert decision_from_assessment(
-        JevAssessment(0.5, admission_choice="accepted_ai_editorial")
-    ).status == "accept"
-    assert decision_from_assessment(
-        JevAssessment(0.5, admission_choice="non_ai")
-    ).status == "reject"
-    assert decision_from_assessment(
-        JevAssessment(0.5, admission_choice="non_editorial")
-    ).status == "reject"
-    assert decision_from_assessment(
-        JevAssessment(0.5, admission_choice="insufficient_evidence")
-    ).status == "unresolved"
+    assert _status("accepted_ai_editorial") == "accept"
+    assert _status("non_ai") == "reject"
+    assert _status("non_editorial") == "reject"
+    assert _status("insufficient_evidence") == "unresolved"
 
 
 def test_admission_request_only_when_enabled() -> None:

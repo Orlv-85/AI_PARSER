@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from threading import BoundedSemaphore
 from types import SimpleNamespace
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -106,7 +106,7 @@ def _fetch(settings: Settings, fetch_state: dict[str, object | None] | None = No
     return _fetch_source_items(
         source=(0, _html_source(), 1, fetch_state or NO_VALIDATORS),
         settings=settings,
-        logger=_Logger(),
+        logger=cast(Any, _Logger()),
         run_id="run",
         full_text_semaphore=None,
     )
@@ -274,7 +274,7 @@ def test_process_html_links_two_stage_closes_fetcher_when_placeholder_loop_raise
             SourceRun(
                 config=_html_source(),
                 db_source_id=1,
-                article_repo=_Repo(),
+                article_repo=cast(Any, _Repo()),
                 settings=_settings(
                     jev_model="model",
                     semantic_admission_policy_version="policy",
@@ -362,7 +362,7 @@ def test_process_html_links_two_stage_covers_non_batch_edge_paths(monkeypatch) -
         SourceRun(
             config=_html_source(),
             db_source_id=1,
-            article_repo=_Repo(known={"known"}, is_new=False),
+            article_repo=cast(Any, _Repo(known={"known"}, is_new=False)),
             settings=_settings(html_max_links_per_source=-1, article_batch_upsert_enabled=False),
         ),
         links,
@@ -401,7 +401,7 @@ def test_process_html_links_two_stage_batch_mode(monkeypatch) -> None:
         SourceRun(
             config=_html_source(),
             db_source_id=1,
-            article_repo=repo,
+            article_repo=cast(Any, repo),
             settings=_settings(article_batch_upsert_enabled=True),
         ),
         ["https://example.com/one", "https://example.com/two"],
@@ -416,13 +416,11 @@ def test_process_html_links_two_stage_batch_mode(monkeypatch) -> None:
 
 
 def test_persist_fetch_state_if_present_skips_results_without_metadata() -> None:
-    assert (
-        _persist_fetch_state_if_present(
-            source_repo=SimpleNamespace(),  # type: ignore[arg-type]
-            db_source_id=1,
-            result=HtmlListPageResult(links=["https://example.com/news/1"]),
-        )
-        is None
+    # The fake repo has no methods: a persist call would raise AttributeError.
+    _persist_fetch_state_if_present(
+        source_repo=cast(Any, SimpleNamespace()),
+        db_source_id=1,
+        result=HtmlListPageResult(links=["https://example.com/news/1"]),
     )
 
 
@@ -479,7 +477,7 @@ def test_process_html_links_two_stage_excluded_item_is_logged_and_not_stored(
         SourceRun(
             config=_html_source(),
             db_source_id=1,
-            article_repo=repo,
+            article_repo=cast(Any, repo),
             settings=_settings(article_batch_upsert_enabled=False),
             admission_state=AdmissionState(enabled=True) if admission_enabled else None,
         ),
@@ -510,7 +508,7 @@ def test_process_html_links_two_stage_skips_item_without_row(monkeypatch) -> Non
             SourceRun(
                 config=_html_source(),
                 db_source_id=1,
-                article_repo=repo,
+                article_repo=cast(Any, repo),
                 settings=_settings(article_batch_upsert_enabled=batch_mode),
             ),
             urls,
@@ -526,7 +524,7 @@ def _run_html_links(links: list[str], flags: list[str], **setting_overrides):
         SourceRun(
             config=_html_source(),
             db_source_id=1,
-            article_repo=_Repo(known={"known1", "known2"}),
+            article_repo=cast(Any, _Repo(known={"known1", "known2"})),
             settings=_settings(article_batch_upsert_enabled=False, **setting_overrides),
         ),
         links,
