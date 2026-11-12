@@ -3,10 +3,10 @@ import calendar
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Any
 
 from app.core.daily.signals_entities import Entity
 from app.core.daily.signals_model import ArticleObs, DayCoverage, Thresholds
+from app.core.daily.signals_payload import SnapshotPayload
 
 WEEK = "week"
 MONTH = "month"
@@ -68,7 +68,7 @@ class PreviousPeriod:
 class PeriodInput:  # pylint: disable=too-many-instance-attributes
     kind: str
     start: date
-    snapshots: Mapping[date, Mapping[str, Any]]  # stored daily payloads of the period days
+    snapshots: Mapping[date, SnapshotPayload]  # stored daily payloads of the period days
     coverage: Mapping[date, DayCoverage]
     observations: Mapping[date, Sequence[ArticleObs]]
     entities: Mapping[str, Entity]

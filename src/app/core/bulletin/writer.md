@@ -259,6 +259,9 @@ the safe direction: the story falls back to its title.
   the page (item 4+) (voice.md samples).
 - One attempt, no correcting retry (FR-005 says one call); the transport retry of the journal is
   the only second send and is reserved against the cap.
+- The packet and the run summary are `TypedDict`s (`WriterPacket`, `WriterSummary`); the model
+  answer is `object` until checked (decided 2026-11-12 (agent): mypy checks the keys and forces the
+  checks before use; the request and the summary keep their JSON).
 
 ## Invariants
 

@@ -174,6 +174,7 @@ that check it.
 | Quiet-day opening line is a template, not model output | counts are our facts |
 | Chips are display only | filtering the digest was deferred (OD4) |
 | Signals run only after a successful publication; failure never changes the job result | the digest job must not depend on the signals block |
+| Payload shape is `TypedDict`s (`signals_payload.py`); working fields of an item (entity key, article ids, unit, delta) live in dataclasses beside it, not in `_`-keys; keys methodology v1 did not write are `NotRequired` | decided 2026-11-12 (agent): mypy checks the keys and the reads of stored v1 payloads; the stored JSON stays byte-identical, so no methodology bump |
 
 ## Invariants
 
@@ -227,6 +228,7 @@ GET /?date=D                                     web/signals_view.py: render_sig
 | `core/daily/signals_trend.py` | Rising/Cooling window rule shared with the period signals (`trend_windows`, `trend_delta`, `TrendRow`, `unit_articles`, `window_units`); the snapshot builds its items from the rows. Window of D includes D | yes |
 | `core/daily/signals_model.py` | `Thresholds`, `ArticleObs`, `EntityMention`, `DayCoverage`, `SnapshotInput`, event labels and display orders | yes |
 | `core/daily/signals_stories.py` | Story clustering (`cluster`, `Story`), `links`, `linked_articles` | yes |
+| `core/daily/signals_payload.py` | Shape of the stored payload: `SnapshotPayload`, `NewItem`, `TrendItem`, `TopStory`, `Link` and the rest; read back by the brief and the period signals | yes |
 | `core/daily/signals_lines.py` | `one_liner` of a New item, sentence split | yes |
 | `core/daily/signals_naming.py` | `specific_variant`, `same_vendor`, `unit_key`, `proper_name` | yes |
 | `core/daily/signals_history.py` | `LexicalHistory`: earliest lexical mention before D | yes |

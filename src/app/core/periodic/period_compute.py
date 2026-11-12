@@ -4,15 +4,16 @@ Pure and deterministic: no database, no provider, no clock. `generated_at` is an
 """
 import copy
 from collections import Counter, defaultdict
-from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import asdict, replace
+from collections.abc import Callable, Iterable, Sequence
+from dataclasses import asdict, dataclass, field, replace
 from datetime import date
-from typing import Any
+from typing import TypedDict
 
 from app.core.daily.signals_brief import HARD_EVENTS
 from app.core.daily.signals_compute import METHODOLOGY_VERSION, payload_hash
 from app.core.daily.signals_model import EVENT_LABELS, ArticleObs, Thresholds
 from app.core.daily.signals_naming import unit_key
+from app.core.daily.signals_payload import Link, SnapshotPayload, TrendItem
 from app.core.daily.signals_stories import _article_order, links
 from app.core.daily.signals_trend import (
     TrendRow,
@@ -28,6 +29,18 @@ from app.core.periodic.period_model import (
     period_status,
     previous_start,
 )
+from app.core.periodic.period_payload import (
+    Comparison,
+    CoverageLine,
+    EventMix,
+    MixRow,
+    MonthTrendItem,
+    PeriodEntity,
+    PeriodNewItem,
+    PeriodPayload,
+    PeriodStory,
+    Trend,
+)
 
 __all__ = ["PERIOD_METHODOLOGY_VERSION", "compute_period", "payload_hash"]
 
@@ -41,6 +54,34 @@ def _r(value: float) -> float:
     return round(value, 3)
 
 
+@dataclass
+class _MergedStory:  # pylint: disable=too-many-instance-attributes
+    """One period story while the daily stories merge into it."""
+    label: str
+    event_type: str
+    entities: list[str]
+    days: list[str] = field(default_factory=list)
+    articles: int = 0
+    pubs: set[str] = field(default_factory=set)
+    best: int = -1
+    label_pubs: int = -1
+    links: dict[str, Link] = field(default_factory=dict)
+
+    def story(self, links_max: int) -> PeriodStory:
+        return {"label": self.label, "event_type": self.event_type, "entities": self.entities,
+                "days": sorted(self.days), "articles": self.articles,
+                "publishers": max(self.best, len(self.pubs)),
+                "links": _pick_links(list(self.links.values()), links_max)}
+
+
+class _Subject(TypedDict):
+    """Who a Rising or Cooling item is about."""
+    entity_id: int
+    name: str
+    type: str
+    vendor: str | None
+
+
 def _articles(data: PeriodInput) -> list[ArticleObs]:
     out: list[ArticleObs] = []
     for day in data.days:
@@ -48,13 +89,13 @@ def _articles(data: PeriodInput) -> list[ArticleObs]:
     return out
 
 
-def _snapshots(data: PeriodInput) -> list[tuple[date, Mapping[str, Any]]]:
+def _snapshots(data: PeriodInput) -> list[tuple[date, SnapshotPayload]]:
     return [(d, data.snapshots[d]) for d in data.days
             if d in data.snapshots and data.snapshots[d].get("status") != "unavailable"]
 
 
 # Coverage -------------------------------------------------------------------------------------
-def coverage_line(data: PeriodInput, articles: Sequence[ArticleObs]) -> dict[str, Any]:
+def coverage_line(data: PeriodInput, articles: Sequence[ArticleObs]) -> CoverageLine:
     """Days complete / days in period, items, extracted share, publishers, quiet flag.
 
     A day without a coverage row is missing: it is listed, never counted as a zero day."""
@@ -76,41 +117,33 @@ def coverage_line(data: PeriodInput, articles: Sequence[ArticleObs]) -> dict[str
 
 
 # Top stories ----------------------------------------------------------------------------------
-def top_stories(data: PeriodInput) -> list[dict[str, Any]]:
+def top_stories(data: PeriodInput) -> list[PeriodStory]:
     """Daily top stories merged across days by event type + entity set; ranked by distinct
     publishers (a lower bound from the stored links), then days."""
     t = data.limits
-    merged: dict[tuple, dict[str, Any]] = {}
+    merged: dict[tuple[str, tuple[str, ...]], _MergedStory] = {}
     for day, snap in _snapshots(data):
         for story in snap.get("top_stories", ()):
             entities = tuple(sorted(story.get("entities", ())))
             key = (story["event_type"], entities or ("label", story["label"].casefold()))
-            row = merged.setdefault(key, {
-                "label": story["label"], "event_type": story["event_type"],
-                "entities": list(entities), "days": [], "articles": 0, "_pubs": set(),
-                "_best": -1, "_links": {}})
-            row["days"].append(day.isoformat())
-            row["articles"] += story["articles"]
-            row["_best"] = max(row["_best"], story["publishers"])
-            if story["publishers"] > row.get("_label_pubs", -1):
-                row["label"], row["_label_pubs"] = story["label"], story["publishers"]
+            row = merged.setdefault(key, _MergedStory(
+                label=story["label"], event_type=story["event_type"], entities=list(entities)))
+            row.days.append(day.isoformat())
+            row.articles += story["articles"]
+            row.best = max(row.best, story["publishers"])
+            if story["publishers"] > row.label_pubs:
+                row.label, row.label_pubs = story["label"], story["publishers"]
             for link in story.get("links", ()):
-                row["_pubs"].add(link["publisher"])
-                row["_links"].setdefault(link["url"], link)
-    out = []
-    for row in merged.values():
-        row["publishers"] = max(row.pop("_best"), len(row.pop("_pubs")))
-        row.pop("_label_pubs", None)
-        row["links"] = _pick_links(list(row.pop("_links").values()), t.links_max)
-        row["days"] = sorted(row["days"])
-        out.append(row)
+                row.pubs.add(link["publisher"])
+                row.links.setdefault(link["url"], link)
+    out = [row.story(t.links_max) for row in merged.values()]
     out.sort(key=lambda r: (-r["publishers"], -len(r["days"]), -r["articles"], r["label"]))
     return out[:t.top_max]
 
 
-def _pick_links(items: list[dict[str, str]], limit: int) -> list[dict[str, str]]:
-    first: list[dict[str, str]] = []
-    rest: list[dict[str, str]] = []
+def _pick_links(items: list[Link], limit: int) -> list[Link]:
+    first: list[Link] = []
+    rest: list[Link] = []
     seen: set[str] = set()
     for item in items:
         (rest if item["publisher"] in seen else first).append(item)
@@ -119,14 +152,15 @@ def _pick_links(items: list[dict[str, str]], limit: int) -> list[dict[str, str]]
 
 
 # Top entities ---------------------------------------------------------------------------------
-def top_entities(data: PeriodInput, articles: Sequence[ArticleObs]) -> dict[str, list[dict]]:
+def top_entities(data: PeriodInput, articles: Sequence[ArticleObs]
+                 ) -> dict[str, list[PeriodEntity]]:
     """By type group: distinct articles, then publishers; minimums and a cap per group."""
     t = data.limits
     by_key: dict[str, dict[int, ArticleObs]] = defaultdict(dict)
     for a in articles:
         for m in a.mentions:
             by_key[m.entity_key][a.article_id] = a
-    groups: dict[str, list[dict[str, Any]]] = {name: [] for _, name in ENTITY_GROUPS}
+    groups: dict[str, list[PeriodEntity]] = {name: [] for _, name in ENTITY_GROUPS}
     names = dict(ENTITY_GROUPS)
     for key, members in by_key.items():
         entity = data.entities.get(key)
@@ -148,18 +182,18 @@ def top_entities(data: PeriodInput, articles: Sequence[ArticleObs]) -> dict[str,
 
 
 # New ------------------------------------------------------------------------------------------
-def new_this_period(data: PeriodInput) -> list[dict[str, Any]]:
+def new_this_period(data: PeriodInput) -> list[PeriodNewItem]:
     """Union of the daily New lists: confirmed first, then by first-seen day."""
     t = data.limits
-    seen: dict[Any, dict[str, Any]] = {}
+    seen: dict[int | str, PeriodNewItem] = {}
     for day, snap in _snapshots(data):
         for item in snap.get("new", ()):
             key = item.get("entity_id") or item["name"].casefold()
             row = seen.get(key)
             if row is None:
-                seen[key] = {**copy.deepcopy(dict(item)), "first_seen_day": day.isoformat()}
+                seen[key] = {**copy.deepcopy(item), "first_seen_day": day.isoformat()}
             elif item["level"] == "confirmed" and row["level"] != "confirmed":
-                seen[key] = {**copy.deepcopy(dict(item)), "first_seen_day": row["first_seen_day"]}
+                seen[key] = {**copy.deepcopy(item), "first_seen_day": row["first_seen_day"]}
     rows = list(seen.values())
     rows.sort(key=lambda r: (r["level"] != "confirmed", r["first_seen_day"], -r["publishers"],
                              r["name"]))
@@ -167,7 +201,7 @@ def new_this_period(data: PeriodInput) -> list[dict[str, Any]]:
 
 
 # Rising and cooling ---------------------------------------------------------------------------
-def risers_and_coolers(data: PeriodInput) -> dict[str, Any]:
+def risers_and_coolers(data: PeriodInput) -> Trend:
     """Week: the daily computation with D = the last day of the week. The Sunday snapshot is used
     when its methodology is current and its Rising was usable, else the shared helper runs over
     the week bounds. Month: the shared rule over month totals against the previous month."""
@@ -176,14 +210,15 @@ def risers_and_coolers(data: PeriodInput) -> dict[str, Any]:
     end = data.end
     snap = data.snapshots.get(end)
     if snap is not None and snap.get("methodology_version") == METHODOLOGY_VERSION:
-        if snap.get("sections", {}).get("rising", {}).get("state") == "ready":
+        rising = snap.get("sections", {}).get("rising")
+        if rising is not None and rising.get("state") == "ready":
             return {"state": "ready", "source": "sunday_snapshot",
                     "rising": copy.deepcopy(list(snap.get("rising", ()))),
                     "cooling": copy.deepcopy(list(snap.get("cooling", ())))}
     return _risers_from_helper(data)
 
 
-def _risers_from_helper(data: PeriodInput) -> dict[str, Any]:
+def _risers_from_helper(data: PeriodInput) -> Trend:
     daily = data.daily
     usable = trend_windows(data.end, data.coverage, data.comparable_from, daily)
     if usable is None:
@@ -193,12 +228,14 @@ def _risers_from_helper(data: PeriodInput) -> dict[str, Any]:
     rows = trend_delta(data.coverage, data.observations, (cur_days, prev_days),
                        excluded=set(), t=daily)
 
-    def counts(row: TrendRow) -> dict[str, Any]:
-        return {"current_7d": row.current, "previous_7d": row.previous,
-                "expected_7d": _r(row.expected), "today": len(today.get(row.unit, ()))}
+    def item(who: _Subject, row: TrendRow, articles: Sequence[ArticleObs]) -> TrendItem:
+        return {**who, "current_7d": row.current, "previous_7d": row.previous,
+                "expected_7d": _r(row.expected), "today": len(today.get(row.unit, ())),
+                "trailing_mean": None, "spike": False,
+                "publishers": len({a.publisher for a in articles}),
+                "links": links(articles, daily.links_max)}
 
-    rising, cooling = _ranked(data, rows, (cur_days, prev_days), counts_of=counts,
-                              keys=("current_7d", "previous_7d"))
+    rising, cooling = _ranked(data, rows, (cur_days, prev_days), item)
     return {"state": "ready", "source": "helper", "rising": rising[:daily.rising_max],
             "cooling": cooling[:daily.cooling_max]}
 
@@ -237,7 +274,7 @@ def _month_windows(data: PeriodInput) -> tuple[list[date], list[date]] | None:
     return cur, prev
 
 
-def _month_risers(data: PeriodInput) -> dict[str, Any]:
+def _month_risers(data: PeriodInput) -> Trend:
     windows = _month_windows(data)
     if windows is None:
         return {"state": "unavailable", "source": "month_helper", "rising": [], "cooling": []}
@@ -246,44 +283,44 @@ def _month_risers(data: PeriodInput) -> dict[str, Any]:
     rows = trend_delta(data.coverage, data.observations, (cur_days, prev_days),
                        excluded=set(), t=daily)
 
-    def counts(row: TrendRow) -> dict[str, Any]:
-        return {"current": row.current, "previous": row.previous, "expected": _r(row.expected)}
+    def item(who: _Subject, row: TrendRow, articles: Sequence[ArticleObs]) -> MonthTrendItem:
+        return {**who, "current": row.current, "previous": row.previous,
+                "expected": _r(row.expected), "trailing_mean": None, "spike": False,
+                "publishers": len({a.publisher for a in articles}),
+                "links": links(articles, daily.links_max)}
 
-    rising, cooling = _ranked(data, rows, (cur_days, prev_days), counts_of=counts,
-                              keys=("current", "previous"))
+    rising, cooling = _ranked(data, rows, (cur_days, prev_days), item)
     return {"state": "ready", "source": "month_helper", "rising": rising[:daily.rising_max],
             "cooling": cooling[:daily.cooling_max]}
 
 
-def _ranked(data: PeriodInput, rows: Sequence[TrendRow],
-            windows: tuple[Sequence[date], Sequence[date]], *,
-            counts_of: Callable[[TrendRow], dict[str, Any]],
-            keys: tuple[str, str]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Rising and cooling items, best first; `windows` are the current and previous days,
-    `keys` the current and previous count fields."""
+def _ranked[T](data: PeriodInput, rows: Sequence[TrendRow],
+               windows: tuple[Sequence[date], Sequence[date]],
+               item_of: Callable[[_Subject, TrendRow, Sequence[ArticleObs]], T]
+               ) -> tuple[list[T], list[T]]:
+    """Rising and cooling items, best first (delta, then the current or previous count);
+    `windows` are the current and previous days."""
     cur_days, prev_days = windows
-    cur_key, prev_key = keys
-    rising: list[dict[str, Any]] = []
-    cooling: list[dict[str, Any]] = []
+    rising: list[tuple[float, int, str, T]] = []
+    cooling: list[tuple[float, int, str, T]] = []
     for row in rows:
-        counts = counts_of(row)
-        if row.rising:
-            item = _trend_item(data, row.unit, cur_days, row.current_articles, counts)
-            if item is not None:
-                rising.append({**item, "_delta": row.rising_delta})
-        if row.cooling:
-            item = _trend_item(data, row.unit, prev_days, row.previous_articles, counts)
-            if item is not None:
-                cooling.append({**item, "_delta": row.cooling_delta})
-    rising.sort(key=lambda i: (-i["_delta"], -i[cur_key], i["name"]))
-    cooling.sort(key=lambda i: (-i["_delta"], -i[prev_key], i["name"]))
-    for item in rising + cooling:
-        item.pop("_delta")
-    return rising, cooling
+        who = _subject(data, row.unit, cur_days) if row.rising else None
+        if who is not None:
+            rising.append((row.rising_delta, row.current, who["name"],
+                           item_of(who, row, row.current_articles)))
+        who = _subject(data, row.unit, prev_days) if row.cooling else None
+        if who is not None:
+            cooling.append((row.cooling_delta, row.previous, who["name"],
+                            item_of(who, row, row.previous_articles)))
+    return _best_first(rising), _best_first(cooling)
 
 
-def _trend_item(data: PeriodInput, unit: str, days: Iterable[date],
-                articles: Sequence[ArticleObs], counts: dict[str, Any]) -> dict[str, Any] | None:
+def _best_first[T](ranked: list[tuple[float, int, str, T]]) -> list[T]:
+    return [item for *_, item in sorted(ranked, key=lambda r: (-r[0], -r[1], r[2]))]
+
+
+def _subject(data: PeriodInput, unit: str, days: Iterable[date]) -> _Subject | None:
+    """The most mentioned entity of `unit` over `days`; None when it needs review."""
     seen: Counter[str] = Counter()
     for day in days:
         for a in data.observations.get(day, ()):
@@ -293,14 +330,11 @@ def _trend_item(data: PeriodInput, unit: str, days: Iterable[date],
     if entity.needs_review:
         return None
     return {"entity_id": data.entity_ids.get(key, 0), "name": entity.display_name,
-            "type": entity.entity_type, "vendor": entity.vendor, **counts,
-            "trailing_mean": None, "spike": False, "publishers": len({a.publisher
-                                                                       for a in articles}),
-            "links": links(articles, data.daily.links_max)}
+            "type": entity.entity_type, "vendor": entity.vendor}
 
 
 # Event mix ------------------------------------------------------------------------------------
-def event_mix(data: PeriodInput, compare: bool) -> dict[str, Any]:
+def event_mix(data: PeriodInput, compare: bool) -> EventMix:
     """Stories and articles per event type from the daily chips; the rest as "+N more"."""
     stories: Counter[str] = Counter()
     arts: Counter[str] = Counter()
@@ -309,7 +343,7 @@ def event_mix(data: PeriodInput, compare: bool) -> dict[str, Any]:
             stories[chip["event_type"]] += chip["stories"]
             arts[chip["event_type"]] += chip["articles"]
     previous = data.previous.event_stories if compare and data.previous else None
-    rows = []
+    rows: list[MixRow] = []
     for event, label in EVENT_LABELS.items():
         if event not in HARD_EVENTS or not (stories[event] or arts[event]):
             continue
@@ -325,7 +359,7 @@ def event_mix(data: PeriodInput, compare: bool) -> dict[str, Any]:
 
 
 # Comparison -----------------------------------------------------------------------------------
-def comparison(data: PeriodInput, publishers: int) -> dict[str, Any]:
+def comparison(data: PeriodInput, publishers: int) -> Comparison:
     """`none` without a usable previous period, `suppressed` (low_publisher_coverage) when the
     publishers of this period are below `breadth_ratio` of the previous one, else `ready`."""
     prev = data.previous
@@ -341,7 +375,7 @@ def comparison(data: PeriodInput, publishers: int) -> dict[str, Any]:
 
 
 # Payload --------------------------------------------------------------------------------------
-def compute_period(data: PeriodInput) -> dict[str, Any]:
+def compute_period(data: PeriodInput) -> PeriodPayload:
     """The stored payload of one completed period."""
     t: PeriodThresholds = data.limits
     articles = _articles(data)
@@ -353,8 +387,8 @@ def compute_period(data: PeriodInput) -> dict[str, Any]:
                            items=cov["items"], previous_ready=previous_usable)
     cmp_ = comparison(data, cov["publishers"])
     compared = cmp_["state"] == "ready"
-    trend = risers_and_coolers(data) if compared else {
-        "state": "hidden", "source": None, "rising": [], "cooling": []}
+    hidden: Trend = {"state": "hidden", "source": None, "rising": [], "cooling": []}
+    trend = risers_and_coolers(data) if compared else hidden
     mix = event_mix(data, compared)
     sections = {
         "top_stories": "ready" if snaps else "empty",

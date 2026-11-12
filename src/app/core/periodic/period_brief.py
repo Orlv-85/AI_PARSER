@@ -11,17 +11,23 @@ from app.core.daily.signals_brief import (
     HARD_EVENTS,
     ArticleRefs,
     BriefRules,
+    DigestItem,
+    IdMap,
+    Packet,
+    PacketItem,
     PacketTooLarge,
     Sentence,
     fit_packet,
     input_hash,
     is_review,
+    items_of,
     norm,
     parse_brief,
     request_body,
     request_key,
 )
 from app.core.periodic.period_model import MONTH, WEEK
+from app.core.periodic.period_payload import PeriodPayload
 
 PERIOD_BRIEF_VERSION = "period-signals-brief-1"
 # Per kind: bytes of the packet, allowed sentence counts, output bound in tokens, USD cap of one
@@ -69,45 +75,45 @@ def _prompt(kind: str) -> str:
 PERIOD_PROMPTS = {WEEK: _prompt(WEEK), MONTH: _prompt(MONTH)}
 
 
-def _build(payload: Mapping[str, Any], digest_items: Iterable[Mapping[str, Any]], *,
-           new_max: int | None, risers_max: int | None) -> tuple[dict[str, Any],
-                                                                 dict[str, dict[str, str]]]:
-    def items(group: str) -> list[Mapping[str, Any]]:
-        return [i for i in payload.get(group) or [] if isinstance(i, Mapping)]
-
-    new_items, riser_items = items("new")[:new_max], items("rising")[:risers_max]
+def _build(payload: PeriodPayload, digest_items: Iterable[DigestItem], *,
+           new_max: int | None, risers_max: int | None) -> tuple[Packet, IdMap]:
+    new_items = items_of(payload.get("new"))[:new_max]
+    riser_items = items_of(payload.get("rising"))[:risers_max]
     if (payload.get("sections") or {}).get("rising") != "ready":
         riser_items = []
-    stories_in = items("top_stories")
-    refs = ArticleRefs(digest_items, [stories_in, new_items, riser_items])
-    stories = []
+    stories_in = items_of(payload.get("top_stories"))
+    refs = ArticleRefs(digest_items, [link for item in (*stories_in, *new_items, *riser_items)
+                                      for link in item.get("links") or []])
+    stories: list[PacketItem] = []
     for story in stories_in:
-        entry: dict[str, Any] = {"label": norm(story["label"]), "outlets": story["publishers"],
-                                 "event": story["event_type"],
-                                 "articles": refs.of(story, PERIOD_LINKS_PER_ITEM)}
+        entry: PacketItem = {"label": norm(story["label"]), "outlets": story["publishers"],
+                             "event": story["event_type"],
+                             "articles": refs.of(story.get("links"), PERIOD_LINKS_PER_ITEM)}
         if is_review([norm(link["title"]) for link in story.get("links") or []]):
             entry["kind"] = "review"
         stories.append(entry)
-    new = [{"name": n["name"], "type": n["type"], "vendor": n.get("vendor"),
-            "outlets": n["publishers"], "what": n.get("one_liner") or n.get("novelty_quote") or "",
-            "articles": refs.of(n, PERIOD_LINKS_PER_ITEM)} for n in new_items]
-    risers = [{"name": r["name"], "type": r.get("type"), "vendor": r.get("vendor"),
-               "articles": refs.of(r, PERIOD_LINKS_PER_ITEM)} for r in riser_items]
-    mix = payload.get("event_mix") or {}
-    packet: dict[str, Any] = {
+    new: list[PacketItem] = [
+        {"name": n["name"], "type": n["type"], "vendor": n.get("vendor"),
+         "outlets": n["publishers"], "what": n.get("one_liner") or n.get("novelty_quote") or "",
+         "articles": refs.of(n.get("links"), PERIOD_LINKS_PER_ITEM)} for n in new_items]
+    risers: list[PacketItem] = [
+        {"name": r["name"], "type": r.get("type"), "vendor": r.get("vendor"),
+         "articles": refs.of(r.get("links"), PERIOD_LINKS_PER_ITEM)} for r in riser_items]
+    mix = payload.get("event_mix")
+    coverage = payload.get("coverage")
+    packet: Packet = {
         "kind": payload["period_kind"], "start": payload["period_start"],
         "end": payload["period_end"], "quiet": False,
-        "digest_items": (payload.get("coverage") or {}).get("items", 0),
+        "digest_items": coverage.get("items", 0) if coverage else 0,
         "stories": stories, "new": new, "risers": risers,
-        "event_counts": {r["label"]: r["stories"] for r in mix.get("types") or []
-                         if isinstance(r, Mapping) and r.get("event_type") in HARD_EVENTS
-                         and r.get("stories")}}
-    packet["articles"] = refs.articles
+        "event_counts": {r["label"]: r["stories"] for r in items_of(mix.get("types") if mix else [])
+                         if r.get("event_type") in HARD_EVENTS and r.get("stories")},
+        "articles": refs.articles}
     return packet, refs.id_map
 
 
-def period_packet(payload: Mapping[str, Any], digest_items: Sequence[Mapping[str, Any]]
-                  ) -> tuple[dict[str, Any], dict[str, dict[str, str]]]:
+def period_packet(payload: PeriodPayload, digest_items: Sequence[DigestItem]
+                  ) -> tuple[Packet, IdMap]:
     """(packet, id map) for one period from its stored payload and the digest items of its days.
 
     Ids `a1..aN` follow the first reference: top stories, New items, risers. Summaries are cut
@@ -128,13 +134,13 @@ def period_packet(payload: Mapping[str, Any], digest_items: Sequence[Mapping[str
     raise error
 
 
-def period_input_hash(packet: Mapping[str, Any], model: str) -> str:
+def period_input_hash(packet: Packet, model: str) -> str:
     return str(input_hash(packet, model, PERIOD_BRIEF_VERSION))
 
 
-def period_body(packet: Mapping[str, Any], model: str,
+def period_body(packet: Packet, model: str,
                 recovery: str | None = None) -> dict[str, Any]:
-    kind = str(packet["kind"])
+    kind = str(packet.get("kind"))
     return dict(request_body(packet, model, recovery, prompt=PERIOD_PROMPTS[kind],
                              max_output=PERIOD_MAX_OUTPUT[kind]))
 
@@ -143,7 +149,7 @@ def period_request_key(body: Mapping[str, Any]) -> str:
     return str(request_key(body, PERIOD_BRIEF_VERSION))
 
 
-def parse_period_brief(data: Any, packet: Mapping[str, Any], model: str) -> list[Sentence]:
+def parse_period_brief(data: object, packet: Packet, model: str) -> list[Sentence]:
     """The daily validation with the sentence counts of the packet's kind."""
-    return list(parse_brief(data, packet, model,
-                            BriefRules(PERIOD_SENTENCES[str(packet["kind"])], keep_valid=False)))
+    counts = PERIOD_SENTENCES[str(packet.get("kind"))]
+    return list(parse_brief(data, packet, model, BriefRules(counts, keep_valid=False)))
