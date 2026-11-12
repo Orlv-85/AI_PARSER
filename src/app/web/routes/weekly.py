@@ -10,6 +10,7 @@ from app.usecases.weekly_analytics import (
     WeeklyAnalyticsItem,
     WeeklyAnalyticsReport,
     WeeklyAnalyticsReportIndexEntry,
+    WeeklyDraft,
     read_weekly_report,
     save_weekly_report,
     stored_reports,
@@ -121,13 +122,15 @@ def _save_response(deps: WebDeps, payload: WeeklyAnalyticsPayload) -> WeeklyAnal
         deps.create_all()
         stored = save_weekly_report(
             deps.SessionLocal,
-            report_date=payload.report_date,
-            date_from=payload.date_from,
-            date_to=payload.date_to,
-            summary=payload.summary,
-            new=_items(payload.new),
-            trending_up=_items(payload.trending_up),
-            trending_down=_items(payload.trending_down),
+            payload.report_date,
+            WeeklyDraft(
+                date_from=payload.date_from,
+                date_to=payload.date_to,
+                summary=payload.summary,
+                new=_items(payload.new),
+                trending_up=_items(payload.trending_up),
+                trending_down=_items(payload.trending_down),
+            ),
         )
     return _build_weekly_analytics_response(report_date=payload.report_date,
                                             weekly_report=stored)

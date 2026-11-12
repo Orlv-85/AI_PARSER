@@ -71,7 +71,7 @@ from app.storage.daily_signals_ledger import (
 )
 from app.storage.journal_files import private_write
 from app.storage.models_sql import AIEntity, AIEntityOverride, Article
-from app.usecases.daily.signals_recompute import recompute_reports
+from app.usecases.daily.signals_recompute import RecomputeScope, recompute_reports
 
 LOGGER = logging.getLogger(__name__)
 
@@ -377,7 +377,7 @@ def run_signals(session: Session, settings: Any, options: RunOptions,
                                          counts=counts)
     # Through the latest completed day, so a backfill never leaves later reports stale (F1).
     until = max(options.report_date, now().date() - timedelta(days=1))
-    result = recompute_reports(repo, until, all_days=options.recompute_all, since=days[0],
+    result = recompute_reports(repo, until, RecomputeScope(options.recompute_all, days[0]),
                                now=now())
     session.commit()
     report.update(reports_written=[d.isoformat() for d in result.written],

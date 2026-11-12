@@ -32,7 +32,7 @@ from app.storage.models_sql import (
 from app.usecases.archive.capture import prune_articles
 from app.usecases.daily import signals_recompute
 from app.usecases.daily.signals import add_override
-from app.usecases.daily.signals_recompute import digest_text, recompute_reports
+from app.usecases.daily.signals_recompute import RecomputeScope, digest_text, recompute_reports
 
 COMPARABLE_FROM = date(2026, 10, 10)
 D = date(2026, 10, 16)
@@ -450,7 +450,7 @@ def test_recompute_bound_and_all_days(session, repo):
         repo.replace_membership(day)
         repo.save_extraction(article, extraction(model("Atlas")), content_hash="h")
     assert recompute_reports(repo, days[1], now=NOW).written == [days[1]]
-    assert recompute_reports(repo, days[1], now=NOW, all_days=True).written == [days[0]]
+    assert recompute_reports(repo, days[1], RecomputeScope(all_days=True), now=NOW).written == [days[0]]
 
 
 def _settled_day_with_new_item(session, repo):
@@ -482,7 +482,7 @@ def test_settled_day_keeps_its_snapshot(session, repo):
 @pytest.mark.parametrize("call", [{"since": D}, {"all_days": True}])
 def test_run_days_and_recompute_all_rewrite_settled_days(session, repo, call):
     later = _settled_day_with_new_item(session, repo)
-    assert D in recompute_reports(repo, later, now=NOW, **call).written
+    assert D in recompute_reports(repo, later, RecomputeScope(**call), now=NOW).written
     assert json.loads(repo.get_report(D).payload)["new"] == []
 
 
@@ -499,7 +499,7 @@ def test_day_that_lost_articles_keeps_its_snapshot(session, repo, all_days):
     prune_articles(session, older_than_days=365)
     session.flush()
     session.expire_all()
-    result = recompute_reports(repo, D, now=NOW, all_days=all_days)
+    result = recompute_reports(repo, D, RecomputeScope(all_days=all_days), now=NOW)
     assert not result.written and result.lost_articles == (D,)
     stored = repo.get_report(D)
     assert stored.payload_hash == before
