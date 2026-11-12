@@ -154,51 +154,69 @@ def _chips(signals: DailySignalsResponse) -> str:
     return f'<ul class="signal-chips">{chips}</ul>'
 
 
+def _section_note(signals: DailySignalsResponse, name: str) -> str | None:
+    state = signals.sections.get(name)
+    return state.note if state else None
+
+
+def _status_lines(signals: DailySignalsResponse, hide_spikes: bool) -> str:
+    if signals.status == "partial":
+        cov = signals.coverage
+        lines = [_status(f"Extracted {cov.extracted}/{cov.items} digest items; "
+                         "signals may be incomplete.")]
+    else:
+        lines = [_status(n) for n in signals.notes]
+    # The Rising/Spikes note moves to the status line when the card is hidden (not on quiet days).
+    rising_note = _section_note(signals, "rising")
+    if hide_spikes and not signals.quiet and rising_note:
+        lines.append(_status(rising_note))
+    return "".join(lines)
+
+
+def _cards(signals: DailySignalsResponse, hide_spikes: bool, spikes_only: bool) -> list[str]:
+    """A quiet day shows only cards that have items (no empty-state cards, FR-006)."""
+    labels = {c.event_type: event_label(1, c.label).split(" ", 1)[1]
+              for c in signals.event_counts}
+    cards = []
+    if signals.new or not signals.quiet:
+        cards.append(_card("New", "".join(_new_item(i) for i in signals.new),
+                           _section_note(signals, "new"), "signals-new",
+                           "Nothing was first seen in our corpus on this date."))
+    if signals.top_stories or not signals.quiet:
+        cards.append(_card("Top stories", "".join(_story(s, labels) for s in signals.top_stories),
+                           _section_note(signals, "top_stories"), "signals-top",
+                           "No story was covered by more than one publisher."))
+    if not hide_spikes:
+        note = None if signals.quiet else _section_note(signals, "rising")
+        cards.append(_card("Spikes" if spikes_only else "Rising",
+                           "".join(_trend(i) for i in signals.rising), note, "signals-rising",
+                           "Nothing is rising or spiking on this date."))
+    return cards
+
+
+def _cooling(signals: DailySignalsResponse) -> str:
+    state = signals.sections.get("cooling")
+    if not state or state.state != "ready":
+        return ""
+    return (f'<details class="signal-cooling"><summary>Cooling ({len(signals.cooling)})'
+            f'</summary><ul class="signal-list">'
+            f"{''.join(_trend(i) for i in signals.cooling)}</ul></details>")
+
+
+def _unavailable_note(signals: DailySignalsResponse | None) -> str:
+    return signals.notes[0] if signals is not None and signals.notes else UNAVAILABLE
+
+
 def render_signals(signals: DailySignalsResponse | None, *, read_error: bool = False) -> str:
     """Inner HTML of `#daily-signals-body`."""
     if read_error:
         return _status(READ_ERROR)
     if signals is None or signals.status == "unavailable":
-        note = signals.notes[0] if signals is not None and signals.notes else UNAVAILABLE
-        return _status(note)
-    labels = {c.event_type: event_label(1, c.label).split(" ", 1)[1]
-              for c in signals.event_counts}
-    lines = []
-    if signals.status == "partial":
-        cov = signals.coverage
-        lines.append(_status(f"Extracted {cov.extracted}/{cov.items} digest items; "
-                             "signals may be incomplete."))
-    else:
-        lines.extend(_status(n) for n in signals.notes)
-    sections = signals.sections
-    new_state = sections.get("new")
-    top_state = sections.get("top_stories")
-    rising_state = sections.get("rising")
-    cooling_state = sections.get("cooling")
-    spikes_only = rising_state is not None and rising_state.state == "spikes_only"
-    # A quiet day shows only cards that have items (no empty-state cards, FR-006).
+        return _status(_unavailable_note(signals))
+    rising = signals.sections.get("rising")
+    spikes_only = rising is not None and rising.state == "spikes_only"
     hide_spikes = not signals.rising and (signals.quiet or spikes_only)
-    # The Rising/Spikes note moves to the status line when the card is hidden (not on quiet days).
-    if hide_spikes and not signals.quiet and rising_state is not None and rising_state.note:
-        lines.append(_status(rising_state.note))
-    cards = []
-    if signals.new or not signals.quiet:
-        cards.append(_card("New", "".join(_new_item(i) for i in signals.new),
-                           new_state.note if new_state else None, "signals-new",
-                           "Nothing was first seen in our corpus on this date."))
-    if signals.top_stories or not signals.quiet:
-        cards.append(_card("Top stories", "".join(_story(s, labels) for s in signals.top_stories),
-                           top_state.note if top_state else None, "signals-top",
-                           "No story was covered by more than one publisher."))
-    if not hide_spikes:
-        note = rising_state.note if rising_state and not signals.quiet else None
-        cards.append(_card("Spikes" if spikes_only else "Rising",
-                           "".join(_trend(i) for i in signals.rising), note, "signals-rising",
-                           "Nothing is rising or spiking on this date."))
-    cooling = ""
-    if cooling_state and cooling_state.state == "ready":
-        cooling = (f'<details class="signal-cooling"><summary>Cooling ({len(signals.cooling)})'
-                   f'</summary><ul class="signal-list">'
-                   f"{''.join(_trend(i) for i in signals.cooling)}</ul></details>")
+    cards = _cards(signals, hide_spikes, spikes_only)
     grid = f'<div class="signal-grid cols-{len(cards)}">{"".join(cards)}</div>' if cards else ""
-    return f'{_brief(signals)}{_chips(signals)}{"".join(lines)}{grid}{cooling}'
+    return (f"{_brief(signals)}{_chips(signals)}{_status_lines(signals, hide_spikes)}{grid}"
+            f"{_cooling(signals)}")

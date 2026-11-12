@@ -296,40 +296,56 @@ def _replace(entity: ExtractedEntity, **changes: Any) -> ExtractedEntity:
 
 
 def _entity(raw: Any, haystack: str, published_at: date | None, reject) -> ExtractedEntity | None:
-    if not isinstance(raw, dict) or not isinstance(raw.get("name"), str) \
-            or not 1 <= len(raw["name"]) <= 120 or not raw["name"].strip():
-        reject("malformed_entity")
+    name = _grounded_name(raw, haystack, reject)
+    if name is None:
         return None
-    name = raw["name"].strip()
-    if ws(name) not in haystack:
-        reject("name_not_grounded")
-        return None
-    canonical = _short(raw.get("canonical_name"))
-    if canonical is None or ws(canonical) not in haystack:
-        canonical = name
-    vendor = _short(raw.get("vendor"))
-    if vendor is not None and ws(vendor) not in haystack:
-        vendor = None
     raw_type = raw["type"].strip().lower() if isinstance(raw.get("type"), str) else ""
     entity_type = TYPE_SYNONYMS.get(raw_type, raw_type)
     if entity_type not in ENTITY_TYPES:
         reject("type_unknown")
         return None
-    role = raw["role"] if raw.get("role") in ("primary", "mentioned") else "mentioned"
-    is_new = raw.get("is_new") is True
-    quote = raw.get("is_new_quote")
-    if is_new:
-        if not (isinstance(quote, str) and len(quote.split()) <= 30 and len(quote) <= 300
-                and ws(quote) in haystack
-                and quote_names_entity(quote, name, canonical, entity_type, vendor)):
-            reject("novelty_unsupported")
-            is_new = False
-        elif is_retrospective(quote, published_at):
-            reject("novelty_retrospective")
-            is_new = False
-    novelty_quote = quote.strip() if is_new and isinstance(quote, str) else None
-    return ExtractedEntity(name=name, canonical_name=canonical, entity_type=entity_type,
-                           vendor=vendor, role=role, is_new=is_new, novelty_quote=novelty_quote)
+    entity = ExtractedEntity(
+        name=name, canonical_name=_grounded(raw.get("canonical_name"), haystack) or name,
+        entity_type=entity_type, vendor=_grounded(raw.get("vendor"), haystack),
+        role=raw["role"] if raw.get("role") in ("primary", "mentioned") else "mentioned",
+        is_new=False, novelty_quote=None)
+    if raw.get("is_new") is not True:
+        return entity
+    quote = _novelty_quote(raw.get("is_new_quote"), entity, haystack, published_at, reject)
+    return _replace(entity, is_new=quote is not None, novelty_quote=quote)
+
+
+def _grounded_name(raw: Any, haystack: str, reject) -> str | None:
+    if not isinstance(raw, dict) or not isinstance(raw.get("name"), str) \
+            or not 1 <= len(raw["name"]) <= 120 or not raw["name"].strip():
+        reject("malformed_entity")
+        return None
+    name: str = raw["name"].strip()
+    if ws(name) not in haystack:
+        reject("name_not_grounded")
+        return None
+    return name
+
+
+def _grounded(value: Any, haystack: str) -> str | None:
+    """A short optional field kept only when it appears in the article text."""
+    short = _short(value)
+    return short if short is not None and ws(short) in haystack else None
+
+
+def _novelty_quote(quote: Any, entity: ExtractedEntity, haystack: str,
+                   published_at: date | None, reject) -> str | None:
+    """The stripped quote when it supports `is_new`, else None with the reason."""
+    if not (isinstance(quote, str) and len(quote.split()) <= 30 and len(quote) <= 300
+            and ws(quote) in haystack
+            and quote_names_entity(quote, entity.name, entity.canonical_name,
+                                   entity.entity_type, entity.vendor)):
+        reject("novelty_unsupported")
+        return None
+    if is_retrospective(quote, published_at):
+        reject("novelty_retrospective")
+        return None
+    return quote.strip()
 
 
 def mention_key(entity: ExtractedEntity) -> tuple[str, str]:

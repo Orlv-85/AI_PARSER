@@ -334,25 +334,42 @@ def grounding_error(text: str, numbers: set[str], names: str,
     return None
 
 
-# pylint: disable-next=too-many-branches
-def _sentence(raw: Any, ctx: _Context, seen: set[Any]) -> Sentence:
+def _shape(raw: Any, ctx: _Context) -> tuple[str, list[str], dict[str, str]]:
+    """(text, ids, quote) of a sentence with a valid schema, length, script and quote."""
     if not isinstance(raw, dict) or set(raw) != {"text", "ids", "quote"}:
         raise BriefInvalid("schema")
     text, ids, quote = raw["text"], raw["ids"], raw["quote"]
+    _check_text(text)
+    _check_ids(ids, ctx)
+    _check_quote(quote, ids, ctx)
+    return text, ids, quote
+
+
+def _check_text(text: Any) -> None:
     if not isinstance(text, str) or not 20 <= len(text) <= 240:
         raise BriefInvalid("text_length")
     if MARKUP.search(text):
         raise BriefInvalid("url_or_markup")
     if NON_ENGLISH.search(text):
         raise BriefInvalid("non_english")
+
+
+def _check_ids(ids: Any, ctx: _Context) -> None:
     if not isinstance(ids, list) or not 1 <= len(ids) <= 3 or \
             any(not isinstance(i, str) or i not in ctx.articles for i in ids):
         raise BriefInvalid("unknown_id")
+
+
+def _check_quote(quote: Any, ids: list[str], ctx: _Context) -> None:
     if not isinstance(quote, dict) or set(quote) != {"id", "span"} or quote["id"] not in ids \
             or not _span_ok(quote["span"]):
         raise BriefInvalid("quote_schema")
     if norm(quote["span"]).casefold() not in ctx.text(quote["id"]).casefold():
         raise BriefInvalid("quote_not_found")
+
+
+def _check_grounding(text: str, ids: list[str], ctx: _Context) -> None:
+    """Numbers and names of the sentence must come from the cited articles."""
     cited = " ".join(ctx.text(i) for i in ids)
     numbers = set(NUMBER.findall(cited)).union(*(ctx.outlets.get(i, set()) for i in ids))
     if ctx.packet["quiet"]:
@@ -361,6 +378,10 @@ def _sentence(raw: Any, ctx: _Context, seen: set[Any]) -> Sentence:
     code = grounding_error(norm(text), numbers, names)
     if code:
         raise BriefInvalid(code)
+
+
+def _claim(ids: list[str], ctx: _Context, seen: set[Any]) -> None:
+    """Record the sentence ids and its stories in `seen`; a repeat of either is refused."""
     key = tuple(sorted(ids))
     if key in seen:
         raise BriefInvalid("duplicate_sentence")
@@ -371,6 +392,12 @@ def _sentence(raw: Any, ctx: _Context, seen: set[Any]) -> Sentence:
     # Only an accepted sentence claims its ids and stories; a dropped one claims nothing.
     seen.add(key)
     seen.update(stories)
+
+
+def _sentence(raw: Any, ctx: _Context, seen: set[Any]) -> Sentence:
+    text, ids, quote = _shape(raw, ctx)
+    _check_grounding(text, ids, ctx)
+    _claim(ids, ctx, seen)
     return Sentence(text=text.strip(), ids=tuple(ids), quote_id=quote["id"],
                     quote=quote["span"].strip())
 
