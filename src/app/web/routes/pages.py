@@ -253,7 +253,7 @@ def _logout_response(deps: WebDeps, request: Request) -> JSONResponse:
     return response
 
 
-def build_pages_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-many-statements
+def build_pages_router(deps: WebDeps) -> APIRouter:
     router = APIRouter()
 
     @router.get("/", response_class=HTMLResponse, response_model=str)

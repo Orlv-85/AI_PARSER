@@ -66,7 +66,7 @@ flowchart LR
   (date format and default), even though the enabled home validates malformed dates as 400.
   Tests: `test_home_date_openapi_matches_daily`.
 - Nested page handlers only delegate to module-level helpers; route registration, names,
-  response models and OpenAPI stay unchanged. Tests: `test_page_router_handlers_only_delegate`,
+  response models and OpenAPI stay unchanged. Tests: `test_router_handlers_only_delegate`,
   `test_route_table_order_names_and_models_are_pinned`, `test_auth_middleware_coverage_is_pinned`.
 - Digest links from bulletin and period pages use `/daily`; Full report uses the stored
   `full_report_url` and item count. The digest date picker keeps the current path when setting
@@ -203,10 +203,10 @@ flowchart LR
 - `/static/` is served by `_NoCacheStaticFiles`: correct content type, an ETag and
   `Cache-Control: no-cache`, so the browser revalidates and a deploy never mixes new HTML with
   old JS. Tests: `test_static_asset_is_served_with_type_and_no_cache`.
-- `/static/admin/` has the protection of `/admin` (`is_protected_ui` in `auth_middleware`); the
+- `/static/admin/` has the protection of `/admin` (`_requires_auth` in `web/app.py`); the
   check runs on the normalized, lower-cased path (`..`, `//`, `.` and case do not bypass it);
   every other `/static/` path is public. Tests: `test_admin_assets_need_a_session_like_admin`,
-  `test_admin_assets_check_uses_normalized_path`.
+  `test_admin_assets_check_uses_normalized_path`, `test_auth_rule_covers_paths_outside_the_route_table`.
 - The admin event wiring lives in `static/admin/sources.js` (the last admin script) because it uses
   functions of all admin files. No test.
 - The asset files are package data of `app.web` and ship in the wheel. Tests:

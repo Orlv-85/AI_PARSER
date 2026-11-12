@@ -11,12 +11,12 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
-from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.categories import READABLE_CATEGORIES
-from app.usecases.news_reads import agent_article, agent_rows, news_rows
+from app.usecases.news_reads import ArticleRow, agent_article, agent_rows, news_rows
 from app.web.models import DigestLinkFeedItem, NewsArticleDetail, NewsItem
 from app.web.routes import WebDeps
+from app.web.routes.common import _http_errors
 
 _NEWS_LINKS_DATE_QUERY = Query(alias="date")
 
@@ -81,6 +81,104 @@ def _link_item(article: Any, source_key: str | None, source_name: str | None,
     )
 
 
+def _news_rows(deps: WebDeps, filters: dict[str, object]) -> list[ArticleRow]:
+    with _http_errors():
+        deps.create_all()
+        rows: list[ArticleRow] = news_rows(deps.SessionLocal, **filters)
+        return rows
+
+
+def _news_items(rows: list[ArticleRow]) -> list[NewsItem]:
+    return [_news_item(*row) for row in rows]
+
+
+def _news_item(article: Any, source_key: str | None, source_name: str | None) -> NewsItem:
+    return NewsItem(
+        title=article.title,
+        published_at=article.published_at,
+        rank_score=article.rank_score,
+        url_canonical=article.url_canonical,
+        source_id=article.source_id,
+        source_key=source_key,
+        source_name=source_name,
+        **_article_category_metadata(article),
+    )
+
+
+def _export_item(article: Any, source_key: str | None, source_name: str | None,
+                 include_content: bool) -> dict[str, object | None]:
+    item: dict[str, object | None] = {
+        "article_id": article.id,
+        "title": article.title,
+        "published_at": article.published_at,
+        "rank_score": article.rank_score,
+        "url_canonical": article.url_canonical,
+        "source_id": article.source_id,
+        "source_key": source_key,
+        "source_name": source_name,
+    }
+    if include_content:
+        item["summary"] = article.summary
+        item["content"] = article.content
+        item["url"] = article.url
+    item.update(_article_category_metadata(article))
+    return item
+
+
+def _export_response(rows: list[ArticleRow], include_content: bool) -> JSONResponse:
+    payload = [_export_item(article, source_key, source_name, include_content)
+               for article, source_key, source_name in rows]
+    filename = datetime.now(UTC).strftime("news-export-%Y%m%dT%H%M%SZ.json")
+    return JSONResponse(
+        content=jsonable_encoder(payload),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _links_response(deps: WebDeps, target_date: date, *, limit: int, offset: int,
+                    min_ai_relevance: float, include_content: bool) -> list[DigestLinkFeedItem]:
+    with _http_errors():
+        deps.create_all()
+        rows = agent_rows(
+            deps.SessionLocal,
+            hours=None,
+            limit=limit,
+            offset=offset,
+            query=None,
+            days=1,
+            sort="published",
+            min_ai_relevance=min_ai_relevance,
+            date_from=target_date,
+            date_to=target_date,
+        )
+    return [_link_item(article, source_key, source_name, include_content)
+            for article, source_key, source_name in rows]
+
+
+def _article_response(deps: WebDeps, article_id: int) -> NewsArticleDetail:
+    with _http_errors():
+        deps.create_all()
+        row = agent_article(deps.SessionLocal, article_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    article, source_key, source_name = row
+    return NewsArticleDetail(
+        article_id=article.id,
+        title=article.title,
+        summary=article.summary,
+        content=article.content,
+        published_at=article.published_at,
+        rank_score=article.rank_score,
+        url=article.url,
+        url_canonical=article.url_canonical,
+        source_id=article.source_id,
+        source_key=source_key,
+        source_name=source_name,
+        **_article_category_metadata(article),
+    )
+
+
 def build_news_router(deps: WebDeps) -> APIRouter:
     router = APIRouter()
 
@@ -99,28 +197,10 @@ def build_news_router(deps: WebDeps) -> APIRouter:
         date_from: date | None = None,
         date_to: date | None = None,
     ) -> list[NewsItem]:
-        try:
-            deps.create_all()
-            rows = news_rows(deps.SessionLocal, **_view_filters(
-                hours=hours, date_from=date_from, date_to=date_to, category=category,
-                limit=limit, min_ai_relevance=min_ai_relevance, query=query, days=days,
-                sort=sort))
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
-
-        return [
-            NewsItem(
-                title=article.title,
-                published_at=article.published_at,
-                rank_score=article.rank_score,
-                url_canonical=article.url_canonical,
-                source_id=article.source_id,
-                source_key=source_key,
-                source_name=source_name,
-                **_article_category_metadata(article),
-            )
-            for article, source_key, source_name in rows
-        ]
+        return _news_items(_news_rows(deps, _view_filters(
+            hours=hours, date_from=date_from, date_to=date_to, category=category,
+            limit=limit, min_ai_relevance=min_ai_relevance, query=query, days=days,
+            sort=sort)))
 
     @router.get("/api/news/export")
     def export_news(
@@ -136,39 +216,10 @@ def build_news_router(deps: WebDeps) -> APIRouter:
         date_from: date | None = None,
         date_to: date | None = None,
     ) -> JSONResponse:
-        try:
-            deps.create_all()
-            rows = news_rows(deps.SessionLocal, **_view_filters(
-                hours=hours, date_from=date_from, date_to=date_to, category=category,
-                limit=limit, min_ai_relevance=min_ai_relevance, query=query, days=days,
-                sort=sort, include_content=include_content))
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
-
-        payload: list[dict[str, object | None]] = []
-        for article, source_key, source_name in rows:
-            item: dict[str, object | None] = {
-                "article_id": article.id,
-                "title": article.title,
-                "published_at": article.published_at,
-                "rank_score": article.rank_score,
-                "url_canonical": article.url_canonical,
-                "source_id": article.source_id,
-                "source_key": source_key,
-                "source_name": source_name,
-            }
-            if include_content:
-                item["summary"] = article.summary
-                item["content"] = article.content
-                item["url"] = article.url
-            item.update(_article_category_metadata(article))
-            payload.append(item)
-
-        filename = datetime.now(UTC).strftime("news-export-%Y%m%dT%H%M%SZ.json")
-        return JSONResponse(
-            content=jsonable_encoder(payload),
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-        )
+        return _export_response(_news_rows(deps, _view_filters(
+            hours=hours, date_from=date_from, date_to=date_to, category=category,
+            limit=limit, min_ai_relevance=min_ai_relevance, query=query, days=days,
+            sort=sort, include_content=include_content)), include_content)
 
     @router.get(
         "/api/news/links",
@@ -186,26 +237,11 @@ def build_news_router(deps: WebDeps) -> APIRouter:
     ) -> list[DigestLinkFeedItem]:
         # Without a session or the publish token the content fields are left out (set by
         # the auth middleware); the answer is otherwise the same, so old clients keep working.
-        include_content = include_content and getattr(request.state, "full_text_allowed", False)
-        try:
-            deps.create_all()
-            rows = agent_rows(
-                deps.SessionLocal,
-                hours=None,
-                limit=limit,
-                offset=offset,
-                query=None,
-                days=1,
-                sort="published",
-                min_ai_relevance=min_ai_relevance,
-                date_from=target_date,
-                date_to=target_date,
-            )
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
-
-        return [_link_item(article, source_key, source_name, include_content)
-                for article, source_key, source_name in rows]
+        return _links_response(
+            deps, target_date, limit=limit, offset=offset, min_ai_relevance=min_ai_relevance,
+            include_content=include_content
+            and getattr(request.state, "full_text_allowed", False),
+        )
 
     return router
 
@@ -215,29 +251,6 @@ def build_news_article_router(deps: WebDeps) -> APIRouter:
 
     @router.get("/api/news/{article_id}", response_model=NewsArticleDetail)
     def get_news_article(article_id: int) -> NewsArticleDetail:
-        try:
-            deps.create_all()
-            row = agent_article(deps.SessionLocal, article_id)
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
-
-        if row is None:
-            raise HTTPException(status_code=404, detail="Article not found")
-
-        article, source_key, source_name = row
-        return NewsArticleDetail(
-            article_id=article.id,
-            title=article.title,
-            summary=article.summary,
-            content=article.content,
-            published_at=article.published_at,
-            rank_score=article.rank_score,
-            url=article.url,
-            url_canonical=article.url_canonical,
-            source_id=article.source_id,
-            source_key=source_key,
-            source_name=source_name,
-            **_article_category_metadata(article),
-        )
+        return _article_response(deps, article_id)
 
     return router

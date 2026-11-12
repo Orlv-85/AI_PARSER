@@ -1,9 +1,13 @@
-"""Pins the web route table and auth coverage so moving routes between modules changes neither."""
+"""Pins the web route table, parameters, thin handlers and auth coverage so moving routes between
+modules changes none of them."""
 
+import ast
+import inspect
 import re
 from importlib import import_module
-from typing import Any
+from typing import Any, cast
 
+import pytest
 from fastapi.datastructures import DefaultPlaceholder
 from fastapi.routing import APIRoute, iter_route_contexts
 from fastapi.testclient import TestClient
@@ -12,7 +16,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import get_settings
 from app.storage.models_sql import Base
-from app.web.app import create_app
+from app.web.app import _is_allowed, _requires_auth, create_app
 
 _PUBLISH_TOKEN = "publish-token-0123456789abcdef0123"
 
@@ -138,6 +142,59 @@ _PUBLISH_ROUTES = {
 }
 
 
+# Query and path parameters of the news, weekly and source onboarding routers, from OpenAPI:
+# (method, path, name, required, default, (minimum, maximum)).
+_ROUTE_PARAMS: list[tuple[object, ...]] = [
+    ('GET', '/api/news', 'hours', False, 24, (1, 720)),
+    ('GET', '/api/news', 'limit', False, 30, (1, 200)),
+    ('GET', '/api/news', 'min_ai_relevance', False, 0.2, (0.0, 1.0)),
+    ('GET', '/api/news', 'query', False, None, (None, None)),
+    ('GET', '/api/news', 'days', False, 7, (1, 365)),
+    ('GET', '/api/news', 'sort', False, 'rank', (None, None)),
+    ('GET', '/api/news', 'category', False, None, (None, None)),
+    ('GET', '/api/news', 'date_from', False, None, (None, None)),
+    ('GET', '/api/news', 'date_to', False, None, (None, None)),
+    ('GET', '/api/news/export', 'hours', False, 24, (1, 720)),
+    ('GET', '/api/news/export', 'limit', False, 30, (1, 200)),
+    ('GET', '/api/news/export', 'min_ai_relevance', False, 0.2, (0.0, 1.0)),
+    ('GET', '/api/news/export', 'query', False, None, (None, None)),
+    ('GET', '/api/news/export', 'days', False, 7, (1, 365)),
+    ('GET', '/api/news/export', 'sort', False, 'rank', (None, None)),
+    ('GET', '/api/news/export', 'category', False, None, (None, None)),
+    ('GET', '/api/news/export', 'include_content', False, False, (None, None)),
+    ('GET', '/api/news/export', 'date_from', False, None, (None, None)),
+    ('GET', '/api/news/export', 'date_to', False, None, (None, None)),
+    ('GET', '/api/news/links', 'date', True, None, (None, None)),
+    ('GET', '/api/news/links', 'limit', False, 30, (1, 200)),
+    ('GET', '/api/news/links', 'offset', False, 0, (0, None)),
+    ('GET', '/api/news/links', 'min_ai_relevance', False, 0.2, (0.0, 1.0)),
+    ('GET', '/api/news/links', 'include_content', False, False, (None, None)),
+    ('GET', '/api/news/weekly-analytics', 'date', False, None, (None, None)),
+    ('GET', '/api/news/weekly-analytics/reports', 'limit', False, 52, (1, 260)),
+    ('GET', '/api/news/weekly-analytics/freshness', 'date', False, None, (None, None)),
+    ('GET', '/api/news/{article_id}', 'article_id', True, None, (None, None)),
+    ('POST', '/api/source-onboarding/batches/{batch_id}/check', 'batch_id', True, None, (1, None)),
+    ('POST', '/api/source-onboarding/batches/{batch_id}/approve-ready', 'batch_id',
+     True, None, (1, None)),
+    ('GET', '/api/source-onboarding/overlaps', 'batch_id', False, None, (1, None)),
+    ('GET', '/api/source-onboarding/overlaps', 'candidate_id', False, [], (None, None)),
+    ('GET', '/api/source-onboarding/candidates', 'batch_id', False, None, (1, None)),
+    ('GET', '/api/source-onboarding/candidates', 'status', False, None, (None, None)),
+    ('GET', '/api/source-onboarding/candidates', 'validation_status', False, None, (None, None)),
+    ('GET', '/api/source-onboarding/batches/{batch_id}/summary', 'batch_id',
+     True, None, (None, None)),
+    ('POST', '/api/source-onboarding/candidates/{candidate_id}/approve', 'candidate_id',
+     True, None, (1, None)),
+    ('POST', '/api/source-onboarding/candidates/{candidate_id}/disable', 'candidate_id',
+     True, None, (1, None)),
+    ('POST', '/api/source-onboarding/candidates/{candidate_id}/reject', 'candidate_id',
+     True, None, (1, None)),
+    ('POST', '/api/source-onboarding/candidates/{candidate_id}/mark-duplicate', 'candidate_id',
+     True, None, (1, None)),
+    ('PATCH', '/api/source-onboarding/candidates/{candidate_id}', 'candidate_id',
+     True, None, (1, None)),
+]
+
 def _type_name(value: object) -> str | None:
     if value is None:
         return None
@@ -211,3 +268,65 @@ def test_auth_middleware_coverage_is_pinned(monkeypatch, tmp_path) -> None:
             publish_routes.add((method, path))
     assert open_routes == _OPEN_ROUTES
     assert publish_routes == _PUBLISH_ROUTES
+
+
+def test_auth_rule_covers_paths_outside_the_route_table() -> None:
+    assert not _requires_auth("HEAD", "/api/news/links")
+    assert _requires_auth("POST", "/api/news/links")
+    assert _requires_auth("GET", "/api/unknown")
+    assert not _requires_auth("POST", "/api/auth/logout")
+    assert not _requires_auth("GET", "/unknown-page")
+    assert _requires_auth("GET", "/static//Admin/../admin/app.js")
+    assert not _requires_auth("GET", "/static/app.css")
+
+
+def test_publish_token_opens_only_post_to_publish_paths() -> None:
+    assert _is_allowed("POST", "/api/news/digests", has_token=True)
+    assert not _is_allowed("POST", "/api/news/digests", has_token=False)
+    assert not _is_allowed("PUT", "/api/news/weekly-analytics", has_token=True)
+    assert not _is_allowed("POST", "/api/update/run", has_token=True)
+    assert _is_allowed("GET", "/api/news/digests", has_token=False)
+
+
+def _param_rows(app, paths: set[str]) -> list[tuple[object, ...]]:
+    rows: list[tuple[object, ...]] = []
+    for path, operations in app.openapi()["paths"].items():
+        if path not in paths:
+            continue
+        for method, operation in operations.items():
+            for param in operation.get("parameters", []):
+                schema = param["schema"]
+                bounds = schema.get("anyOf", [schema])[0]
+                rows.append((method.upper(), path, param["name"], param.get("required", False),
+                             schema.get("default"),
+                             (bounds.get("minimum"), bounds.get("maximum"))))
+    return rows
+
+
+def test_route_parameters_are_pinned(monkeypatch, tmp_path) -> None:
+    client = _client(monkeypatch, tmp_path)
+    paths = {str(row[1]) for row in _ROUTE_PARAMS}
+    assert _param_rows(client.app, paths) == _ROUTE_PARAMS
+
+
+@pytest.mark.parametrize("module,factory", [
+    ("pages", "build_pages_router"),
+    ("sources", "build_sources_router"),
+    ("news", "build_news_router"),
+    ("news", "build_news_article_router"),
+    ("weekly", "build_weekly_router"),
+])
+def test_router_handlers_only_delegate(module: str, factory: str) -> None:
+    builder = getattr(import_module(f"app.web.routes.{module}"), factory)
+    tree = ast.parse(inspect.getsource(builder))
+    handlers = [node for node in cast(ast.FunctionDef, tree.body[0]).body
+                if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)]
+    assert handlers
+    for handler in handlers:
+        assert len(handler.body) == 1, handler.name
+        statement = handler.body[0]
+        assert isinstance(statement, ast.Return), handler.name
+        assert isinstance(statement.value, ast.Call | ast.Await), handler.name
+        # Mapping rows inline would move handler logic back into the factory.
+        assert not any(isinstance(node, ast.ListComp | ast.SetComp | ast.DictComp
+                                  | ast.GeneratorExp) for node in ast.walk(statement)), handler.name

@@ -4,8 +4,7 @@ import re
 from datetime import UTC, date, datetime, timedelta
 from html import unescape
 
-from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy.exc import SQLAlchemyError
+from fastapi import APIRouter, Query
 
 from app.usecases.weekly_analytics import (
     WeeklyAnalyticsItem,
@@ -25,7 +24,7 @@ from app.web.models import (
     WeeklyAnalyticsResponse,
 )
 from app.web.routes import WebDeps
-from app.web.routes.common import _OPTIONAL_WEEKLY_ANALYTICS_DATE_QUERY
+from app.web.routes.common import _OPTIONAL_WEEKLY_ANALYTICS_DATE_QUERY, _http_errors
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 
@@ -48,35 +47,37 @@ def _build_weekly_analytics_response(
             trending_down=[],
         )
 
-    def _serialize_items(items: list[WeeklyAnalyticsItem]) -> list[WeeklyAnalyticsItemPayload]:
-        payload: list[WeeklyAnalyticsItemPayload] = []
-        for item in items:
-            if not item.url.startswith(("http://", "https://")):
-                continue
-            title = _plain_text(item.title, max_length=255)
-            summary = _plain_text(item.summary, max_length=2000)
-            if not title or not summary:
-                continue
-            payload.append(
-                WeeklyAnalyticsItemPayload(
-                    title=title,
-                    summary=summary,
-                    url=item.url,
-                    **getattr(item, "details", {}),
-                )
-            )
-        return payload
-
     return WeeklyAnalyticsResponse(
         report_date=weekly_report.report_date,
         date_from=weekly_report.date_from,
         date_to=weekly_report.date_to,
         summary=weekly_report.summary,
-        new=_serialize_items(weekly_report.new),
-        trending_up=_serialize_items(weekly_report.trending_up),
-        trending_down=_serialize_items(weekly_report.trending_down),
+        new=_item_payloads(weekly_report.new),
+        trending_up=_item_payloads(weekly_report.trending_up),
+        trending_down=_item_payloads(weekly_report.trending_down),
         **{"status": "legacy", **getattr(weekly_report, "metadata", {})},
     )
+
+
+def _item_payloads(items: list[WeeklyAnalyticsItem]) -> list[WeeklyAnalyticsItemPayload]:
+    """Items with an http(s) URL and a non-empty plain-text title and summary."""
+    payload: list[WeeklyAnalyticsItemPayload] = []
+    for item in items:
+        if not item.url.startswith(("http://", "https://")):
+            continue
+        title = _plain_text(item.title, max_length=255)
+        summary = _plain_text(item.summary, max_length=2000)
+        if not title or not summary:
+            continue
+        payload.append(
+            WeeklyAnalyticsItemPayload(
+                title=title,
+                summary=summary,
+                url=item.url,
+                **getattr(item, "details", {}),
+            )
+        )
+    return payload
 
 
 def _plain_text(value: str, *, max_length: int) -> str:
@@ -107,6 +108,63 @@ def _items(items: list[WeeklyAnalyticsItemPayload]) -> list[dict[str, str]]:
             for item in items]
 
 
+def _report_response(deps: WebDeps, target_date: date | None) -> WeeklyAnalyticsResponse:
+    with _http_errors():
+        deps.create_all()
+        report_date, report = read_weekly_report(
+            deps.SessionLocal, target_date, datetime.now(UTC).date())
+    return _build_weekly_analytics_response(report_date=report_date, weekly_report=report)
+
+
+def _save_response(deps: WebDeps, payload: WeeklyAnalyticsPayload) -> WeeklyAnalyticsResponse:
+    with _http_errors(409):
+        deps.create_all()
+        stored = save_weekly_report(
+            deps.SessionLocal,
+            report_date=payload.report_date,
+            date_from=payload.date_from,
+            date_to=payload.date_to,
+            summary=payload.summary,
+            new=_items(payload.new),
+            trending_up=_items(payload.trending_up),
+            trending_down=_items(payload.trending_down),
+        )
+    return _build_weekly_analytics_response(report_date=payload.report_date,
+                                            weekly_report=stored)
+
+
+def _report_list_response(deps: WebDeps, limit: int) -> WeeklyAnalyticsReportListResponse:
+    with _http_errors():
+        deps.create_all()
+        items = stored_reports(deps.SessionLocal, limit)
+    return _build_weekly_report_list_response(items=items)
+
+
+def _freshness_response(deps: WebDeps,
+                        target_date: date | None) -> WeeklyAnalyticsFreshnessResponse:
+    with _http_errors():
+        deps.create_all()
+        fresh = weekly_freshness(deps.SessionLocal, target_date, datetime.now(UTC).date())
+
+    run = fresh.latest_fetch_run
+    dates = {"report_date": fresh.report_date, "date_from": fresh.date_from,
+             "date_to": fresh.date_to, "article_count": fresh.article_count}
+    if run is None:
+        return WeeklyAnalyticsFreshnessResponse(**dates)
+
+    return WeeklyAnalyticsFreshnessResponse(
+        **dates,
+        latest_fetch_run_id=run.run_id,
+        latest_fetch_status=run.status,
+        latest_fetch_started_at=run.started_at,
+        latest_fetch_finished_at=run.finished_at,
+        latest_fetch_fetched=run.fetched_count,
+        latest_fetch_new=run.new_count,
+        latest_fetch_duplicates=run.duplicate_count,
+        latest_fetch_errors=run.error_count,
+    )
+
+
 def build_weekly_router(deps: WebDeps) -> APIRouter:
     router = APIRouter()
 
@@ -116,42 +174,12 @@ def build_weekly_router(deps: WebDeps) -> APIRouter:
         *,
         target_date: date | None = _OPTIONAL_WEEKLY_ANALYTICS_DATE_QUERY,
     ) -> WeeklyAnalyticsResponse:
-        try:
-            deps.create_all()
-            report_date, report = read_weekly_report(
-                deps.SessionLocal, target_date, datetime.now(UTC).date())
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
-
-        return _build_weekly_analytics_response(
-            report_date=report_date,
-            weekly_report=report,
-        )
+        return _report_response(deps, target_date)
 
     @router.post("/api/news/weekly-analytics", response_model=WeeklyAnalyticsResponse,
                  response_model_exclude_unset=True)
     def save_weekly_ai_analytics(payload: WeeklyAnalyticsPayload) -> WeeklyAnalyticsResponse:
-        try:
-            deps.create_all()
-            stored = save_weekly_report(
-                deps.SessionLocal,
-                report_date=payload.report_date,
-                date_from=payload.date_from,
-                date_to=payload.date_to,
-                summary=payload.summary,
-                new=_items(payload.new),
-                trending_up=_items(payload.trending_up),
-                trending_down=_items(payload.trending_down),
-            )
-        except ValueError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
-
-        return _build_weekly_analytics_response(
-            report_date=payload.report_date,
-            weekly_report=stored,
-        )
+        return _save_response(deps, payload)
 
     @router.get(
         "/api/news/weekly-analytics/reports",
@@ -161,12 +189,7 @@ def build_weekly_router(deps: WebDeps) -> APIRouter:
         *,
         limit: int = Query(52, ge=1, le=260),
     ) -> WeeklyAnalyticsReportListResponse:
-        try:
-            deps.create_all()
-            items = stored_reports(deps.SessionLocal, limit)
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
-        return _build_weekly_report_list_response(items=items)
+        return _report_list_response(deps, limit)
 
     @router.get(
         "/api/news/weekly-analytics/freshness",
@@ -176,28 +199,6 @@ def build_weekly_router(deps: WebDeps) -> APIRouter:
         *,
         target_date: date | None = _OPTIONAL_WEEKLY_ANALYTICS_DATE_QUERY,
     ) -> WeeklyAnalyticsFreshnessResponse:
-        try:
-            deps.create_all()
-            fresh = weekly_freshness(deps.SessionLocal, target_date, datetime.now(UTC).date())
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="News storage is unavailable") from exc
-
-        run = fresh.latest_fetch_run
-        dates = {"report_date": fresh.report_date, "date_from": fresh.date_from,
-                 "date_to": fresh.date_to, "article_count": fresh.article_count}
-        if run is None:
-            return WeeklyAnalyticsFreshnessResponse(**dates)
-
-        return WeeklyAnalyticsFreshnessResponse(
-            **dates,
-            latest_fetch_run_id=run.run_id,
-            latest_fetch_status=run.status,
-            latest_fetch_started_at=run.started_at,
-            latest_fetch_finished_at=run.finished_at,
-            latest_fetch_fetched=run.fetched_count,
-            latest_fetch_new=run.new_count,
-            latest_fetch_duplicates=run.duplicate_count,
-            latest_fetch_errors=run.error_count,
-        )
+        return _freshness_response(deps, target_date)
 
     return router

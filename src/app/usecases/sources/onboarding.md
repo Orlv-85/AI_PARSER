@@ -340,6 +340,9 @@ check it.
   `ValueError` and `SQLAlchemyError` to HTTP answers. Tests:
   `test_entry_points_import_from_storage_only_row_types`, `test_entry_points_do_not_commit`,
   `test_source_onboarding_http_errors_map_only_named_value_errors`.
+  Route handlers in `build_sources_router` only delegate in one call: to a module-level function
+  taking `deps`, or to `deps.source_intake` for the check status.
+  Tests: `test_router_handlers_only_delegate`.
 - Every `/api/source-onboarding/*` route and the admin page need an admin session when auth is on.
   Tests: `test_auth_middleware_coverage_is_pinned`, `test_route_table_order_names_and_models_are_pinned`.
 
@@ -430,7 +433,7 @@ scripts/sources_onboarding_helper.py db-bootstrap | db-review | db-validate | db
 | `core/sources/review.py` | Check probe (`probe_source`), evidence brief, `SourceReviewer` (Jev, DeepSeek), `evidence_fingerprint` |
 | `usecases/sources/intake.py` | `SourceIntakeService`: check job, registry and same-host checks, cache, `approve_ready` |
 | `usecases/sources/candidate_review.py` | `SourceOnboardingService`: candidate lists, summaries and review actions returning the review response models; `review_in_session` |
-| `web/routes/sources.py` | 14 `/api/source-onboarding/*` routes; HTTP errors only (`_http_errors`) |
+| `web/routes/sources.py` | 14 `/api/source-onboarding/*` routes calling module-level handlers; HTTP errors only (`_http_errors` of `web/routes/common.py`) |
 | `web/routes/__init__.py` (not covered, shared) | `WebDeps.create_onboarding_tables`: once-per-app table initializer wired by `create_app` |
 | `web/service.py` (not covered, shared) | `UpdateRunService` |
 | `storage/source_candidate_repo.py` | `SourceImportBatchRepo`, `SourceCandidateRepo` (drafts, filters, validation result, review save, summary) |
