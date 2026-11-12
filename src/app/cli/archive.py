@@ -7,6 +7,7 @@ from app.observability import setup_json_logging
 from app.usecases.archive.capture import (
     ARCHIVE_CACHE_ROOT,
     DAILY_CACHE_ROOT,
+    CaptureOptions,
     dedupe_page_cache,
     purge_archive,
 )
@@ -27,8 +28,8 @@ def archive_capture_command(
     deps.create_all()
     logger = setup_json_logging()
     with deps.SessionLocal() as session:
-        summary = archive_capture(session, scope_all=scope_all, no_download=no_download,
-                                  max_seconds=max_seconds, logger=logger)
+        summary = archive_capture(session, CaptureOptions(scope_all, no_download, max_seconds),
+                                  logger=logger)
     echo_json(summary)
 
 

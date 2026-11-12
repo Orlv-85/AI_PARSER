@@ -18,7 +18,7 @@ from app.core.bulletin import world_change as wc
 from app.core.jev import CONTENT_LIMIT
 from app.core.world.gdelt import Candidate
 from app.ingest.fetcher import DEFAULT_USER_AGENT
-from app.storage.archive import WORLD_SOURCE_KEY, ArchiveRepo
+from app.storage.archive import WORLD_SOURCE_KEY, ArchiveRepo, DocumentMeta, TextVersion
 from app.storage.models_sql import (
     ArchiveDocument,
     ArchiveText,
@@ -233,10 +233,24 @@ def test_world_text_reuses_stored_archive_text(session, tmp_path):
     item = row(session, "Known")
     repo = ArchiveRepo(session)
     document = repo.upsert_document(
-        url_canonical_hash=item.url_canonical_hash, url=item.url, url_canonical=item.url,
-        source_key=None, host="site1.example.org", title="Known", published_at=None,
-        publication_day=None, publication_status=None, article_id=None, first_seen_at=None)
-    repo.add_version(document, text=BODY, origin="source_page", extraction_version="x")
+        DocumentMeta(
+            url_canonical_hash=item.url_canonical_hash,
+            url=item.url,
+            url_canonical=item.url,
+            source_key=None,
+            host="site1.example.org",
+            title="Known",
+            published_at=None,
+            publication_day=None,
+            publication_status=None,
+            article_id=None,
+            first_seen_at=None,
+        ),
+    )
+    repo.add_version(
+        document,
+        TextVersion(text=BODY, origin="source_page", extraction_version="x"),
+    )
     session.commit()
     web = Web()
     summary = texts(session, tmp_path, web)
@@ -247,11 +261,11 @@ def test_world_text_reuses_stored_archive_text(session, tmp_path):
 
 def _real_document(session, item, **fields):
     repo = ArchiveRepo(session)
-    document = repo.upsert_document(**{
+    document = repo.upsert_document(DocumentMeta(**{
         "url_canonical_hash": item.url_canonical_hash, "url": item.url, "url_canonical": item.url,
         "source_key": "real-source", "host": item.source_domain, "title": "Real title",
         "published_at": None, "publication_day": date(2026, 10, 29),
-        "publication_status": "dated", "article_id": 42, "first_seen_at": None, **fields})
+        "publication_status": "dated", "article_id": 42, "first_seen_at": None, **fields}))
     session.commit()
     return document
 
@@ -426,8 +440,10 @@ def test_cli_world_screen_reads_archive_text(maker, monkeypatch, tmp_path):
 def test_world_text_downloads_only_pending_documents(session, tmp_path):
     seed(session, cand(1, title="Pending"), cand(2, title="Archived"), cand(3, title="Retry due"))
     archived = _real_document(session, row(session, "Archived"))
-    ArchiveRepo(session).add_version(archived, text=BODY, origin="source_page",
-                                     extraction_version="x")
+    ArchiveRepo(session).add_version(
+        archived,
+        TextVersion(text=BODY, origin="source_page", extraction_version="x"),
+    )
     retry = _real_document(session, row(session, "Retry due"))
     ArchiveRepo(session).record_attempt(
         retry, issue="http_500", gave_up=False,

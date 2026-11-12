@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.canonicalize import canonical_url_hash
 from app.core.world.gdelt import Candidate
-from app.storage.archive import ArchiveRepo
+from app.storage.archive import ArchiveRepo, DocumentMeta
 from app.storage.models_sql import (
     ArchiveDocument,
     Article,
@@ -182,9 +182,20 @@ def test_world_prune_keeps_archive(session):
     repo.record_file("20261031000000", "gkg", FILE_DONE)
     url = "https://example.org/old"
     ArchiveRepo(session).upsert_document(
-        url_canonical_hash=canonical_url_hash(url), url=url, url_canonical=url, source_key=None,
-        host="example.org", title="t", published_at=None, publication_day=None,
-        publication_status=None, article_id=None, first_seen_at=old)
+        DocumentMeta(
+            url_canonical_hash=canonical_url_hash(url),
+            url=url,
+            url_canonical=url,
+            source_key=None,
+            host="example.org",
+            title="t",
+            published_at=None,
+            publication_day=None,
+            publication_status=None,
+            article_id=None,
+            first_seen_at=old,
+        ),
+    )
     session.add(WorldChangeAssessment(
         url_canonical_hash=canonical_url_hash(url), world_change="none",
         world_change_confidence=0.5, area="Work", area_confidence=0.5, actor="people",

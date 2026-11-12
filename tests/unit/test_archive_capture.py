@@ -8,7 +8,7 @@ import httpx
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
-from app.storage.archive import WORLD_SOURCE_KEY, ArchiveRepo
+from app.storage.archive import WORLD_SOURCE_KEY, ArchiveRepo, DocumentMeta
 from app.storage.article_evidence_cache import EXTRACTION_VERSION, PageCache, url_key
 from app.storage.models_sql import ArchiveDocument, ArchiveText, Article, Base
 from app.usecases.archive import capture as capture_module
@@ -16,6 +16,7 @@ from app.usecases.archive.capture import (
     ARCHIVE_MAX_PER_HOST,
     ARCHIVE_RAW_KEEP_DAYS,
     ARCHIVE_RETRY_DELAYS,
+    CaptureOptions,
     PageFetch,
     capture,
     dedupe_page_cache,
@@ -63,7 +64,8 @@ def _capture(session, tmp_path, routes=None, calls=None, **kwargs):
     transport = httpx.MockTransport(_transport(routes or {}, calls))
     clock = kwargs.pop("clock", time.monotonic)
     fetch = page_fetch(tmp_path, lambda: httpx.AsyncClient(transport=transport), clock=clock)
-    return capture(session, fetch=fetch, **kwargs)
+    options = {k: kwargs.pop(k) for k in ("scope_all", "no_download", "max_seconds") if k in kwargs}
+    return capture(session, CaptureOptions(**options), fetch=fetch, **kwargs)
 
 
 def page_fetch(tmp_path, client_factory, **kwargs):
@@ -367,9 +369,20 @@ def _document_after_sync(session, url) -> int:
 def _world_document(session, key="w"):
     url = f"https://world.example.org/{key}"
     return ArchiveRepo(session).upsert_document(
-        url_canonical_hash=f"world/{key}", url=url, url_canonical=url,
-        source_key=WORLD_SOURCE_KEY, host="world.example.org", title="World", published_at=None,
-        publication_day=None, publication_status=None, article_id=None, first_seen_at=NOW)
+        DocumentMeta(
+            url_canonical_hash=f"world/{key}",
+            url=url,
+            url_canonical=url,
+            source_key=WORLD_SOURCE_KEY,
+            host="world.example.org",
+            title="World",
+            published_at=None,
+            publication_day=None,
+            publication_status=None,
+            article_id=None,
+            first_seen_at=NOW,
+        ),
+    )
 
 
 def test_archive_coverage_skips_world_documents() -> None:

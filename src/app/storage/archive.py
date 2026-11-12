@@ -2,6 +2,7 @@
 import hashlib
 import json
 from collections.abc import Collection, Sequence
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 
 from sqlalchemy import ColumnElement, delete, func, select
@@ -26,59 +27,76 @@ def text_sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+@dataclass(frozen=True)
+class DocumentMeta:  # pylint: disable=too-many-instance-attributes
+    """Latest metadata of an archive document; `first_seen_at` counts only on creation."""
+
+    url_canonical_hash: str
+    url: str
+    url_canonical: str
+    source_key: str | None
+    host: str
+    title: str
+    published_at: datetime | None = None
+    publication_day: date | None = None
+    publication_status: str | None = None
+    article_id: int | None = None
+    first_seen_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class TextVersion:
+    """One text of a document and where it came from."""
+
+    text: str
+    origin: str
+    extraction_version: str
+    final_url: str | None = None
+    http_status: int | None = None
+    issues: Sequence[str] = ()
+
+
 class ArchiveRepo:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def upsert_document(  # pylint: disable=too-many-arguments
-            self, *, url_canonical_hash: str, url: str, url_canonical: str,
-            source_key: str | None, host: str, title: str, published_at: datetime | None,
-            publication_day: date | None, publication_status: str | None, article_id: int | None,
-            first_seen_at: datetime | None) -> ArchiveDocument:
+    def upsert_document(self, meta: DocumentMeta) -> ArchiveDocument:
         """Create the document of a canonical hash or refresh its latest metadata; the first
         `first_seen_at` is kept."""
         now = datetime.now(UTC)
         document = self.session.scalar(select(ArchiveDocument).where(
-            ArchiveDocument.url_canonical_hash == url_canonical_hash))
+            ArchiveDocument.url_canonical_hash == meta.url_canonical_hash))
         if document is None:
-            document = ArchiveDocument(url_canonical_hash=url_canonical_hash,
-                                       first_seen_at=first_seen_at or now, state=STATE_PENDING,
-                                       attempts=0, created_at=now)
+            document = ArchiveDocument(url_canonical_hash=meta.url_canonical_hash,
+                                       first_seen_at=meta.first_seen_at or now,
+                                       state=STATE_PENDING, attempts=0, created_at=now)
             self.session.add(document)
-        document.url = url
-        document.url_canonical = url_canonical
-        document.source_key = source_key
-        document.host = host
-        document.title = title
-        document.published_at = published_at
-        document.publication_day = publication_day
-        document.publication_status = publication_status
-        document.article_id = article_id
+        for name in ("url", "url_canonical", "source_key", "host", "title", "published_at",
+                     "publication_day", "publication_status", "article_id"):
+            setattr(document, name, getattr(meta, name))
         document.updated_at = now
         self.session.flush()
         return document
 
-    def add_version(
-            self, document: ArchiveDocument, *, text: str, origin: str, extraction_version: str,
-            final_url: str | None = None, http_status: int | None = None,
-            issues: Sequence[str] = ()) -> ArchiveText | None:
+    def add_version(self, document: ArchiveDocument, version: TextVersion) -> ArchiveText | None:
         """Append a text version unless the document already has this exact text."""
+        text = version.text
         digest = text_sha256(text)
         exists = self.session.scalar(select(ArchiveText.id).where(
             ArchiveText.document_id == document.id, ArchiveText.text_sha256 == digest))
         if exists is not None:
             return None
         now = datetime.now(UTC)
-        version = ArchiveText(document_id=document.id, text=text, text_chars=len(text),
-                              text_sha256=digest, origin=origin,
-                              extraction_version=extraction_version, final_url=final_url,
-                              http_status=http_status, issues=json.dumps(list(issues)),
-                              captured_at=now)
-        self.session.add(version)
+        row = ArchiveText(document_id=document.id, text=text, text_chars=len(text),
+                          text_sha256=digest, origin=version.origin,
+                          extraction_version=version.extraction_version,
+                          final_url=version.final_url, http_status=version.http_status,
+                          issues=json.dumps(list(version.issues)), captured_at=now)
+        self.session.add(row)
         document.state = STATE_ARCHIVED
         document.updated_at = now
         self.session.flush()
-        return version
+        return row
 
     def purge(self, *, url: str | None = None, source_key: str | None = None,
               host: str | None = None, apply: bool = False) -> tuple[int, int]:
