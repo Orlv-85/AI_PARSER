@@ -283,7 +283,8 @@ the Troubleshooting section of `README.md`.
       "evidence": ["PR #239: tests/unit/test_web_app.py `import_module(\"app.web.app\")._signer(...)` passed locally, CI reported W0212 on 10 lines"],
       "cause": "Same as local-mypy-worktree-stale-editable-install: pylint resolves `app.*` through the editable install of the main folder (older master), cannot infer the branch-only name and skips the check.",
       "fix": "Run pylint as `PYTHONPATH=src PYLINTHOME=.pylint.d <main>/.venv/bin/python -m pylint src tests` in the worktree. In tests import private names directly (`from app.web.app import _signer`), the repo's convention, instead of `module._name`.",
-      "verification": "With PYTHONPATH=src the old test file gave 4 W0212 locally; after the direct imports the full pylint run is clean."
+      "verification": "With PYTHONPATH=src the old test file gave 4 W0212 locally. The next CI run still found C1803 (`helper(...) == {}`) that the local PYTHONPATH=src run (same pylint 4.1.3) did not report, so for inference-based messages CI decides.",
+      "if_it_recurs": "Push early and read the CI lint log; do not trust a local 10.00/10 from a worktree for new tests that call branch-only helpers."
     }
   ]
 }

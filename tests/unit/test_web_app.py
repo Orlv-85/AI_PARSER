@@ -903,8 +903,8 @@ def test_signer_signs_with_the_configured_secret() -> None:
 
 
 def test_category_metadata_skips_unreadable_category_and_missing_literal() -> None:
-    assert _article_category_metadata(SimpleNamespace(category="not-a-category")) == {}
+    assert not _article_category_metadata(SimpleNamespace(category="not-a-category"))
     no_literal = SimpleNamespace(date_provenance='{"published": {"selected": null}}')
-    assert _article_category_metadata(no_literal) == {}
+    assert not _article_category_metadata(no_literal)
     literal = SimpleNamespace(date_provenance='{"published": {"selected": {"literal": "May 1"}}}')
     assert _article_category_metadata(literal) == {"publication_literal": "May 1"}
