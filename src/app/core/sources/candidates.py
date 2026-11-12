@@ -192,7 +192,11 @@ def _candidates_by_host(candidates: Sequence[object]) -> dict[str, list[object]]
 
 def _host_overlap_groups(host_candidates: list[object]) -> list[CandidateOverlapGroup]:
     """One group per connected set of overlapping candidates of one host."""
+    if len(host_candidates) < 2:
+        return []
     overlaps_by_id, reasons_by_pair = _overlap_graph(host_candidates)
+    if len(overlaps_by_id) < 2:
+        return []
     candidate_by_id = {
         int(read_str(candidate, "id")): candidate for candidate in host_candidates
     }
@@ -204,6 +208,9 @@ def _host_overlap_groups(host_candidates: list[object]) -> list[CandidateOverlap
         component_ids, strongest_reason = _overlap_component(
             candidate_id, overlaps_by_id, reasons_by_pair, visited
         )
+        # Defensive guard: graph construction should make this unreachable.
+        if len(component_ids) < 2:  # pragma: no cover
+            continue
         groups.append(_overlap_group(sorted(component_ids), strongest_reason, candidate_by_id))
     return groups
 

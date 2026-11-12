@@ -369,7 +369,8 @@ def _check_quote(quote: Any, ids: list[str], ctx: _Context) -> None:
 
 
 def _check_grounding(text: str, ids: list[str], ctx: _Context) -> None:
-    """Numbers and names of the sentence must come from the cited articles."""
+    """Numbers and names must come from the cited articles and their packet items (outlet
+    counts, names; the digest item count on a quiet day)."""
     cited = " ".join(ctx.text(i) for i in ids)
     numbers = set(NUMBER.findall(cited)).union(*(ctx.outlets.get(i, set()) for i in ids))
     if ctx.packet["quiet"]:
