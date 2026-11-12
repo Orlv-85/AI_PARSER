@@ -10,6 +10,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from app.core.canonicalize import canonical_url_hash
+from app.storage.daily_signals_ledger import RunEnv
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import (
     Article,
@@ -93,7 +94,7 @@ def run(session, tmp_path, fake=None, **options):
     values = {"report_date": D, "cache_dir": tmp_path / "cache"} | options
     config = values.pop("settings", settings())
     return run_signals(session, config, RunOptions(**values),
-                       transport=(fake or Fake()).transport, now=lambda: NOW)
+                       RunEnv(transport=(fake or Fake()).transport, now=lambda: NOW))
 
 
 def digest_snapshot(session):
@@ -448,7 +449,7 @@ def test_ledger_stop_skips_briefs_and_keeps_extraction(session, tmp_path):
     fake = Both()
     report = run_signals(session, settings(brief_model=PRO),
                          RunOptions(report_date=D, cache_dir=tmp_path / "cache"),
-                         transport=fake.transport, clock=lambda: clock["now"], now=wall)
+                         RunEnv(transport=fake.transport, clock=lambda: clock["now"], now=wall))
     assert (report["state"], report["progress"]) == ("ok", 3)
     assert report["brief"]["days"] == {D.isoformat(): "skipped:deadline_reached"}
     assert report["brief"]["terminal_reason"] == "deadline_reached"

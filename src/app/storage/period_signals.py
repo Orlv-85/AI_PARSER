@@ -24,7 +24,7 @@ from app.core.periodic.period_model import (
     period_days,
     previous_start,
 )
-from app.storage.daily_signals import DailySignalRepo
+from app.storage.daily_signals import BriefRecord, DailySignalRepo
 from app.storage.models_sql import (
     AIEntity,
     DailySignalReport,
@@ -191,15 +191,9 @@ class PeriodSignalRepo:
         return self.session.scalar(select(PeriodSignalBrief).where(
             PeriodSignalBrief.period_kind == kind, PeriodSignalBrief.period_start == start))
 
-    def save_brief(self, kind: str, start: date, *, brief_version: str, model: str,
-                   input_hash: str, status: str, payload: Mapping[str, Any],
-                   reason: str | None = None) -> PeriodSignalBrief:
+    def save_brief(self, kind: str, start: date, brief: BriefRecord) -> PeriodSignalBrief:
         """Insert or replace the period's brief row (same upsert pattern as `save_report`)."""
-        if status not in ("ok", "invalid"):
-            raise ValueError(status)
-        values = {"brief_version": brief_version, "model": model, "input_hash": input_hash,
-                  "status": status, "reason": reason,
-                  "payload": json.dumps(dict(payload), sort_keys=True), "updated_at": _now()}
+        values = brief.values()
         row = self.get_brief(kind, start)
         if row is None:
             try:

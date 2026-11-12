@@ -5,6 +5,7 @@ import asyncio
 import hashlib
 import json
 from collections import Counter
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
@@ -348,8 +349,37 @@ def fallback_topic(row, journal, client, secret):
             "request_key": request_key("deepseek", body)}
 
 
-def enrich(article, row, journal, client, keys, *, details=None):
+@dataclass(frozen=True)
+class ProviderCalls:
+    """Paid calls of a daily run: the journal that records them, the HTTP client, the keys."""
+
+    journal: Any
+    client: Any
+    keys: dict[str, str]
+
+
+@dataclass
+class _Progress:
+    """Per-row counts and holds of a run, written to `run`/progress.json after each row."""
+
+    run: Path
+    counts: Counter[str] = field(default_factory=Counter)
+    held: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class _Enrichment:
+    verdict: dict[str, Any]
+    summary: dict[str, Any]
+    review: Any
+    topic: str
+    topic_confidence: Any
+    fallback: dict[str, Any] | None
+
+
+def enrich(article, row, calls: ProviderCalls, details=None):
     body = {"model": JEV_MODEL, "state": source_state(row), "questions": QUESTIONS}
+    journal, client, keys = calls.journal, calls.client, calls.keys
     data = admission_from_proof(article, row)
     if data is None:
         try:
@@ -361,7 +391,7 @@ def enrich(article, row, journal, client, keys, *, details=None):
         return verdict["outcome"]
     # An uncertain comparison only drops the material_type badge; the topic decides the hold.
     try:
-        topic, topic_confidence, fallback = _daily_topic(verdict, row, journal, client, keys)
+        topic, topic_confidence, fallback = _daily_topic(verdict, row, calls)
     except ValueError as exc:
         if "conservative input/output bound" not in str(exc):
             raise
@@ -375,8 +405,8 @@ def enrich(article, row, journal, client, keys, *, details=None):
         if details is not None:
             details.extend(exc.failures)
         return "summary_not_supported"
-    _apply_enrichment(article, row, body, verdict, summary, review=review,
-                      topic=topic, topic_confidence=topic_confidence, fallback=fallback)
+    _apply_enrichment(article, row, body,
+                      _Enrichment(verdict, summary, review, topic, topic_confidence, fallback))
     return "enriched"
 
 
@@ -387,23 +417,23 @@ def _daily_assessment(row, data):
         raise PilotStopped("invalid_daily_assessment") from None
 
 
-def _daily_topic(verdict, row, journal, client, keys):
+def _daily_topic(verdict, row, calls: ProviderCalls):
     topic, confidence = verdict["topic"], verdict["topic_raw"]["confidence"]
     if topic is not None:
         return topic, confidence, None
-    fallback = fallback_topic(row, journal, client, keys["deepseek"])
+    fallback = fallback_topic(row, calls.journal, calls.client, calls.keys["deepseek"])
     if fallback is None:
         return None, confidence, None
     return fallback["topic"], fallback["confidence"], fallback
 
 
-def _apply_enrichment(article, row, body, verdict, summary, *, review,  # pylint: disable=too-many-arguments
-                      topic, topic_confidence, fallback):
+def _apply_enrichment(article, row, body, result: _Enrichment):
+    verdict, summary, fallback = result.verdict, result.summary, result.fallback
     article.title = row["title"][:512]
     article.content = row["content"]
     article.summary = summary["generated_summary"]
-    article.category = topic
-    article.category_confidence = topic_confidence
+    article.category = result.topic
+    article.category_confidence = result.topic_confidence
     article.ai_relevance_score = verdict["assessment"]["relevance_score"]
     article.material_type = verdict["material_type"]
     article.compared_products = encoded([p["name"] for p in summary["compared_products"]])
@@ -411,7 +441,8 @@ def _apply_enrichment(article, row, body, verdict, summary, *, review,  # pylint
         "rubric": RUBRIC_VERSION, "version": DAILY_VERSION,
         "jev_key": request_key("jev", body), "source_origin": row["origin"],
         "source_content_hash": fingerprint(row["content"]),
-        "summary": summary, "summary_review": review, "summary_prompt": SUMMARY_PROMPT_VERSION,
+        "summary": summary, "summary_review": result.review,
+        "summary_prompt": SUMMARY_PROMPT_VERSION,
         "topic_source": "jev" if fallback is None else "deepseek_fallback",
         **({} if fallback is None else {"topic_fallback": fallback}),
     })
@@ -462,24 +493,24 @@ def _provider_keys(settings):
     return {k: v.get_secret_value() for k, v in keys.items()}
 
 
-def _enrich_scope(session, articles, cache, journal, *, keys, run, counts, held):
-    with httpx.Client(timeout=90, transport=httpx.HTTPTransport(retries=0)) as client:
-        for article in articles:
-            if reusable(article):
-                counts["reused"] += 1
-                continue
-            row = source_row(article, cache)
-            details: list[str] = []
-            if row is None or article.publication_status != "confirmed":
-                state = "insufficient_source_or_date_evidence"
-            else:
-                state = enrich(article, row, journal, client, keys, details=details)
-                session.commit()
-            counts[state] += 1
-            if state != "enriched":
-                held.append({"article_id": article.id, "reason": state,
-                             **({"details": details} if details else {})})
-            private_write(run / "progress.json", {"counts": dict(counts), "held": held})
+def _enrich_scope(session, articles, cache, calls: ProviderCalls, progress: _Progress):
+    counts, held = progress.counts, progress.held
+    for article in articles:
+        if reusable(article):
+            counts["reused"] += 1
+            continue
+        row = source_row(article, cache)
+        details: list[str] = []
+        if row is None or article.publication_status != "confirmed":
+            state = "insufficient_source_or_date_evidence"
+        else:
+            state = enrich(article, row, calls, details)
+            session.commit()
+        counts[state] += 1
+        if state != "enriched":
+            held.append({"article_id": article.id, "reason": state,
+                         **({"details": details} if details else {})})
+        private_write(progress.run / "progress.json", {"counts": dict(counts), "held": held})
 
 
 def _back_up_digest(previous, target, run):
@@ -493,7 +524,8 @@ def _back_up_digest(previous, target, run):
     return backup
 
 
-def _publish_digest(session, articles, target, run, *, report, held):
+def _publish_digest(session, articles, target, progress: _Progress, report):
+    run, held = progress.run, progress.held
     groups = digest_groups(articles)
     if not groups:
         raise PilotStopped("no_supported_items")
@@ -530,8 +562,8 @@ def publish_day(session, settings, target: date, root: Path):
                            {"version": DAILY_VERSION, "day": target.isoformat()}, CAPS,
                            transport_review_reason=TRANSPORT_REVIEW_REASON,
                            transport_retry_delays=TRANSPORT_RETRY_DELAYS)
-    counts: Counter[str] = Counter()
-    held: list[dict[str, Any]] = []
+    progress = _Progress(run)
+    counts, held = progress.counts, progress.held
     try:
         articles = day_articles(session, target)
         report["scope_count"] = len(articles)
@@ -539,9 +571,10 @@ def publish_day(session, settings, target: date, root: Path):
         pending = [a for a in articles if not reusable(a) and admission_from_proof(
             a, {"title": a.title, "content": a.content or ""}) is None]
         asyncio.run(acquire(cache, pending))
-        _enrich_scope(session, articles, cache, journal,
-                      keys=keys, run=run, counts=counts, held=held)
-        _publish_digest(session, articles, target, run, report=report, held=held)
+        with httpx.Client(timeout=90, transport=httpx.HTTPTransport(retries=0)) as client:
+            _enrich_scope(session, articles, cache, ProviderCalls(journal, client, keys),
+                          progress)
+        _publish_digest(session, articles, target, progress, report)
     except (PilotStopped, ValueError) as exc:
         session.rollback()
         report.update(state="failed_preserved_previous", reason=str(exc), scope_complete=False)

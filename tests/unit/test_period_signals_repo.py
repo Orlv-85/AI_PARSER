@@ -12,7 +12,7 @@ from sqlalchemy import create_engine, event, func, select
 from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import Settings
-from app.storage.daily_signals import DailySignalRepo
+from app.storage.daily_signals import DailySignalRepo, NewOverride
 from app.storage.models_sql import Article, Base, PeriodSignalReport
 from app.storage.period_signals import PeriodSignalRepo
 from app.usecases.daily.signals import add_override
@@ -124,9 +124,15 @@ def test_period_run_applies_entity_overrides(maker):
     seed_weeks(maker, W1, W2)
     run(maker, backfill=2)
     with maker() as session:
-        add_override(DailySignalRepo(session, comparable_from=COMPARABLE_FROM),
-                     kind="alias", type_group_="artifact", match_key="bravo",
-                     target_base_key="alpha")
+        add_override(
+            DailySignalRepo(session, comparable_from=COMPARABLE_FROM),
+            NewOverride(
+                kind="alias",
+                type_group="artifact",
+                match_key="bravo",
+                target_base_key="alpha",
+            ),
+        )
         session.commit()
     assert run(maker, backfill=2)["written"] == ["2026-10-12", "2026-10-19"]
 

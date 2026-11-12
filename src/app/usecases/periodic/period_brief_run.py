@@ -6,14 +6,12 @@ signals ledger. The ledger, and with it the provider client, is created only whe
 """
 import json
 import logging
-import time
 import uuid
-from collections.abc import Callable, Sequence
-from datetime import UTC, date, datetime
+from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Any
-
-import httpx
 
 from app.core.daily.signals_brief import (
     BRIEF_PRICES,
@@ -32,7 +30,16 @@ from app.core.periodic.period_brief import (
     period_request_key,
 )
 from app.core.provider_costs import microdollars
-from app.storage.daily_signals_ledger import LedgerStop, SignalsLedger
+from app.storage.daily_signals import BriefRecord
+from app.storage.daily_signals_ledger import (
+    DEFAULT_ENV,
+    CallTag,
+    LedgerConfig,
+    LedgerProvider,
+    LedgerStop,
+    RunEnv,
+    SignalsLedger,
+)
 from app.storage.period_signals import PeriodSignalRepo
 
 LOGGER = logging.getLogger(__name__)
@@ -44,17 +51,39 @@ def _label(kind: str, start: date) -> str:
     return f"{kind}:{start.isoformat()}"
 
 
-def _attempts(session: Any, repo: PeriodSignalRepo, ledger: SignalsLedger, *, kind: str,  # pylint: disable=too-many-arguments
-              start: date, model: str, packet: dict[str, Any], id_map: dict[str, Any],
-              digest: str) -> str:
+@dataclass(frozen=True)
+class _PeriodWork:
+    """A due period brief: its packet, id map and input hash."""
+
+    kind: str
+    start: date
+    packet: dict[str, Any]
+    id_map: dict[str, Any]
+    digest: str
+
+
+@dataclass(frozen=True)
+class BriefBudget:
+    """Limits of one brief step: run total in USD, ledger folder, seconds."""
+
+    max_usd: str
+    cache_dir: Path
+    max_seconds: int
+
+
+def _attempts(repo: PeriodSignalRepo, ledger: SignalsLedger, work: _PeriodWork,
+              model: str) -> str:
     """Up to two attempts for one period (one recovery); returns its report state."""
+    session = repo.session
+    kind, start, packet, id_map, digest = (work.kind, work.start, work.packet, work.id_map,
+                                           work.digest)
     reasons: list[str] = []
     for _ in range(ATTEMPTS):
         body = period_body(packet, model, recovery=reasons[-1] if reasons else None)
         result = ledger.dispatch(
             body, request_key=period_request_key(body),
             reserved_micro=ledger.bound_micro(body, PERIOD_MAX_OUTPUT[kind]),
-            version=PERIOD_BRIEF_VERSION, scope_day=start.isoformat())
+            tag=CallTag(version=PERIOD_BRIEF_VERSION, scope_day=start.isoformat()))
         if result.state != "response":
             return f"skipped:attempt_{result.state}"
         try:
@@ -62,13 +91,12 @@ def _attempts(session: Any, repo: PeriodSignalRepo, ledger: SignalsLedger, *, ki
         except BriefInvalid as error:
             reasons.append(str(error))
             continue
-        repo.save_brief(kind, start, brief_version=PERIOD_BRIEF_VERSION, model=model,
-                        input_hash=digest, status="ok", payload=brief_payload(sentences, id_map))
+        repo.save_brief(kind, start, BriefRecord(PERIOD_BRIEF_VERSION, model, digest, "ok",
+                                                 brief_payload(sentences, id_map)))
         session.commit()
         return "ok"
-    repo.save_brief(kind, start, brief_version=PERIOD_BRIEF_VERSION, model=model,
-                    input_hash=digest, status="invalid", payload={},
-                    reason=",".join(reasons)[:1000])
+    repo.save_brief(kind, start, BriefRecord(PERIOD_BRIEF_VERSION, model, digest, "invalid", {},
+                                             reason=",".join(reasons)[:1000]))
     session.commit()
     return "invalid"
 
@@ -97,14 +125,14 @@ def _prepare(repo: PeriodSignalRepo, kind: str, start: date,  # pylint: disable=
     return "due", (packet, id_map, digest)
 
 
-def run_briefs(session: Any, repo: PeriodSignalRepo, settings: Any,  # pylint: disable=too-many-arguments,too-many-locals
-               targets: Sequence[tuple[str, date]], *, max_usd: str, cache_dir: Path,
-               max_seconds: int, transport: httpx.BaseTransport | None = None,
-               clock: Callable[[], float] = time.monotonic,
-               now: Callable[[], datetime] = lambda: datetime.now(UTC)) -> dict[str, Any]:
-    """The brief step for `targets` (kind, start), oldest first. `max_usd` is the run total;
-    each brief is also held to `PERIOD_BRIEF_MAX_USD` of its kind. Never raises a provider
-    error: a stop is a terminal reason in the report."""
+def run_briefs(repo: PeriodSignalRepo, settings: Any,  # pylint: disable=too-many-locals
+               targets: Sequence[tuple[str, date]], budget: BriefBudget,
+               env: RunEnv = DEFAULT_ENV) -> dict[str, Any]:
+    """The brief step for `targets` (kind, start), oldest first. `budget.max_usd` is the run
+    total; each brief is also held to `PERIOD_BRIEF_MAX_USD` of its kind. Never raises a
+    provider error: a stop is a terminal reason in the report."""
+    session = repo.session
+    clock, cache_dir = env.clock, budget.cache_dir
     model = settings.daily_signals_brief_model
     out: dict[str, Any] = {"state": "ok", "model": model, "periods": {},
                            "run": {"calls": 0, "usd": 0.0}, "terminal_reason": None}
@@ -121,8 +149,8 @@ def run_briefs(session: Any, repo: PeriodSignalRepo, settings: Any,  # pylint: d
         out["periods"] = {_label(k, s): "skipped:brief_model_unpriced" for k, s in targets}
         return out
     started = clock()
-    run_id = now().strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
-    total = microdollars(max_usd)
+    run_id = env.now().strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
+    total = microdollars(budget.max_usd)
     spent = 0
     calls = 0
     for index, (kind, start) in enumerate(targets):
@@ -138,14 +166,12 @@ def run_briefs(session: Any, repo: PeriodSignalRepo, settings: Any,  # pylint: d
             continue
         cache_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         ledger = SignalsLedger(
-            cache_dir / "ledger.sqlite3", run_id=f"{run_id}-brief-{label}", api_key=key,
-            max_calls=ATTEMPTS, max_usd_micro=cap, deadline=started + max_seconds, clock=clock,
-            transport=transport, prices=prices)
+            cache_dir / "ledger.sqlite3", run_id=f"{run_id}-brief-{label}",
+            provider=LedgerProvider(api_key=key, prices=prices, transport=env.transport),
+            caps=LedgerConfig(ATTEMPTS, cap, started + budget.max_seconds, clock))
         try:
-            packet, id_map, digest = work
-            out["periods"][label] = _attempts(session, repo, ledger, kind=kind, start=start,
-                                              model=model, packet=packet, id_map=id_map,
-                                              digest=digest)
+            out["periods"][label] = _attempts(repo, ledger, _PeriodWork(kind, start, *work),
+                                              model)
         except LedgerStop as stop:
             session.rollback()
             out["terminal_reason"] = str(stop)

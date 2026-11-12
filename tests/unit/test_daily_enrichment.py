@@ -885,8 +885,8 @@ def test_enrich_fallback_bound_is_held_but_other_value_errors_propagate(
         raise ValueError(message)
 
     monkeypatch.setattr(daily, "fallback_topic", fail)
-    args = (row, {"url": row.url, "title": row.title, "content": SOURCE}, None, None,
-            {"deepseek": "test-key"})
+    args = (row, {"url": row.url, "title": row.title, "content": SOURCE},
+            daily.ProviderCalls(None, None, {"deepseek": "test-key"}))
     if held:
         assert daily.enrich(*args) == "source_input_too_large"
     else:
