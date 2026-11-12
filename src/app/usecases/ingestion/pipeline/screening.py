@@ -2,7 +2,7 @@
 import json
 from logging import Logger
 from math import isfinite
-from typing import cast
+from typing import Any, cast
 
 from app.config.settings import Settings
 from app.config.sources import SourceConfig
@@ -21,8 +21,12 @@ from app.storage.admission import (
 )
 from app.storage.article_repo import ArticleRepo
 from app.storage.models_sql import AdmissionDecision
-from app.usecases.ingestion.pipeline.models import AdmissionState
-from app.usecases.ingestion.pipeline.rows import _assessment_payload, _candidate_payload
+from app.usecases.ingestion.pipeline.models import AdmissionState, SourceRun
+from app.usecases.ingestion.pipeline.rows import (
+    _assessment_payload,
+    _build_article_row,
+    _candidate_payload,
+)
 
 
 def _pause(
@@ -136,6 +140,39 @@ def _screen_candidate(
     return _score_and_record(
         item=item, key=key, article_repo=article_repo, relevance_scorer=relevance_scorer,
         admission_state=admission_state, logger=logger,
+    )
+
+
+def _assessed_row(
+    run: SourceRun, item: Any, *, canonical: str, canonical_hash: str,
+) -> tuple[str, dict[str, object] | None]:
+    """Screen (or, without admission, classify) one new item; the row is None unless stored."""
+    if run.admission_enabled:
+        action, assessment = _screen_candidate(
+            item=item,
+            config=run.config,
+            db_source_id=run.db_source_id,
+            article_repo=run.article_repo,
+            settings=run.settings,
+            relevance_scorer=run.relevance_scorer,
+            admission_state=run.admission_state,
+            canonical_hash=canonical_hash,
+            canonical_url=canonical,
+        )
+        if action != "accept":
+            return action, None
+    else:
+        assessment = (
+            run.relevance_scorer.classify(item) if run.relevance_scorer is not None else None
+        )
+    return "accept", _build_article_row(
+        item=item,
+        config=run.config,
+        db_source_id=run.db_source_id,
+        canonical=canonical,
+        canonical_hash=canonical_hash,
+        assessment=assessment,
+        admission_enabled=run.admission_enabled,
     )
 
 

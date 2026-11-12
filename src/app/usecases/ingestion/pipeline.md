@@ -437,8 +437,9 @@ web update (thread or process)               web/service.py: UpdateRunService
            _persist_fetch_state_if_present   validators; 304 -> not_modified, stop
            HTML links -> _process_html_links_two_stage   html_links.py (filter, cap, known check, download)
            items      -> _process_fetched_source_items   rss.py (filter, known/streak check)
-             _screen_candidate (admission)   screening.py: cache key, pending row, Jev, record_decision
-             _build_article_row              rows.py: dates, relevance, freshness, rank, provenance
+             _assessed_row                   screening.py, shared by both paths:
+               _screen_candidate (admission) cache key, pending row, Jev, record_decision; else classify
+               _build_article_row            rows.py: dates, relevance, freshness, rank, provenance
                                              (steps: _row_relevance, _publication_time, _assessment_fields)
              insert_article / upsert_articles_batch
        clear_collection_paused if a fresh success; commit
@@ -450,14 +451,14 @@ web update (thread or process)               web/service.py: UpdateRunService
 | File | Role | Pure |
 | --- | --- | --- |
 | `usecases/ingestion/pipeline/__init__.py` | Re-exports `run_fetch_cycle` only; everything else is imported from its module | no |
-| `usecases/ingestion/pipeline/cycle.py` | `run_fetch_cycle` (setup, pause check, summary) over `_run_sources` (per-source loop), `_process_source_with_admission`, `_process_prefetched_source`, `_record_persist_failure`, `_finish_source`; savepoint per source, `FetchSummary` | no |
-| `usecases/ingestion/pipeline/models.py` | `FetchSummary`, `SourceMetrics`, `AdmissionState`, `EnabledSource`, `FetchResult`, replay and comparison constants | yes |
+| `usecases/ingestion/pipeline/cycle.py` | `run_fetch_cycle` (setup; `_pause_without_scorer`, `_prefetch_sources`, `_finished_summary`) over `_run_sources` (per-source loop), `_process_source_with_admission`, `_process_prefetched_source`, `_record_persist_failure`, `_finish_source`; savepoint per source, `FetchSummary` | no |
+| `usecases/ingestion/pipeline/models.py` | `FetchSummary`, `SourceMetrics`, `AdmissionState`, `SourceRun` (what every persist step of one source reads), `EnabledSource`, `FetchResult`, replay and comparison constants | yes |
 | `usecases/ingestion/pipeline/sources.py` | `_managed_source_to_config`, fetch-state persist and validator clear | no |
 | `usecases/ingestion/pipeline/fetch.py` | Network fetch of enabled sources: validators, execution groups, thread pool | no |
 | `usecases/ingestion/pipeline/source_result.py` | `_process_source_result` (HTML or items path), `_log_source_metrics` | no |
-| `usecases/ingestion/pipeline/html_links.py` | `_process_html_links_two_stage`: list page links to stored articles | no |
-| `usecases/ingestion/pipeline/rss.py` | `_process_fetched_source_items`: feed items to stored articles | no |
-| `usecases/ingestion/pipeline/screening.py` | `_screen_candidate` (cache lookup `_resolve_cached`, then `_score_and_record`, `_pause`), cached-assessment checks (`_assessment_from_cached`, `_cached_score`, `_cached_category`), admission counters snapshot and restore | no |
+| `usecases/ingestion/pipeline/html_links.py` | `_process_html_links_two_stage`: list page links to stored articles; per link `_process_link` (`_count_known_link`, `_fetch_new_item`, `_assessed_row`, `_store_row`), then `_flush_queued_rows` | no |
+| `usecases/ingestion/pipeline/rss.py` | `_process_fetched_source_items`: feed items to stored articles; per item `_process_item` (`_count_known_item`, `_assessed_row`, `_stage_row`), then `_flush_queued_rows` | no |
+| `usecases/ingestion/pipeline/screening.py` | `_assessed_row` (screen or classify, then `_build_article_row`), `_screen_candidate` (cache lookup `_resolve_cached`, then `_score_and_record`, `_pause`), cached-assessment checks (`_assessment_from_cached`, `_cached_score`, `_cached_category`), admission counters snapshot and restore | no |
 | `usecases/ingestion/pipeline/scorer.py` | `jev_relevance_scorer`: opens the Jev client and, with `daily_enrichment_enabled`, the daily admission journal of the UTC day; logs `daily_admission_usage` and closes the journal | no |
 | `usecases/ingestion/pipeline/replay.py` | Pending admission candidates replayed before a source's fresh fetch | no |
 | `usecases/ingestion/pipeline/rows.py` | Candidate payloads, `_build_article_row`, exclusion reason, batch upsert | no |
@@ -531,5 +532,5 @@ functions). Runtime tests replace module attributes of the pipeline modules (fet
 every method and field the real object offers (fetch fakes return `RssItemList` or
 `HtmlListPageResult`). A patch must name the module that reads the name (`cycle.py` reads `SessionLocal`, `load_sources`,
 `SourceRepo`, `ArticleRepo`; `fetch.py` the fetch functions and `Fetcher`; `html_links.py`
-`fetch_html_article`; `rows.py` the scoring functions; `rss.py` and `html_links.py` the
-canonicalizers): `test_every_monkeypatch_hits_a_module_that_reads_the_name` fails otherwise.
+`fetch_html_article`; `rows.py` the scoring functions; `screening.py` `_screen_candidate` and
+`_build_article_row`; `rss.py` and `html_links.py` the canonicalizers): `test_every_monkeypatch_hits_a_module_that_reads_the_name` fails otherwise.

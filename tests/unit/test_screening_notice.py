@@ -44,6 +44,7 @@ def test_missing_provider_pauses_with_exact_notice(tmp_path, monkeypatch, jev_en
     )
     summary = run_fetch_cycle(settings=settings, logger=getLogger("notice-test"))
     assert summary.screening_paused == 1
+    assert (summary.fetched, summary.new, summary.duplicates, summary.errors) == (0, 0, 0, 0)
     with sessions() as session:
         status = get_collection_status(session)
         assert status.paused is True

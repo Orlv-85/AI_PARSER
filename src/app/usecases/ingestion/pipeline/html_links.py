@@ -19,13 +19,12 @@ from app.storage.admission import (
     upsert_pending,
 )
 from app.storage.article_repo import ArticleRepo
-from app.usecases.ingestion.pipeline.models import AdmissionState
+from app.usecases.ingestion.pipeline.models import AdmissionState, SourceRun
 from app.usecases.ingestion.pipeline.rows import (
-    _build_article_row,
     _item_exclusion_reason,
     _upsert_article_rows,
 )
-from app.usecases.ingestion.pipeline.screening import _html_placeholder_key, _screen_candidate
+from app.usecases.ingestion.pipeline.screening import _assessed_row, _html_placeholder_key
 
 
 @dataclass
@@ -52,107 +51,147 @@ def _capped_links(
     return capped
 
 
+@dataclass
+class _HtmlRun(SourceRun):
+    quality_flags: list[str] | None
+    fetcher: Fetcher
+
+    def flag(self, name: str) -> None:
+        if self.quality_flags is not None:
+            self.quality_flags.append(name)
+
+
+def _make_fetcher(settings: Settings) -> Fetcher:
+    return Fetcher(
+        timeout_seconds=settings.request_timeout_seconds,
+        max_retries=settings.max_retries,
+        per_source_min_interval_seconds=settings.per_source_min_interval_seconds,
+        http_max_connections=settings.fetch_http_max_connections,
+        http_max_keepalive_connections=settings.fetch_http_max_keepalive_connections,
+    )
+
+
 def _upsert_placeholders(
+    run: _HtmlRun,
     *,
     canonical_by_link: list[tuple[str, str, str]],
     known_hashes: set[str],
     placeholder_keys: dict[str, str],
-    db_source_id: int,
-    article_repo: ArticleRepo,
-    settings: Settings,
 ) -> None:
     for link, _canonical, canonical_hash in canonical_by_link:
         if canonical_hash in known_hashes:
-            settle_pending(article_repo.session, key=placeholder_keys[canonical_hash])
+            settle_pending(run.article_repo.session, key=placeholder_keys[canonical_hash])
             continue
         upsert_pending(
-            article_repo.session,
+            run.article_repo.session,
             key=placeholder_keys[canonical_hash],
             url_canonical_hash=canonical_hash,
-            source_id=db_source_id,
+            source_id=run.db_source_id,
             payload={"kind": "html_link", "url": link},
             evidence_hash="",
-            policy_version=settings.semantic_admission_policy_version,
-            model=settings.jev_model,
+            policy_version=run.settings.semantic_admission_policy_version,
+            model=run.settings.jev_model,
         )
 
 
-def _count_known_link(
-    tally: _HtmlTally, *, ph_key: str, admission_enabled: bool, article_repo: ArticleRepo,
-    streak_stop: int,
-) -> bool:
+def _count_known_link(run: _HtmlRun, tally: _HtmlTally, *, ph_key: str) -> bool:
     """Count a stored link; True when the known streak says to stop."""
     tally.duplicate_count += 1
     tally.skipped_known_items += 1
-    if admission_enabled:
-        settle_pending(article_repo.session, key=ph_key)
+    if run.admission_enabled:
+        settle_pending(run.article_repo.session, key=ph_key)
     tally.known_streak += 1
-    if 0 < streak_stop <= tally.known_streak:
+    if 0 < run.settings.html_known_streak_stop <= tally.known_streak:
         tally.early_stop_hit = True
         return True
     return False
 
 
-def _fetch_new_item(
-    tally: _HtmlTally,
-    *,
-    link: str,
-    ph_key: str,
-    config: SourceConfig,
-    article_repo: ArticleRepo,
-    settings: Settings,
-    fetcher: Fetcher,
-    quality_flags: list[str] | None,
-    admission_enabled: bool,
-) -> Any | None:
+def _fetch_new_item(run: _HtmlRun, tally: _HtmlTally, *, link: str, ph_key: str) -> Any | None:
     """Fetch one article page; None when it failed or was excluded (already settled/flagged)."""
     exclusions: list[str] = []
     fetch_options: dict[str, Any] = {}
-    if admission_enabled:
+    if run.admission_enabled:
         fetch_options["on_exclusion"] = exclusions.append
     try:
         item = fetch_html_article(
-            source=config,
+            source=run.config,
             url=str(link),
-            timeout_seconds=settings.request_timeout_seconds,
-            fetcher=fetcher,
+            timeout_seconds=run.settings.request_timeout_seconds,
+            fetcher=run.fetcher,
             **fetch_options,
         )
     except Exception:
-        if quality_flags is not None:
-            quality_flags.append("article_failure")
+        run.flag("article_failure")
         return None
     if item is None:
         if exclusions:
-            settle_pending(article_repo.session, key=ph_key)
+            settle_pending(run.article_repo.session, key=ph_key)
             return None
-        if quality_flags is not None:
-            quality_flags.append("parser_failure")
+        run.flag("parser_failure")
         return None
     reason = _item_exclusion_reason(item)
     if reason:
         log_exclusion(str(item.url), reason)
-        if admission_enabled:
-            settle_pending(article_repo.session, key=ph_key)
+        if run.admission_enabled:
+            settle_pending(run.article_repo.session, key=ph_key)
         return None
     tally.fetched_articles += 1
-    if (item.published_at is None and item.publication_evidence_at is None
-            and quality_flags is not None):
-        quality_flags.append("unknown_publication_date")
+    if item.published_at is None and item.publication_evidence_at is None:
+        run.flag("unknown_publication_date")
     return item
 
 
-def _store_row(
-    tally: _HtmlTally, row: dict[str, object], *, batch_mode: bool, article_repo: ArticleRepo,
-) -> None:
-    if batch_mode:
+def _store_row(run: _HtmlRun, tally: _HtmlTally, row: dict[str, object]) -> None:
+    if run.settings.article_batch_upsert_enabled:
         tally.queued_rows.append(row)
         return
-    _, is_new = article_repo.insert_article(**row)
+    _, is_new = run.article_repo.insert_article(**row)
     if is_new:
         tally.new_count += 1
     else:
         tally.duplicate_count += 1
+
+
+def _process_link(
+    run: _HtmlRun,
+    tally: _HtmlTally,
+    *,
+    known_hashes: set[str],
+    link: str,
+    canonical: str,
+    canonical_hash: str,
+    ph_key: str,
+) -> bool:
+    """Persist one list-page link; True when the source loop stops (known streak or pause)."""
+    if canonical_hash in known_hashes:
+        return _count_known_link(run, tally, ph_key=ph_key)
+    tally.known_streak = 0
+    item = _fetch_new_item(run, tally, link=link, ph_key=ph_key)
+    if item is None:
+        return False
+    assessed: tuple[str, dict[str, object] | None] = _assessed_row(
+        run, item, canonical=canonical, canonical_hash=canonical_hash,
+    )
+    action, row = assessed
+    if run.admission_enabled:
+        # Screened: the body (or its decision) now holds the candidate, not the link.
+        settle_pending(run.article_repo.session, key=ph_key)
+    if row is not None:
+        _store_row(run, tally, row)
+        known_hashes.add(canonical_hash)
+    return action == "paused"
+
+
+def _flush_queued_rows(run: _HtmlRun, tally: _HtmlTally) -> None:
+    if not run.settings.article_batch_upsert_enabled:
+        return
+    batch_new, batch_duplicates = _upsert_article_rows(
+        article_repo=run.article_repo,
+        rows=tally.queued_rows,
+    )
+    tally.new_count += batch_new
+    tally.duplicate_count += batch_duplicates
 
 
 def _process_html_links_two_stage(
@@ -167,12 +206,10 @@ def _process_html_links_two_stage(
     admission_state: AdmissionState | None = None,
 ) -> tuple[int, int, int, int, bool]:
     tally = _HtmlTally()
-    batch_mode = settings.article_batch_upsert_enabled
     admission_enabled = admission_state is not None and admission_state.enabled
-    capped_links = _capped_links(links, settings, quality_flags)
     canonical_by_link: list[tuple[str, str, str]] = [
         (str(link), canonicalize_url(str(link)), canonical_url_hash(str(link)))
-        for link in capped_links
+        for link in _capped_links(links, settings, quality_flags)
     ]
     # Stored hashes; the article loop adds each hash it stores, so in-run repeats count as known.
     known_hashes = article_repo.existing_canonical_hashes([h for _, _, h in canonical_by_link])
@@ -180,90 +217,34 @@ def _process_html_links_two_stage(
         canonical_hash: _html_placeholder_key(settings, canonical_hash)
         for _, _, canonical_hash in canonical_by_link
     } if admission_enabled else {}
-    fetcher = Fetcher(
-        timeout_seconds=settings.request_timeout_seconds,
-        max_retries=settings.max_retries,
-        per_source_min_interval_seconds=settings.per_source_min_interval_seconds,
-        http_max_connections=settings.fetch_http_max_connections,
-        http_max_keepalive_connections=settings.fetch_http_max_keepalive_connections,
+    run = _HtmlRun(
+        config=config,
+        db_source_id=db_source_id,
+        article_repo=article_repo,
+        settings=settings,
+        relevance_scorer=relevance_scorer,
+        admission_state=admission_state,
+        quality_flags=quality_flags,
+        fetcher=_make_fetcher(settings),
     )
 
     try:
         if admission_enabled:
             _upsert_placeholders(
+                run,
                 canonical_by_link=canonical_by_link,
                 known_hashes=known_hashes,
                 placeholder_keys=placeholder_keys,
-                db_source_id=db_source_id,
-                article_repo=article_repo,
-                settings=settings,
             )
-
         for link, canonical, canonical_hash in canonical_by_link:
-            ph_key = placeholder_keys.get(canonical_hash, "")
-            if canonical_hash in known_hashes:
-                if _count_known_link(
-                    tally, ph_key=ph_key, admission_enabled=admission_enabled,
-                    article_repo=article_repo, streak_stop=settings.html_known_streak_stop,
-                ):
-                    break
-                continue
-
-            tally.known_streak = 0
-            item = _fetch_new_item(
-                tally, link=link, ph_key=ph_key, config=config, article_repo=article_repo,
-                settings=settings, fetcher=fetcher, quality_flags=quality_flags,
-                admission_enabled=admission_enabled,
-            )
-            if item is None:
-                continue
-
-            assessment = None
-            if admission_enabled:
-                action, assessment = _screen_candidate(
-                    item=item,
-                    config=config,
-                    db_source_id=db_source_id,
-                    article_repo=article_repo,
-                    settings=settings,
-                    relevance_scorer=relevance_scorer,
-                    admission_state=admission_state,
-                    canonical_hash=canonical_hash,
-                    canonical_url=canonical,
-                )
-                # Screened: the body (or its decision) now holds the candidate, not the link.
-                settle_pending(article_repo.session, key=ph_key)
-                if action == "paused":
-                    break
-                if action != "accept":
-                    continue
-            else:
-                assessment = (
-                    relevance_scorer.classify(item) if relevance_scorer is not None else None
-                )
-
-            row = _build_article_row(
-                item=item,
-                config=config,
-                db_source_id=db_source_id,
-                canonical=canonical,
-                canonical_hash=canonical_hash,
-                assessment=assessment,
-                admission_enabled=admission_enabled,
-            )
-            if row is None:
-                continue
-            _store_row(tally, row, batch_mode=batch_mode, article_repo=article_repo)
-            known_hashes.add(canonical_hash)
-        if batch_mode:
-            batch_new, batch_duplicates = _upsert_article_rows(
-                article_repo=article_repo,
-                rows=tally.queued_rows,
-            )
-            tally.new_count += batch_new
-            tally.duplicate_count += batch_duplicates
+            if _process_link(
+                run, tally, known_hashes=known_hashes, link=link, canonical=canonical,
+                canonical_hash=canonical_hash, ph_key=placeholder_keys.get(canonical_hash, ""),
+            ):
+                break
+        _flush_queued_rows(run, tally)
     finally:
-        fetcher.close()
+        run.fetcher.close()
     return (
         tally.fetched_articles, tally.new_count, tally.duplicate_count,
         tally.skipped_known_items, tally.early_stop_hit,

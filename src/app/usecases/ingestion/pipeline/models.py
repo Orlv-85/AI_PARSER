@@ -1,11 +1,14 @@
 """Fetch cycle value types and tuning constants."""
 from dataclasses import dataclass
 
+from app.config.settings import Settings
 from app.config.sources import SourceConfig
+from app.core.jev import JevRelevanceScorer
 from app.ingest.html import (
     HtmlListPageResult,
 )
 from app.ingest.rss import RssItemList
+from app.storage.article_repo import ArticleRepo
 
 # Pending admission candidates replayed per source before its fresh fetch.
 PENDING_REPLAY_LIMIT = 50
@@ -68,3 +71,18 @@ class AdmissionState:
     rejected: int = 0
     unresolved: int = 0
     observed: int = 0
+
+
+@dataclass
+class SourceRun:
+    """What the RSS and HTML paths pass to every step while persisting one source."""
+    config: SourceConfig
+    db_source_id: int
+    article_repo: ArticleRepo
+    settings: Settings
+    relevance_scorer: JevRelevanceScorer | None
+    admission_state: AdmissionState | None
+
+    @property
+    def admission_enabled(self) -> bool:
+        return self.admission_state is not None and self.admission_state.enabled

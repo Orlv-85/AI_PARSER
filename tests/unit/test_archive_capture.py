@@ -347,6 +347,17 @@ def test_download_documents_touches_only_given_ids(tmp_path) -> None:
     assert _document(session, other).state == "pending"
 
 
+def test_download_documents_without_due_documents_reports_no_outage(tmp_path) -> None:
+    def no_client():
+        raise AssertionError("no download expected")
+
+    summary = capture_module.download_documents(
+        _session(), [], cache_root=tmp_path / "archive", daily_cache_root=tmp_path / "daily",
+        client_factory=no_client, host_interval=0)
+
+    assert (summary["outage"], summary["downloads"], summary["skipped_time"]) == (False, 0, 0)
+
+
 def _document_after_sync(session, url) -> int:
     rows = session.scalars(select(Article)).all()
     capture_module.archive_articles(session, rows)
