@@ -3,7 +3,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
 from logging import Logger
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy.orm import Session
 
@@ -29,8 +29,18 @@ class PreparedBulletin:
     texts: dict[str, SourceText] = field(default_factory=dict)
 
 
-def assess_day(session: Session, settings: Settings, logger: Logger, day: date, *,
-               opener: Callable[..., Any], max_usd: str = ASSESS_DEFAULT_MAX_USD,
+@dataclass(frozen=True)
+class BulletinEnv:
+    """What the bulletin steps share besides the session: settings, logger, provider openers."""
+
+    settings: Settings
+    logger: Logger
+    assessor_factory: Callable[..., Any] | None = None
+    writer_factory: Callable[..., Any] | None = None
+
+
+def assess_day(session: Session, env: BulletinEnv, day: date, *,
+               max_usd: str = ASSESS_DEFAULT_MAX_USD,
                dry_run: bool = False) -> dict[str, Any] | None:
     """Shared assessment path; existing answers and journal caps remain authoritative."""
     repo = WorldChangeRepo(session)
@@ -38,7 +48,8 @@ def assess_day(session: Session, settings: Settings, logger: Logger, day: date, 
     if dry_run:
         summary = run_assessment(session, repo, None, day, dry_run=True)
     else:
-        with opener(settings, logger, day, max_usd) as assessor:
+        opener = cast(Callable[..., Any], env.assessor_factory)
+        with opener(env.settings, env.logger, day, max_usd) as assessor:
             summary = run_assessment(session, repo, assessor, day)
     return summary
 
@@ -58,12 +69,14 @@ def prepare_bulletin(session: Session, settings: Settings, logger: Logger, day: 
     return PreparedBulletin(result.bulletin, result.reason, library, numbers, texts)
 
 
-def write_prepared(prepared: PreparedBulletin, settings: Settings, logger: Logger, today: date, *,
-                   opener: Callable[..., Any], max_usd: str = WRITER_MAX_USD_PER_DAY) -> None:
+def write_prepared(prepared: PreparedBulletin, env: BulletinEnv, today: date, *,
+                   max_usd: str = WRITER_MAX_USD_PER_DAY) -> None:
     """Apply the existing writer and keep its summary beside the builder's counts."""
     if prepared.bulletin is None:
         return
-    with opener(settings, today, max_usd=float(max_usd)) as writer:
+    logger = env.logger
+    opener = cast(Callable[..., Any], env.writer_factory)
+    with opener(env.settings, today, max_usd=float(max_usd)) as writer:
         written = write_bulletin(prepared.bulletin, prepared.texts, writer.ask)
         written.summary["cost_usd"] = writer.cost_usd()
     prepared.bulletin = written.bulletin
@@ -76,36 +89,33 @@ def has_provider_key(settings: Settings, name: str) -> bool:
     return key is not None and bool(key.get_secret_value().strip())
 
 
-def _daily_assess(session: Session, settings: Settings, logger: Logger, day: date,
-                  opener: Callable[..., Any]) -> dict[str, Any]:
-    if not has_provider_key(settings, "jev_api_key"):
-        log_event(logger, event="bulletin_assess_skipped", date=day.isoformat(),
+def _daily_assess(session: Session, env: BulletinEnv, day: date) -> dict[str, Any]:
+    if not has_provider_key(env.settings, "jev_api_key"):
+        log_event(env.logger, event="bulletin_assess_skipped", date=day.isoformat(),
                   reason="missing_jev_key")
         return {"reason": "missing_jev_key"}
-    return assess_day(session, settings, logger, day, opener=opener) or {"reason": "no_digest"}
+    return assess_day(session, env, day) or {"reason": "no_digest"}
 
 
-def _daily_write(prepared: PreparedBulletin, settings: Settings, logger: Logger, today: date,
-                 opener: Callable[..., Any]) -> dict[str, Any]:
+def _daily_write(prepared: PreparedBulletin, env: BulletinEnv, today: date) -> dict[str, Any]:
     if prepared.bulletin is None:
         return {"reason": prepared.reason}
-    if not has_provider_key(settings, "ds_api_key"):
-        log_event(logger, event="bulletin_writer_skipped", date=prepared.bulletin.date,
+    if not has_provider_key(env.settings, "ds_api_key"):
+        log_event(env.logger, event="bulletin_writer_skipped", date=prepared.bulletin.date,
                   reason="missing_ds_key")
         return {"reason": "missing_ds_key"}
-    write_prepared(prepared, settings, logger, today, opener=opener)
+    write_prepared(prepared, env, today)
     return dict(prepared.numbers["writer"])
 
 
-def run_daily(session: Session, settings: Settings, logger: Logger, day: date,
-              today: Callable[[], date], *,
-              assessor_factory: Callable[..., Any], writer_factory: Callable[..., Any]
-              ) -> dict[str, Any]:
+def run_daily(session: Session, env: BulletinEnv, day: date,
+              today: Callable[[], date]) -> dict[str, Any]:
     """Assess, build, optionally write, store, and return the one command summary."""
-    assessment = _daily_assess(session, settings, logger, day, assessor_factory)
-    prepared = prepare_bulletin(session, settings, logger, day,
+    settings = env.settings
+    assessment = _daily_assess(session, env, day)
+    prepared = prepare_bulletin(session, settings, env.logger, day,
                                 write=has_provider_key(settings, "ds_api_key"))
-    writer = _daily_write(prepared, settings, logger, today(), writer_factory)
+    writer = _daily_write(prepared, env, today())
     stored = BulletinRepo(session).save(day, bulletin=prepared.bulletin, reason=prepared.reason,
                                        numbers=prepared.numbers)
     session.commit()

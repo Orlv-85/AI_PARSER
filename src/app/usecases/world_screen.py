@@ -38,7 +38,7 @@ from app.storage.world import (
     WorldRepo,
 )
 from app.storage.world_change import WorldChangeRepo
-from app.usecases.bulletin.assessor import open_assessor
+from app.usecases.bulletin.assessor import JournalFile, open_assessor
 
 STEP_SCREEN = "screen"
 STEP_ASSESS = "assess"
@@ -84,9 +84,10 @@ def open_world_assessor(settings: Any, logger: Logger,
     One file per real day, whatever `--date` or `--max-usd` a run has; not the digest's journal.
     """
     manager: AbstractContextManager[WorldChangeAssessor] = open_assessor(
-        settings, logger, today, WORLD_JEV_MAX_USD_PER_DAY,
-        root=Path("data/world") / today.isoformat(), version=WORLD_JOURNAL_VERSION,
-        usage_event="world_screen_usage", file_name=f"journal-{WORLD_JOURNAL_VERSION}.sqlite3")
+        settings, logger, today, WORLD_JEV_MAX_USD_PER_DAY, JournalFile(
+            root=Path("data/world") / today.isoformat(), version=WORLD_JOURNAL_VERSION,
+            usage_event="world_screen_usage",
+            file_name=f"journal-{WORLD_JOURNAL_VERSION}.sqlite3"))
     return manager
 
 

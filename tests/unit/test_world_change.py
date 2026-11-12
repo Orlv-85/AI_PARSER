@@ -39,7 +39,7 @@ from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import Article, Base, WorldChangeAssessment
 from app.storage.provider_journal import PilotJournal, TransportAttemptsExhausted
 from app.storage.world_change import WorldChangeRepo
-from app.usecases.bulletin.assessor import open_assessor
+from app.usecases.bulletin.assessor import JournalFile, open_assessor
 
 DAY = date(2026, 10, 30)
 ANSWER = {"answers": {
@@ -601,7 +601,8 @@ def test_open_assessor_caps_the_journal(tmp_path):
     root = tmp_path / "day"
     journals = []
     for _ in range(2):  # the second run reopens the same day folder and journal
-        with open_assessor(settings, getLogger("t"), DAY, "0.05", root=root) as assessor:
+        with open_assessor(settings, getLogger("t"), DAY, "0.05",
+                           JournalFile(root=root)) as assessor:
             assert (assessor.secret, assessor.model) == ("k", settings.jev_model)
             journal = assessor.payment_journal
             journals.append(journal)
@@ -623,18 +624,30 @@ def test_open_assessor_caps_the_journal(tmp_path):
 def test_open_assessor_logs_journal_usage_on_close(tmp_path, caplog):
     settings = Settings(_env_file=None, jev_api_key=SecretStr("k"))
     with caplog.at_level("INFO"):
-        with open_assessor(settings, getLogger("t"), DAY, "0.05", root=tmp_path,
-                              usage_event="world_usage") as assessor:
+        with open_assessor(
+            settings,
+            getLogger("t"),
+            DAY,
+            "0.05",
+            JournalFile(root=tmp_path, usage_event="world_usage"),
+        ) as assessor:
             report = assessor.payment_journal.report()
     assert [r.args for r in caplog.records if r.getMessage() == "world_usage"] == [report]
     with pytest.raises(ValueError, match="missing_provider_key"):
-        with open_assessor(Settings(_env_file=None), getLogger("t"), DAY, "0.05", root=tmp_path):
+        with open_assessor(
+            Settings(_env_file=None),
+            getLogger("t"),
+            DAY,
+            "0.05",
+            JournalFile(root=tmp_path),
+        ):
             pass
 
 def test_open_assessor_closes_journal_when_the_run_fails(tmp_path, caplog):
     settings = Settings(_env_file=None, jev_api_key=SecretStr("k"))
     with caplog.at_level("INFO"), pytest.raises(RuntimeError, match="^run failed$"):
-        with open_assessor(settings, getLogger("t"), DAY, "0.05", root=tmp_path) as assessor:
+        with open_assessor(settings, getLogger("t"), DAY, "0.05",
+                           JournalFile(root=tmp_path)) as assessor:
             journal = assessor.payment_journal
             raise RuntimeError("run failed")
     with pytest.raises(sqlite3.ProgrammingError):

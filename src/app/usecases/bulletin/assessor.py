@@ -4,6 +4,7 @@ Behavior: src/app/core/bulletin/world_change.md.
 """
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import date
 from logging import Logger
 from pathlib import Path
@@ -21,15 +22,26 @@ from app.core.provider_costs import microdollars
 from app.storage.provider_journal import JournalPolicy, PilotJournal
 
 
-@contextmanager
-def open_assessor(settings, logger: Logger, target: date, max_usd: str, *,
-                  root: Path | None = None, version: str = WORLD_CHANGE_VERSION,
-                  usage_event: str = "bulletin_assess_usage",
-                  file_name: str | None = None) -> Iterator[WorldChangeAssessor]:
-    """Assessor with its own capped journal in data/bulletin/<day>/ (one file per cap).
+@dataclass(frozen=True)
+class JournalFile:
+    """Where an assessor keeps its journal and how its usage is logged; the defaults are the
+    bulletin's (data/bulletin/<day>/, one file per cap)."""
 
-    The world stream passes its own `root`, journal `version`, `usage_event` and `file_name`.
-    """
+    root: Path | None = None
+    version: str = WORLD_CHANGE_VERSION
+    usage_event: str = "bulletin_assess_usage"
+    file_name: str | None = None
+
+
+BULLETIN_JOURNAL = JournalFile()
+
+
+@contextmanager
+def open_assessor(settings, logger: Logger, target: date, max_usd: str,
+                  journal_file: JournalFile = BULLETIN_JOURNAL) -> Iterator[WorldChangeAssessor]:
+    """Assessor with its own capped journal; the world stream passes its own `journal_file`."""
+    root, version = journal_file.root, journal_file.version
+    usage_event, file_name = journal_file.usage_event, journal_file.file_name
     api_key = getattr(settings, "jev_api_key", None)
     secret = api_key.get_secret_value().strip() if api_key is not None else ""
     if not secret:
