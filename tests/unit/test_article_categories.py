@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime
 from importlib import import_module
 from pathlib import Path
@@ -10,7 +11,7 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import get_settings
-from app.storage.article_repo import ArticleRepo
+from app.storage.article_repo import ArticleRepo, ViewFilter
 from app.storage.models_sql import Base
 from app.web.app import create_app
 
@@ -60,7 +61,7 @@ def test_category_updates_preserve_accepted_values_on_fallback(batch) -> None:
         assert original.category == "AI Coding"
         assert original.category_confidence == 0.98
         assert original.rank_score == 0.3
-        rows = repo.list_for_view(hours=24, limit=10, query=None, days=1, sort="rank")
+        rows = repo.list_for_view(ViewFilter(hours=24, days=1, sort="rank"), limit=10)
         stored = {article.url_canonical_hash: article for article, _, _ in rows}
         assert stored["new"].category is None
         assert stored["duplicate"].category == "Infrastructure"
@@ -78,14 +79,14 @@ def test_category_filter_and_sort_apply_before_limit() -> None:
             _row("coding-low", 0.3, "AI Coding"), _row("coding-high", 0.8, "AI Coding"),
         ):
             repo.insert_article(row)
-        kwargs = {"hours": 24, "limit": 3, "query": None, "days": 1, "sort": "category"}
-        rows = repo.list_for_view(**kwargs)
+        view = ViewFilter(hours=24, days=1, sort="category")
+        rows = repo.list_for_view(view, limit=3)
         assert [article.url_canonical_hash for article, _, _ in rows] == [
             "coding-high", "coding-low", "security",
         ]
-        filtered = repo.list_for_view(**{**kwargs, "category": "Security", "limit": 1})
+        filtered = repo.list_for_view(replace(view, category="Security"), limit=1)
         assert [article.url_canonical_hash for article, _, _ in filtered] == ["security"]
-        assert not repo.list_for_view(**{**kwargs, "category": "missing"})
+        assert not repo.list_for_view(replace(view, category="missing"), limit=3)
 
 
 def test_category_metadata_reaches_news_links_and_exports(tmp_path, monkeypatch) -> None:

@@ -96,9 +96,6 @@ py-version = "3.14"
 jobs = 1
 ignore-paths = ["^src/app/storage/migrations/"]
 
-[tool.pylint.design]
-max-args = 8
-
 [tool.pylint.format]
 max-line-length = 100
 

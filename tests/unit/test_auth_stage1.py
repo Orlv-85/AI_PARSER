@@ -37,7 +37,7 @@ def _build_authenticated_client(monkeypatch, tmp_path) -> TestClient:
         def __init__(self, _session) -> None:
             pass
 
-        def list_for_view(self, **_kwargs):
+        def list_for_view(self, *_args, **_kwargs):
             row = SimpleNamespace(
                 title="Auth Test News",
                 published_at=datetime(2026, 2, 21, 12, 0, tzinfo=UTC),

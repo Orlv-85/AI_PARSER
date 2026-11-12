@@ -6,19 +6,19 @@ fixed `/api/news/<name>` path of the other routers.
 
 import json
 from datetime import UTC, date, datetime
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 
 from app.core.categories import READABLE_CATEGORIES
+from app.storage.article_repo import ViewFilter
 from app.usecases.news_reads import ArticleRow, agent_article, agent_rows, news_rows
 from app.web.models import DigestLinkFeedItem, NewsArticleDetail, NewsItem
 from app.web.routes import WebDeps
 from app.web.routes.common import _http_errors
-
-_NEWS_LINKS_DATE_QUERY = Query(alias="date")
 
 
 def _article_category_metadata(article: object) -> dict[str, Any]:
@@ -47,16 +47,49 @@ def _article_category_metadata(article: object) -> dict[str, Any]:
     return result
 
 
-def _view_filters(*, hours: int, date_from: date | None, date_to: date | None,
-                  category: str | None, **filters: object) -> dict[str, object]:
-    """`list_for_view` arguments: a date range replaces the `hours` window."""
-    has_date_range = date_from is not None or date_to is not None
-    found: dict[str, object] = {"hours": None if has_date_range else hours, **filters}
-    if has_date_range:
-        found.update(date_from=date_from, date_to=date_to)
-    if category is not None:
-        found["category"] = category
-    return found
+class _NewsWindow(BaseModel):
+    hours: int = Field(24, ge=1, le=720)
+    limit: int = Field(30, ge=1, le=200)
+    min_ai_relevance: float = Field(0.2, ge=0.0, le=1.0)
+    query: str | None = None
+    days: int = Field(7, ge=1, le=365)
+    sort: str = Field("rank", pattern="^(rank|published|category)$")
+    category: str | None = None
+
+
+class NewsQuery(_NewsWindow):
+    """Query of `/api/news`; field order is the order of the OpenAPI parameters."""
+
+    date_from: date | None = None
+    date_to: date | None = None
+
+
+class NewsExportQuery(_NewsWindow):
+    """Query of `/api/news/export`: `include_content` sits before the date range."""
+
+    include_content: bool = False
+    date_from: date | None = None
+    date_to: date | None = None
+
+
+def _view(news: NewsQuery | NewsExportQuery) -> ViewFilter:
+    """`list_for_view` filter: a date range replaces the `hours` window."""
+    has_date_range = news.date_from is not None or news.date_to is not None
+    return ViewFilter(
+        hours=None if has_date_range else news.hours, days=news.days, sort=news.sort,
+        query=news.query, min_ai_relevance=news.min_ai_relevance,
+        date_from=news.date_from, date_to=news.date_to, category=news.category,
+    )
+
+
+class LinksQuery(BaseModel):
+    """Query of `/api/news/links`."""
+
+    target_date: date = Field(alias="date")
+    limit: int = Field(30, ge=1, le=200)
+    offset: int = Field(0, ge=0)
+    min_ai_relevance: float = Field(0.2, ge=0.0, le=1.0)
+    include_content: bool = False
 
 
 def _link_item(article: Any, source_key: str | None, source_name: str | None,
@@ -81,10 +114,10 @@ def _link_item(article: Any, source_key: str | None, source_name: str | None,
     )
 
 
-def _news_rows(deps: WebDeps, filters: dict[str, object]) -> list[ArticleRow]:
+def _news_rows(deps: WebDeps, news: NewsQuery | NewsExportQuery) -> list[ArticleRow]:
     with _http_errors():
         deps.create_all()
-        rows: list[ArticleRow] = news_rows(deps.SessionLocal, **filters)
+        rows: list[ArticleRow] = news_rows(deps.SessionLocal, _view(news), limit=news.limit)
         return rows
 
 
@@ -135,22 +168,14 @@ def _export_response(rows: list[ArticleRow], include_content: bool) -> JSONRespo
     )
 
 
-def _links_response(deps: WebDeps, target_date: date, *, limit: int, offset: int,
-                    min_ai_relevance: float, include_content: bool) -> list[DigestLinkFeedItem]:
+def _links_response(deps: WebDeps, links: LinksQuery, include_content: bool
+                    ) -> list[DigestLinkFeedItem]:
+    view = ViewFilter(hours=None, days=1, sort="published",
+                      min_ai_relevance=links.min_ai_relevance,
+                      date_from=links.target_date, date_to=links.target_date)
     with _http_errors():
         deps.create_all()
-        rows = agent_rows(
-            deps.SessionLocal,
-            hours=None,
-            limit=limit,
-            offset=offset,
-            query=None,
-            days=1,
-            sort="published",
-            min_ai_relevance=min_ai_relevance,
-            date_from=target_date,
-            date_to=target_date,
-        )
+        rows = agent_rows(deps.SessionLocal, view, limit=links.limit, offset=links.offset)
     return [_link_item(article, source_key, source_name, include_content)
             for article, source_key, source_name in rows]
 
@@ -185,62 +210,25 @@ def build_news_router(deps: WebDeps) -> APIRouter:
     @router.get(
         "/api/news", response_model=list[NewsItem], response_model_exclude_unset=True,
     )
-    def list_news(  # pylint: disable=too-many-arguments
-        *,
-        hours: int = Query(24, ge=1, le=720),
-        limit: int = Query(30, ge=1, le=200),
-        min_ai_relevance: float = Query(0.2, ge=0.0, le=1.0),
-        query: str | None = None,
-        days: int = Query(7, ge=1, le=365),
-        sort: str = Query("rank", pattern="^(rank|published|category)$"),
-        category: str | None = None,
-        date_from: date | None = None,
-        date_to: date | None = None,
-    ) -> list[NewsItem]:
-        return _news_items(_news_rows(deps, _view_filters(
-            hours=hours, date_from=date_from, date_to=date_to, category=category,
-            limit=limit, min_ai_relevance=min_ai_relevance, query=query, days=days,
-            sort=sort)))
+    def list_news(news: Annotated[NewsQuery, Query()]) -> list[NewsItem]:
+        return _news_items(_news_rows(deps, news))
 
     @router.get("/api/news/export")
-    def export_news(  # pylint: disable=too-many-arguments
-        *,
-        hours: int = Query(24, ge=1, le=720),
-        limit: int = Query(30, ge=1, le=200),
-        min_ai_relevance: float = Query(0.2, ge=0.0, le=1.0),
-        query: str | None = None,
-        days: int = Query(7, ge=1, le=365),
-        sort: str = Query("rank", pattern="^(rank|published|category)$"),
-        category: str | None = None,
-        include_content: bool = False,
-        date_from: date | None = None,
-        date_to: date | None = None,
-    ) -> JSONResponse:
-        return _export_response(_news_rows(deps, _view_filters(
-            hours=hours, date_from=date_from, date_to=date_to, category=category,
-            limit=limit, min_ai_relevance=min_ai_relevance, query=query, days=days,
-            sort=sort, include_content=include_content)), include_content)
+    def export_news(news: Annotated[NewsExportQuery, Query()]) -> JSONResponse:
+        return _export_response(_news_rows(deps, news), news.include_content)
 
     @router.get(
         "/api/news/links",
         response_model=list[DigestLinkFeedItem],
         response_model_exclude_unset=True,
     )
-    def list_news_links(
-        *,
-        target_date: date = _NEWS_LINKS_DATE_QUERY,
-        limit: int = Query(30, ge=1, le=200),
-        offset: int = Query(0, ge=0),
-        min_ai_relevance: float = Query(0.2, ge=0.0, le=1.0),
-        include_content: bool = False,
-        request: Request,
-    ) -> list[DigestLinkFeedItem]:
+    def list_news_links(links: Annotated[LinksQuery, Query()], request: Request
+                        ) -> list[DigestLinkFeedItem]:
         # Without a session or the publish token the content fields are left out (set by
         # the auth middleware); the answer is otherwise the same, so old clients keep working.
         return _links_response(
-            deps, target_date, limit=limit, offset=offset, min_ai_relevance=min_ai_relevance,
-            include_content=include_content
-            and getattr(request.state, "full_text_allowed", False),
+            deps, links,
+            links.include_content and getattr(request.state, "full_text_allowed", False),
         )
 
     return router

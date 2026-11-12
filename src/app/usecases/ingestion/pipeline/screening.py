@@ -5,7 +5,6 @@ from math import isfinite
 from typing import Any, cast
 
 from app.config.settings import Settings
-from app.config.sources import SourceConfig
 from app.core.categories import READABLE_CATEGORIES
 from app.core.ingestion.admission import (
     admission_cache_key,
@@ -19,7 +18,6 @@ from app.storage.admission import (
     record_decision,
     upsert_pending,
 )
-from app.storage.article_repo import ArticleRepo
 from app.storage.models_sql import AdmissionDecision
 from app.usecases.ingestion.pipeline.models import AdmissionState, SourceRun
 from app.usecases.ingestion.pipeline.rows import (
@@ -66,10 +64,11 @@ def _resolve_cached(
 
 
 def _score_and_record(
-    *, item: object, key: str, article_repo: ArticleRepo,
-    relevance_scorer: JevRelevanceScorer, admission_state: AdmissionState,
-    logger: Logger | None,
+    run: SourceRun, item: object, key: str, logger: Logger | None,
 ) -> tuple[str, JevAssessment | None]:
+    """Screen with the provider; the caller has checked that the scorer and admission exist."""
+    relevance_scorer = cast(JevRelevanceScorer, run.relevance_scorer)
+    admission_state = cast(AdmissionState, run.admission_state)
     was_cached = relevance_scorer.state(item) in relevance_scorer.cache
     assessment = relevance_scorer.classify(item)
     if assessment is None:
@@ -83,7 +82,7 @@ def _score_and_record(
     if not was_cached:
         admission_state.fresh_success = True
     record_decision(
-        article_repo.session,
+        run.article_repo.session,
         key=key,
         decision=decision.status,
         reason=decision.reason,
@@ -101,12 +100,12 @@ def _score_and_record(
     return (decision.status, None)
 
 
-def _screen_candidate(  # pylint: disable=too-many-arguments
-    *, item: object, config: SourceConfig, db_source_id: int, article_repo: ArticleRepo,
-    settings: Settings, relevance_scorer: JevRelevanceScorer | None,
-    admission_state: AdmissionState | None, canonical_hash: str, logger: Logger | None = None,
+def _screen_candidate(
+    run: SourceRun, item: object, *, canonical_hash: str, logger: Logger | None = None,
     canonical_url: str | None = None,
 ) -> tuple[str, JevAssessment | None]:
+    settings, article_repo = run.settings, run.article_repo
+    relevance_scorer, admission_state = run.relevance_scorer, run.admission_state
     if admission_state is None or not admission_state.enabled:
         assessment = relevance_scorer.classify(item) if relevance_scorer is not None else None
         return ("accept", assessment)
@@ -128,8 +127,8 @@ def _screen_candidate(  # pylint: disable=too-many-arguments
         article_repo.session,
         key=key,
         url_canonical_hash=canonical_hash,
-        source_id=db_source_id,
-        payload=_candidate_payload(item, config, canonical_url),
+        source_id=run.db_source_id,
+        payload=_candidate_payload(item, run.config, canonical_url),
         evidence_hash=ev_hash,
         policy_version=settings.semantic_admission_policy_version,
         model=settings.jev_model,
@@ -137,10 +136,7 @@ def _screen_candidate(  # pylint: disable=too-many-arguments
     )
     if relevance_scorer is None:
         return _pause(admission_state, logger, "provider_missing")
-    return _score_and_record(
-        item=item, key=key, article_repo=article_repo, relevance_scorer=relevance_scorer,
-        admission_state=admission_state, logger=logger,
-    )
+    return _score_and_record(run, item, key, logger)
 
 
 def _assessed_row(
@@ -149,15 +145,7 @@ def _assessed_row(
     """Screen (or, without admission, classify) one new item; the row is None unless stored."""
     if run.admission_enabled:
         action, assessment = _screen_candidate(
-            item=item,
-            config=run.config,
-            db_source_id=run.db_source_id,
-            article_repo=run.article_repo,
-            settings=run.settings,
-            relevance_scorer=run.relevance_scorer,
-            admission_state=run.admission_state,
-            canonical_hash=canonical_hash,
-            canonical_url=canonical,
+            run, item, canonical_hash=canonical_hash, canonical_url=canonical,
         )
         if action != "accept":
             return action, None
@@ -166,13 +154,7 @@ def _assessed_row(
             run.relevance_scorer.classify(item) if run.relevance_scorer is not None else None
         )
     return "accept", _build_article_row(
-        item=item,
-        config=run.config,
-        db_source_id=run.db_source_id,
-        canonical=canonical,
-        canonical_hash=canonical_hash,
-        assessment=assessment,
-        admission_enabled=run.admission_enabled,
+        run, item, canonical=canonical, canonical_hash=canonical_hash, assessment=assessment,
     )
 
 

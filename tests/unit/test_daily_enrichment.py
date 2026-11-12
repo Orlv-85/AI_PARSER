@@ -28,7 +28,13 @@ from app.storage.admission import set_collection_paused
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.provider_journal import PilotJournal
 from app.usecases.daily import enrichment as daily
+from app.usecases.ingestion.pipeline.models import AdmissionState, SourceRun
 from app.usecases.ingestion.pipeline.rows import _build_article_row
+
+
+def row_run(*, config, db_source_id, admission=False):
+    return SourceRun(config=config, db_source_id=db_source_id, article_repo=None, settings=None,
+                     admission_state=AdmissionState(enabled=admission))
 
 
 def test_complete_day_more_than_200_and_preserves_history(session, tmp_path, monkeypatch):
@@ -245,8 +251,13 @@ def test_ordinary_ingestion_uses_rubric_journal_and_reusable_admission(tmp_path,
     assert journal.report()["providers"]["jev"]["calls"] == 1
     journal.close()
     config = SourceConfig(id="test", name="Test", type="rss", url="https://example.org/feed")
-    values = _build_article_row(item=item, config=config, db_source_id=1,
-        canonical=item.url, canonical_hash="hash", assessment=assessment, admission_enabled=True)
+    values = _build_article_row(
+        row_run(config=config, db_source_id=1, admission=True),
+        item,
+        canonical=item.url,
+        canonical_hash="hash",
+        assessment=assessment,
+    )
     row = article(session)
     row.enrichment_provenance = values["enrichment_provenance"]
     data = daily.admission_from_proof(row, {"title": item.title, "content": SOURCE})
@@ -279,8 +290,13 @@ def test_feed_only_admission_is_reused_by_enrichment(tmp_path, session):
     assert len(states) == 1
     assert "Summary: Feed line about AI" in states[0]
     config = SourceConfig(id="test", name="Test", type="rss", url="https://example.org/feed")
-    values = _build_article_row(item=item, config=config, db_source_id=1,
-        canonical=item.url, canonical_hash="hash", assessment=assessment, admission_enabled=True)
+    values = _build_article_row(
+        row_run(config=config, db_source_id=1, admission=True),
+        item,
+        canonical=item.url,
+        canonical_hash="hash",
+        assessment=assessment,
+    )
     row = article(session)
     row.enrichment_provenance = values["enrichment_provenance"]
     data = daily.admission_from_proof(row, {"title": item.title, "content": ""})

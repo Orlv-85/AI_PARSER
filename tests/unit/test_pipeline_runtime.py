@@ -204,7 +204,8 @@ def _inline_fetches(monkeypatch) -> tuple[list[str], list[int]]:
         def submit(self, fn, **kwargs):
             return _Future(fn(**kwargs))
 
-    def fetch(*, config, **_kwargs):
+    def fetch(*, source, **_kwargs):
+        config = source[1]
         order.append(config.id)
         return _rss_result([]) if config.type == "rss" else HtmlListPageResult(links=[])
 

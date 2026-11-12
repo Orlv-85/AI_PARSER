@@ -26,15 +26,13 @@ def _stored_validators(fetch_state: dict[str, object | None]) -> tuple[str | Non
 
 def _fetch_source_items(
     *,
-    config: SourceConfig,
-    db_source_id: int,
-    fetch_state: dict[str, object | None],
+    source: EnabledSource,
     settings: Settings,
     logger: Logger,
     run_id: str,
     full_text_semaphore: BoundedSemaphore | None,
 ) -> FetchResult:
-    del db_source_id
+    _idx, config, _db_source_id, fetch_state = source
     conditional = (
         settings.fetch_conditional_rss_enabled if config.type == "rss"
         else settings.fetch_conditional_html_list_enabled
@@ -160,15 +158,13 @@ def _collect_fetched_items(
             futures: dict[Future, tuple[int, SourceConfig, int]] = {
                 pool.submit(
                     _fetch_source_items,
-                    config=config,
-                    db_source_id=db_source_id,
-                    fetch_state=fetch_state,
+                    source=source,
                     settings=settings,
                     logger=logger,
                     run_id=run_id,
                     full_text_semaphore=full_text_semaphore,
-                ): (idx, config, db_source_id)
-                for idx, config, db_source_id, fetch_state in group
+                ): source[:3]
+                for source in group
             }
             for future in as_completed(futures):
                 idx, config, _db_source_id = futures[future]

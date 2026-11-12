@@ -18,7 +18,7 @@ from app.core.jev import JevAssessment
 from app.storage.admission import get_cached_decision
 from app.storage.models_sql import AdmissionDecision as Row
 from app.storage.models_sql import Base
-from app.usecases.ingestion.pipeline.models import AdmissionState
+from app.usecases.ingestion.pipeline.models import AdmissionState, SourceRun
 from app.usecases.ingestion.pipeline.screening import (
     _assessment_from_cached,
     _screen_candidate,
@@ -77,9 +77,18 @@ def _key():
 
 def _screen(session, scorer, state, logger=None):
     return _screen_candidate(
-        item=ITEM, config=CONFIG, db_source_id=1, article_repo=SimpleNamespace(session=session),
-        settings=SETTINGS, relevance_scorer=scorer, admission_state=state,
-        canonical_hash="h", logger=logger, canonical_url="https://example.com/a",
+        SourceRun(
+            config=CONFIG,
+            db_source_id=1,
+            article_repo=SimpleNamespace(session=session),
+            settings=SETTINGS,
+            relevance_scorer=scorer,
+            admission_state=state,
+        ),
+        ITEM,
+        canonical_hash="h",
+        logger=logger,
+        canonical_url="https://example.com/a",
     )
 
 

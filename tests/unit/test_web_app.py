@@ -1,4 +1,5 @@
 import time
+from dataclasses import asdict
 from datetime import UTC, date, datetime
 from html.parser import HTMLParser
 from importlib import import_module
@@ -10,13 +11,14 @@ from fastapi.testclient import TestClient
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.config.settings import get_settings
+from app.storage.article_repo import ViewFilter
 from app.usecases import digest as digest_usecases
 from app.usecases import news_reads
 from app.usecases.daily import signals_reads
 from app.web.app import _onboarding_engine, _signer, create_app
 from app.web.auth import SessionSigner
 from app.web.routes import pages as pages_routes
-from app.web.routes.news import _article_category_metadata, _view_filters
+from app.web.routes.news import NewsQuery, _article_category_metadata, _view
 
 
 class _NoSignalsRepo:
@@ -52,7 +54,7 @@ def test_web_app_pages_and_update_flow(monkeypatch, tmp_path) -> None:
         def __init__(self, _session) -> None:
             pass
 
-        def list_for_view(self, **_kwargs):
+        def list_for_view(self, *_args, **_kwargs):
             return []
 
     class _NewsDigestRepo:
@@ -193,8 +195,8 @@ def test_news_view_filters_and_source_fields(monkeypatch, tmp_path) -> None:
         def __init__(self, _session) -> None:
             pass
 
-        def list_for_view(self, **kwargs):
-            captured.update(kwargs)
+        def list_for_view(self, view, **kwargs):
+            captured.update(asdict(view), **kwargs)
             row = SimpleNamespace(
                 title="News",
                 published_at=datetime(2026, 2, 21, 12, 0, tzinfo=UTC),
@@ -221,6 +223,9 @@ def test_news_view_filters_and_source_fields(monkeypatch, tmp_path) -> None:
         "query": "ai",
         "days": 5,
         "sort": "published",
+        "date_from": None,
+        "date_to": None,
+        "category": None,
     }
     assert payload[0]["source_key"] == "src-key"
     assert payload[0]["source_name"] == "Source Name"
@@ -322,8 +327,8 @@ def test_news_export_returns_json_attachment_and_include_content(
         def __init__(self, _session) -> None:
             pass
 
-        def list_for_view(self, **kwargs):
-            captured_calls.append(dict(kwargs))
+        def list_for_view(self, view, **kwargs):
+            captured_calls.append({**asdict(view), **kwargs})
             article = SimpleNamespace(
                 id=7,
                 title="Exported item",
@@ -337,8 +342,8 @@ def test_news_export_returns_json_attachment_and_include_content(
             )
             return [(article, "src-key", "Source Name")]
 
-        def list_for_agent(self, **kwargs):
-            return self.list_for_view(**kwargs)
+        def list_for_agent(self, view, **kwargs):
+            return self.list_for_view(view, **kwargs)
 
     web_app_module = import_module("app.web.app")
     monkeypatch.setattr(web_app_module, "create_all", lambda: None)
@@ -368,7 +373,6 @@ def test_news_export_returns_json_attachment_and_include_content(
 
     assert captured_calls[0]["hours"] == 6
     assert captured_calls[0]["limit"] == 5
-    assert captured_calls[1]["include_content"] is True
 
 
 def test_news_export_forwards_date_range_and_returns_503_on_db_error(
@@ -393,8 +397,8 @@ def test_news_export_forwards_date_range_and_returns_503_on_db_error(
         def __init__(self, _session) -> None:
             pass
 
-        def list_for_view(self, **kwargs):
-            captured.update(kwargs)
+        def list_for_view(self, view, **kwargs):
+            captured.update(asdict(view), **kwargs)
             return []
 
     web_app_module = import_module("app.web.app")
@@ -451,8 +455,8 @@ def test_news_api_forwards_date_range_and_overrides_hours_passthrough(
         def __init__(self, _session) -> None:
             pass
 
-        def list_for_view(self, **kwargs):
-            captured.update(kwargs)
+        def list_for_view(self, view, **kwargs):
+            captured.update(asdict(view), **kwargs)
             row = SimpleNamespace(
                 title="News",
                 published_at=datetime(2026, 2, 21, 12, 0, tzinfo=UTC),
@@ -878,12 +882,12 @@ def test_admin_page_sort_defaults_to_published() -> None:
 
 def test_news_view_filters_one_sided_date_range_replaces_hours():
     start = date(2026, 1, 1)
-    assert _view_filters(hours=24, date_from=start, date_to=None, category=None, limit=5) == {
-        "hours": None, "limit": 5, "date_from": start, "date_to": None}
-    assert _view_filters(hours=24, date_from=None, date_to=start, category="tools", limit=5) == {
-        "hours": None, "limit": 5, "date_from": None, "date_to": start, "category": "tools"}
-    assert _view_filters(hours=24, date_from=None, date_to=None, category=None, limit=5) == {
-        "hours": 24, "limit": 5}
+    assert _view(NewsQuery(hours=24, date_from=start)) == ViewFilter(
+        hours=None, days=7, sort="rank", min_ai_relevance=0.2, date_from=start)
+    assert _view(NewsQuery(hours=24, date_to=start, category="tools")) == ViewFilter(
+        hours=None, days=7, sort="rank", min_ai_relevance=0.2, date_to=start, category="tools")
+    assert _view(NewsQuery(hours=24)) == ViewFilter(
+        hours=24, days=7, sort="rank", min_ai_relevance=0.2)
 
 
 def test_onboarding_engine_creates_missing_sqlite_folders(tmp_path) -> None:

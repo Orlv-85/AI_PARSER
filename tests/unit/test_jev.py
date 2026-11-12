@@ -28,8 +28,14 @@ from app.ingest.rss import RssFetchResult, _with_rss_metadata
 from app.storage.models_sql import Article as StoredArticle
 from app.storage.models_sql import Base
 from app.usecases.ingestion.pipeline import run_fetch_cycle
+from app.usecases.ingestion.pipeline.models import AdmissionState, SourceRun
 from app.usecases.ingestion.pipeline.rows import _build_article_row
 from app.usecases.ingestion.pipeline.scorer import jev_relevance_scorer
+
+
+def row_run(*, config, db_source_id, admission=False):
+    return SourceRun(config=config, db_source_id=db_source_id, article_repo=None, settings=None,
+                     admission_state=AdmissionState(enabled=admission))
 
 
 def _article(index: int = 1) -> Article:
@@ -295,11 +301,17 @@ def _sha(text: str) -> str:
 
 def _pinned_row(article: Article) -> dict:
     row = _build_article_row(
-        item=article, config=SourceConfig(id="test", name="Test", type="rss",
-                                          url="https://example.com/feed"),
-        db_source_id=1, canonical="c", canonical_hash="h", admission_enabled=True,
+        row_run(
+            config=SourceConfig(id="test", name="Test", type="rss",
+            url="https://example.com/feed"),
+            db_source_id=1,
+            admission=True,
+        ),
+        article,
+        canonical="c",
+        canonical_hash="h",
         assessment=JevAssessment(0.9, None, None, "accepted_ai_editorial", 0.9,
-                                 "NotComparison", 0.9),
+        "NotComparison", 0.9),
     )
     assert row is not None
     provenance: dict = json.loads(str(row["enrichment_provenance"]))

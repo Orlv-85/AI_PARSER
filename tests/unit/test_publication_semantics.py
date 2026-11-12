@@ -6,8 +6,17 @@ from app.config.sources import SourceConfig
 from app.core.jev import JevAssessment
 from app.ingest.html import fetch_html_article
 from app.ingest.rss import parse_rss
-from app.usecases.ingestion.pipeline.models import COMPARISON_MIN_CONFIDENCE
+from app.usecases.ingestion.pipeline.models import (
+    COMPARISON_MIN_CONFIDENCE,
+    AdmissionState,
+    SourceRun,
+)
 from app.usecases.ingestion.pipeline.rows import _build_article_row, _candidate_payload
+
+
+def row_run(*, config, db_source_id, admission=False):
+    return SourceRun(config=config, db_source_id=db_source_id, article_repo=None, settings=None,
+                     admission_state=AdmissionState(enabled=admission))
 
 
 def test_atom_updated_only_does_not_become_publication():
@@ -36,13 +45,11 @@ def test_unknown_or_conflicting_publication_has_zero_freshness():
             content=None,
         )
         row = _build_article_row(
-            item=item,
-            config=source,
-            db_source_id=1,
+            row_run(config=source, db_source_id=1, admission=False),
+            item,
             canonical=str(item.url),
             canonical_hash="a" * 64,
             assessment=None,
-            admission_enabled=False,
         )
         assert row["published_at"] is None
         assert row["freshness_score"] == 0
@@ -59,13 +66,11 @@ def test_day_precision_evidence_sets_publication_day_not_published_at():
                               fetcher=fetcher)
     assert item is not None
     row = _build_article_row(
-        item=item,
-        config=source,
-        db_source_id=1,
+        row_run(config=source, db_source_id=1, admission=False),
+        item,
         canonical=str(item.url),
         canonical_hash="b" * 64,
         assessment=None,
-        admission_enabled=False,
     )
     assert row["published_at"] is None
     assert row["publication_day"] == date(2026, 10, 1)
@@ -78,9 +83,13 @@ def _future_row(published_at):
     item = SimpleNamespace(title="AI research", url="https://example.com/research",
                            published_at=published_at, publication_date_kind="published",
                            date_evidence=None, summary=None, content=None)
-    return _build_article_row(item=item, config=source, db_source_id=1,
-                              canonical=str(item.url), canonical_hash="a" * 64,
-                              assessment=None, admission_enabled=False)
+    return _build_article_row(
+        row_run(config=source, db_source_id=1, admission=False),
+        item,
+        canonical=str(item.url),
+        canonical_hash="a" * 64,
+        assessment=None,
+    )
 
 
 def test_future_publication_becomes_collection_time():
@@ -108,9 +117,13 @@ def test_candidate_payload_replaces_future_date():
 
 def _row(item, assessment=None, admission_enabled=False):
     source = SourceConfig(id="test", name="Test", type="rss", url="https://example.com/feed")
-    return _build_article_row(item=item, config=source, db_source_id=7,
-                              canonical="https://example.com/a", canonical_hash="c" * 64,
-                              assessment=assessment, admission_enabled=admission_enabled)
+    return _build_article_row(
+        row_run(config=source, db_source_id=7, admission=admission_enabled),
+        item,
+        canonical="https://example.com/a",
+        canonical_hash="c" * 64,
+        assessment=assessment,
+    )
 
 
 def _item(**fields):

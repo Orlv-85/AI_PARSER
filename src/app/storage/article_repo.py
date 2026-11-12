@@ -1,7 +1,7 @@
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
-from typing import Any, cast
+from typing import Any
 
 from sqlalchemy import Select, case, delete, desc, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
@@ -12,6 +12,20 @@ from app.core.categories import CATEGORY_ORDER
 from app.storage.models_sql import Article, ArticleAlias, FetchRun, Source
 
 _ROW_SCORES = ("ai_relevance_score", "freshness_score", "rank_score")
+
+
+@dataclass(frozen=True)
+class ViewFilter:
+    """Which articles a list shows: a `hours` window, or `days` with a date range; text; order."""
+
+    hours: int | None
+    days: int
+    sort: str
+    query: str | None = None
+    min_ai_relevance: float = 0.0
+    date_from: date | None = None
+    date_to: date | None = None
+    category: str | None = None
 
 
 def _publication_since(moment: datetime):
@@ -213,69 +227,31 @@ class ArticleRepo:
         )
         return list(self.session.scalars(stmt).all())
 
-    def list_for_view(  # pylint: disable=too-many-arguments
-        self,
-        *,
-        hours: int | None,
-        limit: int,
-        offset: int = 0,
-        query: str | None,
-        days: int,
-        sort: str,
-        min_ai_relevance: float = 0.0,
-        date_from: date | None = None,
-        date_to: date | None = None,
-        include_content: bool = False,
-        category: str | None = None,
+    def list_for_view(
+        self, view: ViewFilter, *, limit: int, offset: int = 0,
     ) -> list[tuple[Article, str | None, str | None]]:
-        del include_content
         base_stmt = (
             select(Article, Source.source_key, Source.name)
             .outerjoin(Source, Article.source_id == Source.id)
-            .where(Article.ai_relevance_score >= min_ai_relevance)
+            .where(Article.ai_relevance_score >= view.min_ai_relevance)
         )
-        if category is not None:
-            base_stmt = base_stmt.where(Article.category == category)
+        if view.category is not None:
+            base_stmt = base_stmt.where(Article.category == view.category)
         base_stmt = base_stmt.where(*_view_window(
-            hours=hours, days=days, query=query, date_from=date_from, date_to=date_to))
-        if query:
-            base_stmt = base_stmt.where(_text_match(query))
-        base_stmt = base_stmt.order_by(*_view_order(sort)).limit(limit).offset(offset)
+            hours=view.hours, days=view.days, query=view.query, date_from=view.date_from,
+            date_to=view.date_to))
+        if view.query:
+            base_stmt = base_stmt.where(_text_match(view.query))
+        base_stmt = base_stmt.order_by(*_view_order(view.sort)).limit(limit).offset(offset)
         return [
             (row[0], row[1], row[2])
             for row in self.session.execute(base_stmt).all()
         ]
 
-    def list_for_agent(  # pylint: disable=too-many-arguments
-        self,
-        *,
-        hours: int | None,
-        limit: int,
-        offset: int = 0,
-        query: str | None,
-        days: int,
-        sort: str,
-        min_ai_relevance: float = 0.0,
-        date_from: date | None = None,
-        date_to: date | None = None,
-        include_content: bool = False,
+    def list_for_agent(
+        self, view: ViewFilter, *, limit: int, offset: int = 0,
     ) -> list[tuple[Article, str | None, str | None]]:
-        kwargs: dict[str, Any] = {
-            "hours": hours,
-            "limit": limit,
-            "offset": offset,
-            "query": query,
-            "days": days,
-            "sort": sort,
-            "min_ai_relevance": min_ai_relevance,
-        }
-        if date_from is not None:
-            kwargs["date_from"] = date_from
-        if date_to is not None:
-            kwargs["date_to"] = date_to
-        if include_content:
-            kwargs["include_content"] = include_content
-        return self.list_for_view(**cast(Any, kwargs))
+        return self.list_for_view(view, limit=limit, offset=offset)
 
     def get_article_for_agent(
         self, *, article_id: int

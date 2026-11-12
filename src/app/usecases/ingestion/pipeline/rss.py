@@ -2,8 +2,6 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.config.settings import Settings
-from app.config.sources import SourceConfig
 from app.core.canonicalize import canonical_url_hash, canonicalize_url
 from app.core.ingestion.admission import (
     admission_cache_key,
@@ -13,12 +11,10 @@ from app.core.ingestion.admission import (
 from app.core.ingestion.page_filter import (
     log_exclusion,
 )
-from app.core.jev import JevRelevanceScorer
 from app.storage.admission import (
     upsert_pending,
 )
-from app.storage.article_repo import ArticleRepo
-from app.usecases.ingestion.pipeline.models import AdmissionState, SourceMetrics, SourceRun
+from app.usecases.ingestion.pipeline.models import SourceMetrics, SourceRun
 from app.usecases.ingestion.pipeline.rows import (
     _candidate_payload,
     _item_exclusion_reason,
@@ -146,26 +142,10 @@ def _process_item(
 
 
 def _process_fetched_source_items(
-    *,
-    items: list,
-    config: SourceConfig,
-    db_source_id: int,
-    article_repo: ArticleRepo,
-    settings: Settings,
-    relevance_scorer: JevRelevanceScorer | None = None,
-    admission_state: AdmissionState | None = None,
-    metrics: SourceMetrics | None = None,
+    run: SourceRun, items: list, metrics: SourceMetrics | None = None,
 ) -> tuple[int, int, int, bool]:
-    run = SourceRun(
-        config=config,
-        db_source_id=db_source_id,
-        article_repo=article_repo,
-        settings=settings,
-        relevance_scorer=relevance_scorer,
-        admission_state=admission_state,
-    )
     tally = _RssTally()
-    streak_stop = settings.rss_known_streak_stop if config.type == "rss" else 0
+    streak_stop = run.settings.rss_known_streak_stop if run.config.type == "rss" else 0
     use_known_skip = run.admission_enabled or streak_stop > 0
     items = _accepted_items(items)
     if run.admission_enabled:

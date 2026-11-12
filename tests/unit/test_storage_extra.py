@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config.sources import SourceConfig
 from app.storage import db
-from app.storage.article_repo import ArticleRepo
+from app.storage.article_repo import ArticleRepo, ViewFilter
 from app.storage.models_sql import Article, ArticleAlias, Base, Source
 from app.storage.source_repo import SourceRepo
 
@@ -179,18 +179,12 @@ def test_list_for_view_applies_sort_with_query() -> None:
     ))
 
     by_rank = article_repo.list_for_view(
-        hours=24,
+        ViewFilter(hours=24, days=7, sort="rank", query="ai"),
         limit=10,
-        query="ai",
-        days=7,
-        sort="rank",
     )
     by_published = article_repo.list_for_view(
-        hours=24,
+        ViewFilter(hours=24, days=7, sort="published", query="ai"),
         limit=10,
-        query="ai",
-        days=7,
-        sort="published",
     )
 
     assert [row[0].title for row in by_rank] == [
@@ -228,11 +222,8 @@ def test_list_for_view_applies_sort_without_query() -> None:
     ))
 
     by_published = article_repo.list_for_view(
-        hours=24,
+        ViewFilter(hours=24, days=7, sort="published", query=None),
         limit=10,
-        query=None,
-        days=7,
-        sort="published",
     )
 
     assert [row[0].title for row in by_published] == [
@@ -266,11 +257,8 @@ def test_list_for_view_applies_rank_sort_without_query() -> None:
     ))
 
     by_rank = article_repo.list_for_view(
-        hours=24,
+        ViewFilter(hours=24, days=7, sort="rank", query=None),
         limit=10,
-        query=None,
-        days=7,
-        sort="rank",
     )
 
     assert [row[0].title for row in by_rank] == [
@@ -592,22 +580,26 @@ def test_list_for_view_date_range_skips_hours_and_days_windows() -> None:
     target_day = now.date()
 
     no_query = article_repo.list_for_view(
-        hours=1,
+        ViewFilter(
+            hours=1,
+            days=1,
+            sort="published",
+            query=None,
+            date_from=target_day,
+            date_to=target_day,
+        ),
         limit=10,
-        query=None,
-        days=1,
-        sort="published",
-        date_from=target_day,
-        date_to=target_day,
     )
     with_query = article_repo.list_for_view(
-        hours=1,
+        ViewFilter(
+            hours=1,
+            days=1,
+            sort="rank",
+            query="match",
+            date_from=target_day,
+            date_to=target_day,
+        ),
         limit=10,
-        query="match",
-        days=1,
-        sort="rank",
-        date_from=target_day,
-        date_to=target_day,
     )
 
     assert [row[0].title for row in no_query] == ["Inside Day Window"]
@@ -639,22 +631,26 @@ def test_list_for_view_supports_open_ended_date_ranges() -> None:
         ))
 
     only_from = article_repo.list_for_view(
-        hours=1,
+        ViewFilter(
+            hours=1,
+            days=1,
+            sort="published",
+            query=None,
+            date_from=middle.date(),
+            date_to=None,
+        ),
         limit=10,
-        query=None,
-        days=1,
-        sort="published",
-        date_from=middle.date(),
-        date_to=None,
     )
     only_to = article_repo.list_for_view(
-        hours=1,
+        ViewFilter(
+            hours=1,
+            days=1,
+            sort="published",
+            query=None,
+            date_from=None,
+            date_to=middle.date(),
+        ),
         limit=10,
-        query=None,
-        days=1,
-        sort="published",
-        date_from=None,
-        date_to=middle.date(),
     )
 
     assert [row[0].title for row in only_from] == ["Newer Open Range", "Middle Open Range"]
