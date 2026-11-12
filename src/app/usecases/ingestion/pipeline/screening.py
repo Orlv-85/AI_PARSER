@@ -2,7 +2,7 @@
 import json
 from logging import Logger
 from math import isfinite
-from typing import Any, TypeIs, cast
+from typing import Any, TypeGuard, cast
 
 from app.config.settings import Settings
 from app.core.categories import READABLE_CATEGORIES
@@ -191,7 +191,7 @@ def _restore_admission(
     state.fresh_success = snapshot[4]
 
 
-def _valid_cached_probability(value: object) -> TypeIs[float]:
+def _valid_cached_probability(value: object) -> TypeGuard[float]:
     return (
         not isinstance(value, bool) and isinstance(value, (int, float))
         and isfinite(value) and 0.0 <= value <= 1.0
