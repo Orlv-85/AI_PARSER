@@ -24,7 +24,8 @@ def _run_for(kind: str | None, target: date | None, backfill: int, recompute_all
 
 
 @app.command("period-signals")
-def period_signals(
+# Typer: each argument is one command-line option, so the list is the CLI itself.
+def period_signals(  # pylint: disable=too-many-arguments
     *,
     kind: str | None = typer.Option(
         None, "--kind",

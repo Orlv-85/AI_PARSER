@@ -7,7 +7,13 @@ from typing import Any
 
 from app.core.canonical_json import encoded, fingerprint
 from app.core.ingestion.reject_policy import CLEANUP_POLICY, cleanup_verdict
-from app.core.jev import JevAssessment, JevInputTooLarge, JevRelevanceScorer, _probability
+from app.core.jev import (
+    JevAssessment,
+    JevInputTooLarge,
+    JevRelevanceScorer,
+    ScorerConfig,
+    _probability,
+)
 from app.core.provider_costs import PRICES
 
 TAXONOMY_VERSION = "article-topics-2"
@@ -110,8 +116,11 @@ def source_state(row):
 
 def jev_request(row):
     # Use the ordinary admission and relevance questions, not a parallel policy.
-    scorer = JevRelevanceScorer(None, JEV_MODEL, getLogger(__name__),  # type: ignore[arg-type]
-                                semantic_admission_enabled=True)
+    scorer = JevRelevanceScorer(
+        None,
+        getLogger(__name__),
+        ScorerConfig(JEV_MODEL, semantic_admission_enabled=True),
+    )
     questions = scorer.questions()
     questions["category"]["criteria"] = {
         **TOPIC_CRITERIA, "Other": "Unrelated to AI or insufficient information to classify."}

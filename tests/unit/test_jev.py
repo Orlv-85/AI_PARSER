@@ -21,6 +21,7 @@ from app.core.jev import (
     ADMISSION_TRANSPORT_REVIEW_REASON,
     JevAssessment,
     JevRelevanceScorer,
+    ScorerConfig,
 )
 from app.core.models import Article
 from app.ingest.html import HtmlListPageResult
@@ -59,7 +60,11 @@ def test_jev_request_scores_zero_and_reuses_bounded_text() -> None:
     with httpx.Client(
         transport=httpx.MockTransport(respond), headers={"Authorization": "Bearer test-key"},
     ) as client:
-        scorer = JevRelevanceScorer(client, "jev-1.13.0", getLogger("jev-test"))
+        scorer = JevRelevanceScorer(
+            client,
+            getLogger("jev-test"),
+            ScorerConfig("jev-1.13.0"),
+        )
         assert scorer.score(article) == 0.0
         assert scorer.score(article.model_copy(update={"url": "https://example.com/alias"})) == 0.0
     assert len(requests) == 1
@@ -101,7 +106,11 @@ def test_jev_failure_stops_requests_and_does_not_log_secrets(failure, caplog) ->
         return httpx.Response(200, json={"answers": {"ai_relevant": {"noul": values[failure]}}})
 
     with httpx.Client(transport=httpx.MockTransport(respond)) as client:
-        scorer = JevRelevanceScorer(client, "jev-1.13.0", getLogger("jev-test"))
+        scorer = JevRelevanceScorer(
+            client,
+            getLogger("jev-test"),
+            ScorerConfig("jev-1.13.0"),
+        )
         assert scorer.score(_article()) is None
         assert scorer.score(_article(2)) is None
     assert len(calls) == 1
@@ -148,7 +157,11 @@ def test_jev_category_confidence_gate_keeps_valid_relevance(category, confidence
         }})
 
     with httpx.Client(transport=httpx.MockTransport(respond)) as client:
-        scorer = JevRelevanceScorer(client, "jev-1.13.0", getLogger("jev-test"))
+        scorer = JevRelevanceScorer(
+            client,
+            getLogger("jev-test"),
+            ScorerConfig("jev-1.13.0"),
+        )
         result = scorer.classify(_article())
         assert result is not None
         assert result.relevance_score == 0.8
@@ -167,7 +180,11 @@ def test_jev_category_threshold_is_configurable() -> None:
             "category": {"choice": "AI Coding", "confidence": 0.9},
         }},
     ))) as client:
-        scorer = JevRelevanceScorer(client, "jev-1.13.0", getLogger("jev-test"), 0.95)
+        scorer = JevRelevanceScorer(
+            client,
+            getLogger("jev-test"),
+            ScorerConfig("jev-1.13.0", category_min_confidence=0.95),
+        )
         result = scorer.classify(_article())
         assert result is not None
         assert result.category is None
@@ -288,8 +305,13 @@ def _sent_state(article: Article, *, admission: bool, daily: bool) -> str:
 
     with httpx.Client(transport=httpx.MockTransport(respond)) as client:
         JevRelevanceScorer(
-            client, "jev-1.13.0", getLogger("jev-test"), semantic_admission_enabled=admission,
-            daily_enrichment_enabled=daily,
+            client,
+            getLogger("jev-test"),
+            ScorerConfig(
+                "jev-1.13.0",
+                semantic_admission_enabled=admission,
+                daily_enrichment_enabled=daily,
+            ),
         ).classify(article)
     assert len(states) == 1
     return states[0]

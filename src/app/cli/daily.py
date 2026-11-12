@@ -53,6 +53,7 @@ def daily_publish(
 
 
 @app.command("daily-signals")
+# Typer: each argument is one command-line option, so the list is the CLI itself.
 def daily_signals(  # pylint: disable=too-many-arguments
     *,
     report_date: str | None = _REPORT_DATE_OPTION,

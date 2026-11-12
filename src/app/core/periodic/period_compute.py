@@ -19,7 +19,6 @@ from app.core.daily.signals_trend import (
     trend_delta,
     trend_windows,
     unit_articles,
-    window_units,
 )
 from app.core.periodic.period_model import (
     MONTH,
@@ -191,16 +190,14 @@ def _risers_from_helper(data: PeriodInput) -> dict[str, Any]:
         return {"state": "unavailable", "source": "helper", "rising": [], "cooling": []}
     cur_days, prev_days = usable
     today = unit_articles(data.observations.get(data.end, ()))
-    rows = trend_delta(data.coverage, cur_days, prev_days,
-                       cur_units=window_units(data.observations, cur_days),
-                       prev_units=window_units(data.observations, prev_days),
+    rows = trend_delta(data.coverage, data.observations, (cur_days, prev_days),
                        excluded=set(), t=daily)
 
     def counts(row: TrendRow) -> dict[str, Any]:
         return {"current_7d": row.current, "previous_7d": row.previous,
                 "expected_7d": _r(row.expected), "today": len(today.get(row.unit, ()))}
 
-    rising, cooling = _ranked(data, rows, cur_days, prev_days, counts_of=counts,
+    rising, cooling = _ranked(data, rows, (cur_days, prev_days), counts_of=counts,
                               keys=("current_7d", "previous_7d"))
     return {"state": "ready", "source": "helper", "rising": rising[:daily.rising_max],
             "cooling": cooling[:daily.cooling_max]}
@@ -246,24 +243,25 @@ def _month_risers(data: PeriodInput) -> dict[str, Any]:
         return {"state": "unavailable", "source": "month_helper", "rising": [], "cooling": []}
     cur_days, prev_days = windows
     daily = _month_thresholds(data)
-    rows = trend_delta(data.coverage, cur_days, prev_days,
-                       cur_units=window_units(data.observations, cur_days),
-                       prev_units=window_units(data.observations, prev_days),
+    rows = trend_delta(data.coverage, data.observations, (cur_days, prev_days),
                        excluded=set(), t=daily)
 
     def counts(row: TrendRow) -> dict[str, Any]:
         return {"current": row.current, "previous": row.previous, "expected": _r(row.expected)}
 
-    rising, cooling = _ranked(data, rows, cur_days, prev_days, counts_of=counts,
+    rising, cooling = _ranked(data, rows, (cur_days, prev_days), counts_of=counts,
                               keys=("current", "previous"))
     return {"state": "ready", "source": "month_helper", "rising": rising[:daily.rising_max],
             "cooling": cooling[:daily.cooling_max]}
 
 
-def _ranked(data: PeriodInput, rows: Sequence[TrendRow], cur_days: Sequence[date],
-            prev_days: Sequence[date], *, counts_of: Callable[[TrendRow], dict[str, Any]],
+def _ranked(data: PeriodInput, rows: Sequence[TrendRow],
+            windows: tuple[Sequence[date], Sequence[date]], *,
+            counts_of: Callable[[TrendRow], dict[str, Any]],
             keys: tuple[str, str]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Rising and cooling items, best first; `keys` are the current and previous count fields."""
+    """Rising and cooling items, best first; `windows` are the current and previous days,
+    `keys` the current and previous count fields."""
+    cur_days, prev_days = windows
     cur_key, prev_key = keys
     rising: list[dict[str, Any]] = []
     cooling: list[dict[str, Any]] = []

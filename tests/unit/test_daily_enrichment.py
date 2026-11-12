@@ -22,7 +22,7 @@ from daily_fixtures import (  # pylint: disable=import-error,unused-import
 
 from app.config.sources import SourceConfig
 from app.core.canonical_json import encoded, fingerprint
-from app.core.jev import JevRelevanceScorer
+from app.core.jev import JevRelevanceScorer, ScorerConfig
 from app.core.models import Article as CoreArticle
 from app.storage.admission import set_collection_paused
 from app.storage.digest_repo import NewsDigestRepo
@@ -238,14 +238,28 @@ def test_ordinary_ingestion_uses_rubric_journal_and_reusable_admission(tmp_path,
     journal = PilotJournal(tmp_path / "admission.sqlite3", {"version": "test"}, daily.CAPS)
     with httpx.Client(transport=httpx.MockTransport(respond),
                       headers={"Authorization": "Bearer test-key"}) as client:
-        scorer = JevRelevanceScorer(client, "jev-1.13.0", getLogger(__name__),
-            semantic_admission_enabled=True, daily_enrichment_enabled=True,
-            payment_journal=journal)
+        scorer = JevRelevanceScorer(
+            client,
+            getLogger(__name__),
+            ScorerConfig(
+                "jev-1.13.0",
+                semantic_admission_enabled=True,
+                daily_enrichment_enabled=True,
+            ),
+            payment_journal=journal,
+        )
         assessment = scorer.classify(item)
         assert assessment.category == "AI Applications"
-        second = JevRelevanceScorer(client, "jev-1.13.0", getLogger(__name__),
-            semantic_admission_enabled=True, daily_enrichment_enabled=True,
-            payment_journal=journal)
+        second = JevRelevanceScorer(
+            client,
+            getLogger(__name__),
+            ScorerConfig(
+                "jev-1.13.0",
+                semantic_admission_enabled=True,
+                daily_enrichment_enabled=True,
+            ),
+            payment_journal=journal,
+        )
         assert second.classify(item) == assessment
     assert len(calls) == 1
     assert journal.report()["providers"]["jev"]["calls"] == 1
@@ -283,9 +297,16 @@ def test_feed_only_admission_is_reused_by_enrichment(tmp_path, session):
     journal = PilotJournal(tmp_path / "admission.sqlite3", {"version": "test"}, daily.CAPS)
     with httpx.Client(transport=httpx.MockTransport(respond),
                       headers={"Authorization": "Bearer test-key"}) as client:
-        assessment = JevRelevanceScorer(client, "jev-1.13.0", getLogger(__name__),
-            semantic_admission_enabled=True, daily_enrichment_enabled=True,
-            payment_journal=journal).classify(item)
+        assessment = JevRelevanceScorer(
+            client,
+            getLogger(__name__),
+            ScorerConfig(
+                "jev-1.13.0",
+                semantic_admission_enabled=True,
+                daily_enrichment_enabled=True,
+            ),
+            payment_journal=journal,
+        ).classify(item)
     journal.close()
     assert len(states) == 1
     assert "Summary: Feed line about AI" in states[0]

@@ -33,7 +33,7 @@ from app.core.bulletin.world_change import (
 from app.core.canonical_json import encoded, fingerprint
 from app.core.canonicalize import canonical_url_hash
 from app.core.daily import provider_requests, rubric
-from app.core.jev import CONTENT_LIMIT, JevInputTooLarge, JevRelevanceScorer
+from app.core.jev import CONTENT_LIMIT, JevInputTooLarge, JevRelevanceScorer, ScorerConfig
 from app.core.models import Article as CoreArticle
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import Article, Base, WorldChangeAssessment
@@ -93,7 +93,11 @@ def test_rubric_is_untouched():
 
 
 def test_state_matches_daily_enrichment():
-    scorer = JevRelevanceScorer(httpx.Client(), "m", getLogger("t"), daily_enrichment_enabled=True)
+    scorer = JevRelevanceScorer(
+        httpx.Client(),
+        getLogger("t"),
+        ScorerConfig("m", daily_enrichment_enabled=True),
+    )
     with_content = core_article()
     no_content = core_article(content="  ")
     assert world_change_state(with_content) == scorer.state(with_content)

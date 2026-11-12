@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from app.core.ingestion.admission import admission_cache_key, decision_from_assessment
-from app.core.jev import JevAssessment, JevRelevanceScorer
+from app.core.jev import JevAssessment, JevRelevanceScorer, ScorerConfig
 from app.core.models import Article
 
 
@@ -49,8 +49,9 @@ def test_admission_request_only_when_enabled() -> None:
 
     with httpx.Client(transport=httpx.MockTransport(respond)) as client:
         scorer = JevRelevanceScorer(
-            client, "jev-1.13.0", getLogger("test"),
-            semantic_admission_enabled=True,
+            client,
+            getLogger("test"),
+            ScorerConfig("jev-1.13.0", semantic_admission_enabled=True),
         )
         result = scorer.classify(_article())
     assert result is not None
@@ -69,8 +70,9 @@ def test_malformed_admission_pauses_even_with_valid_category() -> None:
 
     with httpx.Client(transport=httpx.MockTransport(respond)) as client:
         scorer = JevRelevanceScorer(
-            client, "jev-1.13.0", getLogger("test"),
-            semantic_admission_enabled=True,
+            client,
+            getLogger("test"),
+            ScorerConfig("jev-1.13.0", semantic_admission_enabled=True),
         )
         result = scorer.classify(_article())
     assert result is None
@@ -111,7 +113,9 @@ def test_provider_failure_stops_all_further_requests(failure):
 
     with httpx.Client(transport=httpx.MockTransport(respond)) as client:
         scorer = JevRelevanceScorer(
-            client, "jev-1.13.0", getLogger("test"), semantic_admission_enabled=True,
+            client,
+            getLogger("test"),
+            ScorerConfig("jev-1.13.0", semantic_admission_enabled=True),
         )
         assert scorer.classify(_article(1)) is None
         assert scorer.classify(_article(2)) is None

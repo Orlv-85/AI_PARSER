@@ -15,6 +15,7 @@ from app.core.jev import (
     ADMISSION_TRANSPORT_RETRY_DELAYS,
     ADMISSION_TRANSPORT_REVIEW_REASON,
     JevRelevanceScorer,
+    ScorerConfig,
 )
 from app.storage.provider_journal import JournalPolicy, PilotJournal
 
@@ -47,9 +48,16 @@ def jev_relevance_scorer(
                                        transport_retry_delays=ADMISSION_TRANSPORT_RETRY_DELAYS))
         try:
             yield JevRelevanceScorer(
-                client, settings.jev_model, logger, settings.jev_category_min_confidence,
-                bool(getattr(settings, "semantic_admission_enabled", False)),
-                daily_enrichment_enabled=daily, payment_journal=journal,
+                client,
+                logger,
+                ScorerConfig(
+                    settings.jev_model,
+                    category_min_confidence=settings.jev_category_min_confidence,
+                    semantic_admission_enabled=bool(
+                        getattr(settings, "semantic_admission_enabled", False)),
+                    daily_enrichment_enabled=daily,
+                ),
+                payment_journal=journal,
             )
         finally:
             if journal is not None:

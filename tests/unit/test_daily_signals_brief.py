@@ -10,6 +10,7 @@ from app.core.daily.signals_brief import (
     BRIEF_PROMPT,
     BRIEF_VERSION,
     BriefInvalid,
+    BriefRules,
     PacketTooLarge,
     brief_packet,
     brief_payload,
@@ -175,7 +176,7 @@ def test_brief_2_answers_pass():
     for day, run in REV2.items():
         packet = run["data"]
         data = RESPONSES[fingerprint(brief2_body(packet))]["data"]
-        sentences = parse_brief(data, packet, PRO, keep_valid=False)
+        sentences = parse_brief(data, packet, PRO, BriefRules(keep_valid=False))
         assert [s.text for s in sentences] == [s["text"] for s in run["brief"]["sentences"]], day
 
 
@@ -190,7 +191,7 @@ def test_revision_1_answers_ten_pass_four_fail_same_story():
     for key, run in ANSWERS.items():
         model = key.split("/")[1]
         try:
-            parse_brief(_accepted(key), run["packet"], model, keep_valid=False)
+            parse_brief(_accepted(key), run["packet"], model, BriefRules(keep_valid=False))
             outcomes[key] = "ok"
         except BriefInvalid as error:
             outcomes[key] = error.code
@@ -212,7 +213,12 @@ def test_rejected_first_attempts_fail_with_their_codes():
     for key, attempt in rejected.items():
         data = response_with(lambda c, raw=attempt["raw"]: c == raw)
         with pytest.raises(BriefInvalid) as error:
-            parse_brief(data, ANSWERS[key]["packet"], key.split("/")[1], keep_valid=False)
+            parse_brief(
+                data,
+                ANSWERS[key]["packet"],
+                key.split("/")[1],
+                BriefRules(keep_valid=False),
+            )
         assert str(error.value) == attempt["result"]
 
 
@@ -286,8 +292,12 @@ def test_failed_or_extra_sentences_are_dropped():
     sentences = parse_brief(answer({"sentences": [S1, S2, S3]}), quiet, PRO, dropped=dropped)
     assert [s.ids for s in sentences] == [("a1", "a2"), ("a3",)] and dropped == ["over_limit:1"]
     with pytest.raises(BriefInvalid, match="^sentence_count$"):
-        parse_brief(answer({"sentences": [S1, S2, S3, S3, S3, S3]}), PACKET, PRO,
-                    keep_valid=False)
+        parse_brief(
+            answer({"sentences": [S1, S2, S3, S3, S3, S3]}),
+            PACKET,
+            PRO,
+            BriefRules(keep_valid=False),
+        )
 
 
 def test_too_few_valid_sentences_fail_with_the_first_error():

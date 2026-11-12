@@ -80,14 +80,18 @@ def _extracted(coverage: Mapping[date, DayCoverage], days: Iterable[date]) -> in
     return sum(coverage[d].extracted for d in days)
 
 
-def trend_delta(coverage: Mapping[date, DayCoverage], cur_days: Sequence[date],
-                prev_days: Sequence[date], *, cur_units: Mapping[str, Sequence[ArticleObs]],
-                prev_units: Mapping[str, Sequence[ArticleObs]], excluded: set[str],
+def trend_delta(coverage: Mapping[date, DayCoverage],
+                observations: Mapping[date, Sequence[ArticleObs]],
+                windows: tuple[Sequence[date], Sequence[date]], *, excluded: set[str],
                 t: Thresholds) -> list[TrendRow]:
-    """Units passing the Rising or Cooling rule; `expected` is the previous count scaled by volume.
+    """Units passing the Rising or Cooling rule over the current and previous `windows`;
+    `expected` is the previous count scaled by volume.
 
     Rows come in unit order; ordering by delta and the entity filters stay with the caller.
     """
+    cur_days, prev_days = windows
+    cur_units = window_units(observations, cur_days)
+    prev_units = window_units(observations, prev_days)
     ratio = _extracted(coverage, cur_days) / _extracted(coverage, prev_days)
     rows = []
     for unit in sorted(set(cur_units) | set(prev_units)):

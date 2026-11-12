@@ -196,14 +196,24 @@ def _words_ok(text: str, low: int, high: int) -> bool:
     return low <= len(text.split()) <= high
 
 
-def _text(value: Any, evidence: str, where: str, dropped: list[str], *, low: int, high: int,
-          copy: bool = False, min_chars: int | None = None) -> str | None:
+@dataclass(frozen=True)
+class _TextRule:
+    """Word count range of one written text, the copy check and the minimum length."""
+
+    low: int
+    high: int
+    copy: bool = False
+    min_chars: int | None = None
+
+
+def _text(value: Any, evidence: str, where: str, dropped: list[str],
+          rule: _TextRule) -> str | None:
     if not isinstance(value, str):
         dropped.append(f"{where}:schema")
         return None
-    code = None if _words_ok(value, low, high) else "word_count"
-    code = code or sentence_error(value, evidence, copy=copy, **(
-        {"min_chars": min_chars} if min_chars else {}))
+    code = None if _words_ok(value, rule.low, rule.high) else "word_count"
+    code = code or sentence_error(value, evidence, copy=rule.copy, **(
+        {"min_chars": rule.min_chars} if rule.min_chars else {}))
     if code:
         dropped.append(f"{where}:{code}")
         return None
@@ -248,7 +258,7 @@ def _sentences(raw: Any, evidence: str, where: str, limit: int, dropped: list[st
         if len(kept) == limit:
             dropped.append(f"{where}:over_limit:{len(sentences) - index + 1}")
             break
-        text = _text(item, evidence, f"{where}:{index}", dropped, low=3, high=80, copy=True)
+        text = _text(item, evidence, f"{where}:{index}", dropped, _TextRule(3, 80, copy=True))
         if text:
             kept.append(text)
     return kept
@@ -256,13 +266,12 @@ def _sentences(raw: Any, evidence: str, where: str, limit: int, dropped: list[st
 
 def _story_text(entry: Mapping[str, Any], evidence: str, dropped: list[str]) -> _StoryText:
     sid = entry["id"]
-    headline = _text(entry.get("headline"), evidence, f"{sid}:headline", dropped,
-                     low=STORY_HEADLINE_MIN_WORDS, high=STORY_HEADLINE_MAX_WORDS, copy=True,
-                     min_chars=8)
+    headline = _text(entry.get("headline"), evidence, f"{sid}:headline", dropped, _TextRule(
+        STORY_HEADLINE_MIN_WORDS, STORY_HEADLINE_MAX_WORDS, copy=True, min_chars=8))
     gloss = entry.get("gloss")
     if gloss is not None:
-        gloss = _text(gloss, evidence, f"{sid}:gloss", dropped, low=2, high=GLOSS_MAX_WORDS,
-                      copy=True, min_chars=8)
+        gloss = _text(gloss, evidence, f"{sid}:gloss", dropped,
+                      _TextRule(2, GLOSS_MAX_WORDS, copy=True, min_chars=8))
     return _StoryText(
         headline=headline, gloss=gloss,
         site=_sentences(entry.get("site"), evidence, f"{sid}:site", SITE_SENTENCES_MAX, dropped),
@@ -279,7 +288,7 @@ def parse_writer(data: Any, packet: Mapping[str, Any], dropped: list[str]
     content = _answer(data)
     evidence = {s["id"]: _evidence(s) for s in packet["stories"]}
     headline = _text(content["headline"], "\n".join(evidence.values()), "headline", dropped,
-                     low=HEADLINE_MIN_WORDS, high=HEADLINE_MAX_WORDS, min_chars=8)
+                     _TextRule(HEADLINE_MIN_WORDS, HEADLINE_MAX_WORDS, min_chars=8))
     texts: dict[str, _StoryText] = {}
     for entry in content["stories"]:
         sid = entry.get("id") if isinstance(entry, dict) else None

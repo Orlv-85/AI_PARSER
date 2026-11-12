@@ -10,6 +10,7 @@ from typing import Any
 from app.core.daily.signals_brief import (
     HARD_EVENTS,
     ArticleRefs,
+    BriefRules,
     PacketTooLarge,
     Sentence,
     fit_packet,
@@ -144,5 +145,5 @@ def period_request_key(body: Mapping[str, Any]) -> str:
 
 def parse_period_brief(data: Any, packet: Mapping[str, Any], model: str) -> list[Sentence]:
     """The daily validation with the sentence counts of the packet's kind."""
-    return list(parse_brief(data, packet, model, counts=PERIOD_SENTENCES[str(packet["kind"])],
-                            keep_valid=False))
+    return list(parse_brief(data, packet, model,
+                            BriefRules(PERIOD_SENTENCES[str(packet["kind"])], keep_valid=False)))

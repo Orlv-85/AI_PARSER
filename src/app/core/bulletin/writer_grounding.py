@@ -14,6 +14,7 @@ from app.core.daily.signals_brief import (
     NUMBER,
     STARTERS,
     WORD,
+    NameRules,
     grounding_error,
     norm,
 )
@@ -122,8 +123,8 @@ def _evidence_error(text: str, evidence: str, copy: bool) -> str | None:
     code = _quote_error(folded, proof)
     if code is None and copy and _copies(folded, proof):
         code = "too_close"
-    return code or grounding_error(folded, set(proof.numbers), "", starters=WRITER_STARTERS,
-                                   canon=canon_number, words=proof.words)
+    return code or grounding_error(folded, set(proof.numbers), "",
+                                   NameRules(WRITER_STARTERS, canon_number, proof.words))
 
 
 def sentence_error(text: str, evidence: str, *, copy: bool = False,
