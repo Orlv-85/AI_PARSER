@@ -36,7 +36,7 @@ from app.storage.world import (
 )
 from app.usecases.archive import capture as capture_module
 from app.usecases.archive.capture import PageFetch
-from app.usecases.world_screen import rank_clusters, run_screen
+from app.usecases.world_screen import ScreenOptions, rank_clusters, run_screen
 from app.usecases.world_text import archive_text_source, run_texts
 
 DAY = date(2026, 10, 30)
@@ -380,8 +380,12 @@ def test_world_text_seam_feeds_step_b(session, tmp_path):
     seed(session, cand(1, title="With text"), cand(2, title="No page"))
     texts(session, tmp_path, Web({"https://site2.example.org/2": (404, "<html></html>")}))
     requests = []
-    summary = run_screen(session, make_assessor(jev_handler(requests=requests)), DAY,
-                         texts=archive_text_source(session))
+    summary = run_screen(
+        session,
+        make_assessor(jev_handler(requests=requests)),
+        DAY,
+        ScreenOptions(texts=archive_text_source(session)),
+    )
     assert (summary["asked"], summary["assessed"], summary["awaiting_text"]) == (1, 1, 0)
     assert summary["skipped_no_text"] == 0
     assert row(session, "With text").state == STATE_ASSESSED

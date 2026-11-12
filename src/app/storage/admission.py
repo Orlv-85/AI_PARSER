@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -53,28 +54,32 @@ def get_cached_decision(session: Session, key: str) -> AdmissionDecisionRow | No
     return session.execute(stmt).scalar_one_or_none()
 
 
-def upsert_pending(  # pylint: disable=too-many-arguments
-    session: Session,
-    *,
-    key: str,
-    url_canonical_hash: str,
-    source_id: int | None,
-    payload: dict[str, Any],
-    evidence_hash: str,
-    policy_version: str,
-    model: str,
-    force_pending: bool = False,
-) -> None:
-    row = get_cached_decision(session, key)
+@dataclass(frozen=True)
+class PendingCandidate:
+    """A candidate waiting for its admission decision, under its cache key."""
+
+    key: str
+    url_canonical_hash: str
+    source_id: int | None
+    payload: dict[str, Any]
+    evidence_hash: str
+    policy_version: str
+    model: str
+
+
+def upsert_pending(session: Session, pending: PendingCandidate, *,
+                   force_pending: bool = False) -> None:
+    source_id, payload = pending.source_id, pending.payload
+    row = get_cached_decision(session, pending.key)
     if row is None:
         row = AdmissionDecisionRow(
-            key=key,
-            url_canonical_hash=url_canonical_hash,
+            key=pending.key,
+            url_canonical_hash=pending.url_canonical_hash,
             source_id=source_id,
             payload=json.dumps({"candidate": payload}, ensure_ascii=True),
-            evidence_hash=evidence_hash,
-            policy_version=policy_version,
-            model=model,
+            evidence_hash=pending.evidence_hash,
+            policy_version=pending.policy_version,
+            model=pending.model,
             provider_status="pending",
             attempts=1,
             created_at=datetime.now(UTC),
@@ -126,15 +131,15 @@ def record_decision(
     key: str,
     decision: str,
     reason: str,
-    provider_status: str = "ok",
     payload: dict[str, Any] | None = None,
 ) -> None:
+    """Store a provider decision (`provider_status` "ok") and its assessment payload."""
     row = get_cached_decision(session, key)
     if row is None:
         return
     row.decision = decision
     row.reason = reason
-    row.provider_status = provider_status
+    row.provider_status = "ok"
     if payload is not None:
         try:
             current = json.loads(row.payload or "{}")

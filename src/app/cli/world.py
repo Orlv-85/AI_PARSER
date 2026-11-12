@@ -11,7 +11,12 @@ from app.core.world.screen import WORLD_JEV_MAX_USD_PER_DAY
 from app.observability import setup_json_logging
 from app.usecases.world_collect import collect_day, yesterday_utc
 from app.usecases.world_report import build_report
-from app.usecases.world_screen import open_world_assessor, run_screen, utc_today
+from app.usecases.world_screen import (
+    ScreenOptions,
+    open_world_assessor,
+    run_screen,
+    utc_today,
+)
 from app.usecases.world_text import archive_text_source, run_texts
 
 app = typer.Typer(help="World news stream (spec 018, item 5).")
@@ -72,11 +77,11 @@ def world_screen(
     with deps.SessionLocal() as session:
         try:
             if dry_run:
-                summary = run_screen(session, None, target, dry_run=True)
+                summary = run_screen(session, None, target, ScreenOptions(dry_run=True))
             else:
                 with open_world_assessor(deps.get_settings(), logger, utc_today()) as assessor:
-                    summary = run_screen(session, assessor, target, limit_usd=float(max_usd),
-                                         texts=archive_text_source(session))
+                    summary = run_screen(session, assessor, target, ScreenOptions(
+                        texts=archive_text_source(session), limit_usd=float(max_usd)))
         except ValueError as exc:
             typer.echo(f"world screen: {exc}", err=True)
             raise typer.Exit(2) from exc

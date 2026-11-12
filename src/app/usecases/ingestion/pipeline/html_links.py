@@ -13,6 +13,7 @@ from app.ingest.html import (
     fetch_html_article,
 )
 from app.storage.admission import (
+    PendingCandidate,
     settle_pending,
     upsert_pending,
 )
@@ -81,13 +82,15 @@ def _upsert_placeholders(
             continue
         upsert_pending(
             run.article_repo.session,
-            key=placeholder_keys[canonical_hash],
-            url_canonical_hash=canonical_hash,
-            source_id=run.db_source_id,
-            payload={"kind": "html_link", "url": link},
-            evidence_hash="",
-            policy_version=run.settings.semantic_admission_policy_version,
-            model=run.settings.jev_model,
+            PendingCandidate(
+                key=placeholder_keys[canonical_hash],
+                url_canonical_hash=canonical_hash,
+                source_id=run.db_source_id,
+                payload={"kind": "html_link", "url": link},
+                evidence_hash="",
+                policy_version=run.settings.semantic_admission_policy_version,
+                model=run.settings.jev_model,
+            ),
         )
 
 

@@ -20,7 +20,7 @@ from app.core.world.gdelt import (
     scan_file,
 )
 from app.observability.logging import log_event
-from app.storage.world import FILE_DONE, FILE_MISSING, WorldRepo
+from app.storage.world import FILE_DONE, FILE_MISSING, FileOutcome, WorldRepo
 
 FILE_ERROR_MISSING = "download failed or file unreadable"
 
@@ -86,11 +86,10 @@ def collect_day(  # pylint: disable=too-many-locals
         result = FileResult()
         found = list(scan_file(scan, kind, name, stats=stats, result=result))
         created, repeats = repo.upsert_candidates(found)
-        repo.record_file(
-            name[:14], kind, FILE_MISSING if result.missing else FILE_DONE,
-            rows=result.rows, matched=result.matched,
-            error=FILE_ERROR_MISSING if result.missing else None,
-        )
+        repo.record_file(name[:14], kind, FileOutcome(
+            FILE_MISSING if result.missing else FILE_DONE, rows=result.rows,
+            matched=result.matched, error=FILE_ERROR_MISSING if result.missing else None,
+        ))
         session.commit()
         summary.new += created
         summary.repeats += repeats

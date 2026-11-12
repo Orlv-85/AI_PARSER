@@ -14,6 +14,7 @@ from app.core.ingestion.admission import (
 )
 from app.core.jev import JevAssessment, JevRelevanceScorer
 from app.storage.admission import (
+    PendingCandidate,
     get_cached_decision,
     record_decision,
     upsert_pending,
@@ -86,7 +87,6 @@ def _score_and_record(
         key=key,
         decision=decision.status,
         reason=decision.reason,
-        provider_status="ok",
         payload=_assessment_payload(assessment),
     )
     if decision.accepted:
@@ -125,13 +125,15 @@ def _screen_candidate(
         return resolved
     upsert_pending(
         article_repo.session,
-        key=key,
-        url_canonical_hash=canonical_hash,
-        source_id=run.db_source_id,
-        payload=_candidate_payload(item, run.config, canonical_url),
-        evidence_hash=ev_hash,
-        policy_version=settings.semantic_admission_policy_version,
-        model=settings.jev_model,
+        PendingCandidate(
+            key=key,
+            url_canonical_hash=canonical_hash,
+            source_id=run.db_source_id,
+            payload=_candidate_payload(item, run.config, canonical_url),
+            evidence_hash=ev_hash,
+            policy_version=settings.semantic_admission_policy_version,
+            model=settings.jev_model,
+        ),
         force_pending=cached is not None and cached.decision == "accept",
     )
     if relevance_scorer is None:

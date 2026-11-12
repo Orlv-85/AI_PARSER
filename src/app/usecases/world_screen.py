@@ -172,8 +172,24 @@ def _follow_known(repo: WorldRepo, pending: list[WorldCandidate],
     return rest
 
 
+@dataclass(frozen=True)
+class ScreenOptions:
+    """Knobs of one screen run: text source of step B, top size, step A threshold, dry run, USD
+    limit of the run."""
+
+    texts: TextSource = no_text
+    top_n: int = WORLD_TOP_N
+    threshold: float = SCREEN_THRESHOLD
+    dry_run: bool = False
+    limit_usd: float | None = None
+
+
+DEFAULT_SCREEN = ScreenOptions()
+
+
 def _screen(repo: WorldRepo, assessor: WorldChangeAssessor, pending: list[WorldCandidate],
-            threshold: float, summary: dict[str, Any], *, limit_usd: float | None) -> None:
+            summary: dict[str, Any], options: ScreenOptions) -> None:
+    threshold, limit_usd = options.threshold, options.limit_usd
     clusters = _group(pending)
     for index, members in enumerate(clusters):
         if _halted(assessor, limit_usd):
@@ -201,7 +217,8 @@ def _screen(repo: WorldRepo, assessor: WorldChangeAssessor, pending: list[WorldC
 
 
 def _assess(repo: WorldRepo, assessor: WorldChangeAssessor, top: list[RankedCluster],
-            texts: TextSource, summary: dict[str, Any], *, limit_usd: float | None) -> None:
+            summary: dict[str, Any], options: ScreenOptions) -> None:
+    texts, limit_usd = options.texts, options.limit_usd
     saver = WorldChangeRepo(repo.session)
     for item in top:
         rep = item.rep
@@ -255,14 +272,14 @@ def _dry_run(repo: WorldRepo, target: date, top_n: int, summary: dict[str, Any])
 
 
 def run_screen(
-    session: Session, assessor: WorldChangeAssessor | None, target: date, *,
-    texts: TextSource = no_text, top_n: int = WORLD_TOP_N,
-    threshold: float = SCREEN_THRESHOLD, dry_run: bool = False, limit_usd: float | None = None,
+    session: Session, assessor: WorldChangeAssessor | None, target: date,
+    options: ScreenOptions = DEFAULT_SCREEN,
 ) -> dict[str, Any]:
     """Step A for the pending candidates of the window, then step B for the top ranked ones."""
     repo = WorldRepo(session)
-    summary = _new_summary(target, dry_run)
-    if dry_run:
+    summary = _new_summary(target, options.dry_run)
+    top_n = options.top_n
+    if options.dry_run:
         return _dry_run(repo, target, top_n, summary)
     if assessor is None:
         raise ValueError("assessor required")
@@ -272,11 +289,11 @@ def run_screen(
     start = _jev_usage(assessor)
     pending = _follow_known(repo, repo.candidates_in_window([STATE_NEW], target),
                             _known_clusters(repo, target), summary)
-    _screen(repo, assessor, pending, threshold, summary, limit_usd=limit_usd)
+    _screen(repo, assessor, pending, summary, options)
     middle = _jev_usage(assessor)
     top = rank_clusters(repo.candidates_in_window(
         [STATE_SCREENED_IN, STATE_TEXT_READY, STATE_ASSESSED], target))[:top_n]
-    _assess(repo, assessor, top, texts, summary, limit_usd=limit_usd)
+    _assess(repo, assessor, top, summary, options)
     end = _jev_usage(assessor)
     summary["tokens"] = {"screen": _delta(middle[0], start[0]),
                          "assess": _delta(end[0], middle[0])}

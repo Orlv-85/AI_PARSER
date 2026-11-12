@@ -12,6 +12,7 @@ from app.core.ingestion.page_filter import (
     log_exclusion,
 )
 from app.storage.admission import (
+    PendingCandidate,
     upsert_pending,
 )
 from app.usecases.ingestion.pipeline.models import SourceMetrics, SourceRun
@@ -62,13 +63,15 @@ def _queue_pending_candidates(run: SourceRun, *, items: list, use_known_skip: bo
         )
         upsert_pending(
             run.article_repo.session,
-            key=key,
-            url_canonical_hash=canonical_hash,
-            source_id=run.db_source_id,
-            payload=_candidate_payload(item, run.config),
-            evidence_hash=ev_hash,
-            policy_version=settings.semantic_admission_policy_version,
-            model=settings.jev_model,
+            PendingCandidate(
+                key=key,
+                url_canonical_hash=canonical_hash,
+                source_id=run.db_source_id,
+                payload=_candidate_payload(item, run.config),
+                evidence_hash=ev_hash,
+                policy_version=settings.semantic_admission_policy_version,
+                model=settings.jev_model,
+            ),
         )
 
 
