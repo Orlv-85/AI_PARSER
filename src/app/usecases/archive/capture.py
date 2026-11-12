@@ -218,26 +218,27 @@ async def _dispatch(downloader: SourcePageDownloader, urls: list[str], deadline:
     return started
 
 
-def _download_step(session: Session, *, since: datetime | None, now: datetime,  # pylint: disable=too-many-locals,too-many-branches,too-many-statements,too-many-arguments
-                   deadline: float, clock: Callable[[], float], cache_root: Path,
-                   daily_cache_root: Path, client_factory: Callable[[], httpx.AsyncClient],
-                   host_interval: float, only: Collection[int] | None = None) -> dict[str, Any]:
-    repo = ArchiveRepo(session)
-    cache = PageCache(cache_root)
-    result: dict[str, Any] = {"cache_reused": 0, "downloads": 0, "gave_up": 0, "skipped_cap": 0,
-                              "skipped_time": 0, "outage": False, "outage_kept": 0}
-    failed: Counter[str] = Counter()
+def _add_page_version(repo: ArchiveRepo, document: ArchiveDocument, page: dict[str, Any]) -> None:
+    repo.add_version(document, text=page["text"], origin=ORIGIN_SOURCE_PAGE,
+                     extraction_version=EXTRACTION_VERSION, final_url=page["final_url"],
+                     http_status=page["http_status"])
+
+
+def _sort_due(repo: ArchiveRepo, documents: list[ArchiveDocument], *, cache_root: Path,
+              daily_cache_root: Path) -> tuple[int, list[ArchiveDocument], list[ArchiveDocument]]:
+    """Reuse extracted daily-publish pages; split the rest into resumed and download targets.
+
+    Returns (reused, resumed, targets)."""
+    reused = 0
     resumed: list[ArchiveDocument] = []
     targets: list[ArchiveDocument] = []
-    for document in _interleave_hosts(repo.due(since, now, ids=only)):
+    for document in _interleave_hosts(documents):
         page = _extracted_page(_page_dir(daily_cache_root, document.url))
         if page is not None:
-            repo.add_version(document, text=page["text"], origin=ORIGIN_SOURCE_PAGE,
-                             extraction_version=EXTRACTION_VERSION, final_url=page["final_url"],
-                             http_status=page["http_status"])
+            _add_page_version(repo, document, page)
             document.next_attempt_at = None
-            session.commit()
-            result["cache_reused"] += 1
+            repo.session.commit()
+            reused += 1
             continue
         directory = _page_dir(cache_root, document.url)
         attempt = _read_json(directory / "attempt.json")
@@ -247,56 +248,105 @@ def _download_step(session: Session, *, since: datetime | None, now: datetime,  
                 continue
             shutil.rmtree(directory, ignore_errors=True)
         targets.append(document)
+    return reused, resumed, targets
+
+
+def _cap_downloads(targets: list[ArchiveDocument]) -> tuple[list[ArchiveDocument], int]:
+    """Keep targets within the per-run and per-host caps; returns (dispatch, skipped)."""
     per_host: Counter[str] = Counter()
     dispatch: list[ArchiveDocument] = []
     for document in targets:
         if (len(dispatch) >= ARCHIVE_MAX_DOWNLOADS
                 or per_host[document.host] >= ARCHIVE_MAX_PER_HOST):
-            result["skipped_cap"] += 1
             continue
         per_host[document.host] += 1
         dispatch.append(document)
-    started: set[str] = set()
-    if dispatch:
-        async def run() -> tuple[bool, list[str]]:
-            async with client_factory() as client:
-                downloader = SourcePageDownloader(cache, client,
-                                                  concurrency=ARCHIVE_DOWNLOAD_CONCURRENCY,
-                                                  host_interval=host_interval)
-                urls = list(dict.fromkeys(document.url for document in dispatch))
-                return_started = await _dispatch(downloader, urls, deadline, clock)
-                return downloader.outage, return_started
-        result["outage"], started_urls = asyncio.run(run())
-        started = set(started_urls)
-        result["downloads"] = len(started)
-    for document in resumed + [d for d in dispatch if d.url in started]:
+    return dispatch, len(targets) - len(dispatch)
+
+
+def _run_downloads(dispatch: list[ArchiveDocument], *, cache: PageCache, deadline: float,
+                   clock: Callable[[], float], client_factory: Callable[[], httpx.AsyncClient],
+                   host_interval: float) -> tuple[bool, set[str]]:
+    """Download the dispatched pages; returns (outage, urls started before the deadline)."""
+    if not dispatch:
+        return False, set()
+
+    async def run() -> tuple[bool, list[str]]:
+        async with client_factory() as client:
+            downloader = SourcePageDownloader(cache, client,
+                                              concurrency=ARCHIVE_DOWNLOAD_CONCURRENCY,
+                                              host_interval=host_interval)
+            urls = list(dict.fromkeys(document.url for document in dispatch))
+            return_started = await _dispatch(downloader, urls, deadline, clock)
+            return downloader.outage, return_started
+    outage, started_urls = asyncio.run(run())
+    return outage, set(started_urls)
+
+
+def _nothing_to_record(attempt: dict[str, Any], outage: bool) -> bool:
+    """Unfinished attempt, or only outage issues during an outage: retry as if not started."""
+    if attempt.get("state") == "started":
+        return True
+    issues = set(attempt.get("issues") or [])
+    return outage and bool(issues) and issues <= OUTAGE_ISSUES
+
+
+def _record_failure(repo: ArchiveRepo, document: ArchiveDocument, attempt: dict[str, Any], *,
+                    cache_root: Path, now: datetime) -> tuple[str, bool]:
+    """Record a failed attempt with its retry time; returns (issue, gave_up)."""
+    issue, permanent = _attempt_issue(attempt, cache_root, document.url)
+    attempts = (document.attempts or 0) + 1
+    gave_up = permanent or attempts > len(ARCHIVE_RETRY_DELAYS)
+    repo.record_attempt(document, issue=issue, gave_up=gave_up, next_attempt_at=None
+                        if gave_up else now + ARCHIVE_RETRY_DELAYS[attempts - 1])
+    return issue, gave_up
+
+
+def _record_downloads(repo: ArchiveRepo, documents: list[ArchiveDocument], *, cache_root: Path,
+                      now: datetime, outage: bool) -> tuple[int, int, Counter[str]]:
+    """Record each downloaded page; returns (outage_kept, gave_up, failed issues)."""
+    outage_kept = gave_up_count = 0
+    failed: Counter[str] = Counter()
+    for document in documents:
         directory = _page_dir(cache_root, document.url)
         attempt = _read_json(directory / "attempt.json")
-        issues = set((attempt or {}).get("issues") or [])
-        if (attempt is None or attempt.get("state") == "started"
-                or (result["outage"] and issues and issues <= OUTAGE_ISSUES)):
+        if attempt is None or _nothing_to_record(attempt, outage):
             shutil.rmtree(directory, ignore_errors=True)
-            result["outage_kept"] += 1
+            outage_kept += 1
             continue
         page = _extracted_page(directory)
         if page is not None:
-            repo.add_version(document, text=page["text"], origin=ORIGIN_SOURCE_PAGE,
-                             extraction_version=EXTRACTION_VERSION, final_url=page["final_url"],
-                             http_status=page["http_status"])
+            _add_page_version(repo, document, page)
             repo.record_attempt(document, issue=None, gave_up=False, next_attempt_at=None)
         else:
-            issue, permanent = _attempt_issue(attempt, cache_root, document.url)
-            attempts = (document.attempts or 0) + 1
-            gave_up = permanent or attempts > len(ARCHIVE_RETRY_DELAYS)
-            repo.record_attempt(document, issue=issue, gave_up=gave_up, next_attempt_at=None
-                                if gave_up else now + ARCHIVE_RETRY_DELAYS[attempts - 1])
+            issue, gave_up = _record_failure(repo, document, attempt, cache_root=cache_root,
+                                             now=now)
             failed[issue] += 1
-            result["gave_up"] += int(gave_up)
-        session.commit()
-    result["skipped_time"] = sum(1 for document in dispatch if document.url not in started)
-    result["failed"] = dict(failed)
-    result["raw_dirs_deleted"] = _clean_cache(cache_root)
-    return result
+            gave_up_count += int(gave_up)
+        repo.session.commit()
+    return outage_kept, gave_up_count, failed
+
+
+def _download_step(session: Session, *, since: datetime | None, now: datetime,
+                   deadline: float, clock: Callable[[], float], cache_root: Path,
+                   daily_cache_root: Path, client_factory: Callable[[], httpx.AsyncClient],
+                   host_interval: float, only: Collection[int] | None = None) -> dict[str, Any]:
+    repo = ArchiveRepo(session)
+    cache = PageCache(cache_root)
+    reused, resumed, targets = _sort_due(repo, repo.due(since, now, ids=only),
+                                         cache_root=cache_root, daily_cache_root=daily_cache_root)
+    dispatch, skipped_cap = _cap_downloads(targets)
+    outage, started = _run_downloads(dispatch, cache=cache, deadline=deadline,
+                                     clock=clock, client_factory=client_factory,
+                                     host_interval=host_interval)
+    outage_kept, gave_up, failed = _record_downloads(
+        repo, resumed + [d for d in dispatch if d.url in started], cache_root=cache_root,
+        now=now, outage=outage)
+    return {"cache_reused": reused, "downloads": len(started), "gave_up": gave_up,
+            "skipped_cap": skipped_cap,
+            "skipped_time": sum(1 for document in dispatch if document.url not in started),
+            "outage": outage, "outage_kept": outage_kept, "failed": dict(failed),
+            "raw_dirs_deleted": _clean_cache(cache_root)}
 
 
 def download_documents(session: Session, document_ids: Collection[int], *,

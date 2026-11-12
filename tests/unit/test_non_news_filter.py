@@ -227,7 +227,7 @@ def test_rss_linked_landing_is_removed_before_text_extraction(monkeypatch) -> No
 def test_rss_item_without_row_is_skipped_without_counting(monkeypatch) -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
-    monkeypatch.setattr("app.usecases.ingestion.pipeline.rss._build_article_row",
+    monkeypatch.setattr("app.usecases.ingestion.pipeline.screening._build_article_row",
                         lambda **_kwargs: None)
     with Session(engine) as session:
         source = _source("rss")
@@ -251,7 +251,7 @@ def _rss_row(rank, category=None):
 def test_rss_disabled_admission_state_uses_scorer_not_screening(monkeypatch) -> None:
     def forbidden(**_kwargs):
         pytest.fail("_screen_candidate called with admission disabled")
-    monkeypatch.setattr("app.usecases.ingestion.pipeline.rss._screen_candidate", forbidden)
+    monkeypatch.setattr("app.usecases.ingestion.pipeline.screening._screen_candidate", forbidden)
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
     with Session(engine) as session:
@@ -275,7 +275,7 @@ def test_rss_disabled_admission_state_uses_scorer_not_screening(monkeypatch) -> 
 def test_rss_batch_duplicate_hash_merges_scores_and_category(
         monkeypatch, second_category, expected_category) -> None:
     rows = iter([_rss_row(1, "old"), _rss_row(10, second_category)])
-    monkeypatch.setattr("app.usecases.ingestion.pipeline.rss._build_article_row",
+    monkeypatch.setattr("app.usecases.ingestion.pipeline.screening._build_article_row",
                         lambda **_kwargs: next(rows))
     captured = []
 
@@ -294,3 +294,23 @@ def test_rss_batch_duplicate_hash_merges_scores_and_category(
             captured[0]["rank_score"]) == (10, 11, 12)
     assert captured[0]["category"] == expected_category
     assert captured[0]["category_confidence"] == 0.5
+
+
+def test_rss_known_streak_does_not_skip_items_of_other_source_types() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine) as session:
+        source = _source("html")
+        db_source = SourceRepo(session).upsert_source(source)
+        item = Article(source_key="example", title="AI release",
+                       url="https://example.com/news/ai")
+
+        def process():
+            return _process_fetched_source_items(
+                items=[item], config=source, db_source_id=db_source.id,
+                article_repo=ArticleRepo(session),
+                settings=Settings(article_batch_upsert_enabled=False, rss_known_streak_stop=1))
+
+        assert process() == (1, 0, 0, False)
+        # Stored now, yet not skipped as known: the streak stop is for RSS feeds only.
+        assert process() == (0, 1, 0, False)

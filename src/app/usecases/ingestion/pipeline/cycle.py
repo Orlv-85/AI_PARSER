@@ -296,67 +296,51 @@ def _run_sources(
             break
 
 
-def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
-    configs = load_sources(settings.sources_path)
-    create_all()
+def _full_text_semaphore(settings: Settings) -> BoundedSemaphore | None:
+    limit = settings.rss_full_text_concurrency_limit
+    return BoundedSemaphore(limit) if limit is not None and limit > 0 else None
 
-    run_id = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
-    totals = _RunTotals()
-    full_text_semaphore = (
-        BoundedSemaphore(settings.rss_full_text_concurrency_limit)
-        if settings.rss_full_text_concurrency_limit
-        and settings.rss_full_text_concurrency_limit > 0
-        else None
+
+def _pause_without_scorer(ctx: _CycleContext, source_count: int) -> FetchSummary:
+    """Screening is on but no provider: pause collection before any fetch."""
+    set_collection_paused(ctx.session)
+    ctx.session.commit()
+    ctx.logger.error(
+        "screening_unavailable",
+        {"run_id": ctx.run_id, "reason": "provider_missing_or_disabled"},
     )
-    admission_state = AdmissionState(enabled=settings.semantic_admission_enabled)
-    with SessionLocal() as session, jev_relevance_scorer(settings, logger) as relevance_scorer:
-        ctx = _CycleContext(
-            settings=settings,
-            logger=logger,
-            run_id=run_id,
-            session=session,
-            source_repo=SourceRepo(session),
-            article_repo=ArticleRepo(session),
-            relevance_scorer=relevance_scorer,
-            admission_state=admission_state,
-            full_text_semaphore=full_text_semaphore,
-        )
-        enabled_sources = _collect_enabled_sources(configs, ctx.source_repo)
+    return FetchSummary(
+        run_id=ctx.run_id,
+        source_count=source_count,
+        fetched=0,
+        new=0,
+        duplicates=0,
+        errors=0,
+        screening_paused=1,
+    )
 
-        if admission_state.enabled and relevance_scorer is None:
-            set_collection_paused(session)
-            session.commit()
-            logger.error(
-                "screening_unavailable",
-                {"run_id": run_id, "reason": "provider_missing_or_disabled"},
-            )
-            return FetchSummary(
-                run_id=run_id,
-                source_count=len(enabled_sources),
-                fetched=0,
-                new=0,
-                duplicates=0,
-                errors=0,
-                screening_paused=1,
-            )
 
-        fetched_by_index: dict[int, FetchResult] = {}
-        if not admission_state.enabled:
-            fetched_by_index, fetch_errors = _collect_fetched_items(
-                enabled_sources=enabled_sources,
-                settings=settings,
-                logger=logger,
-                run_id=run_id,
-                full_text_semaphore=full_text_semaphore,
-            )
-            totals.errors += fetch_errors
+def _prefetch_sources(
+    ctx: _CycleContext, totals: _RunTotals, enabled_sources: list[EnabledSource],
+) -> dict[int, FetchResult]:
+    """Without screening all sources are fetched up front; with it each is fetched in turn."""
+    if ctx.admission_state.enabled:
+        return {}
+    fetched_by_index: dict[int, FetchResult]
+    fetched_by_index, fetch_errors = _collect_fetched_items(
+        enabled_sources=enabled_sources,
+        settings=ctx.settings,
+        logger=ctx.logger,
+        run_id=ctx.run_id,
+        full_text_semaphore=ctx.full_text_semaphore,
+    )
+    totals.errors += fetch_errors
+    return fetched_by_index
 
-        _run_sources(ctx, totals, enabled_sources, fetched_by_index)
 
-        if not admission_state.paused and admission_state.fresh_success:
-            clear_collection_paused(session)
-        session.commit()
-
+def _finished_summary(
+    *, logger: Logger, run_id: str, totals: _RunTotals, source_count: int, paused: bool,
+) -> FetchSummary:
     logger.info(
         "fetch_run_finished",
         {
@@ -374,7 +358,7 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
     )
     return FetchSummary(
         run_id=run_id,
-        source_count=len(enabled_sources),
+        source_count=source_count,
         fetched=totals.fetched,
         new=totals.new,
         duplicates=totals.duplicates,
@@ -385,7 +369,42 @@ def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
         semantic_rejected=totals.semantic_rejected,
         semantic_unresolved=totals.semantic_unresolved,
         semantic_cache_hits=totals.semantic_cache_hits,
-        screening_paused=int(admission_state.paused),
+        screening_paused=int(paused),
         examined=totals.examined,
         sources_fetched=totals.sources_fetched,
+    )
+
+
+def run_fetch_cycle(*, settings: Settings, logger: Logger) -> FetchSummary:
+    configs = load_sources(settings.sources_path)
+    create_all()
+
+    run_id = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+    totals = _RunTotals()
+    admission_state = AdmissionState(enabled=settings.semantic_admission_enabled)
+    with SessionLocal() as session, jev_relevance_scorer(settings, logger) as relevance_scorer:
+        ctx = _CycleContext(
+            settings=settings,
+            logger=logger,
+            run_id=run_id,
+            session=session,
+            source_repo=SourceRepo(session),
+            article_repo=ArticleRepo(session),
+            relevance_scorer=relevance_scorer,
+            admission_state=admission_state,
+            full_text_semaphore=_full_text_semaphore(settings),
+        )
+        enabled_sources = _collect_enabled_sources(configs, ctx.source_repo)
+        if admission_state.enabled and relevance_scorer is None:
+            return _pause_without_scorer(ctx, len(enabled_sources))
+
+        _run_sources(ctx, totals, enabled_sources, _prefetch_sources(ctx, totals, enabled_sources))
+
+        if not admission_state.paused and admission_state.fresh_success:
+            clear_collection_paused(session)
+        session.commit()
+
+    return _finished_summary(
+        logger=logger, run_id=run_id, totals=totals,
+        source_count=len(enabled_sources), paused=admission_state.paused,
     )

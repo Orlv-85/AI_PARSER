@@ -465,6 +465,7 @@ def test_examined_items_stop_at_rss_early_stop(monkeypatch) -> None:
     assert (summary.fetched, summary.examined, summary.sources_fetched) == (5, 2, 1)
     source = logger.payload("source_fetch_finished", "rss_feed")
     assert (source["fetched_items"], source["examined_items"]) == (5, 2)
+    assert source["skipped_known_items"] == 2
     run = logger.payload("fetch_run_finished")
     assert (run["fetched"], run["examined"], run["sources_fetched"]) == (5, 2, 1)
 

@@ -285,6 +285,17 @@ the Troubleshooting section of `README.md`.
       "fix": "Run pylint as `PYTHONPATH=src PYLINTHOME=.pylint.d <main>/.venv/bin/python -m pylint src tests` in the worktree. In tests import private names directly (`from app.web.app import _signer`), the repo's convention, instead of `module._name`.",
       "verification": "With PYTHONPATH=src the old test file gave 4 W0212 locally. The next CI run still found C1803 (`helper(...) == {}`) that the local PYTHONPATH=src run (same pylint 4.1.3) did not report, so for inference-based messages CI decides.",
       "if_it_recurs": "Push early and read the CI lint log; do not trust a local 10.00/10 from a worktree for new tests that call branch-only helpers."
+    },
+    {
+      "id": "local-pytest-worktree-runs-main-folder-code",
+      "date": "2026-11-12",
+      "area": "tests (pytest), git worktrees",
+      "symptom": "In a git worktree, `<main folder>/.venv/bin/pytest` passes after a refactor, then a test that patches a branch-only name fails with `AttributeError: module ... has no attribute`, or the tests keep passing whatever the branch code does.",
+      "evidence": ["Branch refactor/long-pipeline-functions: `import app...screening; print(m.__file__)` printed the main folder path; with PYTHONPATH=src it printed the worktree path"],
+      "cause": "Same editable install as local-mypy-worktree-stale-editable-install: pytest imports `app.*` from the main folder, so the worktree's tests run against master's src.",
+      "fix": "In a worktree run tests as `PYTHONPATH=src <main>/.venv/bin/pytest ...` (crapper and mutator already get `PYTHONPATH=src`).",
+      "verification": "With PYTHONPATH=src the patched-name test imported the worktree module and passed.",
+      "if_it_recurs": "Print `app.__file__` before trusting a green worktree run."
     }
   ]
 }

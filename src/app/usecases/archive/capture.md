@@ -210,7 +210,9 @@ flowchart LR
 ## Code map
 
 - `capture.py`: `download_documents` (download step for given ids), constants, `archive_articles` (sync of stored articles, no network), `capture`
-  (window, batches, due, reuse, downloads, record, clean, summary), `status`, `import_db`
+  (window, batches, due, reuse, downloads, record, clean, summary). Both run `_download_step`:
+  `_sort_due` (reuse daily pages, resumed, targets), `_cap_downloads`, `_run_downloads`,
+  `_record_downloads` (`_nothing_to_record`, `_record_failure`), `_clean_cache`, `status`, `import_db`
   (archive pruned rows from a dump) and `dedupe_page_cache` (one-off page.html cleanup).
 - `storage/article_evidence_cache.py`: shared `PageCache`, `SourcePageDownloader`,
   `make_http_client` (not changed by the archive; `extract_saved` writes no page.html). Cache files

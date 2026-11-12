@@ -22,6 +22,43 @@ def _publication_before(moment: datetime):
                Article.published_at.is_(None) & (Article.publication_day < moment.date()))
 
 
+def _text_match(query: str):
+    ilike = f"%{query}%"
+    return (Article.title.ilike(ilike)
+            | Article.summary.ilike(ilike)
+            | Article.content.ilike(ilike))
+
+
+def _view_window(*, hours: int | None, days: int, query: str | None,
+                 date_from: date | None, date_to: date | None) -> list:
+    """An explicit date range wins; otherwise a search looks back `days`, a listing `hours`."""
+    if date_from is None and date_to is None:
+        span = timedelta(days=days) if query else timedelta(hours=24 if hours is None else hours)
+        return [_publication_since(datetime.now(UTC) - span)]
+    conditions = []
+    if date_from is not None:
+        conditions.append(_publication_since(datetime.combine(date_from, time.min, tzinfo=UTC)))
+    if date_to is not None:
+        end_at = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=UTC)
+        conditions.append(_publication_before(end_at))
+    return conditions
+
+
+def _view_order(sort: str) -> tuple:
+    if sort == "category":
+        return (
+            case(
+                {name: index for index, name in enumerate(CATEGORY_ORDER)},
+                value=Article.category, else_=len(CATEGORY_ORDER),
+            ),
+            Article.rank_score.desc(),
+            Article.published_at.desc().nulls_last(),
+        )
+    if sort == "published":
+        return Article.published_at.desc().nulls_last(), desc(Article.rank_score)
+    return Article.rank_score.desc(), Article.published_at.desc().nulls_last()
+
+
 @dataclass(slots=True)
 class ArticleDailyStats:  # pylint: disable=too-many-instance-attributes
     stat_date: date
@@ -195,21 +232,16 @@ class ArticleRepo:
 
     def search(self, *, query: str, days: int = 7, limit: int = 100) -> list[Article]:
         window_start = datetime.now(UTC) - timedelta(days=days)
-        ilike = f"%{query}%"
         stmt: Select[tuple[Article]] = (
             select(Article)
             .where(_publication_since(window_start))
-            .where(
-                Article.title.ilike(ilike)
-                | Article.summary.ilike(ilike)
-                | Article.content.ilike(ilike)
-            )
+            .where(_text_match(query))
             .order_by(Article.published_at.desc().nulls_last())
             .limit(limit)
         )
         return list(self.session.scalars(stmt).all())
 
-    def list_for_view(  # pylint: disable=too-many-branches
+    def list_for_view(
         self,
         *,
         hours: int | None,
@@ -230,61 +262,13 @@ class ArticleRepo:
             .outerjoin(Source, Article.source_id == Source.id)
             .where(Article.ai_relevance_score >= min_ai_relevance)
         )
-        has_date_range = date_from is not None or date_to is not None
         if category is not None:
             base_stmt = base_stmt.where(Article.category == category)
-        if has_date_range:
-            if date_from is not None:
-                start_at = datetime.combine(date_from, time.min, tzinfo=UTC)
-                base_stmt = base_stmt.where(_publication_since(start_at))
-            if date_to is not None:
-                end_at = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=UTC)
-                base_stmt = base_stmt.where(_publication_before(end_at))
+        base_stmt = base_stmt.where(*_view_window(
+            hours=hours, days=days, query=query, date_from=date_from, date_to=date_to))
         if query:
-            if not has_date_range:
-                window_start = datetime.now(UTC) - timedelta(days=days)
-                base_stmt = base_stmt.where(_publication_since(window_start))
-            ilike = f"%{query}%"
-            base_stmt = base_stmt.where(
-                Article.title.ilike(ilike)
-                | Article.summary.ilike(ilike)
-                | Article.content.ilike(ilike)
-            )
-            if sort == "published":
-                base_stmt = base_stmt.order_by(
-                    Article.published_at.desc().nulls_last(),
-                    desc(Article.rank_score),
-                )
-            else:
-                base_stmt = base_stmt.order_by(
-                    Article.rank_score.desc(),
-                    Article.published_at.desc().nulls_last(),
-                )
-        else:
-            if not has_date_range:
-                effective_hours = 24 if hours is None else hours
-                window_start = datetime.now(UTC) - timedelta(hours=effective_hours)
-                base_stmt = base_stmt.where(_publication_since(window_start))
-            if sort == "published":
-                base_stmt = base_stmt.order_by(
-                    Article.published_at.desc().nulls_last(),
-                    desc(Article.rank_score),
-                )
-            else:
-                base_stmt = base_stmt.order_by(
-                    Article.rank_score.desc(),
-                    Article.published_at.desc().nulls_last(),
-                )
-        if sort == "category":
-            base_stmt = base_stmt.order_by(None).order_by(
-                case(
-                    {name: index for index, name in enumerate(CATEGORY_ORDER)},
-                    value=Article.category, else_=len(CATEGORY_ORDER),
-                ),
-                Article.rank_score.desc(),
-                Article.published_at.desc().nulls_last(),
-            )
-        base_stmt = base_stmt.limit(limit).offset(offset)
+            base_stmt = base_stmt.where(_text_match(query))
+        base_stmt = base_stmt.order_by(*_view_order(sort)).limit(limit).offset(offset)
         return [
             (row[0], row[1], row[2])
             for row in self.session.execute(base_stmt).all()

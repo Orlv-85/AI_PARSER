@@ -2,6 +2,7 @@ from __future__ import annotations
 
 # pylint: disable=protected-access
 from datetime import UTC, datetime
+from threading import BoundedSemaphore
 from types import SimpleNamespace
 
 import pytest
@@ -10,6 +11,7 @@ from app.config.settings import Settings
 from app.config.sources import SourceConfig
 from app.core.models import Article
 from app.ingest.html import HtmlListPageResult
+from app.usecases.ingestion.pipeline.cycle import _full_text_semaphore
 from app.usecases.ingestion.pipeline.fetch import (
     _fetch_source_items,
     _profiled_source_groups,
@@ -459,7 +461,7 @@ def test_process_html_links_two_stage_excluded_item_is_logged_and_not_stored(
         "app.usecases.ingestion.pipeline.html_links._html_placeholder_key", lambda _s, h: f"ph:{h}",
     )
     monkeypatch.setattr(
-        "app.usecases.ingestion.pipeline.html_links._screen_candidate",
+        "app.usecases.ingestion.pipeline.screening._screen_candidate",
         lambda **_kwargs: pytest.fail("an excluded item is not screened"),
     )
     repo = _Repo()
@@ -486,7 +488,7 @@ def test_process_html_links_two_stage_skips_item_without_row(monkeypatch) -> Non
     urls = ["https://example.com/news/a", "https://example.com/news/b"]
     _patch_html_stage(monkeypatch, lambda *, url, **_kwargs: _dated_article(url))
     monkeypatch.setattr(
-        "app.usecases.ingestion.pipeline.html_links._build_article_row", lambda **_kwargs: None,
+        "app.usecases.ingestion.pipeline.screening._build_article_row", lambda **_kwargs: None,
     )
     inserted: list[object] = []
     repo = _Repo()
@@ -539,6 +541,31 @@ def test_process_html_links_two_stage_new_link_resets_known_streak(monkeypatch) 
 
     # known, new, known: the new link resets the streak, so there is no early stop.
     assert result == (1, 1, 2, 2, False)
+
+
+def test_process_html_links_two_stage_streak_stop_of_one_stops_at_first_known_link(
+    monkeypatch,
+) -> None:
+    _patch_html_stage(monkeypatch, lambda *, url, **_kwargs: _dated_article(url))
+    monkeypatch.setattr(
+        "app.usecases.ingestion.pipeline.html_links.canonical_url_hash",
+        lambda url: url.rsplit("/", maxsplit=1)[-1],
+    )
+    _patch_scores(monkeypatch)
+
+    result = _run_html_links(
+        ["https://example.com/known1", "https://example.com/new"], [], html_known_streak_stop=1,
+    )
+
+    assert result == (0, 0, 1, 1, True)
+
+
+def test_full_text_semaphore_only_for_a_positive_limit() -> None:
+    for limit in (None, 0, -1):
+        assert _full_text_semaphore(_settings(rss_full_text_concurrency_limit=limit)) is None
+    assert isinstance(
+        _full_text_semaphore(_settings(rss_full_text_concurrency_limit=1)), BoundedSemaphore,
+    )
 
 
 def test_process_html_links_two_stage_flags_truncated_links(monkeypatch) -> None:
