@@ -397,7 +397,7 @@ def _daily_topic(verdict, row, journal, client, keys):
     return fallback["topic"], fallback["confidence"], fallback
 
 
-def _apply_enrichment(article, row, body, verdict, summary, *, review,
+def _apply_enrichment(article, row, body, verdict, summary, *, review,  # pylint: disable=too-many-arguments
                       topic, topic_confidence, fallback):
     article.title = row["title"][:512]
     article.content = row["content"]

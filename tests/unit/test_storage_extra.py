@@ -110,29 +110,29 @@ def test_source_repo_and_article_repo_paths() -> None:
     assert [row.source_key for row in enabled] == ["source_1"]
 
     now = datetime.now(UTC)
-    article, is_new = article_repo.insert_article(
+    article, is_new = article_repo.insert_article(dict(
         source_id=source.id,
         title="A",
         url="https://example.com/a",
         url_canonical="https://example.com/a",
         url_canonical_hash="h1",
         published_at=now,
-    )
+    ))
     assert is_new is True
 
-    same, is_new_again = article_repo.insert_article(
+    same, is_new_again = article_repo.insert_article(dict(
         source_id=source.id,
         title="A2",
         url="https://example.com/a2",
         url_canonical="https://example.com/a",
         url_canonical_hash="h1",
         published_at=now,
-    )
+    ))
     assert is_new_again is False
     assert same.id == article.id
 
     old_time = now - timedelta(days=10)
-    article_repo.insert_article(
+    article_repo.insert_article(dict(
         source_id=source.id,
         title="Old",
         url="https://example.com/old",
@@ -141,7 +141,7 @@ def test_source_repo_and_article_repo_paths() -> None:
         published_at=old_time,
         summary="legacy",
         content="legacy",
-    )
+    ))
 
     recent_results = article_repo.query_top(hours=24, limit=10)
     assert [row.title for row in recent_results] == ["A"]
@@ -155,7 +155,7 @@ def test_list_for_view_applies_sort_with_query() -> None:
     article_repo = ArticleRepo(session)
     now = datetime.now(UTC)
 
-    article_repo.insert_article(
+    article_repo.insert_article(dict(
         source_id=None,
         title="AI Recent Lower Rank",
         url="https://example.com/recent",
@@ -165,8 +165,8 @@ def test_list_for_view_applies_sort_with_query() -> None:
         summary="ai summary",
         content="ai content",
         rank_score=0.2,
-    )
-    article_repo.insert_article(
+    ))
+    article_repo.insert_article(dict(
         source_id=None,
         title="AI Older Higher Rank",
         url="https://example.com/older",
@@ -176,7 +176,7 @@ def test_list_for_view_applies_sort_with_query() -> None:
         summary="ai summary",
         content="ai content",
         rank_score=0.9,
-    )
+    ))
 
     by_rank = article_repo.list_for_view(
         hours=24,
@@ -208,7 +208,7 @@ def test_list_for_view_applies_sort_without_query() -> None:
     article_repo = ArticleRepo(session)
     now = datetime.now(UTC)
 
-    article_repo.insert_article(
+    article_repo.insert_article(dict(
         source_id=None,
         title="Recent Low Rank",
         url="https://example.com/recent-no-query",
@@ -216,8 +216,8 @@ def test_list_for_view_applies_sort_without_query() -> None:
         url_canonical_hash="nq1",
         published_at=now - timedelta(hours=1),
         rank_score=0.1,
-    )
-    article_repo.insert_article(
+    ))
+    article_repo.insert_article(dict(
         source_id=None,
         title="Older High Rank",
         url="https://example.com/older-no-query",
@@ -225,7 +225,7 @@ def test_list_for_view_applies_sort_without_query() -> None:
         url_canonical_hash="nq2",
         published_at=now - timedelta(hours=2),
         rank_score=0.9,
-    )
+    ))
 
     by_published = article_repo.list_for_view(
         hours=24,
@@ -246,7 +246,7 @@ def test_list_for_view_applies_rank_sort_without_query() -> None:
     article_repo = ArticleRepo(session)
     now = datetime.now(UTC)
 
-    article_repo.insert_article(
+    article_repo.insert_article(dict(
         source_id=None,
         title="Recent Low Rank 2",
         url="https://example.com/recent-no-query-rank",
@@ -254,8 +254,8 @@ def test_list_for_view_applies_rank_sort_without_query() -> None:
         url_canonical_hash="nq3",
         published_at=now - timedelta(hours=1),
         rank_score=0.1,
-    )
-    article_repo.insert_article(
+    ))
+    article_repo.insert_article(dict(
         source_id=None,
         title="Older High Rank 2",
         url="https://example.com/older-no-query-rank",
@@ -263,7 +263,7 @@ def test_list_for_view_applies_rank_sort_without_query() -> None:
         url_canonical_hash="nq4",
         published_at=now - timedelta(hours=2),
         rank_score=0.9,
-    )
+    ))
 
     by_rank = article_repo.list_for_view(
         hours=24,
@@ -417,7 +417,7 @@ def test_article_repo_batch_fallback_and_empty_hashes() -> None:
         ]
     )
 
-    def _fake_insert_article(**kwargs):
+    def _fake_insert_article(kwargs):
         insert_calls.append(kwargs)
         return next(insert_results)
 
@@ -480,10 +480,10 @@ def test_prune_older_than_calls_archive_before_delete() -> None:
     repo = ArticleRepo(session)
     now = datetime.now(UTC)
     for name, age in (("old", 200), ("recent", 5)):
-        repo.insert_article(
+        repo.insert_article(dict(
             source_id=None, title=name, url=f"https://example.com/{name}",
             url_canonical=f"https://example.com/{name}", url_canonical_hash=name,
-            published_at=now - timedelta(days=age))
+            published_at=now - timedelta(days=age)))
     session.commit()
     seen: list[tuple[list[str], int]] = []
 
@@ -513,22 +513,22 @@ def test_prune_older_than_and_count() -> None:
         )
     )
 
-    recent, _ = article_repo.insert_article(
+    recent, _ = article_repo.insert_article(dict(
         source_id=None,
         title="Recent",
         url="https://example.com/recent-prune",
         url_canonical="https://example.com/recent-prune",
         url_canonical_hash="pr1",
         published_at=now - timedelta(days=5),
-    )
-    old, _ = article_repo.insert_article(
+    ))
+    old, _ = article_repo.insert_article(dict(
         source_id=None,
         title="Old",
         url="https://example.com/old-prune",
         url_canonical="https://example.com/old-prune",
         url_canonical_hash="pr2",
         published_at=now - timedelta(days=150),
-    )
+    ))
     session.add(ArticleAlias(
         article_id=old.id,
         source_id=source.id,
@@ -555,7 +555,7 @@ def test_list_for_view_date_range_skips_hours_and_days_windows() -> None:
     article_repo = ArticleRepo(session)
     now = datetime.now(UTC).replace(hour=12, minute=0, second=0, microsecond=0)
 
-    article_repo.insert_article(
+    article_repo.insert_article(dict(
         source_id=None,
         title="Inside Day Window",
         url="https://example.com/date-range-inside",
@@ -565,8 +565,8 @@ def test_list_for_view_date_range_skips_hours_and_days_windows() -> None:
         summary="match me",
         content="match me too",
         rank_score=0.4,
-    )
-    article_repo.insert_article(
+    ))
+    article_repo.insert_article(dict(
         source_id=None,
         title="Previous Day",
         url="https://example.com/date-range-prev",
@@ -576,8 +576,8 @@ def test_list_for_view_date_range_skips_hours_and_days_windows() -> None:
         summary="match me",
         content="match me too",
         rank_score=0.9,
-    )
-    article_repo.insert_article(
+    ))
+    article_repo.insert_article(dict(
         source_id=None,
         title="Next Day",
         url="https://example.com/date-range-next",
@@ -587,7 +587,7 @@ def test_list_for_view_date_range_skips_hours_and_days_windows() -> None:
         summary="match me",
         content="match me too",
         rank_score=0.1,
-    )
+    ))
 
     target_day = now.date()
 
@@ -628,7 +628,7 @@ def test_list_for_view_supports_open_ended_date_ranges() -> None:
         ("Middle Open Range", "middle-open", middle),
         ("Newer Open Range", "newer-open", newer),
     ]:
-        article_repo.insert_article(
+        article_repo.insert_article(dict(
             source_id=None,
             title=title,
             url=f"https://example.com/{url_suffix}",
@@ -636,7 +636,7 @@ def test_list_for_view_supports_open_ended_date_ranges() -> None:
             url_canonical_hash=f"open-{url_suffix}",
             published_at=published_at,
             rank_score=0.5,
-        )
+        ))
 
     only_from = article_repo.list_for_view(
         hours=1,
@@ -717,22 +717,22 @@ def test_article_repo_existing_canonical_hashes_returns_present_subset() -> None
     article_repo = ArticleRepo(session)
     now = datetime.now(UTC)
 
-    article_repo.insert_article(
+    article_repo.insert_article(dict(
         source_id=None,
         title="One",
         url="https://example.com/one",
         url_canonical="https://example.com/one",
         url_canonical_hash="h-one",
         published_at=now,
-    )
-    article_repo.insert_article(
+    ))
+    article_repo.insert_article(dict(
         source_id=None,
         title="Two",
         url="https://example.com/two",
         url_canonical="https://example.com/two",
         url_canonical_hash="h-two",
         published_at=now,
-    )
+    ))
 
     assert article_repo.existing_canonical_hashes(
         ["missing", "h-two", "h-one", "missing-2"]

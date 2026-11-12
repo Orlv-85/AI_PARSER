@@ -53,7 +53,7 @@ def get_cached_decision(session: Session, key: str) -> AdmissionDecisionRow | No
     return session.execute(stmt).scalar_one_or_none()
 
 
-def upsert_pending(
+def upsert_pending(  # pylint: disable=too-many-arguments
     session: Session,
     *,
     key: str,

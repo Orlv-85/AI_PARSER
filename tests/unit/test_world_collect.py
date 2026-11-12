@@ -18,6 +18,7 @@ from app.core.world.gdelt import (
     MAX_CONSECUTIVE_MISSING,
     MAX_MISSING_FILES_OK,
     Candidate,
+    GdeltScan,
     day_file_names,
 )
 from app.storage.models_sql import Base, WorldCandidate, WorldFile
@@ -80,8 +81,8 @@ def engine_fixture(tmp_path):
 
 def run(engine, files, tmp_path, calls=None, on_request=None, **kwargs):
     with Session(engine) as session, client_for(files, calls, on_request) as client:
-        return collect_day(session, DAY, client=client, tmp_dir=tmp_path, pause=0,
-                           retry_delay=0, sleep=lambda _s: None, **kwargs)
+        scan = GdeltScan(client, tmp_dir=tmp_path, pause=0, retry_delay=0, sleep=lambda _s: None)
+        return collect_day(session, DAY, scan=scan, **kwargs)
 
 
 def test_collect_resumes_without_reprocessing_files(engine, tmp_path):

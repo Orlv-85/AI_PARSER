@@ -95,7 +95,7 @@ def test_ingest_persist_query_pipeline_is_deterministic() -> None:
             score = rank_score(relevance=relevance, freshness=freshness, source_weight=0.9)
 
             source_id = html_source.id if item.source_key == "html_source" else None
-            saved, is_new = article_repo.insert_article(
+            saved, is_new = article_repo.insert_article(dict(
                 source_id=source_id,
                 title=item.title,
                 url=str(item.url),
@@ -107,13 +107,13 @@ def test_ingest_persist_query_pipeline_is_deterministic() -> None:
                 ai_relevance_score=relevance,
                 freshness_score=freshness,
                 rank_score=score,
-            )
+            ))
             if is_new:
                 inserted_ids.append(saved.id)
 
         # Duplicate pass should not create extra rows.
         duplicate_item = articles[0]
-        _, is_new = article_repo.insert_article(
+        _, is_new = article_repo.insert_article(dict(
             source_id=None,
             title=duplicate_item.title,
             url=str(duplicate_item.url),
@@ -125,7 +125,7 @@ def test_ingest_persist_query_pipeline_is_deterministic() -> None:
             ai_relevance_score=0.5,
             freshness_score=0.5,
             rank_score=0.5,
-        )
+        ))
         session.commit()
 
         assert is_new is False

@@ -114,7 +114,7 @@ class _ArticleRepo:
         self.known_batches.append(list(canonical_hashes))
         return {value for value in canonical_hashes if value in self.known}
 
-    def insert_article(self, **row):
+    def insert_article(self, row):
         self.inserts.append(row)
         return SimpleNamespace(id=len(self.inserts)), True
 
@@ -280,7 +280,7 @@ def test_run_fetch_cycle_counts_new_duplicates_and_errors(monkeypatch) -> None:
     ]
 
     class _FirstNewArticleRepo(_ArticleRepo):
-        def insert_article(self, **row):
+        def insert_article(self, row):
             self.inserts.append(row)
             return SimpleNamespace(id=len(self.inserts)), len(self.inserts) == 1
 
@@ -641,7 +641,7 @@ def _rss_result(
 
 
 class _NoInsertArticleRepo(_ArticleRepo):
-    def insert_article(self, **row):
+    def insert_article(self, row):
         pytest.fail("a not-modified source must not insert articles")
 
 
@@ -959,7 +959,7 @@ def test_run_fetch_cycle_uses_batch_article_upsert_when_enabled(monkeypatch) -> 
             super().upsert_articles_batch(rows)
             return 1, 1
 
-        def insert_article(self, **row):
+        def insert_article(self, row):
             pytest.fail("insert_article must not be used when batch upsert is enabled")
 
     summary = _run(
@@ -985,7 +985,7 @@ def test_run_fetch_cycle_batch_upsert_does_not_advance_rss_known_streak_for_in_r
     ]
 
     class _BatchArticleRepo(_ArticleRepo):
-        def insert_article(self, **row):
+        def insert_article(self, row):
             pytest.fail("insert_article must not be used when batch upsert is enabled")
 
     summary = _run(

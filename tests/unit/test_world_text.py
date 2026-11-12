@@ -35,6 +35,7 @@ from app.storage.world import (
     WorldRepo,
 )
 from app.usecases.archive import capture as capture_module
+from app.usecases.archive.capture import PageFetch
 from app.usecases.world_screen import rank_clusters, run_screen
 from app.usecases.world_text import archive_text_source, run_texts
 
@@ -110,9 +111,13 @@ class Web:
 
 
 def texts(session, tmp_path, web, **kwargs):
-    options = {"cache_root": tmp_path / "archive", "daily_cache_root": tmp_path / "daily",
-               "host_interval": 0, "client_factory": web.client}
-    return run_texts(session, DAY, **{**options, **kwargs})
+    return run_texts(session, DAY, fetch=page_fetch(tmp_path, web.client), **kwargs)
+
+
+def page_fetch(tmp_path, client_factory=None):
+    extra = {} if client_factory is None else {"client_factory": client_factory}
+    return PageFetch(cache_root=tmp_path / "archive", daily_cache_root=tmp_path / "daily",
+                     host_interval=0, **extra)
 
 
 def test_world_text_goes_through_archive_robots_and_bot_agent(session, tmp_path, monkeypatch):
@@ -126,8 +131,7 @@ def test_world_text_goes_through_archive_robots_and_bot_agent(session, tmp_path,
         return client
 
     monkeypatch.setattr(capture_module, "make_http_client", archive_client)
-    summary = run_texts(session, DAY, cache_root=tmp_path / "archive",
-                        daily_cache_root=tmp_path / "daily", host_interval=0)
+    summary = run_texts(session, DAY, fetch=page_fetch(tmp_path))
     assert [str(r.url) for r in web.requests] == [
         "https://site1.example.org/robots.txt", "https://site1.example.org/1"]
     assert {r.headers["user-agent"] for r in web.requests} == {DEFAULT_USER_AGENT}
@@ -186,10 +190,8 @@ def test_world_text_outage_marks_nothing(session, tmp_path):
     def refuse(request):
         raise httpx.ConnectError("DNS unavailable", request=request)
 
-    summary = run_texts(session, DAY, cache_root=tmp_path / "archive",
-                        daily_cache_root=tmp_path / "daily", host_interval=0,
-                        client_factory=lambda: httpx.AsyncClient(
-                            transport=httpx.MockTransport(refuse)))
+    summary = run_texts(session, DAY, fetch=page_fetch(tmp_path, lambda: httpx.AsyncClient(
+        transport=httpx.MockTransport(refuse))))
     assert summary["outage"] is True
     assert summary["no_text"] == 0 and summary["text_ready"] == 0
     assert summary["kept"] == 12

@@ -16,6 +16,7 @@ from app.usecases.archive.capture import (
     ARCHIVE_MAX_PER_HOST,
     ARCHIVE_RAW_KEEP_DAYS,
     ARCHIVE_RETRY_DELAYS,
+    PageFetch,
     capture,
     dedupe_page_cache,
 )
@@ -60,10 +61,14 @@ def _transport(routes, calls):
 def _capture(session, tmp_path, routes=None, calls=None, **kwargs):
     calls = [] if calls is None else calls
     transport = httpx.MockTransport(_transport(routes or {}, calls))
-    options = {"cache_root": tmp_path / "archive", "daily_cache_root": tmp_path / "daily",
-               "host_interval": 0, "client_factory": lambda: httpx.AsyncClient(transport=transport),
-               **kwargs}
-    return capture(session, **options)
+    clock = kwargs.pop("clock", time.monotonic)
+    fetch = page_fetch(tmp_path, lambda: httpx.AsyncClient(transport=transport), clock=clock)
+    return capture(session, fetch=fetch, **kwargs)
+
+
+def page_fetch(tmp_path, client_factory, **kwargs):
+    return PageFetch(cache_root=tmp_path / "archive", daily_cache_root=tmp_path / "daily",
+                     client_factory=client_factory, host_interval=0, **kwargs)
 
 
 def _document(session, url):
@@ -239,10 +244,8 @@ def test_capture_outage_keeps_attempts(tmp_path) -> None:
 
     def refuse(request):
         raise httpx.ConnectError("DNS unavailable", request=request)
-    summary = capture(session, cache_root=tmp_path / "archive",
-                      daily_cache_root=tmp_path / "daily", host_interval=0,
-                      client_factory=lambda: httpx.AsyncClient(
-                          transport=httpx.MockTransport(refuse)))
+    summary = capture(session, fetch=page_fetch(tmp_path, lambda: httpx.AsyncClient(
+        transport=httpx.MockTransport(refuse))))
     assert summary["outage"] is True
     assert summary["outage_kept"] == summary["downloads"] > 0
     assert summary["failed"] == {} and summary["gave_up"] == 0
@@ -259,10 +262,8 @@ def test_capture_timeouts_are_an_outage(tmp_path) -> None:
 
     def time_out(request):
         raise httpx.ConnectTimeout("network down", request=request)
-    summary = capture(session, cache_root=tmp_path / "archive",
-                      daily_cache_root=tmp_path / "daily", host_interval=0,
-                      client_factory=lambda: httpx.AsyncClient(
-                          transport=httpx.MockTransport(time_out)))
+    summary = capture(session, fetch=page_fetch(tmp_path, lambda: httpx.AsyncClient(
+        transport=httpx.MockTransport(time_out))))
     assert summary["outage"] is True
     assert summary["outage_kept"] == summary["downloads"] > 0
     assert summary["failed"] == {} and summary["gave_up"] == 0
@@ -338,8 +339,7 @@ def test_download_documents_touches_only_given_ids(tmp_path) -> None:
     ids = [_document_after_sync(session, chosen)]
 
     summary = capture_module.download_documents(
-        session, ids, cache_root=tmp_path / "archive", daily_cache_root=tmp_path / "daily",
-        client_factory=lambda: httpx.AsyncClient(transport=transport), host_interval=0)
+        session, ids, fetch=page_fetch(tmp_path, lambda: httpx.AsyncClient(transport=transport)))
 
     assert _pages(calls) == [chosen]
     assert summary["downloads"] == 1
@@ -352,8 +352,7 @@ def test_download_documents_without_due_documents_reports_no_outage(tmp_path) ->
         raise AssertionError("no download expected")
 
     summary = capture_module.download_documents(
-        _session(), [], cache_root=tmp_path / "archive", daily_cache_root=tmp_path / "daily",
-        client_factory=no_client, host_interval=0)
+        _session(), [], fetch=page_fetch(tmp_path, no_client))
 
     assert (summary["outage"], summary["downloads"], summary["skipped_time"]) == (False, 0, 0)
 

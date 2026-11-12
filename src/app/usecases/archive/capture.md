@@ -214,6 +214,8 @@ flowchart LR
   `_sort_due` (reuse daily pages, resumed, targets), `_cap_downloads`, `_run_downloads`,
   `_record_downloads` (`_nothing_to_record`, `_record_failure`), `_clean_cache`, `status`, `import_db`
   (archive pruned rows from a dump) and `dedupe_page_cache` (one-off page.html cleanup).
+  `PageFetch` (cache roots, HTTP client factory, per-host pause, clock) is passed as one object to
+  `capture`, `download_documents`, `_download_step`, `_run_downloads` and `run_texts`.
 - `storage/article_evidence_cache.py`: shared `PageCache`, `SourcePageDownloader`,
   `make_http_client` (not changed by the archive; `extract_saved` writes no page.html). Cache files
   are written through `journal_files.private_bytes` (0o600, atomic replace). `fetch_one` is

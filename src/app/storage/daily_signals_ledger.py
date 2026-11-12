@@ -55,7 +55,7 @@ def _now() -> str:
 
 
 class SignalsLedger:  # pylint: disable=too-many-instance-attributes
-    def __init__(self, path: Path, *, run_id: str, api_key: str, max_calls: int,
+    def __init__(self, path: Path, *, run_id: str, api_key: str, max_calls: int,  # pylint: disable=too-many-arguments
                  max_usd_micro: int, deadline: float,
                  clock: Callable[[], float] = time.monotonic,
                  transport: httpx.BaseTransport | None = None,

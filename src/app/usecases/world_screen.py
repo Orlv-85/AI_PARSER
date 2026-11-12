@@ -254,7 +254,7 @@ def _dry_run(repo: WorldRepo, target: date, top_n: int, summary: dict[str, Any])
     return summary
 
 
-def run_screen(  # pylint: disable=too-many-arguments
+def run_screen(
     session: Session, assessor: WorldChangeAssessor | None, target: date, *,
     texts: TextSource = no_text, top_n: int = WORLD_TOP_N,
     threshold: float = SCREEN_THRESHOLD, dry_run: bool = False, limit_usd: float | None = None,

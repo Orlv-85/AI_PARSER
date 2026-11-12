@@ -101,7 +101,7 @@ def _stage_row(
 ) -> None:
     """Store one row; batch mode only queues it, merging a repeat of the same URL."""
     if not run.settings.article_batch_upsert_enabled:
-        _, is_new = run.article_repo.insert_article(**row)
+        _, is_new = run.article_repo.insert_article(row)
         if is_new:
             tally.new_count += 1
         else:

@@ -26,7 +26,7 @@ FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "daily_signals"
 D = date(2026, 10, 16)
 
 
-def mention(mention_id, name, entity_type="model", vendor=None, *, canonical=None, day=D,
+def mention(mention_id, name, entity_type="model", vendor=None, *, canonical=None, day=D,  # pylint: disable=too-many-arguments
             article_id=None, publisher="example.com", role="primary", is_new=False):
     return Mention(mention_id=mention_id, scope_day=day, article_id=article_id or mention_id,
                    publisher=publisher, name=name, canonical_name=canonical or name,

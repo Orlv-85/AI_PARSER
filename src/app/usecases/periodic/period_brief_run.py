@@ -44,7 +44,7 @@ def _label(kind: str, start: date) -> str:
     return f"{kind}:{start.isoformat()}"
 
 
-def _attempts(session: Any, repo: PeriodSignalRepo, ledger: SignalsLedger, *, kind: str,
+def _attempts(session: Any, repo: PeriodSignalRepo, ledger: SignalsLedger, *, kind: str,  # pylint: disable=too-many-arguments
               start: date, model: str, packet: dict[str, Any], id_map: dict[str, Any],
               digest: str) -> str:
     """Up to two attempts for one period (one recovery); returns its report state."""
@@ -97,7 +97,7 @@ def _prepare(repo: PeriodSignalRepo, kind: str, start: date,  # pylint: disable=
     return "due", (packet, id_map, digest)
 
 
-def run_briefs(session: Any, repo: PeriodSignalRepo, settings: Any,  # pylint: disable=too-many-locals
+def run_briefs(session: Any, repo: PeriodSignalRepo, settings: Any,  # pylint: disable=too-many-arguments,too-many-locals
                targets: Sequence[tuple[str, date]], *, max_usd: str, cache_dir: Path,
                max_seconds: int, transport: httpx.BaseTransport | None = None,
                clock: Callable[[], float] = time.monotonic,

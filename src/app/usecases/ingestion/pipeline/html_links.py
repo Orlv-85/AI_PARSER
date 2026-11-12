@@ -146,7 +146,7 @@ def _store_row(run: _HtmlRun, tally: _HtmlTally, row: dict[str, object]) -> None
     if run.settings.article_batch_upsert_enabled:
         tally.queued_rows.append(row)
         return
-    _, is_new = run.article_repo.insert_article(**row)
+    _, is_new = run.article_repo.insert_article(row)
     if is_new:
         tally.new_count += 1
     else:

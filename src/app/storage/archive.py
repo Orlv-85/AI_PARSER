@@ -58,7 +58,7 @@ class ArchiveRepo:
         self.session.flush()
         return document
 
-    def add_version(  # pylint: disable=too-many-arguments
+    def add_version(
             self, document: ArchiveDocument, *, text: str, origin: str, extraction_version: str,
             final_url: str | None = None, http_status: int | None = None,
             issues: Sequence[str] = ()) -> ArchiveText | None:

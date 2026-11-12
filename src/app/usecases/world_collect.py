@@ -4,24 +4,18 @@ Reads the GDELT files of a UTC day one at a time, stores the kept candidates and
 commits after every file, then prunes. Lives outside core/world/ because it imports storage.
 """
 import logging
-import time
-from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import UTC, date, datetime, timedelta
-from pathlib import Path
 
-import httpx
 from sqlalchemy.orm import Session
 
 from app.core.world.gdelt import (
-    GDELT_BASE_URL,
     KINDS,
     MAX_CONSECUTIVE_MISSING,
     MAX_MISSING_FILES_OK,
-    PAUSE_SECONDS,
-    RETRY_DELAY_SECONDS,
     DayStats,
     FileResult,
+    GdeltScan,
     day_file_names,
     scan_file,
 )
@@ -63,18 +57,12 @@ def _not_done(names: list[tuple[str, str]], done: set[tuple[str, str]]) -> int:
     return sum(1 for kind, name in names if (name[:14], kind) not in done)
 
 
-def collect_day(  # pylint: disable=too-many-arguments,too-many-locals
+def collect_day(  # pylint: disable=too-many-locals
     session: Session,
     day: date,
     *,
-    client: httpx.Client,
-    own_domains: frozenset[str] = frozenset(),
+    scan: GdeltScan,
     max_files: int | None = None,
-    tmp_dir: Path | None = None,
-    pause: float = PAUSE_SECONDS,
-    retry_delay: float = RETRY_DELAY_SECONDS,
-    sleep: Callable[[float], None] = time.sleep,
-    base_url: str = GDELT_BASE_URL,
     logger: logging.Logger | None = None,
 ) -> CollectSummary:
     """Collect the files of `day` that are not done yet; commit per file; prune; log a summary."""
@@ -94,12 +82,9 @@ def collect_day(  # pylint: disable=too-many-arguments,too-many-locals
             summary.skipped += len(rest) - _not_done(rest, done)
             break
         if stats.files_read + stats.files_missing:
-            sleep(pause)
+            scan.sleep(scan.pause)
         result = FileResult()
-        found = list(scan_file(
-            client, kind, name, stats=stats, result=result, own_domains=own_domains,
-            tmp_dir=tmp_dir, retry_delay=retry_delay, sleep=sleep, base_url=base_url,
-        ))
+        found = list(scan_file(scan, kind, name, stats=stats, result=result))
         created, repeats = repo.upsert_candidates(found)
         repo.record_file(
             name[:14], kind, FILE_MISSING if result.missing else FILE_DONE,

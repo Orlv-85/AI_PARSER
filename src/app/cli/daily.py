@@ -53,7 +53,7 @@ def daily_publish(
 
 
 @app.command("daily-signals")
-def daily_signals(
+def daily_signals(  # pylint: disable=too-many-arguments
     *,
     report_date: str | None = _REPORT_DATE_OPTION,
     backfill_days: int = typer.Option(1, "--backfill-days", min=1, max=800),

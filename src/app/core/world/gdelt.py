@@ -217,15 +217,20 @@ class GkgFile:
                 resource.close()
 
 
-def fetch_file(
-    client: httpx.Client,
-    name: str,
-    *,
-    tmp_dir: Path | None = None,
-    retry_delay: float = RETRY_DELAY_SECONDS,
-    sleep: Callable[[float], None] = time.sleep,
-    base_url: str = GDELT_BASE_URL,
-) -> GkgFile | None:
+@dataclass(frozen=True)
+class GdeltScan:
+    """How the files of a day are read: client, own domains for the filter, temp dir, timing."""
+
+    client: httpx.Client
+    own_domains: frozenset[str] = frozenset()
+    tmp_dir: Path | None = None
+    pause: float = PAUSE_SECONDS
+    retry_delay: float = RETRY_DELAY_SECONDS
+    sleep: Callable[[float], None] = time.sleep
+    base_url: str = GDELT_BASE_URL
+
+
+def fetch_file(scan: GdeltScan, name: str) -> GkgFile | None:
     """Download a GKG file (zip or plain), check it and return it open, or None when missing.
 
     A truncated or broken zip, an HTML body or a failed download is a failed attempt. The caller
@@ -233,10 +238,10 @@ def fetch_file(
     """
     for attempt in range(DOWNLOAD_TRIES):
         if attempt:
-            sleep(retry_delay)
-        target = tempfile.TemporaryFile(dir=tmp_dir)  # pylint: disable=consider-using-with
+            scan.sleep(scan.retry_delay)
+        target = tempfile.TemporaryFile(dir=scan.tmp_dir)  # pylint: disable=consider-using-with
         try:
-            if _download(client, base_url + name, target):
+            if _download(scan.client, scan.base_url + name, target):
                 return GkgFile(target)
         except (zipfile.BadZipFile, zlib.error, EOFError):
             pass
@@ -247,19 +252,13 @@ def fetch_file(
     return None
 
 
-def scan_day(  # pylint: disable=too-many-arguments,too-many-locals
+def scan_day(
     day: date,
     *,
-    client: httpx.Client,
+    scan: GdeltScan,
     stats: DayStats,
-    own_domains: frozenset[str] = frozenset(),
     kinds: tuple[str, ...] = KINDS,
     max_files: int | None = None,
-    tmp_dir: Path | None = None,
-    pause: float = PAUSE_SECONDS,
-    retry_delay: float = RETRY_DELAY_SECONDS,
-    sleep: Callable[[float], None] = time.sleep,
-    base_url: str = GDELT_BASE_URL,
 ) -> Iterator[Candidate]:
     """Read the files of a UTC day one at a time and yield the rows kept by the filter.
 
@@ -276,12 +275,9 @@ def scan_day(  # pylint: disable=too-many-arguments,too-many-locals
             stats.files_missing += len(names) - index
             return
         if index:
-            sleep(pause)
+            scan.sleep(scan.pause)
         result = FileResult()
-        yield from scan_file(
-            client, kind, name, stats=stats, result=result, own_domains=own_domains,
-            tmp_dir=tmp_dir, retry_delay=retry_delay, sleep=sleep, base_url=base_url,
-        )
+        yield from scan_file(scan, kind, name, stats=stats, result=result)
         consecutive_missing = consecutive_missing + 1 if result.missing else 0
 
 
@@ -294,33 +290,21 @@ class FileResult:
     matched: int = 0
 
 
-def scan_file(  # pylint: disable=too-many-arguments,too-many-locals
-    client: httpx.Client,
-    kind: str,
-    name: str,
-    *,
-    stats: DayStats,
-    result: FileResult,
-    own_domains: frozenset[str] = frozenset(),
-    tmp_dir: Path | None = None,
-    retry_delay: float = RETRY_DELAY_SECONDS,
-    sleep: Callable[[float], None] = time.sleep,
-    base_url: str = GDELT_BASE_URL,
+def scan_file(
+    scan: GdeltScan, kind: str, name: str, *, stats: DayStats, result: FileResult
 ) -> Iterator[Candidate]:
     """Download one file, yield the rows kept by the filter, fill `stats` and `result`.
 
     `result` is complete when the iterator ends; the temporary file is closed on every exit.
     """
-    gfile = fetch_file(
-        client, name, tmp_dir=tmp_dir, retry_delay=retry_delay, sleep=sleep, base_url=base_url
-    )
+    gfile = fetch_file(scan, name)
     if gfile is None:
         stats.files_missing += 1
         result.missing = True
         return
     rows_before, bad_before, matched_before = stats.rows, stats.bad_rows, stats.matched
     try:
-        yield from _scan_lines(gfile, name, kind == KIND_TRANSLATION, stats, own_domains)
+        yield from _scan_lines(gfile, name, kind == KIND_TRANSLATION, stats, scan.own_domains)
     finally:
         gfile.close()
     result.rows = stats.rows - rows_before

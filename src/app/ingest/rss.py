@@ -201,7 +201,7 @@ def fetch_rss_with_metadata(
     )
 
 # pylint: disable=too-many-positional-arguments
-def fetch_rss(
+def fetch_rss(  # pylint: disable=too-many-arguments
     source_key: str,
     url: str,
     timeout_seconds: float = 15.0,

@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any, cast
@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.core.categories import CATEGORY_ORDER
 from app.storage.models_sql import Article, ArticleAlias, FetchRun, Source
+
+_ROW_SCORES = ("ai_relevance_score", "freshness_score", "rank_score")
 
 
 def _publication_since(moment: datetime):
@@ -153,7 +155,7 @@ class ArticleRepo:
         actual_new = 0
         actual_duplicates = 0
         for row in normalized_rows:
-            _, is_new = self.insert_article(**row)
+            _, is_new = self.insert_article(row)
             if is_new:
                 actual_new += 1
             else:
@@ -161,54 +163,24 @@ class ArticleRepo:
         actual_duplicates += input_duplicates
         return actual_new, actual_duplicates
 
-    def insert_article(
-        self,
-        *,
-        source_id: int | None,
-        title: str,
-        url: str,
-        url_canonical: str,
-        url_canonical_hash: str,
-        published_at: datetime | None,
-        summary: str | None = None,
-        content: str | None = None,
-        ai_relevance_score: float = 0.0,
-        freshness_score: float = 0.0,
-        rank_score: float = 0.0,
-        category: str | None = None,
-        category_confidence: float | None = None,
-        **evidence_fields: Any,
-    ) -> tuple[Article, bool]:
+    def insert_article(self, row: Mapping[str, Any]) -> tuple[Article, bool]:
+        """Insert `row` (`Article` columns) as a new article, or refresh the scores and category
+        of the article stored under its canonical hash; returns (article, is_new)."""
         existing_stmt: Select[tuple[Article]] = select(Article).where(
-            Article.url_canonical_hash == url_canonical_hash
+            Article.url_canonical_hash == row["url_canonical_hash"]
         )
         existing = self.session.execute(existing_stmt).scalar_one_or_none()
+        scores = {name: row.get(name, 0.0) for name in _ROW_SCORES}
         if existing is not None:
-            existing.ai_relevance_score = ai_relevance_score
-            existing.freshness_score = freshness_score
-            existing.rank_score = rank_score
-            if category is not None:
-                existing.category = category
-                existing.category_confidence = category_confidence
+            for name, value in scores.items():
+                setattr(existing, name, value)
+            if row.get("category") is not None:
+                existing.category = row["category"]
+                existing.category_confidence = row.get("category_confidence")
             return existing, False
 
-        article = Article(
-            source_id=source_id,
-            title=title[:self._TITLE_MAX_LEN],
-            summary=summary,
-            content=content,
-            url=url,
-            url_canonical=url_canonical,
-            url_canonical_hash=url_canonical_hash,
-            published_at=published_at,
-            discovered_at=datetime.now(UTC),
-            ai_relevance_score=ai_relevance_score,
-            freshness_score=freshness_score,
-            rank_score=rank_score,
-            category=category,
-            category_confidence=category_confidence,
-            **evidence_fields,
-        )
+        article = Article(**{**row, **scores, "title": row["title"][:self._TITLE_MAX_LEN],
+                             "discovered_at": datetime.now(UTC)})
         self.session.add(article)
         self.session.flush()
         return article, True
@@ -241,7 +213,7 @@ class ArticleRepo:
         )
         return list(self.session.scalars(stmt).all())
 
-    def list_for_view(
+    def list_for_view(  # pylint: disable=too-many-arguments
         self,
         *,
         hours: int | None,
@@ -274,7 +246,7 @@ class ArticleRepo:
             for row in self.session.execute(base_stmt).all()
         ]
 
-    def list_for_agent(
+    def list_for_agent(  # pylint: disable=too-many-arguments
         self,
         *,
         hours: int | None,

@@ -185,7 +185,7 @@ def build_news_router(deps: WebDeps) -> APIRouter:
     @router.get(
         "/api/news", response_model=list[NewsItem], response_model_exclude_unset=True,
     )
-    def list_news(
+    def list_news(  # pylint: disable=too-many-arguments
         *,
         hours: int = Query(24, ge=1, le=720),
         limit: int = Query(30, ge=1, le=200),
@@ -203,7 +203,7 @@ def build_news_router(deps: WebDeps) -> APIRouter:
             sort=sort)))
 
     @router.get("/api/news/export")
-    def export_news(
+    def export_news(  # pylint: disable=too-many-arguments
         *,
         hours: int = Query(24, ge=1, le=720),
         limit: int = Query(30, ge=1, le=200),

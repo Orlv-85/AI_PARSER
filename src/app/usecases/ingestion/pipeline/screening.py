@@ -101,7 +101,7 @@ def _score_and_record(
     return (decision.status, None)
 
 
-def _screen_candidate(
+def _screen_candidate(  # pylint: disable=too-many-arguments
     *, item: object, config: SourceConfig, db_source_id: int, article_repo: ArticleRepo,
     settings: Settings, relevance_scorer: JevRelevanceScorer | None,
     admission_state: AdmissionState | None, canonical_hash: str, logger: Logger | None = None,

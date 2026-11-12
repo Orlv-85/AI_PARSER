@@ -33,7 +33,7 @@ def test_category_updates_preserve_accepted_values_on_fallback(batch) -> None:
     Base.metadata.create_all(engine)
     with sessionmaker(bind=engine)() as session:
         repo = ArticleRepo(session)
-        original, _ = repo.insert_article(**_row("existing", category="Security"))
+        original, _ = repo.insert_article(_row("existing", category="Security"))
         if batch:
             assert repo.upsert_articles_batch([
                 _row("existing", 0.7, "AI Coding"),
@@ -42,10 +42,10 @@ def test_category_updates_preserve_accepted_values_on_fallback(batch) -> None:
                 _row("duplicate", 0.8),
             ]) == (2, 2)
         else:
-            repo.insert_article(**_row("existing", 0.7, "AI Coding"))
-            repo.insert_article(**_row("new", 0.4))
-            repo.insert_article(**_row("duplicate", 0.6, "Infrastructure"))
-            repo.insert_article(**_row("duplicate", 0.8))
+            repo.insert_article(_row("existing", 0.7, "AI Coding"))
+            repo.insert_article(_row("new", 0.4))
+            repo.insert_article(_row("duplicate", 0.6, "Infrastructure"))
+            repo.insert_article(_row("duplicate", 0.8))
         session.flush()
         session.expire_all()
         assert original.category == "AI Coding"
@@ -54,7 +54,7 @@ def test_category_updates_preserve_accepted_values_on_fallback(batch) -> None:
         if batch:
             repo.upsert_articles_batch([_row("existing", 0.3)])
         else:
-            repo.insert_article(**_row("existing", 0.3))
+            repo.insert_article(_row("existing", 0.3))
         session.flush()
         session.expire_all()
         assert original.category == "AI Coding"
@@ -77,7 +77,7 @@ def test_category_filter_and_sort_apply_before_limit() -> None:
             _row("unknown", 1.0), _row("security", 0.9, "Security"),
             _row("coding-low", 0.3, "AI Coding"), _row("coding-high", 0.8, "AI Coding"),
         ):
-            repo.insert_article(**row)
+            repo.insert_article(row)
         kwargs = {"hours": 24, "limit": 3, "query": None, "days": 1, "sort": "category"}
         rows = repo.list_for_view(**kwargs)
         assert [article.url_canonical_hash for article, _, _ in rows] == [
@@ -96,9 +96,9 @@ def test_category_metadata_reaches_news_links_and_exports(tmp_path, monkeypatch)
     sessions = sessionmaker(bind=engine, autoflush=False)
     with sessions() as session:
         repo = ArticleRepo(session)
-        repo.insert_article(**_row("coding", 0.8, "AI Coding"))
-        repo.insert_article(**_row("security", 0.9, "Security"))
-        repo.insert_article(**_row("unknown", 1.0))
+        repo.insert_article(_row("coding", 0.8, "AI Coding"))
+        repo.insert_article(_row("security", 0.9, "Security"))
+        repo.insert_article(_row("unknown", 1.0))
         session.commit()
     web_module = import_module("app.web.app")
     monkeypatch.setattr(web_module, "create_all", lambda: None)

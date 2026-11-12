@@ -47,7 +47,7 @@ def _log_source_metrics(
     )
 
 
-def _process_source_result(
+def _process_source_result(  # pylint: disable=too-many-arguments
     *,
     fetch_result: FetchResult,
     config: SourceConfig,

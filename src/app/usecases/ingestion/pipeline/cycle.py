@@ -202,7 +202,7 @@ def _process_prefetched_source(
     return True
 
 
-def _record_persist_failure(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+def _record_persist_failure(  # pylint: disable=too-many-positional-arguments
     ctx: _CycleContext,
     totals: _RunTotals,
     config: SourceConfig,

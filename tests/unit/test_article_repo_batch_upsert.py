@@ -18,7 +18,7 @@ def test_upsert_articles_batch_counts_new_and_duplicates_and_updates_existing() 
     article_repo = ArticleRepo(session)
     now = datetime(2026, 2, 24, 12, 0, tzinfo=UTC)
 
-    article_repo.insert_article(
+    article_repo.insert_article(dict(
         source_id=None,
         title="Existing",
         url="https://example.com/existing",
@@ -30,7 +30,7 @@ def test_upsert_articles_batch_counts_new_and_duplicates_and_updates_existing() 
         ai_relevance_score=0.1,
         freshness_score=0.1,
         rank_score=0.1,
-    )
+    ))
 
     new_count, duplicate_count = article_repo.upsert_articles_batch(
         [

@@ -403,7 +403,7 @@ def _selector(repo: DailySignalRepo, entity_id: int) -> tuple[AIEntity, str, str
     return entity, entity.type_group, parts[2], vendor
 
 
-def add_override(repo: DailySignalRepo, *, kind: str, type_group_: str, match_key: str,
+def add_override(repo: DailySignalRepo, *, kind: str, type_group_: str, match_key: str,  # pylint: disable=too-many-arguments
                  target_base_key: str, vendor_class: str = "", target_vendor_class: str = "",
                  target_entity_key: str | None = None,
                  note: str | None = None) -> AIEntityOverride:
