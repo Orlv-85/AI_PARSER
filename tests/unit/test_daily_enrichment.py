@@ -19,6 +19,7 @@ from daily_fixtures import (  # pylint: disable=import-error,unused-import
     settings,
     write_report,
 )
+from fixture_options import options  # pylint: disable=import-error
 
 from app.config.sources import SourceConfig
 from app.core.canonical_json import encoded, fingerprint
@@ -739,8 +740,16 @@ def _row_article(*, content=SOURCE, status="confirmed", published=True, proof=Fa
     return row
 
 
-def _evidence(cache, row, *, text=SOURCE, quality="extracted", published=None,
-              title="Page title", text_sha=None, write_text=True):
+def _evidence(cache, row, **opts):
+    text, quality, published, title, text_sha, write_text = options(
+        opts,
+        text=SOURCE,
+        quality="extracted",
+        published=None,
+        title="Page title",
+        text_sha=None,
+        write_text=True,
+    )
     directory = cache.page_dir(row.url)
     if write_text:
         (directory / "text.txt").write_text(text)

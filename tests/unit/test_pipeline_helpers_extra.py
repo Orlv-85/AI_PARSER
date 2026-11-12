@@ -499,7 +499,7 @@ def test_process_html_links_two_stage_skips_item_without_row(monkeypatch) -> Non
     )
     inserted: list[object] = []
     repo = _Repo()
-    repo.insert_article = lambda row: inserted.append(row)  # type: ignore[method-assign]
+    repo.insert_article = inserted.append  # type: ignore[method-assign]
 
     for batch_mode in (False, True):
         result = _process_html_links_two_stage(

@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from fixture_options import options  # pylint: disable=import-error
 
 
 def _load_bridge_module():
@@ -307,9 +308,17 @@ def test_missing_key_fails_before_fetch_or_publish(monkeypatch) -> None:
         )
 
 
-def _daily_job(tmp_path, *, publish_exit=0, signals_exit=0, with_timeout=True, env=None,
-               args=("2026-10-03",), from_scripts_dir=False):
+def _daily_job(tmp_path, **opts):
     """Run the job script with fake docker/flock/timeout and only the tools it needs on PATH."""
+    publish_exit, signals_exit, with_timeout, env, args, from_scripts_dir = options(
+        opts,
+        publish_exit=0,
+        signals_exit=0,
+        with_timeout=True,
+        env=None,
+        args=("2026-10-03",),
+        from_scripts_dir=False,
+    )
     scripts = tmp_path / "scripts"
     scripts.mkdir()
     script = scripts / "run_daily_digest_job.sh"
@@ -603,9 +612,10 @@ def test_archive_job_script_is_isolated(tmp_path):
 WORLD_LIMITS = {"collect": 2400, "screen": 2700, "texts": 900, "screen-b": 900}
 
 
-def _world_job(tmp_path, *, enabled="true", env_file=None, lock_exit=0, fail=None, jev_key="k",
-               job="world"):
+def _world_job(tmp_path, **opts):
     """Run the world job with fake flock, timeout and docker; `fail` is {"world texts": 124}."""
+    enabled, env_file, lock_exit, fail, jev_key, job = options(
+        opts, enabled="true", env_file=None, lock_exit=0, fail=None, jev_key="k", job="world")
     scripts = tmp_path / "scripts"
     scripts.mkdir(parents=True)
     script_name = f"run_daily_{job}_job.sh"

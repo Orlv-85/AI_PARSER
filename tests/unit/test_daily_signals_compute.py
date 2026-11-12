@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from fixture_options import options  # pylint: disable=import-error
 
 from app.core.daily.signals_compute import (
     METHODOLOGY_VERSION,
@@ -28,7 +29,8 @@ D = date(2026, 10, 16)
 GENERATED = datetime(2026, 10, 17, 2, 30)
 
 
-def e(name, entity_type="model", role="primary", new=False, vendor=None, *, quote=None):
+def e(name, entity_type="model", role="primary", new=False, vendor=None, **opts):
+    quote, = options(opts, quote=None)
     return {"name": name, "type": entity_type, "role": role, "is_new": new, "vendor": vendor,
             "quote": quote or (f"Today Acme launched {name}" if new else None)}
 
@@ -41,8 +43,9 @@ class World:
         self.overrides = []
         self.summaries = {}
 
-    def article(self, day, publisher, *entities, event="model_release", title=None, at=None,
-                summary=""):
+    def article(self, day, publisher, *entities, **opts):
+        event, title, at, summary = options(
+            opts, event="model_release", title=None, at=None, summary="")
         article_id = len(self.articles) + 1
         ids = []
         for spec in entities:

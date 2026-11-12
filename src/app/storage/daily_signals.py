@@ -85,7 +85,7 @@ class SignalFailure:
 
 
 @dataclass(frozen=True)
-class NewOverride:
+class NewOverride:  # pylint: disable=too-many-instance-attributes
     """An operator override before it is stored; no `target_entity_key` means a new manual
     entity (`add_override` first reuses the one that owns the target selector)."""
 

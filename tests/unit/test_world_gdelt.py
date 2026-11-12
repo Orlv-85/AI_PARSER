@@ -9,6 +9,7 @@ from datetime import date
 from pathlib import Path
 
 import httpx
+from fixture_options import options  # pylint: disable=import-error
 from typer.testing import CliRunner
 
 from app.cli import main as cli_main
@@ -36,8 +37,9 @@ SECOND = "20261030001500.gkg.csv.zip"
 T_FIRST = "20261030000000.translation.gkg.csv.zip"
 
 
-def gkg_line(title: str, url: str, *, domain: str = "example.org", lang: str = "",
-             themes: str = "EDUCATION", extras: bool = True, columns: int = 27) -> str:
+def gkg_line(title: str, url: str, **opts) -> str:
+    domain, lang, themes, extras, columns = options(
+        opts, domain="example.org", lang="", themes="EDUCATION", extras=True, columns=27)
     cols = [""] * columns
     cols[0:5] = ["20261030000000-1", "20261030000000", "1", domain, url][:min(columns, 5)]
     if columns > 7:

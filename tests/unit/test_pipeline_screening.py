@@ -216,16 +216,15 @@ def test_screen_fresh_accept_records_decision(session, was_cached):
 
 
 @pytest.mark.parametrize(
-    ("choice", "reason", "decision", "rejected", "unresolved"),
+    "case",
     [
         ("non_ai", "NON_AI", "reject", 1, 0),
         ("non_editorial", "NON_EDITORIAL", "reject", 1, 0),
         ("insufficient_evidence", "INSUFFICIENT_EVIDENCE", "unresolved", 0, 1),
     ],
 )
-def test_screen_fresh_non_accept_counts_and_logs(  # pylint: disable=too-many-positional-arguments
-    session, choice, reason, decision, rejected, unresolved,
-):
+def test_screen_fresh_non_accept_counts_and_logs(session, case):
+    choice, reason, decision, rejected, unresolved = case
     state, log = AdmissionState(enabled=True), Log()
     assert _screen(session, FakeScorer(_assessment(choice)), state, log) == (decision, None)
     assert _counters(state) == (1, 0, rejected, unresolved, False, True)

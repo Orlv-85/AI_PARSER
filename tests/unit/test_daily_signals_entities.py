@@ -4,6 +4,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+from fixture_options import options  # pylint: disable=import-error
 
 from app.core.daily.signals_entities import (
     Mention,
@@ -26,8 +27,16 @@ FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "daily_signals"
 D = date(2026, 10, 16)
 
 
-def mention(mention_id, name, entity_type="model", vendor=None, *, canonical=None, day=D,  # pylint: disable=too-many-arguments
-            article_id=None, publisher="example.com", role="primary", is_new=False):
+def mention(mention_id, name, entity_type="model", vendor=None, **opts):
+    canonical, day, article_id, publisher, role, is_new = options(
+        opts,
+        canonical=None,
+        day=D,
+        article_id=None,
+        publisher="example.com",
+        role="primary",
+        is_new=False,
+    )
     return Mention(mention_id=mention_id, scope_day=day, article_id=article_id or mention_id,
                    publisher=publisher, name=name, canonical_name=canonical or name,
                    entity_type=entity_type, vendor=vendor, role=role, is_new=is_new)
@@ -275,7 +284,9 @@ def test_entity_key_stable_when_vendor_first_named():
     assert after.entities["auto:artifact:helixworld"].vendor == "Noiz AI"
 
 
-def merge(override_id, source, target, *, group="artifact", source_class="", target_class=""):
+def merge(override_id, source, target, **opts):
+    group, source_class, target_class = options(
+        opts, group="artifact", source_class="", target_class="")
     return Override(override_id=override_id, kind="merge", type_group=group, match_key=source,
                     vendor_class=source_class, target_base_key=target,
                     target_vendor_class=target_class, target_entity_key=f"manual:{override_id}")

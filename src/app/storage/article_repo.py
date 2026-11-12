@@ -15,7 +15,7 @@ _ROW_SCORES = ("ai_relevance_score", "freshness_score", "rank_score")
 
 
 @dataclass(frozen=True)
-class ViewFilter:
+class ViewFilter:  # pylint: disable=too-many-instance-attributes
     """Which articles a list shows: a `hours` window, or `days` with a date range; text; order."""
 
     hours: int | None

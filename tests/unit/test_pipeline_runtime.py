@@ -145,10 +145,13 @@ def _settings(**overrides) -> Settings:
 
 def _run(
     monkeypatch, configs: list[SourceConfig], *, settings: Settings | None = None,
-    source_repo: type = _SourceRepo, article_repo: type = _ArticleRepo,
-    session: _Session | None = None, logger: _Logger | None = None, **patches: object,
+    source_repo: type = _SourceRepo, **patches: Any,
 ) -> FetchSummary:
-    """Run one cycle; `patches` replace fetch functions (pipeline.fetch, pipeline.html_links)."""
+    """Run one cycle; `patches` replace fetch functions (pipeline.fetch, pipeline.html_links)
+    and may also set `article_repo`, `session` and `logger`."""
+    article_repo: type = patches.pop("article_repo", _ArticleRepo)
+    session: _Session | None = patches.pop("session", None)
+    logger: _Logger | None = patches.pop("logger", None)
     current = session or _Session()
     fetchers = {name: patches.get(name) or _no_fetch(name) for name in (
         "fetch_rss", "fetch_html_links", "fetch_html_links_with_metadata", "fetch_html_article",
