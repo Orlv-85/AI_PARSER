@@ -92,7 +92,7 @@ def _sample(title: object, url: object, date: object = "") -> dict[str, str]:
             "date": str(date or "")[:80]}
 
 
-def probe_source(client: httpx.Client, url: str) -> SourceProbe:
+def probe_source(client: httpx.Client, url: str) -> SourceProbe:  # pylint: disable=too-many-locals
     final_url, content = _read_source(client, url)
     parsed = feedparser.parse(content)
     if parsed.get("version") and parsed.entries:

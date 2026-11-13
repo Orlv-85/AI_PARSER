@@ -524,7 +524,7 @@ def test_save_report_integrity_error_path(session, repo, monkeypatch):
     assert session.scalar(select(func.count(DailySignalReport.id))) == 1
 
 
-def test_synthetic_year_recompute_time(session, repo, capsys):
+def test_synthetic_year_recompute_time(session, repo, capsys):  # pylint: disable=too-many-locals
     rng = random.Random(7)
     start = date(2026, 10, 10)
     names = [f"Entity {i}" for i in range(400)]

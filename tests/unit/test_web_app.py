@@ -36,7 +36,7 @@ def _no_daily_signals(monkeypatch) -> None:
     monkeypatch.setattr(signals_reads, "DailySignalRepo", _NoSignalsRepo)
 
 
-def test_web_app_pages_and_update_flow(monkeypatch, tmp_path) -> None:
+def test_web_app_pages_and_update_flow(monkeypatch, tmp_path) -> None:  # pylint: disable=too-many-locals
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()
 

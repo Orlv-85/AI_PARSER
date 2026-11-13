@@ -115,7 +115,6 @@ disable = [
   "duplicate-code",
   "trailing-newlines",
   "line-too-long",
-  "too-many-locals",
   "broad-exception-caught",
   "logging-too-many-args",
   "invalid-name",

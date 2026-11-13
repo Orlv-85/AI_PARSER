@@ -302,7 +302,7 @@ def render_week(signals: PeriodSignalsResponse) -> str:
             f"{_entities(signals)}{new}{_risers(signals)}{_event_mix(signals)}</div>")
 
 
-def render_picker(periods: Sequence[tuple[date, date, str]], current: date | None,
+def render_picker(periods: Sequence[tuple[date, date, str]], current: date | None,  # pylint: disable=too-many-locals
                   kind: str = "week") -> str:
     """Plain links between stored periods (newest first): previous, next and the list."""
     if not periods:

@@ -14,7 +14,7 @@ from app.storage.models_sql import Base
 from app.web.app import create_app
 
 
-def test_api_e2e_update_and_read_news(monkeypatch, tmp_path) -> None:
+def test_api_e2e_update_and_read_news(monkeypatch, tmp_path) -> None:  # pylint: disable=too-many-locals
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("AINEWS_SOURCES_PATH", str(tmp_path / "sources.yaml"))
     monkeypatch.setenv("AINEWS_DATABASE_URL", f"sqlite:///{tmp_path}/e2e.db")

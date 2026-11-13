@@ -144,7 +144,7 @@ class WeeklyAnalyticsRepo:
         ]
         return entries[:limit]
 
-    def save_weekly_report(
+    def save_weekly_report(  # pylint: disable=too-many-locals
         self, *, report_date: date, draft: WeeklyDraft | None = None,
     ) -> WeeklyAnalyticsReport:
         draft = draft or WeeklyDraft()

@@ -308,7 +308,7 @@ def test_missing_key_fails_before_fetch_or_publish(monkeypatch) -> None:
         )
 
 
-def _daily_job(tmp_path, **opts):
+def _daily_job(tmp_path, **opts):  # pylint: disable=too-many-locals
     """Run the job script with fake docker/flock/timeout and only the tools it needs on PATH."""
     publish_exit, signals_exit, with_timeout, env, args, from_scripts_dir = options(
         opts,
@@ -612,7 +612,7 @@ def test_archive_job_script_is_isolated(tmp_path):
 WORLD_LIMITS = {"collect": 2400, "screen": 2700, "texts": 900, "screen-b": 900}
 
 
-def _world_job(tmp_path, **opts):
+def _world_job(tmp_path, **opts):  # pylint: disable=too-many-locals
     """Run the world job with fake flock, timeout and docker; `fail` is {"world texts": 124}."""
     enabled, env_file, lock_exit, fail, jev_key, job = options(
         opts, enabled="true", env_file=None, lock_exit=0, fail=None, jev_key="k", job="world")

@@ -130,7 +130,7 @@ def _unique(items: list[Target]) -> list[Target]:
     return sorted(set(items), key=lambda t: (t.path, t.line, t.module, t.name))
 
 
-def _targets_in_file(path: Path) -> tuple[list[Target], list[Target]]:
+def _targets_in_file(path: Path) -> tuple[list[Target], list[Target]]:  # pylint: disable=too-many-locals
     """(module-attribute targets, object-attribute targets) patched by one test file."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
     shown = path.relative_to(TESTS.parent).as_posix()

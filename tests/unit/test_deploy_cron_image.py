@@ -19,7 +19,7 @@ def _create_legacy_tooling(tmp_path) -> tuple[Path, Path]:
 
 
 @pytest.mark.parametrize("legacy_container_present", [False, True])
-def test_deploy_updates_cron_to_use_the_deployed_image(tmp_path, legacy_container_present) -> None:
+def test_deploy_updates_cron_to_use_the_deployed_image(tmp_path, legacy_container_present) -> None:  # pylint: disable=too-many-locals
     scripts = tmp_path / "scripts"
     scripts.mkdir()
     script = scripts / "deploy_prod.sh"

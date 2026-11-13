@@ -18,7 +18,7 @@ exit 0
 """
 
 
-def _run_deploy(tmp_path, *, images, in_use, previous, **opts):
+def _run_deploy(tmp_path, *, images, in_use, previous, **opts):  # pylint: disable=too-many-locals
     fail_rmi, fail_prune, extra_env = options(opts, fail_rmi="none", fail_prune="", extra_env=None)
     scripts = tmp_path / "scripts"
     scripts.mkdir()

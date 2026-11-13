@@ -450,7 +450,7 @@ class DailySignalRepo:  # pylint: disable=too-many-public-methods
                                  failed=counts[day]["failed"], skipped=counts[day]["skipped"])
                 for day, n in items.items()}
 
-    def observations(self, result: Reconciliation, evidence: Mapping[int, SignalMention],
+    def observations(self, result: Reconciliation, evidence: Mapping[int, SignalMention],  # pylint: disable=too-many-locals
                      days: Iterable[date]) -> dict[date, list[ArticleObs]]:
         wanted = set(days)
         if not wanted:

@@ -231,7 +231,7 @@ def _skip_reason(data: DayInput) -> str | None:
     return None if data.candidates else "no_assessments"
 
 
-def build_bulletin(data: DayInput, lib: PhraseLibrary) -> BuildResult:
+def build_bulletin(data: DayInput, lib: PhraseLibrary) -> BuildResult:  # pylint: disable=too-many-locals
     """The bulletin of the day, or a skipped result with the reason."""
     reason = _skip_reason(data)
     if reason:

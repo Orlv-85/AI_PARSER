@@ -80,7 +80,7 @@ def _extracted(coverage: Mapping[date, DayCoverage], days: Iterable[date]) -> in
     return sum(coverage[d].extracted for d in days)
 
 
-def trend_delta(coverage: Mapping[date, DayCoverage],
+def trend_delta(coverage: Mapping[date, DayCoverage],  # pylint: disable=too-many-locals
                 observations: Mapping[date, Sequence[ArticleObs]],
                 windows: tuple[Sequence[date], Sequence[date]], *, excluded: set[str],
                 t: Thresholds) -> list[TrendRow]:
