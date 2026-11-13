@@ -17,6 +17,7 @@ from app.usecases.weekly_analytics import (
     weekly_freshness,
 )
 from app.web.models import (
+    NewsDigestItemPayload,
     WeeklyAnalyticsFreshnessResponse,
     WeeklyAnalyticsItemPayload,
     WeeklyAnalyticsPayload,
@@ -104,7 +105,7 @@ def _build_weekly_report_list_response(
     )
 
 
-def _items(items: list[WeeklyAnalyticsItemPayload]) -> list[dict[str, str]]:
+def _items(items: list[NewsDigestItemPayload]) -> list[dict[str, str]]:
     return [{"title": item.title, "summary": item.summary, "url": str(item.url)}
             for item in items]
 

@@ -386,6 +386,7 @@ def test_daily_scorer_opens_capped_admission_journal(tmp_path, monkeypatch, capl
     caps = {"total": 2_000_000, "jev": 1_000_000, "deepseek": 1_000_000}
     with caplog.at_level("INFO"):
         with jev_relevance_scorer(settings, getLogger("jev-test")) as scorer:
+            assert scorer is not None
             journal = scorer.payment_journal
             assert journal.caps == caps
             assert journal.transport_review_reason == ADMISSION_TRANSPORT_REVIEW_REASON
@@ -409,6 +410,7 @@ def test_daily_scorer_closes_journal_when_the_run_fails(tmp_path, monkeypatch, c
                         _env_file=None)
     with caplog.at_level("INFO"), pytest.raises(RuntimeError, match="^run failed$"):
         with jev_relevance_scorer(settings, getLogger("jev-test")) as scorer:
+            assert scorer is not None
             journal = scorer.payment_journal
             raise RuntimeError("run failed")
     with pytest.raises(sqlite3.ProgrammingError):
@@ -421,5 +423,6 @@ def test_scorer_without_daily_enrichment_has_no_journal(tmp_path, monkeypatch) -
     settings = Settings(jev_enabled=True, jev_api_key="k", daily_enrichment_enabled=False,
                         _env_file=None)
     with jev_relevance_scorer(settings, getLogger("jev-test")) as scorer:
+        assert scorer is not None
         assert scorer.payment_journal is None
     assert not (tmp_path / "data").exists()

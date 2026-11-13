@@ -104,5 +104,5 @@ def collect_day(  # pylint: disable=too-many-locals
     summary.pruned_candidates, summary.pruned_files = repo.prune()
     session.commit()
     if logger is not None:
-        log_event(logger, event="world_collect_finished", **summary.as_dict())
+        log_event(logger, level=logging.INFO, event="world_collect_finished", **summary.as_dict())
     return summary

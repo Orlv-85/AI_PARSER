@@ -90,6 +90,13 @@ ignore_missing_imports = true
 namespace_packages = true
 explicit_package_bases = true
 files = ["src", "tests"]
+mypy_path = "src"
+plugins = ["pydantic.mypy"]
+
+# Constructor arguments stay untyped (init_typed = false): pydantic coerces str into HttpUrl,
+# Literal and date fields at runtime, and the code relies on that. Unknown keywords are errors.
+[tool.pydantic-mypy]
+init_forbid_extra = true
 
 [tool.pylint.main]
 py-version = "3.14"

@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Any, cast
 
 from app.storage.article_repo import ArticleRepo, ViewFilter
 
@@ -12,7 +13,7 @@ def test_list_for_agent_delegates_to_list_for_view(monkeypatch) -> None:
         return expected
 
     monkeypatch.setattr(ArticleRepo, "list_for_view", _fake_list_for_view)
-    repo = ArticleRepo(session=object())
+    repo = ArticleRepo(session=cast(Any, object()))
     view = ViewFilter(hours=None, days=30, sort="published", date_from=date(2026, 2, 20),
                       date_to=date(2026, 2, 21))
 
@@ -37,9 +38,9 @@ def test_get_article_for_agent_returns_none_and_row() -> None:
         def execute(self, _stmt):
             return _ExecResult(self._row)
 
-    repo_none = ArticleRepo(_Session(None))
+    repo_none = ArticleRepo(cast(Any, _Session(None)))
     assert repo_none.get_article_for_agent(article_id=1) is None
 
     row = ("article", "src-key", "Source Name")
-    repo_row = ArticleRepo(_Session(row))
+    repo_row = ArticleRepo(cast(Any, _Session(row)))
     assert repo_row.get_article_for_agent(article_id=2) == row

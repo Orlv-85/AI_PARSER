@@ -47,14 +47,14 @@ class SourceRepo:
             )
             self.session.execute(upsert_stmt)
             self.session.flush()
-            refresh_stmt: Select[tuple[Source]] = (
+            refresh_stmt: Select[Source] = (
                 select(Source)
                 .where(Source.source_key == source_config.id)
                 .execution_options(populate_existing=True)
             )
             return self.session.execute(refresh_stmt).scalar_one()
 
-        stmt: Select[tuple[Source]] = select(Source).where(Source.source_key == source_config.id)
+        stmt: Select[Source] = select(Source).where(Source.source_key == source_config.id)
         source = self.session.execute(stmt).scalar_one_or_none()
         if source is None:
             source = Source(source_key=source_config.id)
@@ -71,7 +71,7 @@ class SourceRepo:
         return source
 
     def list_enabled_sources(self) -> list[Source]:
-        stmt: Select[tuple[Source]] = select(Source).where(Source.enabled.is_(True))
+        stmt: Select[Source] = select(Source).where(Source.enabled.is_(True))
         return list(self.session.scalars(stmt).all())
 
     def disable_source(self, source_id: int) -> Source:
@@ -101,7 +101,7 @@ class SourceRepo:
                 return approved_source
 
         source_url = read_str(candidate, "normalized_url")
-        existing_stmt: Select[tuple[Source]] = (
+        existing_stmt: Select[Source] = (
             select(Source).where(Source.url == source_url).limit(1)
         )
         existing = self.session.execute(existing_stmt).scalar_one_or_none()

@@ -1,7 +1,7 @@
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import Select, case, delete, desc, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
@@ -94,7 +94,7 @@ class ArticleRepo:
         self.session = session
 
     def exists_by_canonical_hash(self, canonical_hash: str) -> bool:
-        stmt: Select[tuple[Article]] = (
+        stmt: Select[Article] = (
             select(Article)
             .where(Article.url_canonical_hash == canonical_hash)
             .limit(1)
@@ -180,7 +180,7 @@ class ArticleRepo:
     def insert_article(self, row: Mapping[str, Any]) -> tuple[Article, bool]:
         """Insert `row` (`Article` columns) as a new article, or refresh the scores and category
         of the article stored under its canonical hash; returns (article, is_new)."""
-        existing_stmt: Select[tuple[Article]] = select(Article).where(
+        existing_stmt: Select[Article] = select(Article).where(
             Article.url_canonical_hash == row["url_canonical_hash"]
         )
         existing = self.session.execute(existing_stmt).scalar_one_or_none()
@@ -207,7 +207,7 @@ class ArticleRepo:
         min_ai_relevance: float = 0.0,
     ) -> list[Article]:
         window_start = datetime.now(UTC) - timedelta(hours=hours)
-        stmt: Select[tuple[Article]] = (
+        stmt: Select[Article] = (
             select(Article)
             .where(_publication_since(window_start))
             .where(Article.ai_relevance_score >= min_ai_relevance)
@@ -218,7 +218,7 @@ class ArticleRepo:
 
     def search(self, *, query: str, days: int = 7, limit: int = 100) -> list[Article]:
         window_start = datetime.now(UTC) - timedelta(days=days)
-        stmt: Select[tuple[Article]] = (
+        stmt: Select[Article] = (
             select(Article)
             .where(_publication_since(window_start))
             .where(_text_match(query))
@@ -309,7 +309,9 @@ class ArticleRepo:
             .group_by(Article.publication_day)
         ).all()
         for day, count in day_counts:
-            published_counts[day] = published_counts.get(day, 0) + int(count)
+            # The >= / <= filters drop rows without a publication_day.
+            key = cast(date, day)
+            published_counts[key] = published_counts.get(key, 0) + int(count)
         discovered_counts = self._daily_article_counts(
             field=Article.discovered_at,
             start_at=start_at,

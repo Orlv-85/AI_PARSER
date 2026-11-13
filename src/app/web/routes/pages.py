@@ -222,9 +222,9 @@ async def _login_response(deps: WebDeps, request: Request) -> JSONResponse:
         body = LoginRequest()
     username, password = body.username, body.password
     username_ok = bool(settings.auth_username) and username == settings.auth_username
-    password_ok = bool(settings.auth_password_hash) and verify_password(
+    password_ok = bool(settings.auth_password_hash and verify_password(
         password, settings.auth_password_hash
-    )
+    ))
     if not (username_ok and password_ok):
         _LOGGER.info("login_failed")
         raise HTTPException(status_code=401, detail="Invalid username or password")

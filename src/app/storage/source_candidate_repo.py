@@ -1,4 +1,5 @@
 import json
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, cast
 
@@ -64,7 +65,7 @@ class SourceCandidateRepo:
         batch_id: int | None = None,
         candidate_type: str = "unknown",
     ) -> tuple[SourceCandidate, bool]:
-        stmt: Select[tuple[SourceCandidate]] = select(SourceCandidate).where(
+        stmt: Select[SourceCandidate] = select(SourceCandidate).where(
             SourceCandidate.normalized_url == normalized_url
         )
         existing = self.session.execute(stmt).scalar_one_or_none()
@@ -85,7 +86,7 @@ class SourceCandidateRepo:
         self,
         *,
         batch_id: int | None,
-        candidates: list[object],
+        candidates: Sequence[object],
     ) -> tuple[list[SourceCandidate], int]:
         rows: list[SourceCandidate] = []
         accepted_count = 0
@@ -119,7 +120,7 @@ class SourceCandidateRepo:
         status: str | None = None,
         validation_status: str | None = None,
     ) -> list[SourceCandidate]:
-        stmt: Select[tuple[SourceCandidate]] = select(SourceCandidate)
+        stmt: Select[SourceCandidate] = select(SourceCandidate)
         if batch_id is not None:
             stmt = stmt.where(SourceCandidate.batch_id == batch_id)
         if candidate_ids:
@@ -132,7 +133,7 @@ class SourceCandidateRepo:
         return list(self.session.scalars(stmt).all())
 
     def find_by_normalized_url(self, normalized_url: str) -> SourceCandidate | None:
-        stmt: Select[tuple[SourceCandidate]] = (
+        stmt: Select[SourceCandidate] = (
             select(SourceCandidate).where(SourceCandidate.normalized_url == normalized_url).limit(1)
         )
         return self.session.execute(stmt).scalar_one_or_none()

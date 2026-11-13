@@ -244,12 +244,23 @@ def _month_thresholds(data: PeriodInput) -> Thresholds:
     """The daily rule with the month minimums of `PeriodThresholds` (counts are month totals)."""
     t = data.limits
     return replace(
-        data.daily, rising_min_current=t.month_rising_min_current,
-        rising_min_delta=t.month_rising_min_delta, rising_ratio=t.month_rising_ratio,
-        rising_min_publishers=t.month_rising_min_publishers, rising_max=t.month_rising_max,
-        cooling_min_previous=t.month_cooling_min_previous,
-        cooling_min_delta=t.month_cooling_min_delta, cooling_ratio=t.month_cooling_ratio,
-        cooling_min_publishers=t.month_cooling_min_publishers, cooling_max=t.month_cooling_max)
+        data.daily, rising_min_current=_month(t.month_rising_min_current),
+        rising_min_delta=_month(t.month_rising_min_delta),
+        rising_ratio=_month(t.month_rising_ratio),
+        rising_min_publishers=_month(t.month_rising_min_publishers),
+        rising_max=_month(t.month_rising_max),
+        cooling_min_previous=_month(t.month_cooling_min_previous),
+        cooling_min_delta=_month(t.month_cooling_min_delta),
+        cooling_ratio=_month(t.month_cooling_ratio),
+        cooling_min_publishers=_month(t.month_cooling_min_publishers),
+        cooling_max=_month(t.month_cooling_max))
+
+
+def _month[T](value: T | None) -> T:
+    """A month_* threshold; only week thresholds leave them None (`PeriodThresholds.for_kind`)."""
+    if value is None:
+        raise ValueError("month thresholds are not set")
+    return value
 
 
 def _month_windows(data: PeriodInput) -> tuple[list[date], list[date]] | None:

@@ -38,23 +38,28 @@ def test_bulletin_store_postgres() -> None:
                               0.9, "Work", "organisation", 0.0, "event", article_id=17)
         data = DayInput(day, "ready", False, 1, 0, 0, None, (candidate,), 1)
         built = build_bulletin(data, load_phrases()).bulletin
+        assert built is not None
         numbers = {"assessed": 1, "digest_articles": 1}
         with maker() as session:
             repo = BulletinRepo(session)
             assert repo.save(day, bulletin=built, numbers=numbers) is True
             session.commit()
-            assert repo.get(day).payload["key_results"][0]["article_ids"] == [17]
+            row = repo.get(day)
+            assert row is not None
+            assert row.payload["key_results"][0]["article_ids"] == [17]
             built.headline = "A CHANGED HEADLINE"
             assert repo.save(day, bulletin=built, numbers=numbers) is True
             session.commit()
             row = repo.get(day)
+            assert row is not None
             assert row.payload == built.as_dict()
             row.telegram_message_id = 42
             session.commit()
             assert repo.save(day, bulletin=None, reason="signals_partial", numbers={}) is False
             session.commit()
-            assert repo.get(day).payload == built.as_dict()
-            assert repo.get(day).telegram_message_id == 42
+            row = repo.get(day)
+            assert row is not None
+            assert (row.payload, row.telegram_message_id) == (built.as_dict(), 42)
     finally:
         engine.dispose()
         with admin.begin() as connection:

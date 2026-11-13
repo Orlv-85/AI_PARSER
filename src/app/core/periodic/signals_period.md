@@ -50,7 +50,8 @@ The numbers live in the code: fields of `PeriodThresholds` (by kind) in `period_
   `breadth_ratio`, `quiet_items`, and the caps and minimums of the lists below. Tests:
   `test_thresholds_by_kind`. The month risers have their own `month_*` minimums in the same
   class (see "Risers and coolers (month)"); a week payload does not carry them. Tests:
-  `test_a_week_payload_does_not_change_with_the_month_thresholds`.
+  `test_a_week_payload_does_not_change_with_the_month_thresholds`. A month rule run without a
+  `month_*` value raises `ValueError` (`_month`). Tests: `test_a_missing_month_threshold_fails_loudly`.
 
 **Status** (first rule that holds wins)
 - `unavailable`: no day of the period has a usable snapshot.

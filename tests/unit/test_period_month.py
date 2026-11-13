@@ -20,7 +20,7 @@ from sqlalchemy.orm import sessionmaker
 from app.config.settings import Settings
 from app.core.daily.signals_entities import Entity
 from app.core.daily.signals_model import ArticleObs, DayCoverage, EntityMention
-from app.core.periodic.period_compute import compute_period, payload_hash
+from app.core.periodic.period_compute import _month, compute_period, payload_hash
 from app.core.periodic.period_model import (
     MONTH,
     WEEK,
@@ -119,6 +119,13 @@ def test_month_risers_respect_the_month_minimums():
                       publishers=t.month_rising_min_publishers - 1)
     assert compute_period(month_input(few))["rising"] == []
 
+
+
+def test_a_missing_month_threshold_fails_loudly():
+    # Only week thresholds leave month_* None; a zero is a set value, not a missing one.
+    assert _month(0) == 0
+    with pytest.raises(ValueError, match="^month thresholds are not set$"):
+        _month(None)
 
 def test_month_risers_need_a_complete_previous_month():
     world = month_world(current={"Alpha": 30}, previous={"Alpha": 5}, prev_days=23)

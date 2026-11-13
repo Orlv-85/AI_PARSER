@@ -78,7 +78,7 @@ def _answers(session: Session, articles: list[Article]) -> dict[str, WorldChange
             WorldChangeAssessment.question_version == WORLD_CHANGE_VERSION))}
 
 
-def _source_names(session: Session, articles: list[Article]) -> dict[int, str]:
+def _source_names(session: Session, articles: list[Article]) -> dict[int | None, str]:
     source_ids = {a.source_id for a in articles if a.source_id is not None}
     return {row.id: row.name for row in session.execute(
         select(Source.id, Source.name).where(Source.id.in_(source_ids)))}
