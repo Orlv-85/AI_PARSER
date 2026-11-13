@@ -202,12 +202,15 @@ scripts/run_daily_digest_job.sh (02:00 UTC, after the digest)
   -> ai-news daily-signals                       src/app/cli/daily.py: daily_signals
   -> run_signals                                 usecases/daily/signals.py
        _gate                    flag AINEWS_DAILY_SIGNALS_ENABLED + DS key; else state disabled/missing_provider_key
-       repo.replace_membership  digest items of D -> articles (exact URL, then canonical hash)
+       _replace_memberships     repo.replace_membership: digest items of D -> articles (exact URL,
+                                then canonical hash)
        _extract_days            one DeepSeek call per in-scope article, via SignalsLedger
-       recompute_reports        usecases/daily/signals_recompute.py: reconcile entities, digest text,
+       _recompute               recompute_reports, usecases/daily/signals_recompute.py: reconcile
+                                entities, digest text (_plan_days picks the days; _write_changed),
                                 compute_snapshot per day, store if payload changed; settled days and
                                 days that lost articles keep their snapshot
-       _briefs                  one brief call per target day (paid runs only), via a second ledger run
+       _brief_or_error          _briefs: one brief call per target day (paid runs only), via a second
+                                ledger run; a failure becomes the brief's terminal_reason
   -> JSON run report (stdout + data/daily-signals/runs/<run_id>.json)
 
 GET /api/news/daily-signals?date=D               web/routes/common.py: _read_daily_signals
