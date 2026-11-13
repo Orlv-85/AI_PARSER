@@ -42,7 +42,7 @@ from app.storage.world import (
     WorldRepo,
 )
 from app.usecases.bulletin.assessor import open_assessor
-from app.usecases.world_screen import ScreenOptions, open_world_assessor, rank_clusters, run_screen
+from app.usecases.world.screen import ScreenOptions, open_world_assessor, rank_clusters, run_screen
 
 DAY = date(2026, 10, 30)
 TODAY = date(2026, 11, 1)

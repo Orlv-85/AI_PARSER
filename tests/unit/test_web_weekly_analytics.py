@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import get_settings
 from app.storage.models_sql import Article, Base, FetchRun, Source
-from app.storage.repos import WeeklyAnalyticsRepo
+from app.storage.weekly_analytics import WeeklyAnalyticsRepo
 from app.usecases import digest as digest_usecases
 from app.usecases import weekly_analytics as weekly_usecases
 from app.usecases.daily import signals_reads

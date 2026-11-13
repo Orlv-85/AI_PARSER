@@ -23,7 +23,7 @@ from app.core.world.gdelt import (
 )
 from app.storage.models_sql import Base, WorldCandidate, WorldFile
 from app.storage.world import FILE_DONE, FILE_MISSING, WORLD_RETENTION_DAYS, FileOutcome, WorldRepo
-from app.usecases.world_collect import collect_day, yesterday_utc
+from app.usecases.world.collect import collect_day, yesterday_utc
 
 DAY = date(2026, 10, 30)
 NAMES = day_file_names(DAY)

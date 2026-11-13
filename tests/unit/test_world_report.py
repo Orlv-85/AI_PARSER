@@ -29,7 +29,7 @@ from app.storage.world import (
     STATE_SCREENED_OUT,
     STATE_TEXT_READY,
 )
-from app.usecases.world_report import build_report
+from app.usecases.world.report import build_report
 
 DAY = date(2026, 10, 30)
 

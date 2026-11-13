@@ -31,7 +31,7 @@ from app.storage.world import (
     WorldRepo,
 )
 from app.usecases.archive.capture import PageFetch, archive_articles, download_documents
-from app.usecases.world_screen import TextSource, rank_clusters
+from app.usecases.world.screen import TextSource, rank_clusters
 
 TEXT_PREFIX = "text"
 UNKNOWN_ISSUE = "unknown"
