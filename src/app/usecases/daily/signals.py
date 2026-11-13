@@ -72,7 +72,11 @@ from app.storage.daily_signals_ledger import (
 )
 from app.storage.journal_files import private_write
 from app.storage.models_sql import AIEntity, AIEntityOverride, Article
-from app.usecases.daily.signals_recompute import RecomputeScope, recompute_reports
+from app.usecases.daily.signals_recompute import (
+    RecomputeResult,
+    RecomputeScope,
+    recompute_reports,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -394,19 +398,61 @@ def _incomplete_days(repo: DailySignalRepo, days: list[date],
     return out
 
 
-def run_signals(session: Session, settings: Settings, options: RunOptions,  # pylint: disable=too-many-locals
-                env: RunEnv = DEFAULT_ENV) -> RunReport:
-    """One bounded signals run; returns the run report (no key, no article text)."""
-    now = env.now
-    started = env.clock()
-    run_id = now().strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
-    days = run_days(options)
-    report: RunReport = {
+def _new_report(run_id: str, options: RunOptions, days: list[date]) -> RunReport:
+    return {
         "run_id": run_id, "report_date": options.report_date.isoformat(),
         "extraction_version": EXTRACTION_VERSION, "state": "ok", "terminal_reason": None,
         "days": [d.isoformat() for d in days], "missing_days": [],
         "run": {"calls": 0, "usd": 0.0, "states": {}}, "articles": {}, "progress": 0,
         "incomplete_days": {}, "reports_written": [], "reports_unchanged": 0, "brief": None}
+
+
+def _replace_memberships(session: Session, repo: DailySignalRepo, days: list[date],
+                         report: RunReport) -> None:
+    """Rebuild each day's digest membership; a day without a digest goes to missing_days."""
+    for day in days:
+        if not repo.replace_membership(day):
+            report["missing_days"].append(day.isoformat())
+        session.commit()
+
+
+def _recompute(session: Session, repo: DailySignalRepo, options: RunOptions, days: list[date],
+               now: Callable[[], datetime]) -> RecomputeResult:
+    # Through the latest completed day, so a backfill never leaves later reports stale (F1).
+    until = max(options.report_date, now().date() - timedelta(days=1))
+    result = recompute_reports(repo, until, RecomputeScope(options.recompute_all, days[0]),
+                               now=now())
+    session.commit()
+    return result
+
+
+def _brief_or_error(repo: DailySignalRepo, settings: Settings, options: RunOptions, *,
+                    extraction_micro: int, setup: _LedgerSetup) -> BriefReport:
+    try:
+        return _briefs(repo, settings, options, extraction_micro=extraction_micro, setup=setup)
+    except Exception as error:  # pylint: disable=broad-exception-caught
+        # A brief failure never changes the extraction result or the stored snapshots.
+        repo.session.rollback()
+        LOGGER.exception("daily_signals_brief_failed")
+        return {"model": getattr(settings, "daily_signals_brief_model", None),
+                "days": {},
+                "run": {"calls": 0, "usd": 0.0},
+                "terminal_reason": f"error:{type(error).__name__}"}
+
+
+def _save_run(options: RunOptions, report: RunReport) -> None:
+    runs = options.cache_dir / "runs"
+    runs.mkdir(parents=True, exist_ok=True, mode=0o700)
+    private_write(runs / f"{report['run_id']}.json", report)
+
+
+def run_signals(session: Session, settings: Settings, options: RunOptions,
+                env: RunEnv = DEFAULT_ENV) -> RunReport:
+    """One bounded signals run; returns the run report (no key, no article text)."""
+    started = env.clock()
+    run_id = env.now().strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
+    days = run_days(options)
+    report = _new_report(run_id, options, days)
     repo = DailySignalRepo(session, comparable_from=settings.daily_signals_comparable_from,
                            publisher_overrides=settings.weekly_publisher_overrides)
     key = settings.ds_api_key.get_secret_value().strip() if settings.ds_api_key else ""
@@ -414,10 +460,7 @@ def run_signals(session: Session, settings: Settings, options: RunOptions,  # py
     if gate is not None:
         report["state"] = gate
         return report
-    for day in days:
-        if not repo.replace_membership(day):
-            report["missing_days"].append(day.isoformat())
-        session.commit()
+    _replace_memberships(session, repo, days, report)
     counts: Counter[str] = Counter()
     extraction_micro = 0
     setup = _LedgerSetup(options.cache_dir / "ledger.sqlite3", run_id,
@@ -427,14 +470,10 @@ def run_signals(session: Session, settings: Settings, options: RunOptions,  # py
         report["state"] = "recompute_only"
     else:
         options.cache_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-        ledger = setup.open(options.max_calls, microdollars(options.max_usd))
-        extraction_micro = _extract_days(repo, ledger, options=options, report=report,
-                                         counts=counts)
-    # Through the latest completed day, so a backfill never leaves later reports stale (F1).
-    until = max(options.report_date, now().date() - timedelta(days=1))
-    result = recompute_reports(repo, until, RecomputeScope(options.recompute_all, days[0]),
-                               now=now())
-    session.commit()
+        extraction_micro = _extract_days(
+            repo, setup.open(options.max_calls, microdollars(options.max_usd)),
+            options=options, report=report, counts=counts)
+    result = _recompute(session, repo, options, days, env.now)
     report.update({
         "reports_written": [d.isoformat() for d in result.written],
         "reports_unchanged": result.unchanged, "reports_kept": result.kept,
@@ -443,22 +482,11 @@ def run_signals(session: Session, settings: Settings, options: RunOptions,  # py
         "articles": dict(sorted(counts.items())),
         "incomplete_days": _incomplete_days(repo, days, report["terminal_reason"])})
     if not options.recompute_only:
-        try:
-            report["brief"] = _briefs(repo, settings, options,
-                                      extraction_micro=extraction_micro, setup=setup)
-        except Exception as error:  # pylint: disable=broad-exception-caught
-            # A brief failure never changes the extraction result or the stored snapshots.
-            session.rollback()
-            LOGGER.exception("daily_signals_brief_failed")
-            report["brief"] = {"model": getattr(settings, "daily_signals_brief_model", None),
-                               "days": {},
-                               "run": {"calls": 0, "usd": 0.0},
-                               "terminal_reason": f"error:{type(error).__name__}"}
+        report["brief"] = _brief_or_error(repo, settings, options,
+                                          extraction_micro=extraction_micro, setup=setup)
     report["seconds"] = round(env.clock() - started, 1)
     if not options.recompute_only:
-        runs = options.cache_dir / "runs"
-        runs.mkdir(parents=True, exist_ok=True, mode=0o700)
-        private_write(runs / f"{run_id}.json", report)
+        _save_run(options, report)
     return report
 
 

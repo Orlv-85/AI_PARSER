@@ -117,6 +117,21 @@ def _version_rank(version: str) -> int:
     return EXTRACTION_VERSIONS.index(version) if version in EXTRACTION_VERSIONS else -1
 
 
+def _mentions_by_article_day(result: Reconciliation, evidence: Mapping[int, SignalMention],
+                             days: set[date]) -> dict[tuple[int, str, date], list[EntityMention]]:
+    """Reconciled mentions of `days`, keyed by (article id, url hash, scope day)."""
+    by_article_day: dict[tuple[int, str, date], list[EntityMention]] = defaultdict(list)
+    for mention_id, row in evidence.items():
+        if row.scope_day in days:
+            keys = result.keys[mention_id]
+            by_article_day[(row.article_id, row.url_canonical_hash, row.scope_day)].append(
+                EntityMention(
+                    entity_key=result.assignments[mention_id], type_group=keys.type_group,
+                    base_key=keys.base_key, role=row.role, is_new=row.is_new,
+                    novelty_quote=row.novelty_quote))
+    return by_article_day
+
+
 class DailySignalRepo:  # pylint: disable=too-many-public-methods
     def __init__(self, session: Session, *, comparable_from: date,
                  publisher_overrides: Mapping[str, str] | None = None) -> None:
@@ -450,20 +465,8 @@ class DailySignalRepo:  # pylint: disable=too-many-public-methods
                                  failed=counts[day]["failed"], skipped=counts[day]["skipped"])
                 for day, n in items.items()}
 
-    def observations(self, result: Reconciliation, evidence: Mapping[int, SignalMention],  # pylint: disable=too-many-locals
-                     days: Iterable[date]) -> dict[date, list[ArticleObs]]:
-        wanted = set(days)
-        if not wanted:
-            return {}
-        by_article_day: dict[tuple[int, str, date], list[EntityMention]] = defaultdict(list)
-        for mention_id, row in evidence.items():
-            if row.scope_day in wanted:
-                keys = result.keys[mention_id]
-                by_article_day[(row.article_id, row.url_canonical_hash, row.scope_day)].append(
-                    EntityMention(
-                        entity_key=result.assignments[mention_id], type_group=keys.type_group,
-                        base_key=keys.base_key, role=row.role, is_new=row.is_new,
-                        novelty_quote=row.novelty_quote))
+    def _ok_events(self) -> dict[tuple[int, str], tuple[int, str]]:
+        """(article id, url hash) -> (version rank, event type) of its newest ok extraction."""
         events: dict[tuple[int, str], tuple[int, str]] = {}
         for article_id, url_hash, version, event in self.session.execute(
                 select(ArticleSignal.article_id, ArticleSignal.url_canonical_hash,
@@ -472,14 +475,28 @@ class DailySignalRepo:  # pylint: disable=too-many-public-methods
             rank = _version_rank(version)
             if rank >= events.get((article_id, url_hash), (-2, ""))[0]:
                 events[(article_id, url_hash)] = (rank, event or "other")
+        return events
+
+    def _digest_summaries(self, days: set[date]) -> dict[tuple[date, str], str]:
+        """(digest day, item url) -> summary of the first digest item with that url."""
         summaries: dict[tuple[date, str], str] = {}
         for day, url, summary in self.session.execute(
                 select(NewsDigestReport.report_date, NewsDigestItem.url, NewsDigestItem.summary)
                 .join(NewsDigestGroup, NewsDigestGroup.report_id == NewsDigestReport.id)
                 .join(NewsDigestItem, NewsDigestItem.group_id == NewsDigestGroup.id)
-                .where(NewsDigestReport.report_date.in_(sorted(wanted)))
+                .where(NewsDigestReport.report_date.in_(sorted(days)))
                 .order_by(NewsDigestGroup.position, NewsDigestItem.position)):
             summaries.setdefault((day, url), str(summary or ""))
+        return summaries
+
+    def observations(self, result: Reconciliation, evidence: Mapping[int, SignalMention],
+                     days: Iterable[date]) -> dict[date, list[ArticleObs]]:
+        wanted = set(days)
+        if not wanted:
+            return {}
+        by_article_day = _mentions_by_article_day(result, evidence, wanted)
+        events = self._ok_events()
+        summaries = self._digest_summaries(wanted)
         out: dict[date, list[ArticleObs]] = defaultdict(list)
         for scope, article in self.session.execute(
                 select(DailySignalScope, Article)
