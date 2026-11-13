@@ -77,6 +77,45 @@ def _reviewed_at(cached: dict[str, object], validated_at: datetime | None) -> da
     return value.replace(tzinfo=value.tzinfo or UTC) if value is not None else None
 
 
+def _known_url(row: _Row, rows: list[_Row], existing: list[str], key: str) -> bool:
+    """The URL key is in the registry or on an earlier row of the batch."""
+    duplicate_in_batch = any(
+        other.id < row.id and _url_key(other.url) == key for other in rows
+    )
+    return duplicate_in_batch or any(_url_key(url) == key for url in existing)
+
+
+def _failure_reason(exc: Exception) -> str:
+    return str(exc) if isinstance(exc, ValueError) else type(exc).__name__
+
+
+def _same_host_urls(row: _Row, rows: list[_Row], existing: list[str],
+                    host: str | None) -> list[str]:
+    """Registry and batch URLs (other than `row`) on the candidate's host."""
+    overlaps = [url for url in existing if urlsplit(_url_key(url)).hostname == host]
+    overlaps += [other.url for other in rows
+                 if other.id != row.id
+                 and urlsplit(_url_key(other.url)).hostname == host]
+    return overlaps
+
+
+def _choose_review(row: _Row, overlaps: list[str], fingerprint: str, brief: str,
+                   reviewer: SourceReviewer) -> dict[str, object]:
+    """Overlap review, else a fresh cached review with the same evidence, else a new one."""
+    if overlaps:
+        return {"decision": "review", "reason": "Same-host source: check overlap",
+                "overlap_urls": overlaps[:5]}
+    cached = row.cached
+    reviewed_at = _reviewed_at(cached, row.validated_at)
+    cache_fresh = (
+        reviewed_at is not None
+        and reviewed_at > datetime.now(UTC) - timedelta(days=7)
+    )
+    if cache_fresh and cached.get("fingerprint") == fingerprint and _reusable_review(cached):
+        return {**cached, "cached": True, "reviewed_at": cast(datetime, reviewed_at).isoformat()}
+    return {**reviewer.review(brief), "reviewed_at": datetime.now(UTC).isoformat()}
+
+
 class SourceIntakeService:
     def __init__(self, session_factory: Callable[[], Session], settings: Settings) -> None:
         self.session_factory = session_factory
@@ -154,27 +193,19 @@ class SourceIntakeService:
                 self._job.update({"status": "failed",
                                   "error": f"Verification interrupted: {type(exc).__name__}"})
 
-    def _check_candidate(  # pylint: disable=too-many-locals
+    def _check_candidate(
         self, row: _Row, rows: list[_Row], existing: list[str],
         client: httpx.Client, reviewer: SourceReviewer,
     ) -> None:
-        candidate_url = row.url
-        key = _url_key(candidate_url)
-        duplicate_in_batch = any(
-            other.id < row.id and _url_key(other.url) == key for other in rows
-        )
-        if duplicate_in_batch or any(_url_key(url) == key for url in existing):
+        key = _url_key(row.url)
+        if _known_url(row, rows, existing, key):
             self._save(row, "warning", "unknown", {
                 "decision": "duplicate", "reason": "Source URL is already in the registry",
             })
             return
-        host = urlsplit(key).hostname
-        overlaps = [url for url in existing if urlsplit(_url_key(url)).hostname == host]
-        overlaps += [other.url for other in rows
-                     if other.id != row.id
-                     and urlsplit(_url_key(other.url)).hostname == host]
+        overlaps = _same_host_urls(row, rows, existing, urlsplit(key).hostname)
         try:
-            probe = probe_source(client, candidate_url)
+            probe = probe_source(client, row.url)
             if any(_url_key(url) == _url_key(probe.url) for url in existing):
                 self._save(row, "warning", probe.source_type, {
                     "decision": "duplicate", "reason": "Redirect leads to an existing source",
@@ -182,35 +213,19 @@ class SourceIntakeService:
                 return
             brief = probe.brief(row.raw_input)
             fingerprint = evidence_fingerprint(brief, self.settings)
-            cached = row.cached
-            reviewed_at = _reviewed_at(cached, row.validated_at)
-            cache_fresh = (
-                reviewed_at is not None
-                and reviewed_at > datetime.now(UTC) - timedelta(days=7)
-            )
             final_host = urlsplit(_url_key(probe.url)).hostname
             overlaps += [url for url in existing
                          if urlsplit(_url_key(url)).hostname == final_host and url not in overlaps]
-            review: dict[str, object]
-            if overlaps:
-                review = {"decision": "review", "reason": "Same-host source: check overlap",
-                          "overlap_urls": overlaps[:5]}
-            elif (cache_fresh and cached.get("fingerprint") == fingerprint
-                  and _reusable_review(cached)):
-                review = {**cached, "cached": True,
-                          "reviewed_at": cast(datetime, reviewed_at).isoformat()}
-            else:
-                review = {**reviewer.review(brief),
-                          "reviewed_at": datetime.now(UTC).isoformat()}
-            review = {**review, "fingerprint": fingerprint, "evidence": json.loads(brief),
-                      "requested_url": candidate_url,
+            review = {**_choose_review(row, overlaps, fingerprint, brief, reviewer),
+                      "fingerprint": fingerprint, "evidence": json.loads(brief),
+                      "requested_url": row.url,
                       "checked_at": datetime.now(UTC).isoformat()}
             self._save(row, "validated", probe.source_type, review)
         except Exception as exc:  # the candidate is saved as failed with the reason
             _LOGGER.warning("source_intake_candidate_failed url=%s", row.url, exc_info=True)
-            reason = str(exc) if isinstance(exc, ValueError) else type(exc).__name__
             self._save(row, "failed", "unknown", {
-                "decision": "reject", "reason": f"Technical verification failed: {reason[:300]}",
+                "decision": "reject",
+                "reason": f"Technical verification failed: {_failure_reason(exc)[:300]}",
             })
 
     def _save(self, row: _Row, validation: str, source_type: str,
