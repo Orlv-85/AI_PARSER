@@ -8,6 +8,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import date
 from typing import Any
 
+from app.core.bulletin.phrases import PhraseLibrary
+
 FIRST_DAY = date(2022, 11, 30)  # Day 0 (FR-006)
 MIN_CONFIDENCE = 0.7  # world_change confidence needed to show a story (item 1 proposal)
 HARM_MIN = 0.7  # harm_to_people probability that makes a story count-only (ER-11)
@@ -189,7 +191,7 @@ def _day_type(data: DayInput) -> str:
     return "ordinary"
 
 
-def _numbers(data: DayInput, lib: dict[str, Any]) -> str:
+def _numbers(data: DayInput, lib: PhraseLibrary) -> str:
     numbers = lib["numbers"]
     if data.model_releases > 0 and data.product_launches > 0:
         def unit(count: int, kind: str) -> str:
@@ -210,7 +212,7 @@ def _headline(shown: list[Story], marker: str) -> tuple[str | None, bool]:
     return None, False
 
 
-def _byline(day: date, lib: dict[str, Any]) -> str:
+def _byline(day: date, lib: PhraseLibrary) -> str:
     return f"{lib['labels']['byline']} \u00b7 Day {day_number(day)} \u00b7 {day:%b} {day.day}"
 
 
@@ -229,7 +231,7 @@ def _skip_reason(data: DayInput) -> str | None:
     return None if data.candidates else "no_assessments"
 
 
-def build_bulletin(data: DayInput, lib: dict[str, Any]) -> BuildResult:
+def build_bulletin(data: DayInput, lib: PhraseLibrary) -> BuildResult:
     """The bulletin of the day, or a skipped result with the reason."""
     reason = _skip_reason(data)
     if reason:
@@ -278,7 +280,7 @@ def _key_results(events: list[_Event]) -> list[_Event]:
 
 
 def _add_reactions(key: list[Story], rubric: Story | None, coop: list[Story],
-                   lib: dict[str, Any], day: date) -> int:
+                   lib: PhraseLibrary, day: date) -> int:
     """Rubric story, first Cooperation story, then (only if neither got one) one Key result."""
     reactions = lib["reactions"]
     used = 0

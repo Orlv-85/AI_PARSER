@@ -138,6 +138,10 @@ def test_phrases_validation_rejects_bad_data():
     (lambda d: d["cut"].update(footnote=["*"]), "cut needs a marker and a footnote"),
     (lambda d: d.update(note={"a": ["The regime ends."]}),
      "forbidden word 'regime' in 'The regime ends.'"),
+    (lambda d: d.update(labels=list(d["labels"])), "labels must be an object"),
+    (lambda d: d.update(cut="*"), "cut must be an object"),
+    (lambda d: d["numbers"].update(units=["model", "product"]), r"^numbers\.units needs "),
+    (lambda d: d["reactions"].update(by_area=[]), "reactions.by_area must be an object"),
 ])
 def test_phrases_validation_messages(mutate, message):
     data = json.loads(json.dumps(LIB))

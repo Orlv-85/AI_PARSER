@@ -8,7 +8,6 @@ from collections.abc import Sequence
 from datetime import date
 from html import escape
 from pathlib import Path
-from typing import Any
 
 from pydantic import ValidationError
 
@@ -67,22 +66,24 @@ def week_label(start: date, end: date) -> str:
     return f"{_short(start)} - {_short(end)}"
 
 
-def _t(value: Any) -> str:
+def _t(value: object) -> str:
     return "" if value is None else escape(str(value))
 
 
-def _i(value: Any) -> int:
+def _i(value: object) -> int:
+    if not isinstance(value, (int, float, str)):
+        return 0
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except ValueError:
         return 0
 
 
-def _list(value: Any) -> list[Any]:
+def _list(value: object) -> list[object]:
     return value if isinstance(value, list) else []
 
 
-def _dict(value: Any) -> dict[str, Any]:
+def _dict(value: object) -> dict[str, object]:
     return value if isinstance(value, dict) else {}
 
 
@@ -99,7 +100,7 @@ def _outlets(count: int) -> str:
     return f"{count} outlet" + ("" if count == 1 else "s")
 
 
-def _day(value: Any) -> str:
+def _day(value: object) -> str:
     """A day as a link to the daily page; anything that is not a date stays escaped text."""
     try:
         day = date.fromisoformat(str(value))
@@ -108,12 +109,12 @@ def _day(value: Any) -> str:
     return f'<a href="/daily?date={day.isoformat()}">{_short(day)}</a>'
 
 
-def _days(values: Any, prefix: str = "days") -> str | None:
+def _days(values: object, prefix: str = "days") -> str | None:
     days = [_day(v) for v in _list(values)]
     return f"{prefix}: {', '.join(days)}" if days else None
 
 
-def _links(links: Any) -> str:
+def _links(links: object) -> str:
     items = []
     for link in _list(links):
         link = _dict(link)
@@ -139,14 +140,14 @@ def _card(title: str, card_id: str, body: str, note: str | None = None, empty: s
             f"{lines}{items}</section>")
 
 
-def _story(story: dict[str, Any], labels: dict[str, str]) -> str:
+def _story(story: dict[str, object], labels: dict[str, str]) -> str:
     event = _t(labels.get(str(story.get("event_type"))))
     meta = _meta([_outlets(_i(story.get("publishers"))), event, _days(story.get("days"))])
     return (f"<li><strong>{_t(story.get('label'))}</strong>{meta}"
             f"{_links(story.get('links'))}</li>")
 
 
-def _entity(item: dict[str, Any]) -> str:
+def _entity(item: dict[str, object]) -> str:
     articles = _i(item.get("articles"))
     meta = _meta([_t(item.get("vendor")) or None,
                   f"{articles} article" + ("" if articles == 1 else "s"),
@@ -154,7 +155,7 @@ def _entity(item: dict[str, Any]) -> str:
     return f"<li><strong>{_t(item.get('name'))}</strong>{meta}{_links(item.get('links'))}</li>"
 
 
-def _new(item: dict[str, Any]) -> str:
+def _new(item: dict[str, object]) -> str:
     confirmed = item.get("level") == "confirmed"
     links = _list(item.get("links"))
     first = _dict(links[0]) if links else {}
@@ -168,7 +169,7 @@ def _new(item: dict[str, Any]) -> str:
             f"{what}{_links(links)}</li>")
 
 
-def _trend_html(item: Any) -> str:
+def _trend_html(item: object) -> str:
     try:
         return str(_trend(DailySignalTrendItem.model_validate(item)))
     except ValidationError:
@@ -179,7 +180,7 @@ def _unit(signals: PeriodSignalsResponse) -> str:
     return "month" if signals.period_kind == "month" else "week"
 
 
-def _why_hidden(comparison: dict[str, Any], unit: str = "week") -> str:
+def _why_hidden(comparison: dict[str, object], unit: str = "week") -> str:
     return low_coverage(unit) if comparison.get("state") == "suppressed" else first_period(unit)
 
 
@@ -242,7 +243,7 @@ def _event_mix(signals: PeriodSignalsResponse) -> str:
                  f"No hard event type was covered this {unit}.")
 
 
-def _month_trend(item: Any) -> str:
+def _month_trend(item: object) -> str:
     """A month riser or cooler: month totals (the daily trend markup speaks of 7 days)."""
     item = _dict(item)
     expected = item.get("expected")

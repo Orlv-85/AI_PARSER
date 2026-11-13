@@ -9,18 +9,19 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import NotRequired, Required, TypedDict
 from urllib.parse import urljoin, urlsplit
 from urllib.robotparser import RobotFileParser
 
 import httpx
 from lxml import html as lxml_html
 from lxml.etree import LxmlError  # pylint: disable=no-name-in-module
+from lxml.html import HtmlElement
 
 from app.core.bot_identity import BOT_TOKEN, DEFAULT_USER_AGENT
 from app.core.canonical_json import fingerprint
 from app.core.ingestion.page_filter import url_exclusion_reason
-from app.ingest.date_evidence import extract_date_evidence
+from app.ingest.date_evidence import DateEvidence, extract_date_evidence
 from app.ingest.html import extract_article_text
 from app.storage.journal_files import private_bytes, private_write
 
@@ -31,6 +32,77 @@ _BLOCK_TITLE = re.compile(
     r"404 not found|sign in|log in|enable javascript", re.I)
 _PAYWALL = re.compile(r"subscribe to (?:continue|read)|subscription required|"
                       r"already a subscriber\?? (?:log|sign) in", re.I)
+
+
+class PageEvidence(TypedDict):
+    """What `inspect_page` reads from a page; an unparsable page has no title or canonical hint."""
+
+    version: str
+    title: NotRequired[str]
+    text: str
+    date_evidence: DateEvidence
+    quality: str
+    issues: list[str]
+    canonical_hint: NotRequired[str | None]
+    admission: str
+
+
+class AttemptResult(TypedDict, total=False):
+    state: Required[str]
+    quality: str
+    issues: list[str]
+    text_chars: int
+    evidence_sha256: str
+    published_status: str
+    modified_status: str
+
+
+class Attempt(AttemptResult, total=False):
+    """attempt.json: `begin` writes the start fields, `finish` merges a result over them."""
+
+    version: str
+    url: str
+    started_at: str
+    model_calls: int
+    finished_at: str
+
+
+class CacheStatus(TypedDict):
+    urls: int
+    states: dict[str, int]
+    quality: dict[str, int]
+    publication_dates: dict[str, int]
+    issues: dict[str, int]
+    model_calls: int
+
+
+class ResponseMeta(TypedDict):
+    """One HTTP response without its body."""
+
+    final_url: str
+    status_code: int
+    content_type: str
+    encoding: str | None
+    location: str | None
+    truncated: bool
+    retry_after: str | None
+    fetched_at: str
+    redirect_issue: NotRequired[str]
+
+
+class StoredResponse(ResponseMeta):
+    """response.json beside body.bin."""
+
+    body_sha256: str
+    redirects: list[ResponseMeta]
+    original_url: str
+
+
+class RobotsResponse(ResponseMeta):
+    """robots/<key>.json: the body is kept as text with the redirects that led to it."""
+
+    body: str
+    redirects: NotRequired[list[dict[str, object]]]
 
 
 class HostUnavailableError(RuntimeError):
@@ -63,7 +135,7 @@ def _sha(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
-def _page_title(tree: Any) -> str:
+def _page_title(tree: HtmlElement) -> str:
     title_nodes = tree.xpath('//h1 | //meta[@property="og:title"] | //title')
     for tag in ("h1", "meta", "title"):
         matches = [node for node in title_nodes if node.tag == tag]
@@ -74,7 +146,7 @@ def _page_title(tree: Any) -> str:
     return ""
 
 
-def _structure_issues(tree: Any, title: str, dates: dict[str, Any]) -> list[str]:
+def _structure_issues(tree: HtmlElement, title: str, dates: DateEvidence) -> list[str]:
     issues = []
     if _BLOCK_TITLE.search(title):
         issues.append("blocked_or_error_page")
@@ -103,7 +175,7 @@ def _content_issues(page_html: str, final_url: str) -> tuple[str, list[str]]:
     return content, issues
 
 
-def inspect_page(page_html: str, original_url: str, final_url: str) -> dict[str, Any]:
+def inspect_page(page_html: str, original_url: str, final_url: str) -> PageEvidence:
     """Extraction quality is not an admission verdict or deletion authorization."""
     tree = lxml_html.fromstring(page_html)
     dates = extract_date_evidence(page_html, final_url)
@@ -136,9 +208,10 @@ class PageCache:
         path.mkdir(exist_ok=True, mode=0o700)
         return path
 
-    def attempt(self, url: str) -> dict[str, Any] | None:
+    def attempt(self, url: str) -> Attempt | None:
         path = self.page_dir(url) / "attempt.json"
-        return json.loads(path.read_text()) if path.exists() else None
+        attempt: Attempt | None = json.loads(path.read_text()) if path.exists() else None
+        return attempt
 
     def begin(self, url: str) -> bool:
         if self.attempt(url) is not None:
@@ -148,17 +221,18 @@ class PageCache:
             "started_at": datetime.now(UTC).isoformat(), "model_calls": 0})
         return True
 
-    def finish(self, url: str, result: dict[str, Any]) -> None:
+    def finish(self, url: str, result: AttemptResult) -> None:
         private_write(self.page_dir(url) / "attempt.json", {
             **(self.attempt(url) or {}), **result, "finished_at": datetime.now(UTC).isoformat()})
 
-    def extract_saved(self, url: str) -> dict[str, Any]:
+    def extract_saved(self, url: str) -> AttemptResult:
         directory = self.page_dir(url)
-        response = json.loads((directory / "response.json").read_text())
+        response: StoredResponse = json.loads((directory / "response.json").read_text())
         body = (directory / "body.bin").read_bytes()
         if _sha(body) != response["body_sha256"]:
             raise ValueError("Cached response hash mismatch")
         page_html = body.decode(response["encoding"] or "utf-8", errors="replace")
+        evidence: PageEvidence
         try:
             evidence = inspect_page(page_html, url, response["final_url"])
         except (ValueError, TypeError, AttributeError, LxmlError):
@@ -174,20 +248,22 @@ class PageCache:
         if "html" not in response.get("content_type", "").lower():
             evidence["quality"] = "unresolved"
             evidence["issues"].append("non_html_response")
-        content = evidence.pop("text")
+        content = evidence["text"]
         private_bytes(directory / "text.txt", content.encode())
-        evidence.update(text_sha256=_sha(content.encode()), html_sha256=_sha(page_html.encode()),
-                        text_chars=len(content), response_sha256=fingerprint(response))
-        private_write(directory / "evidence.json", evidence)
-        result = {"state": "completed", "quality": evidence["quality"],
-                  "issues": evidence["issues"], "text_chars": len(content),
-                  "evidence_sha256": fingerprint(evidence),
-                  "published_status": evidence["date_evidence"]["published"]["status"],
-                  "modified_status": evidence["date_evidence"]["modified"]["status"]}
+        saved: dict[str, object] = {key: value for key, value in evidence.items() if key != "text"}
+        saved.update(text_sha256=_sha(content.encode()), html_sha256=_sha(page_html.encode()),
+                     text_chars=len(content), response_sha256=fingerprint(response))
+        private_write(directory / "evidence.json", saved)
+        result: AttemptResult = {
+            "state": "completed", "quality": evidence["quality"],
+            "issues": evidence["issues"], "text_chars": len(content),
+            "evidence_sha256": fingerprint(saved),
+            "published_status": evidence["date_evidence"]["published"]["status"],
+            "modified_status": evidence["date_evidence"]["modified"]["status"]}
         self.finish(url, result)
         return result
 
-    def status(self, urls: list[str]) -> dict[str, Any]:
+    def status(self, urls: list[str]) -> CacheStatus:
         states: Counter[str] = Counter()
         quality: Counter[str] = Counter()
         dates: Counter[str] = Counter()
@@ -241,7 +317,7 @@ class SourcePageDownloader:  # pylint: disable=too-many-instance-attributes
         self.robot_locks: dict[str, asyncio.Lock] = {}
         self.robots: dict[str, RobotFileParser] = {}
 
-    async def _get(self, url: str, original_url: str | None) -> dict[str, Any]:
+    async def _get(self, url: str, original_url: str | None) -> tuple[ResponseMeta, bytes]:
         validate_source_url(url)
         parts = urlsplit(url)
         host = (parts.hostname or "").removeprefix("www.")
@@ -266,23 +342,24 @@ class SourcePageDownloader:  # pylint: disable=too-many-instance-attributes
                         if len(chunk) > remaining:
                             truncated = True
                             break
-                    return {"final_url": str(response.url), "status_code": response.status_code,
-                            "content_type": response.headers.get("content-type", ""),
-                            "encoding": response.encoding, "body": bytes(body),
-                            "location": response.headers.get("location"), "truncated": truncated,
-                            "retry_after": response.headers.get("retry-after"),
-                            "fetched_at": datetime.now(UTC).isoformat()}
+                    meta: ResponseMeta = {
+                        "final_url": str(response.url), "status_code": response.status_code,
+                        "content_type": response.headers.get("content-type", ""),
+                        "encoding": response.encoding,
+                        "location": response.headers.get("location"), "truncated": truncated,
+                        "retry_after": response.headers.get("retry-after"),
+                        "fetched_at": datetime.now(UTC).isoformat()}
+                    return meta, bytes(body)
 
-    async def _follow_robots_redirects(self, saved: dict[str, Any]) -> dict[str, Any]:
+    async def _follow_robots_redirects(self, saved: RobotsResponse) -> RobotsResponse:
         history = list(saved.get("redirects", []))
         for _ in range(max(0, 5 - len(history))):
             if (saved["status_code"] not in {301, 302, 303, 307, 308}
                     or not saved.get("location") or saved.get("truncated")):
                 break
-            destination = urljoin(saved["final_url"], saved["location"])
+            destination = urljoin(saved["final_url"], saved["location"] or "")
             history.append({k: v for k, v in saved.items() if k not in {"body", "redirects"}})
-            response = await self._get(destination, None)
-            body = response.pop("body")
+            response, body = await self._get(destination, None)
             saved = {**response, "body": body.decode("utf-8", errors="replace"),
                      "redirects": history}
         return saved
@@ -298,11 +375,11 @@ class SourcePageDownloader:  # pylint: disable=too-many-instance-attributes
                 directory = self.cache.root / "robots"
                 directory.mkdir(exist_ok=True, mode=0o700)
                 path = directory / (url_key(origin) + ".json")
+                saved: RobotsResponse
                 if path.exists():
                     saved = json.loads(path.read_text())
                 else:
-                    response = await self._get(origin + "/robots.txt", None)
-                    body = response.pop("body")
+                    response, body = await self._get(origin + "/robots.txt", None)
                     saved = {**response, "body": body.decode("utf-8", errors="replace")}
                 saved = await self._follow_robots_redirects(saved)
                 private_write(path, saved)
@@ -322,7 +399,7 @@ class SourcePageDownloader:  # pylint: disable=too-many-instance-attributes
                                               time.monotonic() + float(delay))
             return parser.can_fetch(BOT_TOKEN, url)
 
-    def _note_service_status(self, current: str, response: dict[str, Any]) -> None:
+    def _note_service_status(self, current: str, response: ResponseMeta) -> None:
         status = response["status_code"]
         if status not in {429, 503}:
             return
@@ -334,42 +411,44 @@ class SourcePageDownloader:  # pylint: disable=too-many-instance-attributes
         if status == 429 or self.service_failures[host] >= 3:
             self.blocked_hosts.add(host)
 
-    async def _download_chain(self, url: str, trail: list[str]) -> tuple[dict[str, Any], list]:
+    async def _download_chain(self, url: str, trail: list[str]
+                              ) -> tuple[ResponseMeta, bytes, list[ResponseMeta]]:
         """Follow up to 6 hops manually; `trail` ends with the URL being handled on failure."""
-        history: list[dict[str, Any]] = []
+        history: list[ResponseMeta] = []
         current = url
         for _ in range(6):
             trail.append(current)
             if not await self._robots_allowed(current):
                 raise _RobotsDisallowedError
-            response = await self._get(current, url)
+            response, body = await self._get(current, url)
             self.connection_failures.clear()
             self._note_service_status(current, response)
             if (response["status_code"] not in {301, 302, 303, 307, 308}
                     or not response["location"]):
                 break
             destination = urljoin(current, response["location"])
-            history.append({k: v for k, v in response.items() if k != "body"})
+            history.append(response.copy())
             if url_exclusion_reason(destination):
                 response["redirect_issue"] = "redirect_to_non_article"
                 break
             current = destination
         else:
             response["redirect_issue"] = "too_many_redirects"
-        return response, history
+        return response, body, history
 
-    async def _store_response(self, url: str, response: dict[str, Any], history: list) -> None:
+    async def _store_response(self, url: str, response: ResponseMeta, body: bytes,
+                              history: list[ResponseMeta]) -> None:
         directory = self.cache.page_dir(url)
-        body = response.pop("body")
         private_bytes(directory / "body.bin", body)
-        response.update(body_sha256=_sha(body), redirects=history, original_url=url)
-        private_write(directory / "response.json", response)
+        stored: StoredResponse = {**response, "body_sha256": _sha(body), "redirects": history,
+                                  "original_url": url}
+        private_write(directory / "response.json", stored)
         result = await asyncio.to_thread(self.cache.extract_saved, url)
-        if response.get("redirect_issue"):
+        if issue := response.get("redirect_issue"):
             result["quality"] = "unresolved"
-            result["issues"].append(response["redirect_issue"])
+            result["issues"].append(issue)
             evidence_path = directory / "evidence.json"
-            evidence = json.loads(evidence_path.read_text())
+            evidence: dict[str, object] = json.loads(evidence_path.read_text())
             evidence.update(quality=result["quality"], issues=result["issues"])
             private_write(evidence_path, evidence)
             result["evidence_sha256"] = fingerprint(evidence)
@@ -386,8 +465,8 @@ class SourcePageDownloader:  # pylint: disable=too-many-instance-attributes
             return
         trail: list[str] = [url]
         try:
-            response, history = await self._download_chain(url, trail)
-            await self._store_response(url, response, history)
+            response, body, history = await self._download_chain(url, trail)
+            await self._store_response(url, response, body, history)
         except _RobotsDisallowedError:
             self.cache.finish(url, {"state": "blocked", "quality": "unresolved",
                                     "issues": ["robots_disallowed_or_unavailable"]})
