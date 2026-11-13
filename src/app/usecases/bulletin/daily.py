@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.config.settings import Settings
 from app.core.bulletin.builder import Bulletin, build_bulletin
-from app.core.bulletin.phrases import load_phrases
+from app.core.bulletin.phrases import PhraseLibrary, load_phrases
 from app.core.bulletin.world_change import ASSESS_DEFAULT_MAX_USD, run_assessment
 from app.core.bulletin.writer import SourceText, write_bulletin
 from app.observability.logging import log_event
@@ -24,7 +24,7 @@ from app.usecases.bulletin.writer_run import WRITER_MAX_USD_PER_DAY
 class PreparedBulletin:
     bulletin: Bulletin | None
     reason: str | None
-    library: dict[str, Any]
+    library: PhraseLibrary
     numbers: dict[str, Any]
     texts: dict[str, SourceText] = field(default_factory=dict)
 

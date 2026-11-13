@@ -11,11 +11,12 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, NotRequired, TypedDict
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config.settings import Settings
 from app.core.canonical_json import fingerprint
 from app.core.daily.signals_brief import (
     BRIEF_MAX_USD_PER_DAY,
@@ -94,6 +95,60 @@ def run_days(options: RunOptions) -> list[date]:
             for i in range(options.backfill_days - 1, -1, -1)]
 
 
+class RunTotals(TypedDict):
+    calls: int
+    usd: float
+
+
+class ExtractionRun(RunTotals):
+    states: dict[str, int]
+
+
+class BriefReport(TypedDict):
+    model: str | None
+    days: dict[str, str]
+    run: RunTotals
+    terminal_reason: str | None
+
+
+class IncompleteDay(TypedDict):
+    items: int
+    matched: int
+    extracted: int
+    failed: int
+    skipped: int
+    pending: int
+    reason: str
+
+
+class RunReport(TypedDict):
+    """The run report (runs/<run_id>.json); the recompute and timing keys come at the end."""
+
+    run_id: str
+    report_date: str
+    extraction_version: str
+    state: str
+    terminal_reason: str | None
+    days: list[str]
+    missing_days: list[str]
+    run: ExtractionRun
+    articles: dict[str, int]
+    progress: int
+    incomplete_days: dict[str, IncompleteDay]
+    reports_written: list[str]
+    reports_unchanged: int
+    brief: BriefReport | None
+    reports_kept: NotRequired[int]
+    reports_lost_articles: NotRequired[list[str]]
+    entities: NotRequired[int]
+    seconds: NotRequired[float]
+
+
+def _answer_model(data: object) -> object:
+    """The model a parsed answer names; `parse_extraction` already checked it is a dict."""
+    return data.get("model") if isinstance(data, dict) else None
+
+
 class _Extractor:
     def __init__(self, repo: DailySignalRepo, ledger: SignalsLedger, counts: Counter[str]):
         self.repo = repo
@@ -113,7 +168,7 @@ class _Extractor:
             return False
         return True
 
-    def call(self, article: Article, body: dict[str, Any], scope_day: date) -> Any:
+    def call(self, article: Article, body: dict[str, Any], scope_day: date) -> object:
         """Provider answer data for a 200 response, or None (attempt failed, stays pending)."""
         result = self.ledger.dispatch(
             body, request_key=signals_request_key(body), reserved_micro=reservation_micro(body),
@@ -150,7 +205,7 @@ class _Extractor:
                 reasons.append(str(error))
                 continue
             self.repo.save_extraction(article, extraction, content_hash=content_hash,
-                                      provenance={"model": data.get("model"),
+                                      provenance={"model": _answer_model(data),
                                                   "recovered": bool(reasons), "retry": retry,
                                                   "input": input_kind(article.content,
                                                                       article.summary,
@@ -161,7 +216,7 @@ class _Extractor:
         return "skipped"
 
 
-def _gate(settings: Any, options: RunOptions, key: str) -> str | None:
+def _gate(settings: Settings, options: RunOptions, key: str) -> str | None:
     """Terminal state before any work, or None. The flag gates paid extraction only."""
     if options.recompute_only:
         return None
@@ -171,7 +226,7 @@ def _gate(settings: Any, options: RunOptions, key: str) -> str | None:
 
 
 def _extract_days(repo: DailySignalRepo, ledger: SignalsLedger, *, options: RunOptions,
-                  report: dict[str, Any], counts: Counter[str]) -> int:
+                  report: RunReport, counts: Counter[str]) -> int:
     """Extract pending articles of the run days; returns the run spend in microdollars."""
     session = repo.session
     extractor = _Extractor(repo, ledger, counts)
@@ -284,13 +339,13 @@ class _LedgerSetup:
                                                self.clock))
 
 
-def _briefs(repo: DailySignalRepo, settings: Any, options: RunOptions, *,
-            extraction_micro: int, setup: _LedgerSetup) -> dict[str, Any]:
+def _briefs(repo: DailySignalRepo, settings: Settings, options: RunOptions, *,
+            extraction_micro: int, setup: _LedgerSetup) -> BriefReport:
     """The brief step of a paid run (007 FR-001..FR-003, FR-008). `--max-usd` is the run total:
     briefs get what extraction left, at most BRIEF_MAX_USD_PER_DAY per target day."""
     session = repo.session
     model = settings.daily_signals_brief_model
-    out: dict[str, Any] = {"model": model, "days": {}, "run": {"calls": 0, "usd": 0.0},
+    out: BriefReport = {"model": model, "days": {}, "run": {"calls": 0, "usd": 0.0},
                            "terminal_reason": None}
     targets = _brief_targets(repo, options)
     if not targets:
@@ -326,8 +381,8 @@ def _briefs(repo: DailySignalRepo, settings: Any, options: RunOptions, *,
 
 
 def _incomplete_days(repo: DailySignalRepo, days: list[date],
-                     terminal: str | None) -> dict[str, dict[str, Any]]:
-    out = {}
+                     terminal: str | None) -> dict[str, IncompleteDay]:
+    out: dict[str, IncompleteDay] = {}
     coverage = repo.coverage()
     for day in days:
         cov = coverage.get(day)
@@ -339,14 +394,14 @@ def _incomplete_days(repo: DailySignalRepo, days: list[date],
     return out
 
 
-def run_signals(session: Session, settings: Any, options: RunOptions,
-                env: RunEnv = DEFAULT_ENV) -> dict[str, Any]:
+def run_signals(session: Session, settings: Settings, options: RunOptions,
+                env: RunEnv = DEFAULT_ENV) -> RunReport:
     """One bounded signals run; returns the run report (no key, no article text)."""
     now = env.now
     started = env.clock()
     run_id = now().strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
     days = run_days(options)
-    report: dict[str, Any] = {
+    report: RunReport = {
         "run_id": run_id, "report_date": options.report_date.isoformat(),
         "extraction_version": EXTRACTION_VERSION, "state": "ok", "terminal_reason": None,
         "days": [d.isoformat() for d in days], "missing_days": [],
@@ -380,12 +435,13 @@ def run_signals(session: Session, settings: Any, options: RunOptions,
     result = recompute_reports(repo, until, RecomputeScope(options.recompute_all, days[0]),
                                now=now())
     session.commit()
-    report.update(reports_written=[d.isoformat() for d in result.written],
-                  reports_unchanged=result.unchanged, reports_kept=result.kept,
-                  reports_lost_articles=[d.isoformat() for d in result.lost_articles],
-                  entities=result.entities,
-                  articles=dict(sorted(counts.items())),
-                  incomplete_days=_incomplete_days(repo, days, report["terminal_reason"]))
+    report.update({
+        "reports_written": [d.isoformat() for d in result.written],
+        "reports_unchanged": result.unchanged, "reports_kept": result.kept,
+        "reports_lost_articles": [d.isoformat() for d in result.lost_articles],
+        "entities": result.entities,
+        "articles": dict(sorted(counts.items())),
+        "incomplete_days": _incomplete_days(repo, days, report["terminal_reason"])})
     if not options.recompute_only:
         try:
             report["brief"] = _briefs(repo, settings, options,
@@ -483,9 +539,9 @@ def alias_entity(repo: DailySignalRepo, entity_id: int, name: str) -> AIEntityOv
         note=f"alias {name} -> {target.display_name}"[:255]))
 
 
-def run_entity_command(session_factory: Callable[[], Session], settings: Any,
-                       action: Callable[[DailySignalRepo], dict[str, Any]],
-                       until: date) -> dict[str, Any]:
+def run_entity_command(session_factory: Callable[[], Session], settings: Settings,
+                       action: Callable[[DailySignalRepo], dict[str, object]],
+                       until: date) -> dict[str, object]:
     """One override action, then a recompute up to `until`, committed together. A refused action
     (any ValueError, e.g. an override conflict) raises EntityCommandError and writes nothing."""
     with session_factory() as session:

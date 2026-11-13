@@ -11,7 +11,7 @@ from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import NotRequired, TypedDict
 from urllib.parse import urlsplit
 
 import httpx
@@ -58,6 +58,66 @@ PERMANENT_ISSUES = frozenset({"http_404", "http_410", "robots_disallowed_or_unav
 OUTAGE_ISSUES = frozenset({"download_outage", "ConnectError", "ConnectTimeout", "ReadTimeout",
                            "WriteTimeout", "PoolTimeout"})
 ROBOTS_ANSWERED = frozenset({200, 404, 410})
+
+
+class DownloadCounters(TypedDict):
+    cache_reused: int
+    downloads: int
+    failed: dict[str, int]
+    gave_up: int
+    skipped_cap: int
+    skipped_time: int
+    outage: bool
+    outage_kept: int
+    raw_dirs_deleted: int
+
+
+class CaptureSummary(DownloadCounters):
+    window_days: int | None
+    articles_synced: int
+    window_documents: int
+    window_archived: int
+    coverage_pct: float | None
+    new_versions: dict[str, int]
+    archive_bytes: int
+    archive_size_warning: bool
+
+
+class DayCoverage(TypedDict):
+    documents: int
+    archived: int
+    coverage_pct: float | None
+
+
+class HostCount(TypedDict):
+    host: str
+    documents: int
+
+
+class ArchiveStatus(TypedDict):
+    states: dict[str, int]
+    versions: int
+    archive_bytes: int
+    window_days: int
+    window_documents: int
+    window_archived: int
+    coverage_pct: float | None
+    coverage_by_day: dict[str, DayCoverage]
+    top_hosts_without_text: list[HostCount]
+
+
+class ImportResult(TypedDict):
+    source_articles: int
+    selected: int
+    selected_with_text: int
+    documents: NotRequired[int]
+    new_versions: NotRequired[int]
+
+
+class CachedPage(TypedDict):
+    text: str
+    final_url: str | None
+    http_status: int | None
 
 
 def _archive_client() -> httpx.AsyncClient:
@@ -146,7 +206,7 @@ def _coverage(states: list[tuple[datetime, str]]) -> tuple[int, int, float | Non
 
 def capture(session: Session, options: CaptureOptions = DEFAULT_CAPTURE, *,
             logger: logging.Logger | None = None, now: datetime | None = None,
-            fetch: PageFetch | None = None) -> dict[str, Any]:
+            fetch: PageFetch | None = None) -> CaptureSummary:
     """Sync the window (or every article with `scope_all`), then, unless `no_download`, reuse or
     download pages of due documents without text; summarize."""
     fetch = fetch or PageFetch()
@@ -165,7 +225,7 @@ def capture(session: Session, options: CaptureOptions = DEFAULT_CAPTURE, *,
         synced += archive_articles(session, rows)[0]
         session.commit()
         session.expunge_all()  # keep memory flat over a full seed
-    downloads: dict[str, Any] = {
+    downloads: DownloadCounters = {
         "cache_reused": 0, "downloads": 0, "failed": {}, "gave_up": 0, "skipped_cap": 0,
         "skipped_time": 0, "outage": False, "outage_kept": 0, "raw_dirs_deleted": 0}
     if not options.no_download:
@@ -174,7 +234,7 @@ def capture(session: Session, options: CaptureOptions = DEFAULT_CAPTURE, *,
     repo = ArchiveRepo(session)
     documents, archived, pct = _coverage(repo.window_states(since))
     size = repo.size_bytes()
-    summary: dict[str, Any] = {
+    summary: CaptureSummary = {
         "window_days": None if scope_all else ARCHIVE_LOOKBACK_DAYS,
         "articles_synced": synced, "window_documents": documents, "window_archived": archived,
         "coverage_pct": pct, "new_versions": repo.new_versions_since(started), **downloads,
@@ -189,11 +249,18 @@ def _page_dir(root: Path, url: str) -> Path:
     return Path(root, "pages", url_key(url))
 
 
-def _read_json(path: Path) -> dict[str, Any] | None:
-    return json.loads(path.read_text()) if path.is_file() else None
+def _read_json(path: Path) -> dict[str, object] | None:
+    """A page-cache file as found; readers check each value they use."""
+    data: dict[str, object] | None = json.loads(path.read_text()) if path.is_file() else None
+    return data
 
 
-def _extracted_page(directory: Path) -> dict[str, Any] | None:
+def _issues(attempt: dict[str, object]) -> list[str]:
+    issues = attempt.get("issues")
+    return [issue for issue in issues if isinstance(issue, str)] if isinstance(issues, list) else []
+
+
+def _extracted_page(directory: Path) -> CachedPage | None:
     """Text of a completed, extracted cache attempt whose text matches its evidence hash."""
     attempt = _read_json(directory / "attempt.json")
     evidence = _read_json(directory / "evidence.json")
@@ -206,14 +273,15 @@ def _extracted_page(directory: Path) -> dict[str, Any] | None:
             or hashlib.sha256(text.encode()).hexdigest() != evidence.get("text_sha256")):
         return None
     response = _read_json(directory / "response.json") or {}
-    return {"text": text, "final_url": response.get("final_url"),
-            "http_status": response.get("status_code")}
+    final_url, http_status = response.get("final_url"), response.get("status_code")
+    return {"text": text, "final_url": final_url if isinstance(final_url, str) else None,
+            "http_status": http_status if isinstance(http_status, int) else None}
 
 
-def _attempt_issue(attempt: dict[str, Any], cache_root: Path, url: str) -> tuple[str, bool]:
+def _attempt_issue(attempt: dict[str, object], cache_root: Path, url: str) -> tuple[str, bool]:
     """(issue, permanent) of a failed attempt; an unanswered robots.txt is retryable."""
     # HTTP status first: it names the cause; quality issues of an error page only follow from it.
-    issues = sorted(attempt.get("issues") or [], key=lambda i: (not i.startswith("http_"), i)) \
+    issues = sorted(_issues(attempt), key=lambda i: (not i.startswith("http_"), i)) \
         or [f"state_{attempt.get('state')}"]
     permanent = [issue for issue in issues if issue in PERMANENT_ISSUES]
     if permanent == ["robots_disallowed_or_unavailable"]:
@@ -254,7 +322,7 @@ async def _dispatch(downloader: SourcePageDownloader, urls: list[str], deadline:
     return started
 
 
-def _add_page_version(repo: ArchiveRepo, document: ArchiveDocument, page: dict[str, Any]) -> None:
+def _add_page_version(repo: ArchiveRepo, document: ArchiveDocument, page: CachedPage) -> None:
     repo.add_version(document, TextVersion(page["text"], ORIGIN_SOURCE_PAGE, EXTRACTION_VERSION,
                                            final_url=page["final_url"],
                                            http_status=page["http_status"]))
@@ -317,15 +385,15 @@ def _run_downloads(dispatch: list[ArchiveDocument], *, cache: PageCache, deadlin
     return outage, set(started_urls)
 
 
-def _nothing_to_record(attempt: dict[str, Any], outage: bool) -> bool:
+def _nothing_to_record(attempt: dict[str, object], outage: bool) -> bool:
     """Unfinished attempt, or only outage issues during an outage: retry as if not started."""
     if attempt.get("state") == "started":
         return True
-    issues = set(attempt.get("issues") or [])
+    issues = set(_issues(attempt))
     return outage and bool(issues) and issues <= OUTAGE_ISSUES
 
 
-def _record_failure(repo: ArchiveRepo, document: ArchiveDocument, attempt: dict[str, Any], *,
+def _record_failure(repo: ArchiveRepo, document: ArchiveDocument, attempt: dict[str, object], *,
                     cache_root: Path, now: datetime) -> tuple[str, bool]:
     """Record a failed attempt with its retry time; returns (issue, gave_up)."""
     issue, permanent = _attempt_issue(attempt, cache_root, document.url)
@@ -362,7 +430,7 @@ def _record_downloads(repo: ArchiveRepo, documents: list[ArchiveDocument], *, ca
 
 
 def _download_step(session: Session, due: _DueQuery, *, deadline: float,
-                   fetch: PageFetch) -> dict[str, Any]:
+                   fetch: PageFetch) -> DownloadCounters:
     repo = ArchiveRepo(session)
     now = due.now
     cache_root = fetch.cache_root
@@ -384,7 +452,7 @@ def _download_step(session: Session, due: _DueQuery, *, deadline: float,
 
 def download_documents(session: Session, document_ids: Collection[int], *,
                        now: datetime | None = None,
-                       fetch: PageFetch | None = None) -> dict[str, Any]:
+                       fetch: PageFetch | None = None) -> DownloadCounters:
     """Reuse or download the pages of the given due documents only, with every rule of the
     capture; returns its download counters (`downloads`, `failed`, `outage`, ...)."""
     return _download_step(session, _DueQuery(None, now or datetime.now(UTC), document_ids),
@@ -433,7 +501,12 @@ def _clean_cache(cache_root: Path) -> int:
     return deleted
 
 
-def status(session: Session, *, now: datetime | None = None) -> dict[str, Any]:
+def _day_coverage(rows: list[tuple[datetime, str]]) -> DayCoverage:
+    documents, archived, pct = _coverage(rows)
+    return {"documents": documents, "archived": archived, "coverage_pct": pct}
+
+
+def status(session: Session, *, now: datetime | None = None) -> ArchiveStatus:
     """Read-only archive totals, window coverage per first-seen day and hosts without text."""
     since = (now or datetime.now(UTC)) - timedelta(days=ARCHIVE_LOOKBACK_DAYS)
     repo = ArchiveRepo(session)
@@ -447,9 +520,7 @@ def status(session: Session, *, now: datetime | None = None) -> dict[str, Any]:
         "archive_bytes": repo.size_bytes(),
         "window_days": ARCHIVE_LOOKBACK_DAYS, "window_documents": documents,
         "window_archived": archived, "coverage_pct": pct,
-        "coverage_by_day": {day: dict(zip(("documents", "archived", "coverage_pct"),
-                                          _coverage(rows), strict=True))
-                            for day, rows in sorted(by_day.items())},
+        "coverage_by_day": {day: _day_coverage(rows) for day, rows in sorted(by_day.items())},
         "top_hosts_without_text": [{"host": host, "documents": count}
                                    for host, count in repo.hosts_without_text(STATUS_TOP_HOSTS)],
     }
@@ -460,7 +531,7 @@ IMPORT_COLUMNS = (Article.id, Article.source_id, Article.title, Article.url, Art
                   Article.publication_day, Article.publication_status, Article.discovered_at)
 
 
-def import_db(session: Session, source_url: str, *, apply: bool = False) -> dict[str, Any]:
+def import_db(session: Session, source_url: str, *, apply: bool = False) -> ImportResult:
     """Archive articles of another database (a restored dump) whose hash is neither a current
     article nor an archive document. The source is only read; dry run unless `apply`."""
     url = make_url(source_url)
@@ -492,10 +563,10 @@ def import_db(session: Session, source_url: str, *, apply: bool = False) -> dict
             source.rollback()
     finally:
         engine.dispose()
-    result: dict[str, Any] = {"source_articles": len(hashes), "selected": len(selected),
-                              "selected_with_text": with_text}
+    result: ImportResult = {"source_articles": len(hashes), "selected": len(selected),
+                            "selected_with_text": with_text}
     if apply:
-        result.update(documents=documents, new_versions=versions)
+        result.update({"documents": documents, "new_versions": versions})
     return result
 
 

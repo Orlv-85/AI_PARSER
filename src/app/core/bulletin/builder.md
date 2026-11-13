@@ -129,7 +129,7 @@ flowchart LR
 - Day number: days since 2022-11-30 (Day 1429 = 2026-10-29). Tests: `test_day_number`.
 - Every phrase passes the never-list of `specs/018-daily-inference/voice.md` (ER-4 words, "Administration released"); the
   loader checks the JSON shape, in a fixed order (the first failing check names the error; extra
-  keys are allowed). Tests: `test_phrases_load_and_validate`,
+  keys are allowed; a section of the wrong type is a `PhraseError` too). Tests: `test_phrases_load_and_validate`,
   `test_phrases_validation_rejects_bad_data`, `test_phrases_pass_the_never_list`,
   `test_phrases_validation_messages`, `test_phrases_validation_order_and_extra_keys`,
   `test_phrases_validation_names_the_first_failing_section`.

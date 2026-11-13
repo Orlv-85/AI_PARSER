@@ -3,9 +3,9 @@
 Layout of specs/018-daily-inference/voice.md; behavior in src/app/core/bulletin/builder.md.
 """
 from textwrap import fill
-from typing import Any
 
 from app.core.bulletin.builder import Bulletin, Story
+from app.core.bulletin.phrases import PhraseLibrary
 
 TEXT_WIDTH = 60
 OUTLETS_SHOWN = 3
@@ -43,7 +43,7 @@ def _incidents_line(bulletin: Bulletin, labels: dict[str, str]) -> str:
     return line
 
 
-def render_text(bulletin: Bulletin, lib: dict[str, Any]) -> str:
+def render_text(bulletin: Bulletin, lib: PhraseLibrary) -> str:
     """The bulletin as plain text; empty sections are left out."""
     labels = lib["labels"]
     blocks = [f"{bulletin.masthead}\n{bulletin.byline}"]

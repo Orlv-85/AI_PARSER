@@ -7,9 +7,10 @@ import json
 import math
 import re
 import unicodedata
-from dataclasses import asdict, dataclass, field
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, field, replace
 from datetime import date
-from typing import Any
+from typing import Any, TypedDict, cast
 
 from app.core.canonical_json import encoded, fingerprint
 from app.core.daily.provider_requests import DEEPSEEK_MODEL
@@ -115,6 +116,34 @@ class ExtractionInvalid(ValueError):
     """The whole response is unusable; `str(error)` is the reason."""
 
 
+Reject = Callable[[str], None]
+
+
+class EntityPayload(TypedDict):
+    name: str
+    canonical_name: str
+    entity_type: str
+    vendor: str | None
+    role: str
+    is_new: bool
+    novelty_quote: str | None
+
+
+class ExtractionPayload(TypedDict):
+    event_type: str
+    novelty_claim: bool
+    entities: list[EntityPayload]
+    rejects: dict[str, int]
+
+
+class _Content(TypedDict):
+    """The parts of the model answer that `_content` checked; entities are still unchecked."""
+
+    event_type: str
+    novelty_claim: bool
+    entities: list[object]
+
+
 @dataclass(frozen=True)
 class ExtractedEntity:
     name: str
@@ -133,9 +162,10 @@ class Extraction:
     entities: tuple[ExtractedEntity, ...]
     rejects: dict[str, int] = field(default_factory=dict)
 
-    def payload(self) -> dict[str, Any]:
+    def payload(self) -> ExtractionPayload:
         return {"event_type": self.event_type, "novelty_claim": self.novelty_claim,
-                "entities": [asdict(e) for e in self.entities], "rejects": dict(self.rejects)}
+                "entities": [cast(EntityPayload, asdict(e)) for e in self.entities],
+                "rejects": dict(self.rejects)}
 
 
 def _summary(title: str, summary: str | None) -> str | None:
@@ -186,7 +216,7 @@ def ws(value: str) -> str:
     return str(re.sub(r"\s+", " ", value).strip().casefold())
 
 
-def _short(value: Any, limit: int = 120) -> str | None:
+def _short(value: object, limit: int = 120) -> str | None:
     if not isinstance(value, str) or not value.strip() or len(value) > limit:
         return None
     return value.strip()
@@ -235,7 +265,7 @@ def is_retrospective(quote: str, published_at: date | None) -> bool:
     return published_at is not None and _month_is_earlier(quote, published_at)
 
 
-def _content(data: Any) -> dict[str, Any]:
+def _content(data: object) -> _Content:
     if not isinstance(data, dict) or data.get("model") not in ACCEPTED_MODELS:
         raise ExtractionInvalid("extraction_model")
     try:
@@ -251,10 +281,10 @@ def _content(data: Any) -> dict[str, Any]:
             or not isinstance(content.get("event_type"), str)
             or not isinstance(content.get("novelty_claim"), bool)):
         raise ExtractionInvalid("extraction_schema")
-    return content
+    return cast(_Content, content)
 
 
-def parse_extraction(text: str, data: Any, published_at: date | None) -> Extraction:
+def parse_extraction(text: str, data: object, published_at: date | None) -> Extraction:
     """Validate one provider response against the article text (plan Decision 1 rules 1-9)."""
     content = _content(data)
     haystack = ws(text)
@@ -282,7 +312,7 @@ def parse_extraction(text: str, data: Any, published_at: date | None) -> Extract
         if entity.role == "primary":
             primaries += 1
             if primaries > MAX_PRIMARIES:
-                entities[index] = _replace(entity, role="mentioned")
+                entities[index] = replace(entity, role="mentioned")
                 reject("primary_capped")
     if len(entities) > MAX_ENTITIES:
         reject("entity_capped")
@@ -291,50 +321,52 @@ def parse_extraction(text: str, data: Any, published_at: date | None) -> Extract
                       entities=tuple(_merge_duplicates(entities, reject)), rejects=rejects)
 
 
-def _replace(entity: ExtractedEntity, **changes: Any) -> ExtractedEntity:
-    return ExtractedEntity(**{**asdict(entity), **changes})
-
-
-def _entity(raw: Any, haystack: str, published_at: date | None, reject) -> ExtractedEntity | None:
-    name = _grounded_name(raw, haystack, reject)
+def _entity(raw: object, haystack: str, published_at: date | None,
+            reject: Reject) -> ExtractedEntity | None:
+    if not isinstance(raw, dict):
+        reject("malformed_entity")
+        return None
+    item: dict[str, object] = raw
+    name = _grounded_name(item, haystack, reject)
     if name is None:
         return None
-    raw_type = raw["type"].strip().lower() if isinstance(raw.get("type"), str) else ""
+    raw_type = kind.strip().lower() if isinstance(kind := item.get("type"), str) else ""
     entity_type = TYPE_SYNONYMS.get(raw_type, raw_type)
     if entity_type not in ENTITY_TYPES:
         reject("type_unknown")
         return None
     entity = ExtractedEntity(
-        name=name, canonical_name=_grounded(raw.get("canonical_name"), haystack) or name,
-        entity_type=entity_type, vendor=_grounded(raw.get("vendor"), haystack),
-        role=raw["role"] if raw.get("role") in ("primary", "mentioned") else "mentioned",
+        name=name, canonical_name=_grounded(item.get("canonical_name"), haystack) or name,
+        entity_type=entity_type, vendor=_grounded(item.get("vendor"), haystack),
+        role=role if isinstance(role := item.get("role"), str)
+        and role in ("primary", "mentioned") else "mentioned",
         is_new=False, novelty_quote=None)
-    if raw.get("is_new") is not True:
+    if item.get("is_new") is not True:
         return entity
-    quote = _novelty_quote(raw.get("is_new_quote"), entity, haystack, published_at, reject)
-    return _replace(entity, is_new=quote is not None, novelty_quote=quote)
+    quote = _novelty_quote(item.get("is_new_quote"), entity, haystack, published_at, reject)
+    return replace(entity, is_new=quote is not None, novelty_quote=quote)
 
 
-def _grounded_name(raw: Any, haystack: str, reject) -> str | None:
-    if not isinstance(raw, dict) or not isinstance(raw.get("name"), str) \
-            or not 1 <= len(raw["name"]) <= 120 or not raw["name"].strip():
+def _grounded_name(item: dict[str, object], haystack: str, reject: Reject) -> str | None:
+    raw_name = item.get("name")
+    if not isinstance(raw_name, str) or not 1 <= len(raw_name) <= 120 or not raw_name.strip():
         reject("malformed_entity")
         return None
-    name: str = raw["name"].strip()
+    name = raw_name.strip()
     if ws(name) not in haystack:
         reject("name_not_grounded")
         return None
     return name
 
 
-def _grounded(value: Any, haystack: str) -> str | None:
+def _grounded(value: object, haystack: str) -> str | None:
     """A short optional field kept only when it appears in the article text."""
     short = _short(value)
     return short if short is not None and ws(short) in haystack else None
 
 
-def _novelty_quote(quote: Any, entity: ExtractedEntity, haystack: str,
-                   published_at: date | None, reject) -> str | None:
+def _novelty_quote(quote: object, entity: ExtractedEntity, haystack: str,
+                   published_at: date | None, reject: Reject) -> str | None:
     """The stripped quote when it supports `is_new`, else None with the reason."""
     if not (isinstance(quote, str) and len(quote.split()) <= 30 and len(quote) <= 300
             and ws(quote) in haystack
@@ -353,7 +385,7 @@ def mention_key(entity: ExtractedEntity) -> tuple[str, str]:
                                                             entity.entity_type))
 
 
-def _merge_duplicates(entities: list[ExtractedEntity], reject) -> list[ExtractedEntity]:
+def _merge_duplicates(entities: list[ExtractedEntity], reject: Reject) -> list[ExtractedEntity]:
     """Rule 8: drop stoplisted keys; merge duplicate mention keys (primary wins, is_new OR)."""
     merged: dict[tuple[str, str], ExtractedEntity] = {}
     for entity in entities:
@@ -366,7 +398,7 @@ def _merge_duplicates(entities: list[ExtractedEntity], reject) -> list[Extracted
             merged[key] = entity
             continue
         reject("duplicate_merged")
-        merged[key] = _replace(
+        merged[key] = replace(
             first, role="primary" if "primary" in (first.role, entity.role) else "mentioned",
             is_new=first.is_new or entity.is_new,
             novelty_quote=first.novelty_quote or entity.novelty_quote)
