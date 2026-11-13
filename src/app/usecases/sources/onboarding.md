@@ -134,8 +134,10 @@ check it.
   `test_run_source_validation_returns_failed_result_for_unsupported_candidate_type`,
   `test_run_source_validation_executes_html_path_and_batch_wrapper`,
   `test_source_onboarding_picker_and_ingest_helpers`. A fetch or parse error gives `failed` with
-  the error type and message (`_format_validation_error`): no test (both branches are
-  `pragma: no cover`).
+  the error type and message (`_format_validation_error`) and logs the traceback
+  (`source_validation_fetch_failed`); so does a sampled link that cannot be checked. Tests:
+  `test_validate_rss_candidate_fails_when_the_feed_cannot_be_fetched`,
+  `test_validate_html_candidate_fails_when_the_page_cannot_be_fetched`.
 - The result is stored by `record_validation_result`: status, detected type (also replaces
   `candidate_type` when set), error, details JSON (`_build_validation_details`), `validated_at`.
   Tests: `test_record_validation_result_updates_candidate_and_guards_missing_candidate`,
@@ -173,7 +175,7 @@ check it.
 - One check job per process: `POST .../batches/{batch_id}/check` starts a daemon thread and
   returns 202; the same batch while running returns the running job; another batch while running
   or an unknown batch: 409. `GET .../check-status` shows status, completed and total; a crash sets
-  `failed` with the exception type only. The job state is in memory: after a restart the status is
+  `failed` with the exception type only and logs the traceback (`source_intake_check_failed`). The job state is in memory: after a restart the status is
   `idle` and unchecked candidates stay `pending` until the operator starts the check again (no
   test). Only `draft` candidates are checked (no test). Tests:
   `test_upload_api_returns_immediately_health_and_progress_remain_available`,
@@ -193,7 +195,8 @@ check it.
   followed by hand up to the loop bound in `_read_source`, body capped by `_MAX_RESPONSE_BYTES`,
   client timeout in `source_http_client`. A feed needs entries with a title and link among the
   first samples; an HTML page needs at least two links in article headings other than itself.
-  Probe failure: `failed`, decision `reject`, reason "Technical verification failed". Tests:
+  Probe failure: `failed`, decision `reject`, reason "Technical verification failed"; the
+  traceback is logged (`source_intake_candidate_failed`). Tests:
   `test_probe_uses_only_source_listing_and_records_bounded_evidence`,
   `test_probe_rejects_pages_without_publication_evidence`, `test_probe_bounds_redirects_and_body_size`,
   `test_private_network_sources_are_blocked`, `test_non_http_and_credential_urls_are_blocked`,

@@ -50,6 +50,8 @@ flowchart LR
 - No command imports `app.storage` except row types; only `deps.py` imports `SessionLocal` and
   `create_all`.
 - No command commits.
+- A command that turns a runtime failure into a summary logs it with its traceback. Tests:
+  `test_daily_runtime_failure_exits_zero`.
 
 ## Code map
 

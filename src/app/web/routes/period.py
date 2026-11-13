@@ -78,7 +78,7 @@ def latest_week(deps: WebDeps) -> tuple[date, date] | None:
         deps.create_all()
         rows = period_index(deps.SessionLocal, "week")
     except Exception as exc:  # any failure: the caller's page stays up
-        _LOGGER.error("period_signals_latest_failed error=%s", type(exc).__name__)
+        _LOGGER.error("period_signals_latest_failed error=%s", type(exc).__name__, exc_info=True)
         return None
     shown = next((r for r in rows if r.status in SHOWN_STATUSES), rows[0] if rows else None)
     return (shown.period_start, shown.period_end) if shown is not None else None
@@ -90,7 +90,7 @@ def has_month(deps: WebDeps) -> bool:
         deps.create_all()
         return bool(period_index(deps.SessionLocal, "month"))
     except Exception as exc:  # any failure: the caller's page stays up
-        _LOGGER.error("period_signals_has_month_failed error=%s", type(exc).__name__)
+        _LOGGER.error("period_signals_has_month_failed error=%s", type(exc).__name__, exc_info=True)
         return False
 
 
@@ -117,7 +117,7 @@ def _read_page(deps: WebDeps, kind: str, start: date | None, explicit: bool, not
         periods = [(r.period_start, r.period_end, r.status) for r in rows]
         signals = _response(kind, start, row, brief) if row is not None else None
     except Exception as exc:  # unavailable page, never a 500 (plan: Web)
-        _LOGGER.error("period_signals_page_failed error=%s", type(exc).__name__)
+        _LOGGER.error("period_signals_page_failed error=%s", type(exc).__name__, exc_info=True)
         periods, signals, note = [], None, f"{plural} signals are temporarily unavailable."
     return periods, signals, note
 

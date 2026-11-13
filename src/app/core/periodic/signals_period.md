@@ -177,7 +177,7 @@ The numbers live in the code: fields of `PeriodThresholds` (by kind) in `period_
   idempotent by hash, so a failed 1st heals the next night. Before 2026-12-01 there is no completed
   month inside the range and the month run does nothing and writes nothing; on 2026-12-01 it stores
   November. Its report is the `month` key of the output; a month failure never changes the week
-  report. `--kind week` or `--kind month` runs that kind alone. Tests:
+  report and is logged with its traceback (`period_signals_month_failed`). `--kind week` or `--kind month` runs that kind alone. Tests:
   `test_the_nightly_default_does_nothing_before_the_first_month_is_complete`,
   `test_the_nightly_default_before_december_writes_nothing`,
   `test_plain_run_adds_the_month_report_and_a_kind_does_not`,
@@ -294,13 +294,15 @@ flowchart LR
   "not available" line, never 500; the week picker (previous, next, list) is plain links built from
   the index. A `week` that is not a Monday redirects (303) to its Monday. Tests: `test_no_rows_is_unavailable_200`,
   `test_corrupt_row_is_200`, `test_week_param`, `test_default_skips_a_newer_partial_week`.
+  A failed read gives the same 200 page with a "temporarily unavailable" line and logs the
+  traceback (`period_signals_page_failed`). Tests: `test_period_page_read_failure_is_unavailable_200`.
 - Stored text is escaped; only `http(s)` links are rendered; days and the "Daily Digest" link go to the digest
   at `/daily?date=YYYY-MM-DD` (spec 018 item 6b; `test_period_links_point_to_daily`).
   The brief shows its sentences with numbered source links and the same AI note as the daily brief
   (`AI_NOTE`). Tests: `test_text_is_escaped_and_only_http_links`, `test_week_label_across_months`,
   `test_page_and_api_with_a_brief_on_top`, `test_brief_text_is_escaped_and_only_http_links_are_rendered`.
 - The header link "Weekly" and the line under the daily block on `/` show only when a stored week
-  exists. Tests: `test_nav_link_and_home_line_follow_stored_weeks`,
+  exists; a failed read hides them and logs the traceback. Tests: `test_nav_link_and_home_line_follow_stored_weeks`,
   `test_home_page_survives_a_period_read_failure`.
 
 **Month page** (`GET /monthly`, `GET /monthly?month=YYYY-MM`; same rules as the week page)

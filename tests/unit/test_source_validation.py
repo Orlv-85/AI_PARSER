@@ -64,6 +64,35 @@ def test_validate_rss_candidate_fails_when_feed_has_no_entries() -> None:
     assert "entry" in _value(result, "validation_error").lower()
 
 
+def _logged_with_traceback(caplog) -> list[bool]:
+    return [r.exc_info is not None for r in caplog.records
+            if r.getMessage().startswith("source_validation_fetch_failed")]
+
+
+def _raise(exc: Exception):
+    def fetch(*_args):
+        raise exc
+    return fetch
+
+
+def test_validate_rss_candidate_fails_when_the_feed_cannot_be_fetched(caplog) -> None:
+    candidate = SimpleNamespace(id=3, normalized_url="https://example.com/down.xml")
+    result = source_validation.validate_rss_candidate(
+        candidate, fetch_feed=_raise(TimeoutError("read timed out")))
+    assert (result.status, result.detected_type, result.entry_count) == ("failed", "rss", 0)
+    assert result.validation_error == "TimeoutError: read timed out"
+    assert _logged_with_traceback(caplog) == [True]
+
+
+def test_validate_html_candidate_fails_when_the_page_cannot_be_fetched(caplog) -> None:
+    candidate = SimpleNamespace(id=4, normalized_url="https://example.com/down")
+    result = source_validation.validate_html_candidate(
+        candidate, fetch_html=_raise(ConnectionError()))
+    assert (result.status, result.detected_type, result.link_count) == ("failed", "html", 0)
+    assert result.validation_error == "ConnectionError" and result.sample_links == []
+    assert _logged_with_traceback(caplog) == [True]
+
+
 def test_validate_html_candidate_marks_candidate_valid_when_article_links_are_extractable(
 ) -> None:
     validate_html_candidate = _require_api("validate_html_candidate")
@@ -331,7 +360,7 @@ def test_validate_html_candidate_warns_when_a_sampled_link_is_not_an_article() -
     assert "pricing" in str(result.validation_error)
 
 
-def test_validate_html_candidate_warns_when_a_sampled_link_cannot_be_fetched() -> None:
+def test_validate_html_candidate_warns_when_a_sampled_link_cannot_be_fetched(caplog) -> None:
     links = ["https://example.com/blog/p1", "https://example.com/blog/p2"]
 
     def fetch(url: str) -> str:
@@ -344,6 +373,7 @@ def test_validate_html_candidate_warns_when_a_sampled_link_cannot_be_fetched() -
     )
     assert result.status == "warning"
     assert "p2" in str(result.validation_error)
+    assert _logged_with_traceback(caplog) == [True]
 
 
 def test_validate_html_candidate_warns_when_listing_has_too_few_links() -> None:

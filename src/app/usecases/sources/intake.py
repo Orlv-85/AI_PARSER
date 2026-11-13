@@ -1,6 +1,7 @@
 """Source check job and bulk approval (SourceIntakeService); see onboarding.md next to this file."""
 
 import json
+import logging
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -23,6 +24,8 @@ from app.core.sources.review import (
 from app.storage.models_sql import Source, SourceCandidate, SourceImportBatch
 from app.storage.source_candidate_repo import SourceCandidateRepo
 from app.usecases.sources.candidate_review import SourceOnboardingService
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class IntakeJob(TypedDict):
@@ -146,6 +149,7 @@ class SourceIntakeService:
             with self._lock:
                 self._job["status"] = "finished"
         except Exception as exc:
+            _LOGGER.exception("source_intake_check_failed batch_id=%s", batch_id)
             with self._lock:
                 self._job.update({"status": "failed",
                                   "error": f"Verification interrupted: {type(exc).__name__}"})
@@ -202,7 +206,8 @@ class SourceIntakeService:
                       "requested_url": candidate_url,
                       "checked_at": datetime.now(UTC).isoformat()}
             self._save(row, "validated", probe.source_type, review)
-        except Exception as exc:
+        except Exception as exc:  # the candidate is saved as failed with the reason
+            _LOGGER.warning("source_intake_candidate_failed url=%s", row.url, exc_info=True)
             reason = str(exc) if isinstance(exc, ValueError) else type(exc).__name__
             self._save(row, "failed", "unknown", {
                 "decision": "reject", "reason": f"Technical verification failed: {reason[:300]}",

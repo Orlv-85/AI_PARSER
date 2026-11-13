@@ -63,9 +63,11 @@ function. Each rule lists the tests that check it.
   `test_run_fetch_cycle_html_heavy_profile_fetches_html_before_rss`.
 - Admission on: sources are fetched one at a time, each after its pending replay, so a pause stops
   before the next source is fetched. Tests: `test_outage_preserves_verified_and_replays_after_list_rotation`.
-- A source that fails to fetch is logged (`source_fetch_failed`), counted in `errors` and skipped.
+- A source that fails to fetch is logged with its traceback (`source_fetch_failed`), counted in
+  `errors` and skipped.
   A source that fails while being processed rolls back to its own savepoint (articles, admission
-  rows and validators of that source), is logged (`source_persist_failed`) and counted; the run
+  rows and validators of that source), is logged with its traceback (`source_persist_failed`) and
+  counted; the run
   continues. Tests: `test_run_fetch_cycle_counts_new_duplicates_and_errors`,
   `test_source_savepoint_recovers_after_database_error`, `test_source_rollback_does_not_clear_prior_notice`,
   `test_replay_and_fresh_fetch_share_source_savepoint`.
@@ -139,7 +141,8 @@ function. Each rule lists the tests that check it.
   `test_parse_rss_maps_entries_to_article_model`.
 - Full text (`rss_extract_full_text`): only the first `rss_full_text_max_items_per_source` items,
   at most `rss_full_text_concurrency_limit` at once across sources. A linked page identified as
-  non-news removes the item; any other failure keeps the item without content. Tests:
+  non-news removes the item; any other failure keeps the item without content and logs a warning
+  with the traceback. Tests:
   `test_fetch_rss_extract_full_text_enriches_only_first_n`, `test_fetch_rss_extract_full_text_fail_soft_logs_and_continues`,
   `test_fetch_rss_extract_full_text_disabled`, `test_fetch_rss_extract_full_text_uses_semaphore_acquire_and_release`,
   `test_rss_linked_landing_is_removed_before_text_extraction`.
@@ -165,7 +168,8 @@ function. Each rule lists the tests that check it.
   known links in a row. Known links count as duplicates and in `skipped_known_html_links`. Tests:
   `test_run_fetch_cycle_html_two_stage_skips_known_links_before_article_fetch_future`,
   `test_run_fetch_cycle_html_two_stage_stops_after_known_streak`.
-- A failed or unparsable article page skips that link only. Tests:
+- A failed or unparsable article page skips that link only; a download error logs a warning
+  `event=html.article_fetch outcome=failed` with the URL, error type and traceback. Tests:
   `test_process_html_links_two_stage_covers_non_batch_edge_paths`, `test_html_article_failure_retains_retry_and_continues`,
   `test_html_fetch_cycle_skips_failed_article_only`.
 - Article page: title is the first `h1` text without script, style and template text, else the

@@ -1,4 +1,5 @@
 import json
+import logging
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from logging import getLogger
@@ -471,7 +472,7 @@ def test_source_rollback_does_not_clear_prior_notice(monkeypatch, tmp_path):
 @pytest.mark.parametrize("batch", [False, True])
 @pytest.mark.parametrize("failure", ["exception", "parser"])
 def test_html_article_failure_retains_retry_and_continues(
-    monkeypatch, tmp_path, batch, failure,
+    monkeypatch, tmp_path, batch, failure, caplog,
 ):
     scenario = Scenario(tmp_path, monkeypatch, "two_stage_html", batch)
     original_fetch = scenario.fetch_body
@@ -485,9 +486,13 @@ def test_html_article_failure_retains_retry_and_continues(
         return original_fetch(url=url, **kwargs)
 
     monkeypatch.setattr("app.usecases.ingestion.pipeline.html_links.fetch_html_article", fetch_body)
-    result = scenario.run()
+    with caplog.at_level(logging.WARNING, logger="app.usecases.ingestion.pipeline.html_links"):
+        result = scenario.run()
     assert result.new == 2 and result.screening_paused == 0
     assert len(scenario.requests) == 2
+    logged = f"outcome=failed source_key=s1 url={first_url} error=ReadTimeout"
+    tracebacks = [r.exc_info is not None for r in caplog.records if logged in r.getMessage()]
+    assert tracebacks == ([True] if failure == "exception" else [])
     pending = [r for r in scenario.rows(AdmissionDecision) if r.provider_status == "pending"]
     assert len(pending) == 1
     assert json.loads(pending[0].payload)["candidate"]["url"] == first_url

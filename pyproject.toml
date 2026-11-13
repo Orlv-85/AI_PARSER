@@ -67,7 +67,7 @@ line-length = 100
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+select = ["E", "F", "I", "UP", "B", "BLE"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"

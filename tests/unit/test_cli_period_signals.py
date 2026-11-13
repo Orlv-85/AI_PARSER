@@ -104,7 +104,7 @@ def test_plain_run_adds_the_month_report_and_a_kind_does_not(tmp_path, monkeypat
     engine.dispose()
 
 
-def test_a_month_failure_keeps_the_week_report(tmp_path, monkeypatch):
+def test_a_month_failure_keeps_the_week_report(tmp_path, monkeypatch, caplog):
     engine, maker = make_factory(tmp_path, monkeypatch, enabled=True)
     seed_weeks(maker, PREVIOUS, LATEST, comparable_from=FROM)
     real = period_run.run_periods
@@ -119,6 +119,8 @@ def test_a_month_failure_keeps_the_week_report(tmp_path, monkeypatch):
     report = json.loads(output)
     assert code == 0 and report["written"] == [LATEST.isoformat()]
     assert report["month"] == {"state": "error", "error": "RuntimeError"}
+    assert [r.exc_info is not None for r in caplog.records
+            if r.getMessage() == "period_signals_month_failed"] == [True]
     assert stored(maker) == [LATEST]
     engine.dispose()
 

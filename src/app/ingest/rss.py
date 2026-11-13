@@ -245,12 +245,13 @@ def fetch_rss(
         except NonNewsPageError:
             items.remove(item)
             continue
-        except Exception as exc:
+        except Exception as exc:  # one bad article never stops the feed
             _LOGGER.warning(
                 "event=rss.full_text_extract outcome=failed source_key=%s url=%s error=%s",
                 source_key,
                 item.url,
                 type(exc).__name__,
+                exc_info=True,
             )
             continue
         finally:

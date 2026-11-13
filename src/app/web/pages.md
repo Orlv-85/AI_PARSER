@@ -90,7 +90,8 @@ flowchart LR
   `test_page_views_migration`. Only day, route and count are stored. Read-only
   `ai-news page-views --days N` prints one JSON object for the last N UTC days including today,
   using `PAGE_VIEWS_DEFAULT_DAYS` by default. Tests: `test_page_views_counts_home_and_daily`,
-  `test_page_views_failure_keeps_page`, `test_page_views_stores_no_visitor_data`,
+  `test_page_views_failure_keeps_page` (the failure is logged with its traceback),
+  `test_page_views_stores_no_visitor_data`,
   `test_cli_page_views_prints_json`, `test_page_views_postgres_atomic_increment`,
   `test_page_views_counts_digest_home_and_fallback`, `test_page_views_uses_utc_today`,
   `test_page_views_increment_compiles_for_postgres`, `test_page_views_sqlite_atomic_increment`,

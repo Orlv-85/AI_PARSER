@@ -318,7 +318,8 @@ def test_verify_password_dispatches_and_error_branches(monkeypatch) -> None:
     monkeypatch.setattr(auth_module, "_ARGON2_HASHER", None)
     assert auth_module.verify_password("x", "$argon2id$fake") is False
     monkeypatch.setattr(auth_module, "_ARGON2_HASHER", _RaisingArgon2())
-    assert auth_module.verify_password("x", "$argon2id$fake") is False
+    with pytest.raises(RuntimeError, match="boom"):
+        auth_module.verify_password("x", "$argon2id$fake")
 
     class _FakeBcrypt:
         @staticmethod
@@ -474,3 +475,13 @@ def test_session_verify_returns_none_for_revoked_token() -> None:
     token = signer.sign(subject="operator", now=datetime(2026, 2, 21, 10, 0, tzinfo=UTC))
     signer.revoke(token)
     assert signer.verify(token, now=datetime(2026, 2, 21, 10, 0, tzinfo=UTC)) is None
+
+
+def test_argon2_verify_is_false_only_for_a_mismatch_or_a_malformed_hash() -> None:
+    pytest.importorskip("argon2")
+    auth_module = import_module("app.web.auth")
+    stored = auth_module.hash_password("right-pass")
+    assert stored.startswith("$argon2")
+    assert auth_module.verify_password("right-pass", stored) is True
+    assert auth_module.verify_password("wrong-pass", stored) is False
+    assert auth_module.verify_password("right-pass", "$argon2id$not-a-hash") is False

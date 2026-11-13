@@ -186,8 +186,9 @@ def run_week_and_month(session: Session, settings: Any, options: PeriodRunOption
     report = run_periods(session, settings, options)
     try:
         report["month"] = run_periods(session, settings, replace(options, kind=MONTH))
-    except Exception as exc:  # pylint: disable=broad-exception-caught
+    except Exception as exc:
         session.rollback()
+        LOGGER.exception("period_signals_month_failed")
         report["month"] = {"state": "error", "error": type(exc).__name__}
     return report
 
@@ -203,7 +204,7 @@ def _brief_step(repo: PeriodSignalRepo, settings: Any, options: PeriodRunOptions
             repo, settings, [(options.kind, w) for w in weeks], budget,
             RunEnv(transport=transport))
         return result
-    except Exception as error:  # pylint: disable=broad-exception-caught
+    except Exception as error:
         session.rollback()
         LOGGER.exception("period_signals_brief_failed")
         return {"state": "error", "terminal_reason": f"error:{type(error).__name__}",

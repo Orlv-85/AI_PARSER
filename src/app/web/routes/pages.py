@@ -139,7 +139,7 @@ def _digest_response(deps: WebDeps, selected_date: date | None) -> str:
             _read_daily_signals(report_date, session_local=deps.SessionLocal))
     except Exception as exc:  # any signals failure (F5): the digest page stays up
         _LOGGER.error("daily_signals_read_failed report_date=%s error=%s",
-                      report_date.isoformat(), type(exc).__name__)
+                      report_date.isoformat(), type(exc).__name__, exc_info=True)
         signals_html = render_signals(None, read_error=True)
     return _render_digest(report_date=report_date, digest=digest, signals_html=signals_html,
                           week=latest_week(deps), monthly=has_month(deps))
@@ -160,7 +160,8 @@ def _count_page(deps: WebDeps, route: str) -> None:
     try:
         count_page_view(deps.SessionLocal, datetime.now(UTC).date(), route)
     except Exception as exc:  # Measurement must never take down a public page.
-        _LOGGER.error("page_views_increment_failed route=%s error=%s", route, type(exc).__name__)
+        _LOGGER.error("page_views_increment_failed route=%s error=%s", route, type(exc).__name__,
+                      exc_info=True)
 
 
 def _digest_page(deps: WebDeps, background_tasks: BackgroundTasks,

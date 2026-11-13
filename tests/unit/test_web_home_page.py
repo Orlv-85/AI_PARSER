@@ -351,7 +351,8 @@ def test_page_views_failure_keeps_page(client, maker, caplog):
         session.commit()
     response = client.get("/")
     assert response.status_code == 200 and response.content == expected
-    assert "page_views_increment_failed" in caplog.text
+    assert [r.exc_info is not None for r in caplog.records
+            if r.getMessage().startswith("page_views_increment_failed")] == [True]
 
 
 def test_page_views_uses_utc_today(client, maker, monkeypatch):
