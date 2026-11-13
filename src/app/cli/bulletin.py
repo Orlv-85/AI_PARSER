@@ -20,7 +20,7 @@ from app.usecases.bulletin.daily import (
 )
 from app.usecases.bulletin.stored import store_bulletin
 from app.usecases.bulletin.writer_run import WRITER_MAX_USD_PER_DAY, open_writer
-from app.usecases.world_screen import utc_today
+from app.usecases.world.screen import utc_today
 
 app = typer.Typer(help="Daily bulletin tools (spec 018).")
 

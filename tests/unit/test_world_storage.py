@@ -292,10 +292,7 @@ def test_world_tables_not_read_by_digest():
     allowed = {SRC / "storage" / "world.py", SRC / "storage" / "models_sql.py"}
     allowed |= set((SRC / "core" / "world").glob("*.py"))
     allowed.add(SRC / "cli" / "main.py")
-    allowed.add(SRC / "usecases" / "world_collect.py")
-    allowed.add(SRC / "usecases" / "world_screen.py")
-    allowed.add(SRC / "usecases" / "world_text.py")
-    allowed.add(SRC / "usecases" / "world_report.py")
+    allowed |= set((SRC / "usecases" / "world").glob("*.py"))
     # the bulletin is the one reader (FR-016)
     allowed.add(SRC / "usecases" / "bulletin" / "day_input.py")
     found = []

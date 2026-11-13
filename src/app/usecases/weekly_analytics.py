@@ -10,7 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.storage.models_sql import Article, FetchRun
-from app.storage.repos import (
+from app.storage.weekly_analytics import (
     WeeklyAnalyticsItem,
     WeeklyAnalyticsRepo,
     WeeklyAnalyticsReport,

@@ -3,7 +3,8 @@ from datetime import UTC, date, datetime
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.storage import digest_repo, models_sql, repos
+from app.storage import digest_repo, models_sql
+from app.storage.weekly_analytics import WeeklyAnalyticsRepo, WeeklyDraft
 
 
 def _session():
@@ -321,7 +322,7 @@ def test_weekly_report_builds_local_summary_for_selected_seven_day_window() -> N
     _seed_weekly_analytics_articles(session)
     target_date = date(2026, 3, 7)
 
-    report = repos.WeeklyAnalyticsRepo(session).get_weekly_report(report_date=target_date)
+    report = WeeklyAnalyticsRepo(session).get_weekly_report(report_date=target_date)
 
     assert report.report_date == target_date
     assert report.date_from == date(2026, 3, 1)
@@ -374,7 +375,7 @@ def test_weekly_report_matches_topic_when_titles_vary_between_weeks() -> None:
     )
     session.commit()
 
-    report = repos.WeeklyAnalyticsRepo(session).get_weekly_report(report_date=date(2026, 3, 8))
+    report = WeeklyAnalyticsRepo(session).get_weekly_report(report_date=date(2026, 3, 8))
 
     assert not report.new
     assert [item.title for item in report.trending_up] == [
@@ -390,9 +391,9 @@ def test_get_weekly_report_returns_saved_published_report_for_matching_week() ->
 
     with session_local() as write_session:
         _seed_weekly_analytics_articles(write_session)
-        repos.WeeklyAnalyticsRepo(write_session).save_weekly_report(
+        WeeklyAnalyticsRepo(write_session).save_weekly_report(
             report_date=target_date,
-            draft=repos.WeeklyDraft(
+            draft=WeeklyDraft(
                 date_from=date(2026, 3, 2),
                 date_to=target_date,
                 summary=("Published weekly management snapshot for the completed "
@@ -424,7 +425,7 @@ def test_get_weekly_report_returns_saved_published_report_for_matching_week() ->
         write_session.commit()
 
     with session_local() as read_session:
-        report = repos.WeeklyAnalyticsRepo(read_session).get_weekly_report(report_date=target_date)
+        report = WeeklyAnalyticsRepo(read_session).get_weekly_report(report_date=target_date)
 
     assert report.report_date == target_date
     assert report.date_from == date(2026, 3, 2)
@@ -445,10 +446,10 @@ def test_save_weekly_report_truncates_oversized_titles_for_storage_limits() -> N
     long_title = "A" * 700
 
     with session_local() as session:
-        repo = repos.WeeklyAnalyticsRepo(session)
+        repo = WeeklyAnalyticsRepo(session)
         report = repo.save_weekly_report(
             report_date=target_date,
-            draft=repos.WeeklyDraft(
+            draft=WeeklyDraft(
                 date_from=date(2026, 3, 2),
                 date_to=target_date,
                 summary="Stored report with oversized source title.",

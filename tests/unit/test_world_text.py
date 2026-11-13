@@ -36,8 +36,8 @@ from app.storage.world import (
 )
 from app.usecases.archive import capture as capture_module
 from app.usecases.archive.capture import PageFetch
-from app.usecases.world_screen import ScreenOptions, rank_clusters, run_screen
-from app.usecases.world_text import archive_text_source, run_texts
+from app.usecases.world.screen import ScreenOptions, rank_clusters, run_screen
+from app.usecases.world.text import archive_text_source, run_texts
 
 DAY = date(2026, 10, 30)
 BODY = "An editorial article about AI in schools and hospitals. " * 30

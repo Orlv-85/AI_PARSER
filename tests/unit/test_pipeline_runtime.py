@@ -1034,7 +1034,7 @@ def test_run_fetch_cycle_on_monday_creates_no_legacy_weekly_report(monkeypatch) 
             return cls(2026, 3, 9, 8, 0, tzinfo=tz or UTC)
 
     monkeypatch.setattr(
-        "app.storage.repos.WeeklyAnalyticsRepo.save_weekly_report",
+        "app.storage.weekly_analytics.WeeklyAnalyticsRepo.save_weekly_report",
         lambda _self, *, report_date, **_kwargs: saved.append(report_date),
     )
 
