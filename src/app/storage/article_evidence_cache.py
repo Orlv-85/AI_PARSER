@@ -98,11 +98,21 @@ class StoredResponse(ResponseMeta):
     original_url: str
 
 
-class RobotsResponse(ResponseMeta):
-    """robots/<key>.json: the body is kept as text with the redirects that led to it."""
+class RobotsResponse(TypedDict, total=False):
+    """robots/<key>.json: the body as text with the redirects that led to it. A cached file is
+    trusted as found, so only the fields every reader needs are required."""
 
-    body: str
-    redirects: NotRequired[list[dict[str, object]]]
+    final_url: Required[str]
+    status_code: Required[int]
+    body: Required[str]
+    content_type: str
+    encoding: str | None
+    location: str | None
+    truncated: bool
+    retry_after: str | None
+    fetched_at: str
+    redirect_issue: str
+    redirects: list[dict[str, object]]
 
 
 class HostUnavailableError(RuntimeError):
