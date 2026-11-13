@@ -11,7 +11,7 @@ from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import NotRequired, TypedDict
+from typing import NamedTuple, NotRequired, TypedDict
 from urllib.parse import urlsplit
 
 import httpx
@@ -340,11 +340,15 @@ def _add_page_version(repo: ArchiveRepo, document: ArchiveDocument, page: Cached
                                            http_status=page["http_status"]))
 
 
-def _sort_due(repo: ArchiveRepo, documents: list[ArchiveDocument], *, cache_root: Path,
-              daily_cache_root: Path) -> tuple[int, list[ArchiveDocument], list[ArchiveDocument]]:
-    """Reuse extracted daily-publish pages; split the rest into resumed and download targets.
+class _DueSplit(NamedTuple):
+    reused: int
+    resumed: list[ArchiveDocument]
+    targets: list[ArchiveDocument]
 
-    Returns (reused, resumed, targets)."""
+
+def _sort_due(repo: ArchiveRepo, documents: list[ArchiveDocument], *, cache_root: Path,
+              daily_cache_root: Path) -> _DueSplit:
+    """Reuse extracted daily-publish pages; split the rest into resumed and download targets."""
     reused = 0
     resumed: list[ArchiveDocument] = []
     targets: list[ArchiveDocument] = []
@@ -364,7 +368,7 @@ def _sort_due(repo: ArchiveRepo, documents: list[ArchiveDocument], *, cache_root
                 continue
             shutil.rmtree(directory, ignore_errors=True)
         targets.append(document)
-    return reused, resumed, targets
+    return _DueSplit(reused, resumed, targets)
 
 
 def _cap_downloads(targets: list[ArchiveDocument]) -> tuple[list[ArchiveDocument], int]:
@@ -444,16 +448,15 @@ def _record_downloads(repo: ArchiveRepo, documents: list[ArchiveDocument], *, ca
 def _download_step(session: Session, due: _DueQuery, *, deadline: float,
                    fetch: PageFetch) -> DownloadCounters:
     repo = ArchiveRepo(session)
-    reused, resumed, targets = _sort_due(repo, repo.due(due.since, due.now, ids=due.only),
-                                         cache_root=fetch.cache_root,
-                                         daily_cache_root=fetch.daily_cache_root)
-    dispatch, skipped_cap = _cap_downloads(targets)
-    outage, started = _run_downloads(dispatch, cache=PageCache(fetch.cache_root), deadline=deadline,
-                                     fetch=fetch)
+    cache = PageCache(fetch.cache_root)  # before any write: it creates the cache dirs
+    split = _sort_due(repo, repo.due(due.since, due.now, ids=due.only),
+                      cache_root=fetch.cache_root, daily_cache_root=fetch.daily_cache_root)
+    dispatch, skipped_cap = _cap_downloads(split.targets)
+    outage, started = _run_downloads(dispatch, cache=cache, deadline=deadline, fetch=fetch)
     outage_kept, gave_up, failed = _record_downloads(
-        repo, resumed + [d for d in dispatch if d.url in started], cache_root=fetch.cache_root,
-        now=due.now, outage=outage)
-    return {"cache_reused": reused, "downloads": len(started), "gave_up": gave_up,
+        repo, split.resumed + [d for d in dispatch if d.url in started],
+        cache_root=fetch.cache_root, now=due.now, outage=outage)
+    return {"cache_reused": split.reused, "downloads": len(started), "gave_up": gave_up,
             "skipped_cap": skipped_cap,
             "skipped_time": sum(1 for document in dispatch if document.url not in started),
             "outage": outage, "outage_kept": outage_kept, "failed": dict(failed),
