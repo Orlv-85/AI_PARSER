@@ -11,7 +11,7 @@ from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import NotRequired, TypedDict, cast
+from typing import NotRequired, TypedDict
 from urllib.parse import urlsplit
 
 import httpx
@@ -28,11 +28,9 @@ from app.storage.archive import (
 )
 from app.storage.article_evidence_cache import (
     EXTRACTION_VERSION,
-    Attempt,
     DownloadLimits,
     PageCache,
     SourcePageDownloader,
-    StoredResponse,
     make_http_client,
     url_key,
 )
@@ -251,15 +249,21 @@ def _page_dir(root: Path, url: str) -> Path:
     return Path(root, "pages", url_key(url))
 
 
-def _read_json[T](path: Path, shape: type[T]) -> T | None:
-    """`shape` names what the page cache wrote to the file; it is not checked here."""
-    return cast(T, json.loads(path.read_text())) if path.is_file() else None
+def _read_json(path: Path) -> dict[str, object] | None:
+    """A page-cache file as found; readers check each value they use."""
+    data: dict[str, object] | None = json.loads(path.read_text()) if path.is_file() else None
+    return data
+
+
+def _issues(attempt: dict[str, object]) -> list[str]:
+    issues = attempt.get("issues")
+    return [issue for issue in issues if isinstance(issue, str)] if isinstance(issues, list) else []
 
 
 def _extracted_page(directory: Path) -> CachedPage | None:
     """Text of a completed, extracted cache attempt whose text matches its evidence hash."""
-    attempt = _read_json(directory / "attempt.json", Attempt)
-    evidence = _read_json(directory / "evidence.json", dict[str, object])
+    attempt = _read_json(directory / "attempt.json")
+    evidence = _read_json(directory / "evidence.json")
     text_path = directory / "text.txt"
     if (not attempt or attempt.get("state") != "completed" or not evidence
             or evidence.get("quality") != "extracted" or not text_path.is_file()):
@@ -268,21 +272,21 @@ def _extracted_page(directory: Path) -> CachedPage | None:
     if (len(text.strip()) < ARCHIVE_MIN_TEXT_CHARS
             or hashlib.sha256(text.encode()).hexdigest() != evidence.get("text_sha256")):
         return None
-    response = _read_json(directory / "response.json", StoredResponse)
-    return {"text": text, "final_url": response.get("final_url") if response else None,
-            "http_status": response.get("status_code") if response else None}
+    response = _read_json(directory / "response.json") or {}
+    final_url, http_status = response.get("final_url"), response.get("status_code")
+    return {"text": text, "final_url": final_url if isinstance(final_url, str) else None,
+            "http_status": http_status if isinstance(http_status, int) else None}
 
 
-def _attempt_issue(attempt: Attempt, cache_root: Path, url: str) -> tuple[str, bool]:
+def _attempt_issue(attempt: dict[str, object], cache_root: Path, url: str) -> tuple[str, bool]:
     """(issue, permanent) of a failed attempt; an unanswered robots.txt is retryable."""
     # HTTP status first: it names the cause; quality issues of an error page only follow from it.
-    issues = sorted(attempt.get("issues") or [], key=lambda i: (not i.startswith("http_"), i)) \
+    issues = sorted(_issues(attempt), key=lambda i: (not i.startswith("http_"), i)) \
         or [f"state_{attempt.get('state')}"]
     permanent = [issue for issue in issues if issue in PERMANENT_ISSUES]
     if permanent == ["robots_disallowed_or_unavailable"]:
         parts = urlsplit(url)
-        robots = _read_json(cache_root / "robots" / f"{url_key(f'{parts.scheme}://{parts.netloc}')}.json",
-                            dict[str, object])
+        robots = _read_json(cache_root / "robots" / f"{url_key(f'{parts.scheme}://{parts.netloc}')}.json")
         if robots is not None and robots.get("status_code") not in ROBOTS_ANSWERED:
             return "robots_unavailable", False
     if permanent:
@@ -341,7 +345,7 @@ def _sort_due(repo: ArchiveRepo, documents: list[ArchiveDocument], *, cache_root
             reused += 1
             continue
         directory = _page_dir(cache_root, document.url)
-        attempt = _read_json(directory / "attempt.json", Attempt)
+        attempt = _read_json(directory / "attempt.json")
         if attempt is not None:
             if document.state == STATE_PENDING and attempt.get("state") != "started":
                 resumed.append(document)  # downloaded by a killed run, never recorded
@@ -381,15 +385,15 @@ def _run_downloads(dispatch: list[ArchiveDocument], *, cache: PageCache, deadlin
     return outage, set(started_urls)
 
 
-def _nothing_to_record(attempt: Attempt, outage: bool) -> bool:
+def _nothing_to_record(attempt: dict[str, object], outage: bool) -> bool:
     """Unfinished attempt, or only outage issues during an outage: retry as if not started."""
     if attempt.get("state") == "started":
         return True
-    issues = set(attempt.get("issues") or [])
+    issues = set(_issues(attempt))
     return outage and bool(issues) and issues <= OUTAGE_ISSUES
 
 
-def _record_failure(repo: ArchiveRepo, document: ArchiveDocument, attempt: Attempt, *,
+def _record_failure(repo: ArchiveRepo, document: ArchiveDocument, attempt: dict[str, object], *,
                     cache_root: Path, now: datetime) -> tuple[str, bool]:
     """Record a failed attempt with its retry time; returns (issue, gave_up)."""
     issue, permanent = _attempt_issue(attempt, cache_root, document.url)
@@ -407,7 +411,7 @@ def _record_downloads(repo: ArchiveRepo, documents: list[ArchiveDocument], *, ca
     failed: Counter[str] = Counter()
     for document in documents:
         directory = _page_dir(cache_root, document.url)
-        attempt = _read_json(directory / "attempt.json", Attempt)
+        attempt = _read_json(directory / "attempt.json")
         if attempt is None or _nothing_to_record(attempt, outage):
             shutil.rmtree(directory, ignore_errors=True)
             outage_kept += 1
