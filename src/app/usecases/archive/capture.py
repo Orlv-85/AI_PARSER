@@ -15,7 +15,7 @@ from typing import NotRequired, TypedDict
 from urllib.parse import urlsplit
 
 import httpx
-from sqlalchemy import create_engine, inspect, make_url, select
+from sqlalchemy import Connection, create_engine, inspect, make_url, select
 from sqlalchemy.orm import Session
 
 from app.observability.logging import log_event
@@ -204,16 +204,8 @@ def _coverage(states: list[tuple[datetime, str]]) -> tuple[int, int, float | Non
     return len(states), archived, pct
 
 
-def capture(session: Session, options: CaptureOptions = DEFAULT_CAPTURE, *,  # pylint: disable=too-many-locals
-            logger: logging.Logger | None = None, now: datetime | None = None,
-            fetch: PageFetch | None = None) -> CaptureSummary:
-    """Sync the window (or every article with `scope_all`), then, unless `no_download`, reuse or
-    download pages of due documents without text; summarize."""
-    fetch = fetch or PageFetch()
-    scope_all, max_seconds = options.scope_all, options.max_seconds
-    deadline = fetch.clock() + max_seconds if max_seconds is not None else float("inf")
-    started = now or datetime.now(UTC)
-    since = None if scope_all else started - timedelta(days=ARCHIVE_LOOKBACK_DAYS)
+def _sync_window(session: Session, since: datetime | None) -> int:
+    """Archive the articles first seen since `since` (all with None), in committed batches."""
     ids_stmt = select(Article.id).order_by(Article.id)
     if since is not None:
         ids_stmt = ids_stmt.where(Article.discovered_at >= since)
@@ -225,21 +217,41 @@ def capture(session: Session, options: CaptureOptions = DEFAULT_CAPTURE, *,  # p
         synced += archive_articles(session, rows)[0]
         session.commit()
         session.expunge_all()  # keep memory flat over a full seed
+    return synced
+
+
+def _summary(session: Session, since: datetime | None, started: datetime, synced: int,
+             downloads: DownloadCounters) -> CaptureSummary:
+    """Window coverage and archive size after the run; `since` None is the whole archive."""
+    repo = ArchiveRepo(session)
+    documents, archived, pct = _coverage(repo.window_states(since))
+    size = repo.size_bytes()
+    return {
+        "window_days": None if since is None else ARCHIVE_LOOKBACK_DAYS,
+        "articles_synced": synced, "window_documents": documents, "window_archived": archived,
+        "coverage_pct": pct, "new_versions": repo.new_versions_since(started), **downloads,
+        "archive_bytes": size, "archive_size_warning": size >= ARCHIVE_SIZE_WARN_BYTES,
+    }
+
+
+def capture(session: Session, options: CaptureOptions = DEFAULT_CAPTURE, *,
+            logger: logging.Logger | None = None, now: datetime | None = None,
+            fetch: PageFetch | None = None) -> CaptureSummary:
+    """Sync the window (or every article with `scope_all`), then, unless `no_download`, reuse or
+    download pages of due documents without text; summarize."""
+    fetch = fetch or PageFetch()
+    max_seconds = options.max_seconds
+    deadline = fetch.clock() + max_seconds if max_seconds is not None else float("inf")
+    started = now or datetime.now(UTC)
+    since = None if options.scope_all else started - timedelta(days=ARCHIVE_LOOKBACK_DAYS)
+    synced = _sync_window(session, since)
     downloads: DownloadCounters = {
         "cache_reused": 0, "downloads": 0, "failed": {}, "gave_up": 0, "skipped_cap": 0,
         "skipped_time": 0, "outage": False, "outage_kept": 0, "raw_dirs_deleted": 0}
     if not options.no_download:
         downloads = _download_step(session, _DueQuery(since, started), deadline=deadline,
                                    fetch=fetch)
-    repo = ArchiveRepo(session)
-    documents, archived, pct = _coverage(repo.window_states(since))
-    size = repo.size_bytes()
-    summary: CaptureSummary = {
-        "window_days": None if scope_all else ARCHIVE_LOOKBACK_DAYS,
-        "articles_synced": synced, "window_documents": documents, "window_archived": archived,
-        "coverage_pct": pct, "new_versions": repo.new_versions_since(started), **downloads,
-        "archive_bytes": size, "archive_size_warning": size >= ARCHIVE_SIZE_WARN_BYTES,
-    }
+    summary = _summary(session, since, started, synced, downloads)
     if logger is not None:
         log_event(logger, event="archive_capture_finished", **summary)
     return summary
@@ -429,25 +441,23 @@ def _record_downloads(repo: ArchiveRepo, documents: list[ArchiveDocument], *, ca
     return outage_kept, gave_up_count, failed
 
 
-def _download_step(session: Session, due: _DueQuery, *, deadline: float,  # pylint: disable=too-many-locals
+def _download_step(session: Session, due: _DueQuery, *, deadline: float,
                    fetch: PageFetch) -> DownloadCounters:
     repo = ArchiveRepo(session)
-    now = due.now
-    cache_root = fetch.cache_root
-    cache = PageCache(cache_root)
-    reused, resumed, targets = _sort_due(repo, repo.due(due.since, now, ids=due.only),
-                                         cache_root=cache_root,
+    reused, resumed, targets = _sort_due(repo, repo.due(due.since, due.now, ids=due.only),
+                                         cache_root=fetch.cache_root,
                                          daily_cache_root=fetch.daily_cache_root)
     dispatch, skipped_cap = _cap_downloads(targets)
-    outage, started = _run_downloads(dispatch, cache=cache, deadline=deadline, fetch=fetch)
+    outage, started = _run_downloads(dispatch, cache=PageCache(fetch.cache_root), deadline=deadline,
+                                     fetch=fetch)
     outage_kept, gave_up, failed = _record_downloads(
-        repo, resumed + [d for d in dispatch if d.url in started], cache_root=cache_root,
-        now=now, outage=outage)
+        repo, resumed + [d for d in dispatch if d.url in started], cache_root=fetch.cache_root,
+        now=due.now, outage=outage)
     return {"cache_reused": reused, "downloads": len(started), "gave_up": gave_up,
             "skipped_cap": skipped_cap,
             "skipped_time": sum(1 for document in dispatch if document.url not in started),
             "outage": outage, "outage_kept": outage_kept, "failed": dict(failed),
-            "raw_dirs_deleted": _clean_cache(cache_root)}
+            "raw_dirs_deleted": _clean_cache(fetch.cache_root)}
 
 
 def download_documents(session: Session, document_ids: Collection[int], *,
@@ -531,7 +541,26 @@ IMPORT_COLUMNS = (Article.id, Article.source_id, Article.title, Article.url, Art
                   Article.publication_day, Article.publication_status, Article.discovered_at)
 
 
-def import_db(session: Session, source_url: str, *, apply: bool = False) -> ImportResult:  # pylint: disable=too-many-locals
+def _import_batches(session: Session, source: Connection, selected: list[str],
+                    source_keys: dict[int, str], apply: bool) -> tuple[int, int, int]:
+    """(selected with text, documents, versions) over committed batches of `selected`;
+    archives only with `apply`."""
+    with_text = documents = versions = 0
+    for start in range(0, len(selected), CAPTURE_BATCH_SIZE):
+        chunk = selected[start:start + CAPTURE_BATCH_SIZE]
+        rows = [Article(**row._asdict()) for row in source.execute(
+            select(*IMPORT_COLUMNS).where(Article.url_canonical_hash.in_(chunk))).all()]
+        with_text += sum(len((row.content or "").strip()) >= ARCHIVE_MIN_TEXT_CHARS
+                         for row in rows)
+        if apply:
+            batch_documents, batch_versions = archive_articles(session, rows, source_keys)
+            documents += batch_documents
+            versions += batch_versions
+            session.commit()
+    return with_text, documents, versions
+
+
+def import_db(session: Session, source_url: str, *, apply: bool = False) -> ImportResult:
     """Archive articles of another database (a restored dump) whose hash is neither a current
     article nor an archive document. The source is only read; dry run unless `apply`."""
     url = make_url(source_url)
@@ -548,18 +577,8 @@ def import_db(session: Session, source_url: str, *, apply: bool = False) -> Impo
             selected = sorted(set(hashes) - current)
             source_keys = {int(i): str(k) for i, k in source.execute(
                 select(Source.id, Source.source_key)).all()}
-            with_text = documents = versions = 0
-            for start in range(0, len(selected), CAPTURE_BATCH_SIZE):
-                chunk = selected[start:start + CAPTURE_BATCH_SIZE]
-                rows = [Article(**row._asdict()) for row in source.execute(
-                    select(*IMPORT_COLUMNS).where(Article.url_canonical_hash.in_(chunk))).all()]
-                with_text += sum(len((row.content or "").strip()) >= ARCHIVE_MIN_TEXT_CHARS
-                                 for row in rows)
-                if apply:
-                    batch_documents, batch_versions = archive_articles(session, rows, source_keys)
-                    documents += batch_documents
-                    versions += batch_versions
-                    session.commit()
+            with_text, documents, versions = _import_batches(session, source, selected,
+                                                             source_keys, apply)
             source.rollback()
     finally:
         engine.dispose()
