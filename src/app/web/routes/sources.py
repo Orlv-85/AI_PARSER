@@ -160,7 +160,7 @@ def _overlaps_response(deps: WebDeps, batch_id: int | None,
     )
 
 
-def build_sources_router(deps: WebDeps) -> APIRouter:
+def build_sources_router(deps: WebDeps) -> APIRouter:  # pylint: disable=too-many-locals
     router = APIRouter()
 
     @router.post("/api/source-onboarding/import")

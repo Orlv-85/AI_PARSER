@@ -291,7 +291,7 @@ class PilotJournal:
             exhausted.dispatched = True
             raise
 
-    def call(self, provider, body, client, secret, *, before_dispatch=None):
+    def call(self, provider, body, client, secret, *, before_dispatch=None):  # pylint: disable=too-many-locals
         request = self.key_function(provider, body)
         key, saved, attempt, parent = self._attempt(request)
         amount = self.reservation_function(provider, body)

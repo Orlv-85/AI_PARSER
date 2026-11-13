@@ -128,7 +128,7 @@ def _source_group_max_workers(group: list[EnabledSource], settings: Settings) ->
     return max_workers
 
 
-def _collect_fetched_items(
+def _collect_fetched_items(  # pylint: disable=too-many-locals
     *,
     enabled_sources: list[EnabledSource],
     settings: Settings,

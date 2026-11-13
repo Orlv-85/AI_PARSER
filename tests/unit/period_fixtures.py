@@ -44,7 +44,7 @@ def _raw():
     return mentions, rows
 
 
-def fixture_world():
+def fixture_world():  # pylint: disable=too-many-locals
     """(observations by day for both weeks, reconciliation) from the five fixture days."""
     mentions, rows = _raw()
     out_mentions: list[Mention] = []

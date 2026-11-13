@@ -225,7 +225,7 @@ def _gate(settings: Settings, options: RunOptions, key: str) -> str | None:
     return None if key else "missing_provider_key"
 
 
-def _extract_days(repo: DailySignalRepo, ledger: SignalsLedger, *, options: RunOptions,
+def _extract_days(repo: DailySignalRepo, ledger: SignalsLedger, *, options: RunOptions,  # pylint: disable=too-many-locals
                   report: RunReport, counts: Counter[str]) -> int:
     """Extract pending articles of the run days; returns the run spend in microdollars."""
     session = repo.session
@@ -339,7 +339,7 @@ class _LedgerSetup:
                                                self.clock))
 
 
-def _briefs(repo: DailySignalRepo, settings: Settings, options: RunOptions, *,
+def _briefs(repo: DailySignalRepo, settings: Settings, options: RunOptions, *,  # pylint: disable=too-many-locals
             extraction_micro: int, setup: _LedgerSetup) -> BriefReport:
     """The brief step of a paid run (007 FR-001..FR-003, FR-008). `--max-usd` is the run total:
     briefs get what extraction left, at most BRIEF_MAX_USD_PER_DAY per target day."""
@@ -394,7 +394,7 @@ def _incomplete_days(repo: DailySignalRepo, days: list[date],
     return out
 
 
-def run_signals(session: Session, settings: Settings, options: RunOptions,
+def run_signals(session: Session, settings: Settings, options: RunOptions,  # pylint: disable=too-many-locals
                 env: RunEnv = DEFAULT_ENV) -> RunReport:
     """One bounded signals run; returns the run report (no key, no article text)."""
     now = env.now

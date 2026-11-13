@@ -193,7 +193,7 @@ def test_jev_category_threshold_is_configurable() -> None:
 @pytest.mark.parametrize("batch", [False, True])
 @pytest.mark.parametrize("source_type", ["rss", "html"])
 @pytest.mark.parametrize("api_failure", [False, True])
-def test_ingestion_persists_jev_score_or_heuristic_on_failure(
+def test_ingestion_persists_jev_score_or_heuristic_on_failure(  # pylint: disable=too-many-locals
     tmp_path, monkeypatch, batch, source_type, api_failure,
 ) -> None:
     engine = create_engine(f"sqlite:///{tmp_path}/jev.db")

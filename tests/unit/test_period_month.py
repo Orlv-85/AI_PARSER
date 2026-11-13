@@ -49,7 +49,7 @@ FIRST_NIGHT = datetime(2026, 12, 1, 2, 30)
 
 
 # Month totals ---------------------------------------------------------------------------------
-def month_world(*, current, previous, publishers=4, prev_days=30, cur_days=30):
+def month_world(*, current, previous, publishers=4, prev_days=30, cur_days=30):  # pylint: disable=too-many-locals
     """November (30 days) against October (31 days): `current` and `previous` map an entity name
     to its article count in that month. Every day is complete with 20 items."""
     entities, observations, coverage = {}, {}, {}

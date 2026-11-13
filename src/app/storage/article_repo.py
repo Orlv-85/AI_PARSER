@@ -110,7 +110,7 @@ class ArticleRepo:
         rows = self.session.execute(stmt).scalars().all()
         return {str(value) for value in rows}
 
-    def upsert_articles_batch(self, rows: list[dict[str, Any]]) -> tuple[int, int]:
+    def upsert_articles_batch(self, rows: list[dict[str, Any]]) -> tuple[int, int]:  # pylint: disable=too-many-locals
         if not rows:
             return 0, 0
 

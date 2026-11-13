@@ -63,7 +63,7 @@ def _take_fresh_pending(session: Session, db_source_id: int) -> list[Any]:
             return pending
 
 
-def _replay_pending_for_source(  # pylint: disable=too-many-branches
+def _replay_pending_for_source(  # pylint: disable=too-many-branches,too-many-locals
     session: Session, run: SourceRun, metrics: SourceMetrics,
 ) -> int:
     """Replay the source's pending candidates; `run` carries the admission state."""

@@ -382,7 +382,7 @@ class _Enrichment:
     fallback: dict[str, Any] | None
 
 
-def enrich(article, row, calls: ProviderCalls, details=None):
+def enrich(article, row, calls: ProviderCalls, details=None):  # pylint: disable=too-many-locals
     body = {"model": JEV_MODEL, "state": source_state(row), "questions": QUESTIONS}
     journal, client, keys = calls.journal, calls.client, calls.keys
     data = admission_from_proof(article, row)
@@ -547,7 +547,7 @@ def _publish_digest(session, articles, target, progress: _Progress, report):
                   group_count=len(groups), scope_complete=True, enrichment_complete=not held)
 
 
-def publish_day(session, settings, target: date, root: Path):
+def publish_day(session, settings, target: date, root: Path):  # pylint: disable=too-many-locals
     """Complete scope, bounded paid work, per-row resume, atomic publication with backup."""
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     root.chmod(0o700)

@@ -204,7 +204,7 @@ def _coverage(states: list[tuple[datetime, str]]) -> tuple[int, int, float | Non
     return len(states), archived, pct
 
 
-def capture(session: Session, options: CaptureOptions = DEFAULT_CAPTURE, *,
+def capture(session: Session, options: CaptureOptions = DEFAULT_CAPTURE, *,  # pylint: disable=too-many-locals
             logger: logging.Logger | None = None, now: datetime | None = None,
             fetch: PageFetch | None = None) -> CaptureSummary:
     """Sync the window (or every article with `scope_all`), then, unless `no_download`, reuse or
@@ -429,7 +429,7 @@ def _record_downloads(repo: ArchiveRepo, documents: list[ArchiveDocument], *, ca
     return outage_kept, gave_up_count, failed
 
 
-def _download_step(session: Session, due: _DueQuery, *, deadline: float,
+def _download_step(session: Session, due: _DueQuery, *, deadline: float,  # pylint: disable=too-many-locals
                    fetch: PageFetch) -> DownloadCounters:
     repo = ArchiveRepo(session)
     now = due.now
@@ -531,7 +531,7 @@ IMPORT_COLUMNS = (Article.id, Article.source_id, Article.title, Article.url, Art
                   Article.publication_day, Article.publication_status, Article.discovered_at)
 
 
-def import_db(session: Session, source_url: str, *, apply: bool = False) -> ImportResult:
+def import_db(session: Session, source_url: str, *, apply: bool = False) -> ImportResult:  # pylint: disable=too-many-locals
     """Archive articles of another database (a restored dump) whose hash is neither a current
     article nor an archive document. The source is only read; dry run unless `apply`."""
     url = make_url(source_url)

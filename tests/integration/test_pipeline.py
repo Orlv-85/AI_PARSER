@@ -45,7 +45,7 @@ def _build_test_articles() -> list[Article]:
     return rss_items + html_items
 
 
-def test_ingest_persist_query_pipeline_is_deterministic() -> None:
+def test_ingest_persist_query_pipeline_is_deterministic() -> None:  # pylint: disable=too-many-locals
     engine = create_engine("sqlite:///:memory:", future=True)
     Base.metadata.create_all(engine)
     session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)

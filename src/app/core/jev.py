@@ -155,7 +155,7 @@ class JevRelevanceScorer:  # pylint: disable=too-many-instance-attributes
             return jev_state(article)
         return jev_state(article, with_summary=not self.daily_enrichment_enabled)
 
-    def classify(self, article: Article) -> JevAssessment | None:
+    def classify(self, article: Article) -> JevAssessment | None:  # pylint: disable=too-many-locals
         self.input_held = False
         state = self.state(article)
         if self.failed:

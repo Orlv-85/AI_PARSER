@@ -33,7 +33,7 @@ def _rss_items(
 
 @pytest.mark.parametrize("batch", [False, True])
 @pytest.mark.parametrize("source_type", ["rss", "html"])
-def test_source_savepoint_recovers_after_database_error(
+def test_source_savepoint_recovers_after_database_error(  # pylint: disable=too-many-locals
     monkeypatch, tmp_path, caplog, batch, source_type,
 ) -> None:
     engine = create_engine(f"sqlite:///{tmp_path}/isolation.db")

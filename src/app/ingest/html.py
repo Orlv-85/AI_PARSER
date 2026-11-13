@@ -103,7 +103,7 @@ def _extract_links_with_lxml(
     return found
 
 
-def _extract_links_with_selectolax(
+def _extract_links_with_selectolax(  # pylint: disable=too-many-locals
     *,
     html_content: str,
     base_url: str,

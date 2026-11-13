@@ -75,7 +75,7 @@ def _prompt(kind: str) -> str:
 PERIOD_PROMPTS = {WEEK: _prompt(WEEK), MONTH: _prompt(MONTH)}
 
 
-def _build(payload: PeriodPayload, digest_items: Iterable[DigestItem], *,
+def _build(payload: PeriodPayload, digest_items: Iterable[DigestItem], *,  # pylint: disable=too-many-locals
            new_max: int | None, risers_max: int | None) -> tuple[Packet, IdMap]:
     new_items = items_of(payload.get("new"))[:new_max]
     riser_items = items_of(payload.get("rising"))[:risers_max]

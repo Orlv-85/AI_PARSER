@@ -224,7 +224,7 @@ def fit_packet(packet: Packet, max_bytes: int) -> None:
             raise PacketTooLarge(str(len(encoded(packet).encode())))
 
 
-def brief_packet(payload: SnapshotPayload, digest_items: Iterable[DigestItem]
+def brief_packet(payload: SnapshotPayload, digest_items: Iterable[DigestItem]  # pylint: disable=too-many-locals
                  ) -> tuple[Packet, IdMap]:
     """(packet, id map) for one day from its stored snapshot and published digest items.
 
@@ -457,7 +457,7 @@ def _sentence(raw: object, ctx: _Context, seen: _Seen) -> Sentence:
                     quote=quote["span"].strip())
 
 
-def parse_brief(data: object, packet: Packet, model: str,
+def parse_brief(data: object, packet: Packet, model: str,  # pylint: disable=too-many-locals
                 rules: BriefRules = DAILY_BRIEF, *,
                 dropped: list[str] | None = None) -> list[Sentence]:
     """Validate one provider answer against the packet (plan validation rules 1-9).

@@ -266,7 +266,7 @@ class _Snapshot:  # pylint: disable=too-many-instance-attributes
         return out
 
     # Spike folding (007 noise rules 3 and 4) ---------------------------------------------------
-    def fold_spikes(self, spikes: list[_Spike], stories: list[Story],
+    def fold_spikes(self, spikes: list[_Spike], stories: list[Story],  # pylint: disable=too-many-locals
                     shown: list[tuple[Story, TopStory]], new: list[_NewCandidate]
                     ) -> tuple[list[_Spike], list[Folded]]:
         """(kept spikes with a reason, folded records); the target item lists the spike name
@@ -334,7 +334,7 @@ class _Snapshot:  # pylint: disable=too-many-instance-attributes
     def extracted(self, days: Iterable[date]) -> int:
         return sum(self.data.coverage[d].extracted for d in days)
 
-    def trends(self, excluded: set[str], spikes: list[_Spike] | None, kept: list[_Spike]
+    def trends(self, excluded: set[str], spikes: list[_Spike] | None, kept: list[_Spike]  # pylint: disable=too-many-locals
                ) -> tuple[list[TrendItem], list[TrendItem], bool]:
         """Rising and cooling; `spikes` flag rising items, only `kept` spikes are listed."""
         usable = self.windows()
@@ -381,7 +381,7 @@ class _Snapshot:  # pylint: disable=too-many-instance-attributes
         return None if item is None else _Trend(row.unit, row.cooling_delta, row.previous, item)
 
     # Payload --------------------------------------------------------------------------------
-    def build(self) -> SnapshotPayload:
+    def build(self) -> SnapshotPayload:  # pylint: disable=too-many-locals
         cov = self.data.coverage.get(self.day) or DayCoverage(self.day, "signals", False)
         new, new_keys = self.new_items()
         history_days = self._complete_days(lambda d, c: d < self.day)

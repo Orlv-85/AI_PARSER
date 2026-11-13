@@ -51,7 +51,7 @@ class RecomputeScope:
 RECENT_DAYS = RecomputeScope()
 
 
-def recompute_reports(repo: DailySignalRepo, until: date, scope: RecomputeScope = RECENT_DAYS, *,
+def recompute_reports(repo: DailySignalRepo, until: date, scope: RecomputeScope = RECENT_DAYS, *,  # pylint: disable=too-many-locals
                       now: datetime | None = None,
                       thresholds: Thresholds | None = None) -> RecomputeResult:
     """Reconcile entities and recompute every comparable published day up to `until`;

@@ -65,7 +65,7 @@ def test_e2e_login_protected_logout_denied(monkeypatch, tmp_path) -> None:
     assert denied_again.status_code == 401
 
 
-def test_e2e_second_login_immediately_invalidates_previous_session_token(
+def test_e2e_second_login_immediately_invalidates_previous_session_token(  # pylint: disable=too-many-locals
     monkeypatch, tmp_path
 ) -> None:
     monkeypatch.chdir(tmp_path)

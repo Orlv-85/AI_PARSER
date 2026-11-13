@@ -36,7 +36,7 @@ def test_workflows_pin_runner_and_use_node24_checkout(workflow) -> None:
 
 @pytest.mark.parametrize("workflow", ["deploy-release.yml", "deploy-by-tag.yml"])
 @pytest.mark.parametrize("previous_weekly_enabled", ["true", "false"])
-def test_deploy_transports_deepseek_secret_privately(
+def test_deploy_transports_deepseek_secret_privately(  # pylint: disable=too-many-locals
     workflow, previous_weekly_enabled, tmp_path,
 ) -> None:
     config = yaml.safe_load(Path(".github/workflows", workflow).read_text(encoding="utf-8"))
@@ -115,7 +115,7 @@ def test_production_compose_has_no_weekly_v2_flag() -> None:
     ("secret", "expected"),
     [("publish-token-0123456789abcdef$0123", "publish-token-0123456789abcdef$$0123"), ("", "")],
 )
-def test_deploy_transports_publish_api_token(workflow, secret, expected, tmp_path) -> None:
+def test_deploy_transports_publish_api_token(workflow, secret, expected, tmp_path) -> None:  # pylint: disable=too-many-locals
     config = yaml.safe_load(Path(".github/workflows", workflow).read_text(encoding="utf-8"))
     steps = config["jobs"]["deploy"]["steps"]
     payload = next(step for step in steps if step["name"] == "Prepare runtime env payload")

@@ -154,7 +154,7 @@ class SourceIntakeService:
                 self._job.update({"status": "failed",
                                   "error": f"Verification interrupted: {type(exc).__name__}"})
 
-    def _check_candidate(
+    def _check_candidate(  # pylint: disable=too-many-locals
         self, row: _Row, rows: list[_Row], existing: list[str],
         client: httpx.Client, reviewer: SourceReviewer,
     ) -> None:

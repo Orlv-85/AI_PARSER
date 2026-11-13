@@ -556,7 +556,7 @@ def answer(world_change="changed", confidence=0.9, area="Work", actor="organisat
     return WorldChange(world_change, confidence, area, 0.8, actor, 0.8, harm)
 
 
-def seed_day(maker, **opts):
+def seed_day(maker, **opts):  # pylint: disable=too-many-locals
     status, quiet, items, history, source_name = options(
         opts,
         status="ready",

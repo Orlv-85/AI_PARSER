@@ -139,7 +139,7 @@ def _assessment_fields(item: object, assessment: JevAssessment | None) -> dict[s
     return fields
 
 
-def _build_article_row(
+def _build_article_row(  # pylint: disable=too-many-locals
     run: SourceRun, item: CoreArticle, *, canonical: str, canonical_hash: str,
     assessment: JevAssessment | None,
 ) -> dict[str, object] | None:

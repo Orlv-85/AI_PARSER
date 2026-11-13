@@ -136,7 +136,7 @@ def _context(repo: PeriodSignalRepo) -> PeriodContext:
     return repo.context(reconcile(mentions, repo.daily.overrides()), rows)
 
 
-def run_periods(session: Session, settings: Any, options: PeriodRunOptions, *,
+def run_periods(session: Session, settings: Any, options: PeriodRunOptions, *,  # pylint: disable=too-many-locals
                 now: datetime | None = None, transport: httpx.BaseTransport | None = None
                 ) -> dict[str, Any]:
     """One run of one kind; returns the run report. The flag off does nothing."""
