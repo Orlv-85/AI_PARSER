@@ -30,12 +30,14 @@ class _Logger:
     def __init__(self) -> None:
         self.info_calls: list[tuple[str, dict[str, object]]] = []
         self.error_calls: list[tuple[str, dict[str, object]]] = []
+        self.error_exc_info: dict[str, bool] = {}
 
     def info(self, event: str, payload: dict[str, object]) -> None:
         self.info_calls.append((event, payload))
 
-    def error(self, event: str, payload: dict[str, object]) -> None:
+    def error(self, event: str, payload: dict[str, object], *, exc_info: bool = False) -> None:
         self.error_calls.append((event, payload))
+        self.error_exc_info[event] = exc_info
 
     def payload(self, event: str, source_id: str | None = None) -> dict[str, object]:
         return next(
@@ -320,6 +322,7 @@ def test_run_fetch_cycle_counts_new_duplicates_and_errors(monkeypatch) -> None:
     assert summary.early_stop_hits == 0
     assert session.committed is True
     assert any(event == "source_fetch_failed" for event, _ in logger.error_calls)
+    assert logger.error_exc_info["source_fetch_failed"] is True
     fetch_finished_payload = logger.payload("fetch_run_finished")
     assert fetch_finished_payload["not_modified_sources"] == 0
     assert fetch_finished_payload["skipped_known_html_links"] == 0

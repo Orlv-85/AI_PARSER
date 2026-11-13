@@ -21,6 +21,8 @@ class JsonFormatter(logging.Formatter):
         event_fields = getattr(record, "event_fields", None)
         if isinstance(event_fields, dict):
             payload.update(event_fields)
+        if record.exc_info:
+            payload["traceback"] = self.formatException(record.exc_info)
         return json.dumps(payload, ensure_ascii=True)
 
 

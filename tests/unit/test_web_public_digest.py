@@ -259,10 +259,12 @@ def test_signals_unavailable_partial_and_cooling(monkeypatch, tmp_path) -> None:
     assert "7d: 8 &rarr; 1 (expected 8)" in html
 
 
-def test_signals_read_error_keeps_page(monkeypatch, tmp_path) -> None:
+def test_signals_read_error_keeps_page(monkeypatch, tmp_path, caplog) -> None:
     response = _signals_client(monkeypatch, tmp_path, SIGNALS, broken=True).get(
         "/?date=2026-10-16")
     assert response.status_code == 200
+    assert [r.exc_info is not None for r in caplog.records
+            if r.getMessage().startswith("daily_signals_read_failed")] == [True]
     assert "Daily signals are temporarily unavailable." in response.text
     assert "Digest for 2026-10-16" in response.text
 

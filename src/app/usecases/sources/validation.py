@@ -1,5 +1,6 @@
 """Deterministic validation of source candidates."""
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, cast
@@ -13,6 +14,8 @@ from app.ingest.fetcher import Fetcher
 from app.ingest.html import extract_links_from_html
 from app.ingest.rss import fetch_rss_with_metadata
 from app.storage.source_candidate_repo import SourceCandidateRepo
+
+_LOGGER = logging.getLogger(__name__)
 
 # A listing is judged by a few of its pages, not by one link that happens to work.
 HTML_MIN_LINKS = 2
@@ -42,7 +45,8 @@ def validate_rss_candidate(
     try:
         payload = fetch_feed_fn(normalized_url)
         entries = _extract_feed_entries(payload)
-    except Exception as exc:  # pragma: no cover - exercised via integration path
+    except Exception as exc:  # any fetch or parse error fails the candidate
+        _LOGGER.warning("source_validation_fetch_failed url=%s", normalized_url, exc_info=True)
         return ValidationResult(
             candidate_id=candidate_id,
             status="failed",
@@ -83,7 +87,8 @@ def validate_html_candidate(
     try:
         html_content = str(fetch_html_fn(normalized_url))
         links = list(extract_links_fn(html_content, normalized_url))
-    except Exception as exc:  # pragma: no cover - exercised via integration path
+    except Exception as exc:  # any fetch or parse error fails the candidate
+        _LOGGER.warning("source_validation_fetch_failed url=%s", normalized_url, exc_info=True)
         return ValidationResult(
             candidate_id=candidate_id,
             status="failed",
@@ -131,7 +136,8 @@ def _sampled_link_problem(sample: list[str], fetch_html_fn: Any) -> str | None:
     for link in sample:
         try:
             reason = html_exclusion_reason(link, str(fetch_html_fn(link)))
-        except Exception as exc:  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # any error fails the sampled link
+            _LOGGER.warning("source_validation_fetch_failed url=%s", link, exc_info=True)
             return f"Sampled link {link} could not be checked: {_format_validation_error(exc)}"
         if reason:
             return f"Sampled link {link} is not an article ({reason})"

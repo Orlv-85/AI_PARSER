@@ -219,6 +219,7 @@ def test_fetch_rss_extract_full_text_fail_soft_logs_and_continues(monkeypatch, c
     assert calls == ["https://example.com/a", "https://example.com/b"]
     assert "extract" in caplog.text.lower()
     assert "https://example.com/a" in caplog.text
+    assert [r.exc_info is not None for r in caplog.records] == [True]
 
 
 def test_fetch_rss_extract_full_text_disabled(monkeypatch) -> None:

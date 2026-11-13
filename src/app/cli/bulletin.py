@@ -1,6 +1,5 @@
 """Daily bulletin commands: the `bulletin` group (src/app/cli/main.md)."""
 import json
-import logging
 from datetime import timedelta
 
 import typer
@@ -10,7 +9,6 @@ from app.cli.common import day_within_cap, echo_json, parse_day
 from app.core.bulletin.render import render_text
 from app.core.bulletin.world_change import ASSESS_DEFAULT_MAX_USD, WORLD_CHANGE_MAX_USD_PER_DAY
 from app.observability import setup_json_logging
-from app.observability.logging import log_event
 from app.usecases.bulletin.assessor import open_assessor
 from app.usecases.bulletin.daily import (
     BulletinEnv,
@@ -66,8 +64,8 @@ def bulletin_daily(
                               writer_factory=open_writer)
             summary = run_daily(session, env, target, utc_today)
     except Exception as exc:  # The unattended command reserves nonzero exits for usage errors.
-        log_event(logger, level=logging.ERROR, event="bulletin_daily_failed",
-                  date=target.isoformat(), error=type(exc).__name__, detail=str(exc)[:200])
+        logger.exception("bulletin_daily_failed", extra={"event_fields": {
+            "date": target.isoformat(), "error": type(exc).__name__, "detail": str(exc)[:200]}})
         summary = {"date": target.isoformat(), "status": "skipped", "reason": "daily_failed",
                    "assess": None, "writer": None, "stored": False, "refused": False}
     echo_json(summary)

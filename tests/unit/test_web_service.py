@@ -1,3 +1,5 @@
+import logging
+
 # pylint: disable=protected-access,unnecessary-lambda
 from queue import Empty
 from types import SimpleNamespace
@@ -10,6 +12,7 @@ from app.web.service import UpdateRunService, _coerce_int, _run_offloaded_fetch_
 class _Logger:
     def __init__(self) -> None:
         self.errors: list[tuple[str, dict[str, object]]] = []
+        self.error_exc_info: list[bool] = []
         self.warnings: list[tuple[str, dict[str, object]]] = []
 
     def info(self, _event: str, _payload: dict[str, object]) -> None:
@@ -18,8 +21,9 @@ class _Logger:
     def warning(self, event: str, payload: dict[str, object]) -> None:
         self.warnings.append((event, payload))
 
-    def error(self, event: str, payload: dict[str, object]) -> None:
+    def error(self, event: str, payload: dict[str, object], *, exc_info: bool = False) -> None:
         self.errors.append((event, payload))
+        self.error_exc_info.append(exc_info)
 
 
 def test_run_failure_sets_failed_status(monkeypatch) -> None:
@@ -55,6 +59,7 @@ def test_run_failure_sets_failed_status(monkeypatch) -> None:
     assert status.error_message == "update failed"
     assert status.finished_at is not None
     assert logger.errors and logger.errors[-1][0] == "update_run_failed"
+    assert logger.error_exc_info[-1] is True
 
 
 def test_process_mode_harvests_offloaded_worker_result(monkeypatch, tmp_path) -> None:
@@ -319,7 +324,7 @@ def test_run_offloaded_fetch_cycle_writes_finished_payload_to_queue_and_file(
     assert not hasattr(captured["settings"], "update_execution_mode")
 
 
-def test_run_offloaded_fetch_cycle_failure_uses_put_fallback(monkeypatch, tmp_path) -> None:
+def test_run_offloaded_fetch_cycle_failure_uses_put_fallback(monkeypatch, tmp_path, caplog) -> None:
     queue_payloads: list[dict[str, object]] = []
 
     class _BaseSettings:
@@ -331,7 +336,8 @@ def test_run_offloaded_fetch_cycle_failure_uses_put_fallback(monkeypatch, tmp_pa
             queue_payloads.append(payload)
 
     monkeypatch.setattr("app.web.service.get_settings", lambda: _BaseSettings())
-    monkeypatch.setattr("app.web.service.setup_json_logging", lambda: object())
+    monkeypatch.setattr("app.web.service.setup_json_logging",
+                        lambda: logging.getLogger("test.update_worker"))
 
     def _raise_run_fetch_cycle(**_kwargs):
         raise RuntimeError("worker boom")
@@ -357,6 +363,8 @@ def test_run_offloaded_fetch_cycle_failure_uses_put_fallback(monkeypatch, tmp_pa
         }
     ]
     assert '"status": "failed"' in result_path.read_text(encoding="utf-8")
+    assert [r.exc_info is not None for r in caplog.records
+            if r.getMessage() == "update_worker_failed"] == [True]
 
 
 def test_run_offloaded_fetch_cycle_without_queue_still_writes_result_file(
@@ -555,3 +563,4 @@ def test_coerce_int_handles_supported_and_fallback_types() -> None:
     assert _coerce_int("12", default=9) == 12
     assert _coerce_int("bad", default=9) == 9
     assert _coerce_int(object(), default=9) == 9
+

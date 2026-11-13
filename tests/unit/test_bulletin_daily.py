@@ -261,7 +261,7 @@ def test_daily_runtime_failure_exits_zero(daily, monkeypatch, detail):
                  if event["message"] == "bulletin_daily_failed")
     assert event["date"] == DAY.isoformat()
     assert event["error"] == "OSError" and event["detail"] == detail[:200]
-    assert event["level"] == "ERROR"
+    assert event["level"] == "ERROR" and event["traceback"].startswith("Traceback")
 
 
 def test_bulletin_switches_default_off(monkeypatch):

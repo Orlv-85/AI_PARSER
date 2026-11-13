@@ -1,4 +1,5 @@
 """HTML path: fetch and persist the articles behind a list page."""
+import logging
 from dataclasses import dataclass, field
 from typing import Any, NamedTuple
 
@@ -23,6 +24,8 @@ from app.usecases.ingestion.pipeline.rows import (
     _upsert_article_rows,
 )
 from app.usecases.ingestion.pipeline.screening import _assessed_row, _html_placeholder_key
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
@@ -121,7 +124,9 @@ def _fetch_new_item(run: _HtmlRun, tally: _HtmlTally, *, link: str, ph_key: str)
             fetcher=run.fetcher,
             **fetch_options,
         )
-    except Exception:
+    except Exception as exc:  # one bad page never stops the source
+        _LOGGER.warning("event=html.article_fetch outcome=failed source_key=%s url=%s error=%s",
+                        run.config.id, link, type(exc).__name__, exc_info=True)
         run.flag("article_failure")
         return None
     if item is None:

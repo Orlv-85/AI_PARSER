@@ -85,27 +85,18 @@ def _fetch_source_items(
         fetcher.close()
 
 
-def _log_source_fetch_error(
-    *,
-    logger: Logger,
-    run_id: str,
-    config: SourceConfig,
-    exc: Exception,
-) -> None:
+def _source_fetch_error(*, run_id: str, config: SourceConfig, exc: Exception) -> dict[str, object]:
     cause = exc.__cause__
-    logger.error(
-        "source_fetch_failed",
-        {
-            "run_id": run_id,
-            "source_id": config.id,
-            "stage": "fetch",
-            "url": str(config.url),
-            "error_type": type(exc).__name__,
-            "error_message": str(exc),
-            "cause_type": type(cause).__name__ if cause is not None else None,
-            "cause_message": str(cause) if cause is not None else None,
-        },
-    )
+    return {
+        "run_id": run_id,
+        "source_id": config.id,
+        "stage": "fetch",
+        "url": str(config.url),
+        "error_type": type(exc).__name__,
+        "error_message": str(exc),
+        "cause_type": type(cause).__name__ if cause is not None else None,
+        "cause_message": str(cause) if cause is not None else None,
+    }
 
 
 def _profiled_source_groups(
@@ -168,7 +159,9 @@ def _collect_fetched_items(
                 idx, config, _db_source_id = futures[future]
                 try:
                     fetched_by_index[idx] = future.result()
-                except Exception as exc:
+                except Exception as exc:  # one source never stops the run
                     error_count += 1
-                    _log_source_fetch_error(logger=logger, run_id=run_id, config=config, exc=exc)
+                    logger.error("source_fetch_failed",
+                                 _source_fetch_error(run_id=run_id, config=config, exc=exc),
+                                 exc_info=True)
     return fetched_by_index, error_count

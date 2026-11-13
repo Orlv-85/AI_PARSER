@@ -173,7 +173,7 @@ def test_existing_urls_and_same_host_families_never_use_models(intake, monkeypat
     assert intake.approve_ready(batch) == []
 
 
-def test_failures_and_redirect_duplicates_stay_out_of_approval(intake, monkeypatch) -> None:
+def test_failures_and_redirect_duplicates_stay_out_of_approval(intake, monkeypatch, caplog) -> None:
     with intake.session_factory() as session:
         session.add(Source(source_key="known", name="Known", type="rss",
                            url="https://known.example/feed", enabled=True,
@@ -192,11 +192,13 @@ def test_failures_and_redirect_duplicates_stay_out_of_approval(intake, monkeypat
     assert reviews[0][3]["decision"] == "duplicate"
     assert reviews[1][2] == "failed"
     assert "No publication links" in reviews[1][3]["reason"]
+    assert [r.exc_info is not None for r in caplog.records
+            if r.getMessage().startswith("source_intake_candidate_failed")] == [True]
     assert intake.approve_ready(batch) == []
 
 
 def test_worker_failure_does_not_report_success_and_bad_details_are_safe(
-    intake, monkeypatch
+    intake, monkeypatch, caplog
 ) -> None:
     batch = _batch(intake, ["https://one.example/feed"])
 
@@ -207,6 +209,8 @@ def test_worker_failure_does_not_report_success_and_bad_details_are_safe(
     intake._run(batch)
     assert intake.status()["status"] == "failed"
     assert "provider secret" not in intake.status()["error"]
+    assert [r.exc_info is not None for r in caplog.records
+            if r.getMessage().startswith("source_intake_check_failed")] == [True]
     assert review_details(SourceCandidate(validation_details="invalid")) == {}
     assert review_details(SourceCandidate(validation_details='{"source_review":42}')) == {}
     assert review_details(SourceCandidate(validation_details="[]")) == {}

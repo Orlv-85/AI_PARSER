@@ -1,4 +1,5 @@
 # pylint: disable=redefined-outer-name,protected-access
+import logging
 from datetime import UTC, datetime
 from importlib import import_module
 from logging import getLogger
@@ -6,6 +7,7 @@ from logging import getLogger
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import Settings
@@ -236,3 +238,25 @@ def test_status_is_public_when_admin_auth_enabled(sessions, monkeypatch) -> None
         "paused": True, "message": PAUSED_MESSAGE,
     }
     assert client.get("/api/update/status").status_code == 401
+
+
+def test_update_status_survives_a_database_error_and_logs_it(monkeypatch, caplog) -> None:
+    def broken():
+        raise OperationalError("SELECT 1", {}, Exception("database is locked"))
+
+    monkeypatch.setattr(service_module, "collection_status", broken)
+    logger = getLogger("test.update_status")
+    with caplog.at_level(logging.WARNING, logger="test.update_status"):
+        status = UpdateRunService(logger=logger).current_status()
+    assert status.screening_paused is False and status.screening_message is None
+    assert [r.args for r in caplog.records if r.getMessage() == "screening_status_read_failed"
+            ] == [{"error_type": "OperationalError"}]
+
+
+def test_update_status_does_not_hide_a_bug_in_the_status_read(monkeypatch) -> None:
+    def buggy():
+        raise KeyError("paused")
+
+    monkeypatch.setattr(service_module, "collection_status", buggy)
+    with pytest.raises(KeyError):
+        UpdateRunService(logger=getLogger("test.update_status")).current_status()

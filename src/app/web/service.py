@@ -7,6 +7,8 @@ from pathlib import Path
 from queue import Empty
 from typing import Any
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from app.config.settings import get_settings
 from app.observability import setup_json_logging
 from app.usecases.collection_status import PAUSED_MESSAGE, collection_status
@@ -32,12 +34,13 @@ def _coerce_int(value: object, default: int) -> int:
 
 
 def _run_offloaded_fetch_cycle(
-    _run_id: str,
+    run_id: str,
     runtime_settings_payload: dict[str, object],
     result_path_str: str,
     result_queue: object | None,
 ) -> None:
     result_payload: dict[str, object]
+    logger = setup_json_logging()
     runtime_settings = WebUpdateSettings.model_validate(runtime_settings_payload)
     base_settings = get_settings()
     merged_settings = base_settings.model_copy(
@@ -48,7 +51,7 @@ def _run_offloaded_fetch_cycle(
     )
 
     try:
-        summary = run_fetch_cycle(settings=merged_settings, logger=setup_json_logging())
+        summary = run_fetch_cycle(settings=merged_settings, logger=logger)
         result_payload = {
             "status": "finished",
             "source_count": int(getattr(summary, "source_count", 0)),
@@ -61,7 +64,8 @@ def _run_offloaded_fetch_cycle(
         if bool(getattr(summary, "screening_paused", 0)):
             result_payload["screening_paused"] = 1
             result_payload["screening_message"] = PAUSED_MESSAGE
-    except Exception as exc:  # pragma: no cover - exercised via service polling
+    except Exception as exc:  # the parent reads the failure from the queue or the file
+        logger.exception("update_worker_failed", {"run_id": run_id})
         result_payload = {
             "status": "failed",
             "fetched": 0,
@@ -106,7 +110,9 @@ class UpdateRunService:
     def _apply_screening_status_locked(self) -> None:
         try:
             paused, message = collection_status()
-        except Exception:
+        except SQLAlchemyError as exc:
+            self._logger.warning("screening_status_read_failed",
+                                 {"error_type": type(exc).__name__})
             return
         self._status.screening_paused = paused
         self._status.screening_message = message
@@ -246,6 +252,7 @@ class UpdateRunService:
                     "status": "failed",
                     "error_message": str(exc),
                 },
+                exc_info=True,
             )
 
     def _harvest_process_result_locked(self) -> None:

@@ -25,3 +25,14 @@ def test_json_formatter_merges_tuple_dict_args_and_event_fields() -> None:
     assert payload["outcome"] == "ok"
     assert payload["tool"] == "news.list"
 
+
+
+def test_json_formatter_keeps_the_traceback_of_a_logged_exception() -> None:
+    formatter = JsonFormatter()
+    error = ValueError("bad payload")
+    record = logging.LogRecord("test.logger", logging.ERROR, __file__, 10, "event_failed", (),
+                               (ValueError, error, None))
+    payload = json.loads(formatter.format(record))
+    assert payload["traceback"] == "ValueError: bad payload"
+    plain = logging.LogRecord("test.logger", logging.INFO, __file__, 10, "ok", None, None)
+    assert "traceback" not in json.loads(formatter.format(plain))

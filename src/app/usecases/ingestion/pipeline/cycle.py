@@ -192,13 +192,7 @@ def _process_prefetched_source(
     return True
 
 
-def _record_persist_failure(
-    ctx: _CycleContext,
-    totals: _RunTotals,
-    config: SourceConfig,
-    source_metrics: SourceMetrics,
-    exc: Exception,
-) -> None:
+def _record_persist_failure(totals: _RunTotals, source_metrics: SourceMetrics) -> None:
     source_metrics.new_items = 0
     source_metrics.duplicate_items = 0
     source_metrics.skipped_known_items = 0
@@ -207,17 +201,6 @@ def _record_persist_failure(
     source_metrics.errors = 1
     source_metrics.coverage_complete = False
     totals.errors += 1
-    ctx.logger.error(
-        "source_persist_failed",
-        {
-            "run_id": ctx.run_id,
-            "source_id": config.id,
-            "stage": "persist",
-            "url": str(config.url),
-            "error_type": type(exc).__name__,
-            "error_message": str(exc),
-        },
-    )
 
 
 def _finish_source(
@@ -276,9 +259,13 @@ def _run_sources(
                 source_metrics=source_metrics,
             ):
                 continue
-        except Exception as exc:
+        except Exception as exc:  # one source never stops the run
             _restore_admission(ctx.admission_state, snapshot)
-            _record_persist_failure(ctx, totals, config, source_metrics, exc)
+            _record_persist_failure(totals, source_metrics)
+            ctx.logger.error("source_persist_failed", {
+                "run_id": ctx.run_id, "source_id": config.id, "stage": "persist",
+                "url": str(config.url), "error_type": type(exc).__name__,
+                "error_message": str(exc)}, exc_info=True)
 
         _finish_source(ctx, totals, config, source_metrics, snapshot)
         if ctx.admission_state.paused:

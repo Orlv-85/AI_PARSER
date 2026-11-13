@@ -9,8 +9,12 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 _Argon2PasswordHasher: Any = None
+_ARGON2_REJECTS: tuple[type[Exception], ...] = ()
 try:
     from argon2 import PasswordHasher as _Argon2PasswordHasher  # type: ignore[no-redef]
+    from argon2.exceptions import InvalidHashError, VerificationError
+
+    _ARGON2_REJECTS = (VerificationError, InvalidHashError)
 except ImportError:  # pragma: no cover - optional dependency
     pass
 
@@ -81,7 +85,7 @@ def _verify_argon2_password(password: str, password_hash: str) -> bool:
         return False
     try:
         return bool(_ARGON2_HASHER.verify(password_hash, password))
-    except Exception:
+    except _ARGON2_REJECTS:
         return False
 
 

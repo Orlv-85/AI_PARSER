@@ -44,8 +44,8 @@ flowchart LR
   `test_posted_day_is_never_replaced`.
 - The default date is yesterday UTC. Stdout is one JSON line with date, status, reason, assess
   and writer summaries, stored and refused. Invalid dates are usage errors; operational failures
-  log `bulletin_daily_failed` with date, exception type and detail bounded to 200 characters,
-  and produce a `daily_failed` summary with no stored row and exit zero.
+  log `bulletin_daily_failed` with date, exception type, detail bounded to 200 characters and
+  the traceback, and produce a `daily_failed` summary with no stored row and exit zero.
   Tests: `test_daily_defaults_to_yesterday_utc`, `test_daily_prints_one_summary_line`,
   `test_daily_invalid_date_is_a_usage_error`, `test_daily_runtime_failure_exits_zero`.
 - The job is off unless `AINEWS_BULLETIN_JOB_ENABLED` is true in the environment or `.env`.
@@ -80,7 +80,7 @@ flowchart LR
   belong to items 6 and 8.
 - decided 2026-11-02 (agent): no digest is a stored skip for the unattended command; runtime
   faults log `daily_failed` and exit zero, reserving nonzero exits for usage errors.
-- Exception fields use `log_event`; neither it nor the JSON formatter preserves tracebacks.
+- The JSON formatter writes a logged exception as a `traceback` field.
 - decided 2026-11-02 (agent): DAILY_LIMIT bounds the combined assess/build/write command;
   the service allows the lock wait, that limit, kill grace and cleanup.
 - decided 2026-11-02 (agent): extend the sudoers sample for the new units, as required by the

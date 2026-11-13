@@ -108,7 +108,7 @@ def test_source_savepoint_recovers_after_database_error(
         assert sources["broken"].last_checked_at is None
     failure = next(record for record in caplog.records if record.msg == "source_persist_failed")
     assert failure.args["source_id"] == "broken"
-    assert failure.args["stage"] == "persist"
+    assert failure.args["stage"] == "persist" and failure.exc_info is not None
 
     articles["broken"][1] = articles["broken"][1].model_copy(update={"title": "Recovered"})
     recovered = run_fetch_cycle(settings=settings, logger=logger)
