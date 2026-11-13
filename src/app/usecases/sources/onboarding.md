@@ -212,7 +212,7 @@ check it.
   `test_probe_uses_only_source_listing_and_records_bounded_evidence`.
 - Cache: the candidate's own stored review is reused when its `evidence_fingerprint`
   (`_PROMPT_VERSION`, `jev_model`, `source_review_deepseek_model`, brief) matches and its model
-  call (`reviewed_at`, kept on a cache hit) is younger than the age bound in `_check_candidate`; a
+  call (`reviewed_at`, kept on a cache hit) is younger than the age bound in `_choose_review`; a
   cache hit does not renew the age. Tests:
   `test_background_reviews_commit_results_cache_repeats_and_bulk_connect`,
   `test_stale_cache_rechecks_and_missing_provider_is_not_cached`,
@@ -411,7 +411,7 @@ check it.
 admin page (web/index.html)                          ai-news import-candidates / validate-candidates
   POST /api/source-onboarding/import                 web/routes/sources.py -> import_batch
        -> import_source_candidates
-  POST .../batches/{id}/check -> SourceIntakeService usecases/sources/intake.py: _run, _check_candidate
+  POST .../batches/{id}/check -> SourceIntakeService usecases/sources/intake.py: _run, _check_candidate (_choose_review)
        probe_source, SourceReviewer, evidence_fingerprint   core/sources/review.py
   POST .../batches/{id}/approve-ready -> approve_ready
   POST .../candidates/{id}/approve|reject|disable|mark-duplicate, PATCH .../candidates/{id}

@@ -155,7 +155,41 @@ class JevRelevanceScorer:  # pylint: disable=too-many-instance-attributes
             return jev_state(article)
         return jev_state(article, with_summary=not self.daily_enrichment_enabled)
 
-    def classify(self, article: Article) -> JevAssessment | None:  # pylint: disable=too-many-locals
+    def _ask(self, state: str) -> dict:
+        """One Jev call for `state`, through the payment journal when there is one."""
+        body = {"model": self.model, "state": state, "questions": self.questions()}
+        if self.payment_journal is not None:
+            secret = self.client.headers["Authorization"].removeprefix("Bearer ")
+            data: dict = self.payment_journal.call("jev", body, self.client, secret)
+        else:
+            response = self.client.post("https://api.typesafe.ai/v1/systemone", json=body)
+            response.raise_for_status()
+            data = response.json()
+        return data
+
+    def _log_unavailable(self, exc: Exception) -> None:
+        fields: dict[str, object] = {"error_type": type(exc).__name__}
+        if isinstance(exc, httpx.HTTPStatusError):
+            fields["status_code"] = exc.response.status_code
+        event = "jev_screening_unavailable" if self.semantic_admission_enabled else (
+            "jev_relevance_fallback"
+        )
+        self.logger.error(event, fields)
+
+    def _comparison(self, answers: dict) -> tuple[str | None, float | None]:
+        """Comparison choice and confidence with daily enrichment on; (None, None) otherwise."""
+        if not self.daily_enrichment_enabled:
+            return None, None
+        answer = answers.get("comparison", {})
+        if answer.get("choice") in {"Comparison", "NotComparison", "Unknown"}:
+            try:
+                confidence = _probability(answer.get("confidence"))
+                return answer["choice"], confidence
+            except ValueError:
+                pass
+        return None, None
+
+    def classify(self, article: Article) -> JevAssessment | None:
         self.input_held = False
         state = self.state(article)
         if self.failed:
@@ -163,15 +197,7 @@ class JevRelevanceScorer:  # pylint: disable=too-many-instance-attributes
         if state in self.cache:
             return self.cache[state]
         try:
-            body = {"model": self.model, "state": state, "questions": self.questions()}
-            if self.payment_journal is not None:
-                secret = self.client.headers["Authorization"].removeprefix("Bearer ")
-                data = self.payment_journal.call("jev", body, self.client, secret)
-            else:
-                response = self.client.post("https://api.typesafe.ai/v1/systemone", json=body)
-                response.raise_for_status()
-                data = response.json()
-            answers = data["answers"]
+            answers = self._ask(state)["answers"]
             value = _probability(answers["ai_relevant"]["noul"])
             admission_choice, admission_confidence = (None, None)
             if self.semantic_admission_enabled:
@@ -187,24 +213,10 @@ class JevRelevanceScorer:  # pylint: disable=too-many-instance-attributes
         except (httpx.HTTPError, ValueError, KeyError, TypeError, RuntimeError) as exc:
             # Stop calling a failed provider for the remainder of this fetch cycle.
             self.failed = True
-            fields: dict[str, object] = {"error_type": type(exc).__name__}
-            if isinstance(exc, httpx.HTTPStatusError):
-                fields["status_code"] = exc.response.status_code
-            event = "jev_screening_unavailable" if self.semantic_admission_enabled else (
-                "jev_relevance_fallback"
-            )
-            self.logger.error(event, fields)
+            self._log_unavailable(exc)
             return None
         category, confidence = self._category(answers)
-        comparison, comparison_confidence = None, None
-        if self.daily_enrichment_enabled:
-            answer = answers.get("comparison", {})
-            if answer.get("choice") in {"Comparison", "NotComparison", "Unknown"}:
-                try:
-                    comparison_confidence = _probability(answer.get("confidence"))
-                    comparison = answer["choice"]
-                except ValueError:
-                    pass
+        comparison, comparison_confidence = self._comparison(answers)
         assessment = JevAssessment(
             value, category, confidence, admission_choice, admission_confidence,
             comparison, comparison_confidence,

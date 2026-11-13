@@ -110,10 +110,9 @@ class ArticleRepo:
         rows = self.session.execute(stmt).scalars().all()
         return {str(value) for value in rows}
 
-    def upsert_articles_batch(self, rows: list[dict[str, Any]]) -> tuple[int, int]:  # pylint: disable=too-many-locals
-        if not rows:
-            return 0, 0
-
+    def _normalize_rows(self, rows: list[dict[str, Any]]) -> tuple[dict[str, dict[str, Any]], int]:
+        """Rows by canonical hash (a repeated hash refreshes scores and category of the first
+        row), and the number of repeats."""
         normalized_by_hash: dict[str, dict[str, Any]] = {}
         input_duplicates = 0
         for row in rows:
@@ -134,7 +133,33 @@ class ArticleRepo:
             normalized_by_hash[canonical_hash].setdefault("category_confidence", None)
             normalized_by_hash[canonical_hash].setdefault("material_type", None)
             normalized_by_hash[canonical_hash].setdefault("enrichment_provenance", None)
+        return normalized_by_hash, input_duplicates
 
+    def _bulk_upsert(self, insert_factory: Any, normalized_rows: list[dict[str, Any]]) -> None:
+        """One INSERT ... ON CONFLICT that refreshes scores and a non-null category."""
+        stmt = insert_factory(Article).values(normalized_rows)
+        excluded = stmt.excluded
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[Article.url_canonical_hash],
+            set_={
+                "ai_relevance_score": excluded.ai_relevance_score,
+                "freshness_score": excluded.freshness_score,
+                "rank_score": excluded.rank_score,
+                "category": func.coalesce(excluded.category, Article.category),
+                "category_confidence": case(
+                    (excluded.category.is_not(None), excluded.category_confidence),
+                    else_=Article.category_confidence,
+                ),
+            },
+        )
+        self.session.execute(stmt)
+        self.session.flush()
+
+    def upsert_articles_batch(self, rows: list[dict[str, Any]]) -> tuple[int, int]:
+        if not rows:
+            return 0, 0
+
+        normalized_by_hash, input_duplicates = self._normalize_rows(rows)
         normalized_rows = list(normalized_by_hash.values())
         canonical_hashes = list(normalized_by_hash)
         existing_before = self.existing_canonical_hashes(canonical_hashes)
@@ -146,36 +171,13 @@ class ArticleRepo:
         bind = self.session.get_bind()
         dialect_name = bind.dialect.name if bind is not None else ""
         if dialect_name in {"postgresql", "sqlite"}:
-            insert_factory = postgresql_insert if dialect_name == "postgresql" else sqlite_insert
-            stmt = insert_factory(Article).values(normalized_rows)
-            excluded = stmt.excluded
-            stmt = stmt.on_conflict_do_update(
-                index_elements=[Article.url_canonical_hash],
-                set_={
-                    "ai_relevance_score": excluded.ai_relevance_score,
-                    "freshness_score": excluded.freshness_score,
-                    "rank_score": excluded.rank_score,
-                    "category": func.coalesce(excluded.category, Article.category),
-                    "category_confidence": case(
-                        (excluded.category.is_not(None), excluded.category_confidence),
-                        else_=Article.category_confidence,
-                    ),
-                },
-            )
-            self.session.execute(stmt)
-            self.session.flush()
+            self._bulk_upsert(
+                postgresql_insert if dialect_name == "postgresql" else sqlite_insert,
+                normalized_rows)
             return new_count, duplicate_count
 
-        actual_new = 0
-        actual_duplicates = 0
-        for row in normalized_rows:
-            _, is_new = self.insert_article(row)
-            if is_new:
-                actual_new += 1
-            else:
-                actual_duplicates += 1
-        actual_duplicates += input_duplicates
-        return actual_new, actual_duplicates
+        actual_new = sum(1 for row in normalized_rows if self.insert_article(row)[1])
+        return actual_new, len(normalized_rows) - actual_new + input_duplicates
 
     def insert_article(self, row: Mapping[str, Any]) -> tuple[Article, bool]:
         """Insert `row` (`Article` columns) as a new article, or refresh the scores and category
