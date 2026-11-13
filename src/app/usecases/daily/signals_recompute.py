@@ -102,12 +102,14 @@ def recompute_reports(repo: DailySignalRepo, until: date, scope: RecomputeScope 
     plan = _plan_days(repo, until, scope, coverage)
     t = thresholds or Thresholds()
     needed = {d - timedelta(days=i) for d in plan.days for i in range(2 * t.window_days)}
+    # Keyword order keeps the old order: observations, then history, then the timestamp.
     base = SnapshotInput(
         day=until, observations=digest_text(repo.observations(result, rows, needed)),
+        history=LexicalHistory(repo.history_texts(until)),
+        generated_at=now or datetime.now(UTC),
         coverage=coverage, entities=result.entities, entity_ids=ids,
-        extraction_version=EXTRACTION_VERSION, generated_at=now or datetime.now(UTC),
-        comparable_from=repo.comparable_from, thresholds=t,
-        history=LexicalHistory(repo.history_texts(until)))
+        extraction_version=EXTRACTION_VERSION,
+        comparable_from=repo.comparable_from, thresholds=t)
     written = _write_changed(repo, plan.days, base)
     return RecomputeResult(written=written, unchanged=len(plan.days) - len(written),
                            entities=len(result.entities), reconciliation=result,
