@@ -95,6 +95,9 @@ def test_repeat_is_dropped():
     {"repeats": [{"candidate": "c1"}], "same_event": []},
     {"repeats": [{"candidate": "c1", "published": "p1", "x": 1}], "same_event": []},
     {"repeats": "none", "same_event": []},
+    {"repeats": [{"candidate": ["c1"], "published": "p1"}], "same_event": []},
+    {"repeats": [{"candidate": "c1", "published": {}}], "same_event": []},
+    {"repeats": [], "same_event": [[["c1"], "c2"]]},
     {"repeats": [], "same_event": [["c1", 2]]},
     ["c1"], "not json", "",
 ])

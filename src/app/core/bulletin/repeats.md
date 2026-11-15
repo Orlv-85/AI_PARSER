@@ -72,7 +72,9 @@ flowchart LR
 ## Invariants
 
 - No I/O in this module; the model call is `ask`.
-- The check never raises for a model or journal fault and never drops a candidate on a fault.
+- `check_repeats` never raises for any model answer (ids of any JSON type included) or for a
+  reason returned by `ask`, and never drops a candidate on a fault. A journal that cannot be
+  opened is caught by the caller (`daily.md`).
 - The input `DayInput` is not changed; a new one is returned.
 
 ## Code map

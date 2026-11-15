@@ -110,6 +110,8 @@ def _repeat_pairs(raw: object, candidates: set[str], published: set[str]) -> dic
         if not isinstance(item, dict) or set(item) != {"candidate", "published"}:
             return None
         cid, pid = item["candidate"], item["published"]
+        if not isinstance(cid, str) or not isinstance(pid, str):
+            return None
         if cid not in candidates or pid not in published or cid in found:
             return None
         found[cid] = pid

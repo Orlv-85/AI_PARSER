@@ -1,4 +1,5 @@
 """Daily orchestration; behavior and decisions: src/app/usecases/bulletin/daily.md."""
+import sqlite3
 from collections.abc import Callable
 from contextlib import ExitStack
 from dataclasses import dataclass, field
@@ -9,7 +10,7 @@ from typing import Any, cast
 from sqlalchemy.orm import Session
 
 from app.config.settings import Settings
-from app.core.bulletin.builder import Bulletin, DayInput, build_bulletin
+from app.core.bulletin.builder import READY_STATUSES, Bulletin, DayInput, build_bulletin
 from app.core.bulletin.phrases import PhraseLibrary, load_phrases
 from app.core.bulletin.repeats import RepeatsResult, check_repeats
 from app.core.bulletin.world_change import ASSESS_DEFAULT_MAX_USD, run_assessment
@@ -20,6 +21,8 @@ from app.storage.bulletin_texts import load_sources
 from app.storage.world_change import WorldChangeRepo
 from app.usecases.bulletin.day_input import load_day_input, published_stories
 from app.usecases.bulletin.writer_run import WRITER_MAX_USD_PER_DAY
+
+JOURNAL_UNAVAILABLE = "journal_unavailable"
 
 
 @dataclass
@@ -127,8 +130,13 @@ def _repeat_check(session: Session, env: BulletinEnv, day: date, today: date,
 
         def ask(body: dict[str, Any]) -> tuple[object, str | None]:
             if not writers:
-                writers.append(stack.enter_context(
-                    opener(env.settings, today, max_usd=float(WRITER_MAX_USD_PER_DAY))))
+                try:
+                    writers.append(stack.enter_context(
+                        opener(env.settings, today, max_usd=float(WRITER_MAX_USD_PER_DAY))))
+                except (OSError, sqlite3.Error, ValueError):
+                    # The check is optional: the bulletin is built without it.
+                    env.logger.exception("bulletin_repeats_journal_failed")
+                    return None, JOURNAL_UNAVAILABLE
             answered: tuple[object, str | None] = writers[0].ask(body)
             return answered
 
@@ -143,7 +151,9 @@ def run_daily(session: Session, env: BulletinEnv, day: date,
     now = today()  # one real UTC day for the repeat check and the writer
     keyed = has_provider_key(settings, "ds_api_key")
     data = load_day_input(session, day, include_world=settings.world_stream_in_bulletin)
-    checked = _repeat_check(session, env, day, now, data) if keyed and data else None
+    # A day the builder skips gets no paid check.
+    check = keyed and data is not None and data.status in READY_STATUSES
+    checked = _repeat_check(session, env, day, now, data) if check and data else None
     prepared = prepare_from_input(session, env.logger, day, checked.data if checked else data,
                                   write=keyed)
     if checked:

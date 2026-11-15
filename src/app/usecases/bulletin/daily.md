@@ -35,12 +35,21 @@ flowchart LR
   today)`, the daily cap `WRITER_MAX_USD_PER_DAY` shared with the writer call). It logs one event
   `bulletin_repeats` with the summary and stores it in `numbers["repeats"]`; digest candidates it
   drops still count in `assessed`. Without the key there
-  is no call and no `repeats` entry. A provider fault keeps every candidate and the bulletin still goes out. `prepare_bulletin`
+  is no call and no `repeats` entry. A provider fault keeps every candidate and the bulletin still goes out; so does a journal
+  that cannot be opened (`OSError`, `sqlite3.Error`, the cap's `ValueError`): the traceback is
+  logged as `bulletin_repeats_journal_failed` and the reason is `journal_unavailable`. A day
+  whose status is not in `READY_STATUSES` (the builder skips it) gets no check. When every
+  candidate is a repeat the day is skipped as `no_assessments` and no writer runs. A rerun with
+  the same candidates and stored days sends the same body, which the journal replays free. `prepare_bulletin`
   alone (the other commands) makes no check. The writer summary's `cost_usd` is the journal's
   total of the day, so it includes the repeat call. Tests:
   `test_daily_repeat_check_runs_before_the_build_and_is_stored`,
   `test_daily_invalid_repeat_answer_still_builds_every_story`,
-  `test_daily_without_ds_key_makes_no_repeat_call`.
+  `test_daily_without_ds_key_makes_no_repeat_call`,
+  `test_daily_repeat_journal_that_cannot_open_still_builds_and_stores`,
+  `test_daily_makes_no_repeat_call_for_a_day_the_builder_skips`,
+  `test_daily_with_every_candidate_a_repeat_is_skipped`. The free replay of a rerun has no test
+  here (it is the journal's rule, `provider_journal.md`).
 - Shared assessment retains the read-only, keyless dry-run behavior of `bulletin assess`.
   Tests: `test_daily_shared_assessment_dry_run_is_read_only`.
 - Without a nonblank Jev key, assessment is skipped with reason `missing_jev_key` in the log and

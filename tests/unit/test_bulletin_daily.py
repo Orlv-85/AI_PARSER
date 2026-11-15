@@ -1,5 +1,6 @@
 # pylint: disable=redefined-outer-name,unused-argument
 import json
+import sqlite3
 from contextlib import contextmanager
 from datetime import date
 from types import SimpleNamespace
@@ -39,7 +40,7 @@ def daily(monkeypatch):
     maker = sessionmaker(bind=engine, expire_on_commit=False)
     settings = Settings(_env_file=None, jev_api_key="fake-jev", ds_api_key="fake-ds")
     calls = SimpleNamespace(assess=[], writer=[], assessor_days=[], writer_days=[], repeats=[],
-                            repeats_answer={"repeats": [], "same_event": []})
+                            open_errors=[], repeats_answer={"repeats": [], "same_event": []})
 
     def assess(article):
         calls.assess.append(article.id)
@@ -70,6 +71,8 @@ def daily(monkeypatch):
         assert actual_settings is settings
         assert max_usd == float(WRITER_MAX_USD_PER_DAY)
         calls.writer_days.append(today)
+        if calls.open_errors:
+            raise calls.open_errors.pop(0)
         yield SimpleNamespace(ask=ask, cost_usd=lambda: 0.001)
 
     monkeypatch.setattr(cli_deps, "SessionLocal", maker)
@@ -263,6 +266,41 @@ def test_daily_invalid_repeat_answer_still_builds_every_story(daily):
         row = BulletinRepo(session).get(DAY)
         assert len(row.payload["key_results"]) == 2
         assert row.numbers["repeats"]["reason"] == "invalid_answer"
+
+
+@pytest.mark.parametrize("error", [OSError("disk"), sqlite3.OperationalError("locked"),
+                                   ValueError("max_usd_above_cap")])
+def test_daily_repeat_journal_that_cannot_open_still_builds_and_stores(daily, error):
+    seed(daily, titles=("AI changes the work", "Same event again"))
+    store_previous_day(daily)
+    daily.calls.open_errors.append(error)
+    result, summary = run_day()
+    assert summary["status"] == "ready" and not daily.calls.repeats
+    with daily.maker() as session:
+        row = BulletinRepo(session).get(DAY)
+        assert len(row.payload["key_results"]) == 2
+        assert row.numbers["repeats"]["reason"] == "journal_unavailable"
+    assert "bulletin_repeats_journal_failed" in result.stderr
+
+
+def test_daily_makes_no_repeat_call_for_a_day_the_builder_skips(daily):
+    seed(daily, status="failed", titles=("AI changes the work", "Same event again"))
+    store_previous_day(daily)
+    _, summary = run_day()
+    assert summary["status"] == "skipped" and not daily.calls.repeats
+    assert not daily.calls.writer_days
+
+
+def test_daily_with_every_candidate_a_repeat_is_skipped(daily):
+    seed(daily)
+    store_previous_day(daily)
+    daily.calls.repeats_answer = {"repeats": [{"candidate": "c1", "published": "p1"}],
+                                  "same_event": []}
+    _, summary = run_day()
+    assert summary["status"] == "skipped" and summary["reason"] == "no_assessments"
+    assert not daily.calls.writer
+    with daily.maker() as session:
+        assert len(BulletinRepo(session).get(DAY).numbers["repeats"]["dropped"]) == 1
 
 
 def test_daily_without_ds_key_makes_no_repeat_call(daily):
