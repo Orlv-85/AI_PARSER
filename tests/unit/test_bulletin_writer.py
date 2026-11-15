@@ -612,7 +612,7 @@ def test_no_stories_no_call():
 # prompt and request
 
 def test_prompt_pins_its_rules():
-    assert WRITER_VERSION == "bulletin-writer-5"
+    assert WRITER_VERSION == "bulletin-writer-6"
     assert writer_module.GLOSS_MAX_WORDS == 14
     assert WRITER_VERSION in WRITER_PROMPT
     for rule in ("untrusted", "no outside knowledge", "at most 8 words",
@@ -977,3 +977,4 @@ def test_evidence_reads_missing_article_fields_as_empty():
     story = {"outlets": [], "articles": [{}]}
     evidence = writer_module._evidence  # pylint: disable=protected-access
     assert evidence(story) == "\n\n"  # type: ignore[arg-type]
+
