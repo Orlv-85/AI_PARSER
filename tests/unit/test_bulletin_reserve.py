@@ -10,10 +10,17 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.bulletin import builder as builder_module
-from app.core.bulletin.builder import Candidate, DayInput, build_bulletin
+from app.core.bulletin.builder import (
+    KEY_RESULTS_MAX,
+    RESERVE_MAX,
+    Candidate,
+    DayInput,
+    build_bulletin,
+)
 from app.core.bulletin.phrases import load_phrases
 from app.core.bulletin.render import render_text
 from app.core.bulletin.writer import (
+    WRITER_MAX_OUTPUT,
     SourceText,
     all_stories,
     build_packet,
@@ -287,3 +294,23 @@ def test_reserve_story_echoing_its_non_english_title_is_not_promoted():
     assert result.summary["reserve"]["promoted"] == ["s6"]
     assert result.bulletin.key_results[-1].gloss is None
 
+
+
+def test_english_reserve_story_may_repeat_its_title():
+    bulletin = day()
+    foreign(bulletin, bulletin.key_results[0])
+    title = bulletin.reserve[0].title
+
+    def mutate(c):
+        c["stories"][0].update(headline=None)
+        c["stories"][4].update(headline=title)
+    result, _ = go(bulletin, mutate)
+    assert result.summary["reserve"]["promoted"] == ["s5"]
+    assert result.bulletin.key_results[-1].headline == title
+
+
+def test_output_budget_holds_twelve_stories():
+    # About 310 tokens a story (headline, four sentences, Telegram note, gloss) plus the day
+    # headline, and half as much again: a cut answer falls back to titles for the whole day.
+    stories = KEY_RESULTS_MAX + RESERVE_MAX + 4  # rubric, two Cooperation, incident story
+    assert int(1.5 * (stories * 310 + 50)) <= WRITER_MAX_OUTPUT

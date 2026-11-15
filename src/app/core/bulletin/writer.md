@@ -52,8 +52,9 @@ flowchart LR
 - Reserve (F11): after the shown stories the packet lists `Bulletin.reserve` (`builder.md`) with
   the next ids (shown `s1..sN`, reserve `sN+1..`), each entry marked `"reserve": true`; their texts
   are loaded like the others. The reserve is in the same single call. The headline of the day is
-  checked against the texts of the non-reserve stories only, so one grounded only in a reserve story
-  is dropped. Tests: `test_packet_lists_reserve_after_shown_stories`,
+  checked against the texts of the non-reserve stories only, so one that needs a name or number
+  found only in a reserve story is dropped. The check is of names and numbers, not of the topic: a
+  headline about a reserve story in common words passes (the prompt forbids it; no test). Tests: `test_packet_lists_reserve_after_shown_stories`,
   `test_day_headline_grounded_only_in_a_reserve_story_is_dropped`,
   `test_loader_loads_reserve_texts`.
 - One request per bulletin (FR-005): `WRITER_MODEL` (DeepSeek flash, prices of `BRIEF_PRICES`),
@@ -168,7 +169,8 @@ the safe direction: the story falls back to its title.
   `test_reserve_without_checked_text_is_skipped`, `test_non_english_reserve_needs_headline_and_telegram`,
   `test_reserve_story_echoing_its_non_english_title_is_not_promoted`,
   `test_no_promotion_when_nothing_was_removed`, `test_no_promotion_on_fallback`,
-  `test_other_sections_are_not_refilled`, `test_summary_reports_the_reserve`.
+  `test_other_sections_are_not_refilled`, `test_summary_reports_the_reserve`, `test_english_reserve_story_may_repeat_its_title`,
+  `test_output_budget_holds_twelve_stories`.
 - If the builder's day headline came from any known non-English world title, whether its story
   stays or is removed, it becomes absent (`None`, no cut
   marker), as when no builder title qualifies. A missing headline stays missing; a passing model
@@ -241,7 +243,9 @@ the safe direction: the story falls back to its title.
 - decided 2026-11-15 (owner): names of countries, nationalities, months and weekdays in the text
   of a story in another language stay under the name check ("Hanoi", "Italian", "Thursday" are
   dropped when the article spells them differently). An unchecked country or date in a headline
-  is a distortion risk; the reserve keeps the volume instead. To be reopened if too few stories
+  is a distortion risk; the reserve keeps the volume instead. No code changed for this: it is the
+  existing rule (`test_names_in_a_foreign_story_still_need_the_text`,
+  `test_names_match_whole_words_and_dates_need_the_text`). To be reopened if too few stories
   in other languages are published.
 - decided 2026-11-15 (agent): "AI" and the nouns of `HEADLINE_OPENERS` pass the name check. In
   2026-11-09..14 the check removed 17 of 18 stories in other languages, mostly for "AI" and the
@@ -295,7 +299,10 @@ the safe direction: the story falls back to its title.
   7 and 8 stories, 4 and 5 were removed, 3 were published. `WRITER_MAX_OUTPUT` grew to 6144 for up to
   4 more stories (12 stories about 3750 tokens); `WRITER_MAX_USD_PER_DAY` is unchanged.
 - decided 2026-11-15 (agent): a promoted story needs no day-headline cleanup: the builder headline
-  never comes from a reserve story and a model headline grounded only in one is already dropped.
+  never comes from a reserve story and a model headline with a name or number only a reserve story
+  has is already dropped. Known gap, as before the reserve: a model day headline that paraphrases
+  a removed story (no run of `TITLE_RUN_WORDS` title words) stays, now above the story that took
+  its place.
 - decided 2026-11-15 (agent): only Key results is refilled; the other sections hold one or two
   stories chosen by their own rule, and a reserve story has no section of its own.
 - Model `WRITER_MODEL` only: `PilotJournal` prices every answer at the flash rates, so another
