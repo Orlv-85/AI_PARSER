@@ -39,7 +39,12 @@ from app.core.bulletin.writer import (
     write_bulletin,
     writer_body,
 )
-from app.core.bulletin.writer_grounding import COPY_RUN_WORDS, QUOTE_MAX_WORDS
+from app.core.bulletin.writer_grounding import (
+    COPY_RUN_WORDS,
+    HEADLINE_OPENERS,
+    QUOTE_MAX_WORDS,
+    sentence_error,
+)
 from app.core.canonicalize import canonical_url_hash
 from app.storage.bulletin_texts import load_sources
 from app.storage.digest_repo import NewsDigestRepo
@@ -612,7 +617,7 @@ def test_no_stories_no_call():
 # prompt and request
 
 def test_prompt_pins_its_rules():
-    assert WRITER_VERSION == "bulletin-writer-5"
+    assert WRITER_VERSION == "bulletin-writer-6"
     assert writer_module.GLOSS_MAX_WORDS == 14
     assert WRITER_VERSION in WRITER_PROMPT
     for rule in ("untrusted", "no outside knowledge", "at most 8 words",
@@ -977,3 +982,27 @@ def test_evidence_reads_missing_article_fields_as_empty():
     story = {"outlets": [], "articles": [{}]}
     evidence = writer_module._evidence  # pylint: disable=protected-access
     assert evidence(story) == "\n\n"  # type: ignore[arg-type]
+
+
+FOREIGN_TEXT = ("Исследование показало, что ИИ экономит рабочее время сотрудников офисов, "
+                "но не влияет на зарплату. Опрос провели в ноябре.")
+
+
+def test_ai_is_grounded_in_a_foreign_text():
+    assert sentence_error("The poll found that AI saves working time in offices.",
+                          FOREIGN_TEXT) is None
+
+
+@pytest.mark.parametrize("opener", sorted(HEADLINE_OPENERS))
+def test_headline_opener_nouns_are_not_names(opener):
+    assert sentence_error(f"{opener} of the day found that office time is saved.",
+                          FOREIGN_TEXT) is None
+
+
+@pytest.mark.parametrize("text", [
+    "SuperJob survey finds AI saves office time but leaves pay unchanged.",
+    "Hanoi job fair hears that AI saves office time for the workers.",
+    "The poll found that OpenAI saves working time in offices.",
+])
+def test_names_in_a_foreign_story_still_need_the_text(text):
+    assert sentence_error(text, FOREIGN_TEXT) == "unsupported_name"

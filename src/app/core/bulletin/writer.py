@@ -22,7 +22,7 @@ from app.core.bulletin.writer_grounding import TOKEN, fold, sentence_error
 from app.core.daily.provider_requests import DEEPSEEK_MODEL
 from app.core.daily.signals_brief import SUMMARY_MAX, cut, request_body
 
-WRITER_VERSION = "bulletin-writer-5"
+WRITER_VERSION = "bulletin-writer-6"
 WRITER_MODEL = DEEPSEEK_MODEL
 MODEL_NAMES = frozenset({DEEPSEEK_MODEL, "deepseek-v4.1-flash"})  # the answer may name the alias
 # 8 stories of 4 sentences, a Telegram note and a headline are about 2500 tokens.
