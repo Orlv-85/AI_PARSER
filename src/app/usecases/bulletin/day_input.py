@@ -10,7 +10,7 @@ from statistics import median
 from typing import Any
 from urllib.parse import urlparse
 
-from sqlalchemy import select
+from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
 from app.core.bulletin.builder import (
@@ -20,12 +20,14 @@ from app.core.bulletin.builder import (
     Candidate,
     DayInput,
 )
+from app.core.bulletin.repeats import REPEAT_DAYS, PublishedStory
 from app.core.bulletin.world_change import WORLD_CHANGE_VERSION
 from app.core.canonicalize import canonical_url_hash
 from app.core.daily.titles import digest_title
 from app.storage.bulletin_store import BulletinRepo
 from app.storage.models_sql import (
     Article,
+    BulletinRow,
     DailySignalReport,
     Source,
     WorldChangeAssessment,
@@ -111,31 +113,64 @@ def _digest_candidates(session: Session, articles: list[Article],
     return found
 
 
-def _bulletin_story_keys(payload: dict[str, Any]) -> tuple[set[str], set[str]]:
+def _payload_stories(payload: dict[str, Any]) -> list[dict[str, Any]]:
     stories = [*payload["key_results"], *payload["cooperation"],
                payload["rubric_story"], payload["incident_story"]]
-    stories = [story for story in stories if story is not None]
+    return [story for story in stories if story is not None]
+
+
+def _bulletin_story_keys(payload: dict[str, Any]) -> tuple[set[str], set[str]]:
+    stories = _payload_stories(payload)
     urls = {link["url"] for story in stories for link in story["links"]}
     titles = {cluster_key(story["title"]) for story in stories}
     return urls, titles
 
 
-def _yesterday_story_keys(session: Session, day: date) -> tuple[set[str], set[str]]:
-    row = BulletinRepo(session).get(day - timedelta(days=1))
-    if row is None or row.status != "ready":
-        return set(), set()
-    try:
-        return _bulletin_story_keys(row.payload)
-    except (AttributeError, KeyError, TypeError):
-        return set(), set()
+def _recent_payloads(session: Session, day: date) -> list[tuple[date, Any]]:
+    """Payloads of the ready stored bulletins of D-1 to D-REPEAT_DAYS."""
+    # `bulletin build` reads before it creates the table on a fresh database.
+    if not inspect(session.connection()).has_table(BulletinRow.__tablename__):
+        return []
+    found = []
+    for back in range(1, REPEAT_DAYS + 1):
+        stored = day - timedelta(days=back)
+        row = BulletinRepo(session).get(stored)
+        if row is not None and row.status == "ready":
+            found.append((stored, row.payload))
+    return found
+
+
+def _recent_story_keys(session: Session, day: date) -> tuple[set[str], set[str]]:
+    """Story URLs and title keys of the last days; an unreadable day is ignored on its own."""
+    urls: set[str] = set()
+    titles: set[str] = set()
+    for _stored, payload in _recent_payloads(session, day):
+        try:
+            day_urls, day_titles = _bulletin_story_keys(payload)
+        except (AttributeError, KeyError, TypeError):
+            continue
+        urls |= day_urls
+        titles |= day_titles
+    return urls, titles
+
+
+def published_stories(session: Session, day: date) -> list[PublishedStory]:
+    """Stories of the ready stored bulletins of D-1 to D-REPEAT_DAYS (shown text, title)."""
+    found = []
+    for stored, payload in _recent_payloads(session, day):
+        try:
+            found += [PublishedStory(stored.isoformat(),
+                                     str(story.get("headline") or story["title"]),
+                                     str(story["title"]))
+                      for story in _payload_stories(payload)]
+        except (AttributeError, KeyError, TypeError):
+            continue
+    return found
 
 
 def _world_candidates(session: Session, day: date) -> list[Candidate]:
-    yesterday_urls, yesterday_titles = _yesterday_story_keys(session, day)
     found = []
     for item in WorldRepo(session).candidates_in_window([STATE_ASSESSED], day):
-        if item.url in yesterday_urls or cluster_key(digest_title(item.title)) in yesterday_titles:
-            continue
         answer = WorldChangeRepo(session).get(item.url_canonical_hash, WORLD_CHANGE_VERSION)
         if answer is None:
             continue
@@ -146,6 +181,16 @@ def _world_candidates(session: Session, day: date) -> list[Candidate]:
             area=answer.area, actor=answer.actor, harm=answer.harm_to_people,
             event_key=f"title:{cluster_key(item.title)}", origin="world", language=item.language))
     return found
+
+
+def _split_shown(session: Session, day: date, candidates: list[Candidate]
+                 ) -> tuple[list[Candidate], int]:
+    """Candidates not told in the last days, and how many digest candidates were left out."""
+    urls, titles = _recent_story_keys(session, day)
+    kept = [c for c in candidates if c.url not in urls and cluster_key(c.title) not in titles]
+    left_out = sum(1 for c in candidates if c.origin == "digest") \
+        - sum(1 for c in kept if c.origin == "digest")
+    return kept, left_out
 
 
 def load_day_input(session: Session, day: date, *, include_world: bool) -> DayInput | None:
@@ -160,6 +205,7 @@ def load_day_input(session: Session, day: date, *, include_world: bool) -> DayIn
     candidates = _digest_candidates(session, articles, payload)
     if include_world:
         candidates += _world_candidates(session, day)
+    candidates, digest_left_out = _split_shown(session, day, candidates)
     return DayInput(
         day=day, status=report.status if report else "missing",
         quiet=bool(payload.get("quiet")),
@@ -167,4 +213,5 @@ def load_day_input(session: Session, day: date, *, include_world: bool) -> DayIn
         model_releases=counts.get("model_release", 0),
         product_launches=counts.get("product_launch", 0),
         median_items=_median_items(session, day), candidates=tuple(candidates),
-        digest_articles=len(articles))
+        digest_articles=len(articles), digest_left_out=digest_left_out)
+

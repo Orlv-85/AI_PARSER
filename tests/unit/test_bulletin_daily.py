@@ -1,5 +1,6 @@
 # pylint: disable=redefined-outer-name,unused-argument
 import json
+import sqlite3
 from contextlib import contextmanager
 from datetime import date
 from types import SimpleNamespace
@@ -15,6 +16,7 @@ from app.cli import bulletin as cli_bulletin
 from app.cli import deps as cli_deps
 from app.cli import main as cli_main
 from app.config.settings import Settings
+from app.core.bulletin.repeats import REPEATS_VERSION
 from app.core.bulletin.world_change import ASSESS_DEFAULT_MAX_USD, WORLD_CHANGE_VERSION, WorldChange
 from app.core.bulletin.writer import WRITER_MODEL, WRITER_VERSION
 from app.core.canonicalize import canonical_url_hash
@@ -37,7 +39,8 @@ def daily(monkeypatch):
     Base.metadata.create_all(engine)
     maker = sessionmaker(bind=engine, expire_on_commit=False)
     settings = Settings(_env_file=None, jev_api_key="fake-jev", ds_api_key="fake-ds")
-    calls = SimpleNamespace(assess=[], writer=[], assessor_days=[], writer_days=[])
+    calls = SimpleNamespace(assess=[], writer=[], assessor_days=[], writer_days=[], repeats=[],
+                            open_errors=[], repeats_answer={"repeats": [], "same_event": []})
 
     def assess(article):
         calls.assess.append(article.id)
@@ -52,6 +55,10 @@ def daily(monkeypatch):
                               payment_journal=None)
 
     def ask(body):
+        if REPEATS_VERSION in body["messages"][0]["content"]:
+            calls.repeats.append(body)
+            return {"model": WRITER_MODEL, "choices": [{"finish_reason": "stop", "message": {
+                "content": json.dumps(calls.repeats_answer)}}]}, None
         calls.writer.append(body)
         content = {"headline": "AI changes the work", "stories": [{
             "id": "s1", "headline": "Work changes", "site": [NOTE],
@@ -64,6 +71,8 @@ def daily(monkeypatch):
         assert actual_settings is settings
         assert max_usd == float(WRITER_MAX_USD_PER_DAY)
         calls.writer_days.append(today)
+        if calls.open_errors:
+            raise calls.open_errors.pop(0)
         yield SimpleNamespace(ask=ask, cost_usd=lambda: 0.001)
 
     monkeypatch.setattr(cli_deps, "SessionLocal", maker)
@@ -76,18 +85,21 @@ def daily(monkeypatch):
     engine.dispose()
 
 
-def seed(daily, *, day=DAY, answered=False, status="ready"):
+def seed(daily, *, day=DAY, answered=False, status="ready", titles=("AI changes the work",)):
     with daily.maker() as session:
-        url = "https://example.com/a"
-        article = Article(title="AI changes the work", url=url, url_canonical=url,
-                          url_canonical_hash=canonical_url_hash(url))
-        session.add(article)
-        session.flush()
-        if answered:
-            WorldChangeRepo(session).save(article, ANSWER, version=WORLD_CHANGE_VERSION,
-                                          model="fake")
-        NewsDigestRepo(session).save_digest(report_date=day, groups=[{"title": "G", "items": [
-            {"title": article.title, "summary": "s", "url": url}]}])
+        items = []
+        for suffix, title in zip("abcdef", titles, strict=False):
+            url = f"https://example.com/{suffix}"
+            article = Article(title=title, url=url, url_canonical=url,
+                              url_canonical_hash=canonical_url_hash(url))
+            session.add(article)
+            session.flush()
+            if answered:
+                WorldChangeRepo(session).save(article, ANSWER, version=WORLD_CHANGE_VERSION,
+                                              model="fake")
+            items.append({"title": title, "summary": "s", "url": url})
+        NewsDigestRepo(session).save_digest(
+            report_date=day, groups=[{"title": "G", "items": items}])
         payload = {"status": status, "quiet": False, "coverage": {"items": 1},
                    "event_counts": [], "top_stories": []}
         session.add(DailySignalReport(
@@ -122,6 +134,8 @@ def test_daily_assesses_builds_writes_and_stores(daily):
         assert row.status == "ready" and row.reason is None
         story = row.payload["key_results"][0]
         assert story["text_origin"] == "model" and story["site_note"] == [NOTE]
+        repeats = row.numbers.pop("repeats")
+        assert repeats["reason"] == "nothing_to_compare" and repeats["candidates"] == 1
         assert row.numbers == {"assessed": 1, "digest_articles": 1, "writer": summary["writer"]}
         assert row.versions["writer"] == WRITER_VERSION
         assert session.scalar(select(func.count()).select_from(BulletinRow)) == 1
@@ -209,6 +223,95 @@ def test_daily_writer_uses_current_utc_day_after_assessment(daily, monkeypatch):
     monkeypatch.setattr(cli_bulletin, "utc_today", lambda: next(clock))
     _, summary = run_day()
     assert summary["stored"] is True and daily.calls.writer_days == [TODAY]
+
+
+def store_previous_day(daily):
+    payload = {"key_results": [{"title": "Old news", "headline": "Old headline",
+                                "links": [{"url": "https://old.example/x"}]}],
+               "cooperation": [], "rubric_story": None, "incident_story": None}
+    with daily.maker() as session:
+        session.add(BulletinRow(day=date(2026, 10, 29), status="ready", payload=payload,
+                                numbers={}, versions={}))
+        session.commit()
+
+
+def test_daily_repeat_check_runs_before_the_build_and_is_stored(daily):
+    seed(daily, titles=("AI changes the work", "Same event again"))
+    store_previous_day(daily)
+    daily.calls.repeats_answer = {"repeats": [{"candidate": "c2", "published": "p1"}],
+                                  "same_event": []}
+    result, summary = run_day()
+    assert len(daily.calls.repeats) == 1 and len(daily.calls.writer) == 1
+    sent = json.loads(daily.calls.repeats[0]["messages"][1]["content"])
+    assert sent["published"][0]["title"] == "Old headline"
+    assert daily.calls.writer_days == [TODAY, TODAY] and summary["status"] == "ready"
+    with daily.maker() as session:
+        row = BulletinRepo(session).get(DAY)
+        assert [s["title"] for s in row.payload["key_results"]] == ["AI changes the work"]
+        repeats = row.numbers["repeats"]
+        assert repeats["reason"] is None and repeats["dropped"] == [{
+            "title": "Same event again", "published_day": "2026-10-29",
+            "published_title": "Old headline"}]
+        assert row.numbers["assessed"] == 2
+    assert "bulletin_repeats" in result.stderr
+
+
+def test_daily_invalid_repeat_answer_still_builds_every_story(daily):
+    seed(daily, titles=("AI changes the work", "Same event again"))
+    daily.calls.repeats_answer = {"repeats": [{"candidate": "c9", "published": "p1"}],
+                                  "same_event": []}
+    _, summary = run_day()
+    assert summary["status"] == "ready"
+    with daily.maker() as session:
+        row = BulletinRepo(session).get(DAY)
+        assert len(row.payload["key_results"]) == 2
+        assert row.numbers["repeats"]["reason"] == "invalid_answer"
+
+
+@pytest.mark.parametrize("error", [OSError("disk"), sqlite3.OperationalError("locked"),
+                                   ValueError("max_usd_above_cap")])
+def test_daily_repeat_journal_that_cannot_open_still_builds_and_stores(daily, error):
+    seed(daily, titles=("AI changes the work", "Same event again"))
+    store_previous_day(daily)
+    daily.calls.open_errors.append(error)
+    result, summary = run_day()
+    assert summary["status"] == "ready" and not daily.calls.repeats
+    with daily.maker() as session:
+        row = BulletinRepo(session).get(DAY)
+        assert len(row.payload["key_results"]) == 2
+        assert row.numbers["repeats"]["reason"] == "journal_unavailable"
+    assert "bulletin_repeats_journal_failed" in result.stderr
+
+
+def test_daily_makes_no_repeat_call_for_a_day_the_builder_skips(daily):
+    seed(daily, status="failed", titles=("AI changes the work", "Same event again"))
+    store_previous_day(daily)
+    _, summary = run_day()
+    assert summary["status"] == "skipped" and not daily.calls.repeats
+    assert not daily.calls.writer_days
+
+
+def test_daily_with_every_candidate_a_repeat_is_skipped(daily):
+    seed(daily)
+    store_previous_day(daily)
+    daily.calls.repeats_answer = {"repeats": [{"candidate": "c1", "published": "p1"}],
+                                  "same_event": []}
+    _, summary = run_day()
+    assert summary["status"] == "skipped" and summary["reason"] == "no_assessments"
+    assert not daily.calls.writer
+    with daily.maker() as session:
+        assert len(BulletinRepo(session).get(DAY).numbers["repeats"]["dropped"]) == 1
+
+
+def test_daily_without_ds_key_makes_no_repeat_call(daily):
+    daily.settings.ds_api_key = None
+    seed(daily, titles=("AI changes the work", "Same event again"))
+    store_previous_day(daily)
+    _, summary = run_day()
+    assert summary["status"] == "ready" and not daily.calls.repeats
+    with daily.maker() as session:
+        row = BulletinRepo(session).get(DAY)
+        assert len(row.payload["key_results"]) == 2 and "repeats" not in row.numbers
 
 
 def test_daily_missing_digest_with_keys_is_skipped(daily):

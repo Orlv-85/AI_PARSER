@@ -46,6 +46,7 @@ Index of all docs: [docs/README.md](docs/README.md). Code docs live next to the 
 - [Daily AI Signals](src/app/usecases/daily/signals.md) - behavior, decisions, invariants, code map.
 - [World change questions](src/app/core/bulletin/world_change.md) - Jev questions for the bulletin: what AI changed, per article (018 item 1).
 - [Bulletin builder](src/app/core/bulletin/builder.md) - the Daily Inference bulletin from a day's data and the phrase library, dry run (018 item 2).
+- [Bulletin repeats](src/app/core/bulletin/repeats.md) - model check that keeps events of the last days out of the bulletin and merges same-event candidates (018).
 - [Bulletin writer](src/app/core/bulletin/writer.md) - model text for the bulletin stories with a grounding check, one call per day (018 item 3).
 - [Bulletin storage](src/app/storage/bulletin_store.md) - saved daily bulletins and public API (018 item 4a).
 - [Daily bulletin](src/app/usecases/bulletin/daily.md) - daily job, CLI orchestration and switches (018 item 4b).

@@ -75,16 +75,21 @@ flowchart LR
   `test_world_stream_setting_defaults_off`,
   `test_production_compose_forwards_world_stream_switch_default_off`, `test_world_candidates_without_answer_are_left_out`,
   `test_digest_candidates_keep_article_order_and_skip_unanswered`.
-- A world candidate of D is left out when the ready stored bulletin of D-1 has any story
-  with the same link URL or the same `cluster_key` of its title. Compare all Key results,
-  rubric, Cooperation and incident stories, whatever their origin. Missing or skipped D-1,
-  or an unreadable payload, leaves all candidates eligible; D-2 and older are not checked.
-  Digest candidates are unchanged. Tests: `test_world_candidate_shown_yesterday_is_left_out`,
-  `test_world_candidate_syndicated_copy_shown_yesterday_is_left_out`,
-  `test_world_candidate_kept_when_yesterday_skipped_or_missing`,
-  `test_world_candidate_kept_when_yesterday_payload_is_unreadable`,
-  `test_world_candidates_not_compared_beyond_yesterday`, `test_digest_candidates_ignore_yesterday`,
-  `test_world_candidate_not_shown_yesterday_is_kept`.
+- A candidate of D, digest or world, is left out when a ready stored bulletin of D-1 to
+  D-`REPEAT_DAYS` (`repeats.md`) has a story with the same link URL or the same `cluster_key` of
+  its title. Compare all Key results, rubric, Cooperation and incident stories, whatever their
+  origin. `DayInput.digest_left_out` counts the digest candidates left out, so the assessed share
+  of `bulletin_assessed_share` still counts them. A missing or skipped day, or one with an unreadable payload, is ignored on its own; the
+  other days still count. Older days are not checked. The model check for the same event under
+  other titles is in `repeats.md`. Tests: `test_candidate_shown_in_last_days_is_left_out`,
+  `test_candidate_syndicated_copy_shown_in_last_days_is_left_out`,
+  `test_candidate_left_out_by_url_or_title_key_on_older_days`,
+  `test_candidate_kept_when_stored_days_skipped_or_missing`,
+  `test_candidate_kept_when_stored_payload_is_unreadable`,
+  `test_unreadable_day_does_not_hide_other_days`, `test_candidate_not_compared_beyond_repeat_days`,
+  `test_candidate_not_shown_in_last_days_is_kept`. A database without the bulletins table
+  (`bulletin build` creates it only when it stores) has no stored days:
+  `test_cli_build_creates_missing_table`.
 - One story per event: candidates with the same event key (a top story of the daily signals, else
   the title key of `cluster_key`) make one story; the best-confidence member leads (members that answered `none` only when no member has another
   answer), all outlets are linked. Digest articles are matched to a top story by URL, then by
@@ -180,7 +185,10 @@ flowchart LR
   (decided 2026-11-01 (agent)).
 - The story key from signals' top stories merges outlets that the title key would not.
 - decided 2026-11-05 (agent): the world window spans two GDELT days, so a story would otherwise
-  run on two consecutive days; only D-1 is checked.
+  run on two consecutive days.
+- decided 2026-11-15 (agent): the FR-022 review of 2026-11-09..14 found 7 of 29 stories were
+  repeats, some two or three days apart and from digest articles too, so the free check covers
+  digest and world candidates and the last `REPEAT_DAYS` days.
 
 ## Invariants
 
@@ -199,7 +207,7 @@ flowchart LR
 | `src/app/core/bulletin/phrases.json` | the phrase library (data) |
 | `src/app/core/bulletin/phrases.py` | `load_phrases`, validation and the never-list |
 | `src/app/core/bulletin/render.py` | `render_text` |
-| `src/app/usecases/bulletin/day_input.py` | `load_day_input`: digest article ids, answers, signals, world; `_yesterday_story_keys`, `_bulletin_story_keys`: D-1 story URLs and title keys |
+| `src/app/usecases/bulletin/day_input.py` | `load_day_input`: digest article ids, answers, signals, world; `_recent_story_keys`, `_bulletin_story_keys`: story URLs and title keys of the last `REPEAT_DAYS` days; `published_stories` for the model check |
 | `src/app/config/settings.py` | `world_stream_in_bulletin` |
 | `src/app/cli/bulletin.py` | `bulletin build` |
 | `src/app/storage/bulletin_store.md` | `bulletin build` storage contract |

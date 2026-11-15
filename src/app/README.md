@@ -70,6 +70,7 @@ Feature docs live next to their main module and are checked by `scripts/check_co
 | Daily AI Signals (006, 007) | `usecases/daily/signals.md` |
 | World change questions (018 item 1) | `core/bulletin/world_change.md` |
 | Bulletin builder (018 item 2) | `core/bulletin/builder.md` |
+| Bulletin repeats (018) | `core/bulletin/repeats.md` |
 | Bulletin writer (018 item 3) | `core/bulletin/writer.md` |
 | Bulletin storage (018 item 4a) | `storage/bulletin_store.md` |
 | Daily bulletin (018 item 4b) | `usecases/bulletin/daily.md` |
