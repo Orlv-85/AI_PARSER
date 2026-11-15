@@ -120,6 +120,7 @@ headline of the day, in this order; the first failing check names the drop reaso
    `test_names_match_whole_words_and_dates_need_the_text`,
    `test_translation_case_grounds_names_by_transliteration`, `test_folding_unifies_accents_and_numbers`,
    `test_ai_is_grounded_in_a_foreign_text`, `test_ai_possessive_and_an_opener_inside_a_sentence_pass`,
+   `test_ai_inside_a_longer_name_is_not_the_subject_word`,
    `test_headline_opener_nouns_are_not_names`,
    `test_names_in_a_foreign_story_still_need_the_text`.
 
@@ -127,7 +128,8 @@ What it cannot check: meaning (a true name and number in a false claim: "Mozilla
 Mozilla and the numbers stand in the text), attribution ("Block says" versus a bare claim), causes
 and effects, tone, and harm framing (ER-6, ER-11 stay with the prompt and the human review of
 FR-022 on the first real days). Numbers spelled out in words ("twelve") are not checked. Quotes in
-straight single quotes are not checked (the prompt asks for double quotes). The never-list also
+straight single quotes are not checked (the prompt asks for double quotes). A name that starts with a lower-case letter and has no digit ("xAI", "iPhone") is not
+checked at all (no test). The never-list also
 drops true sentences ("third-party tools"). Names in non-Latin scripts other than Cyrillic (Chinese, Japanese, Arabic
 and so on) can be checked only when the text also spells them in Latin letters; otherwise the
 sentence is dropped. A Cyrillic transliteration that differs from the English spelling ("Yandeks")
