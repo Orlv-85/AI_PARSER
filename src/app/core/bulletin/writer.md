@@ -61,7 +61,7 @@ flowchart LR
   trial stage, what a number counts). Attribute each statement to whoever made it in the source;
   an outlet's comparison, context or judgement stays the outlet's ("TechCrunch notes ..."), or
   has no speaker only when it is plain fact in the source. Never "X says" for words X did not say.
-  Changing the text changes the version (`bulletin-writer-5`).
+  Changing the text changes the version (`bulletin-writer-6`).
   Tests: `test_prompt_pins_its_rules`.
 - The call goes through the provider journal (`PilotJournal`, provider `deepseek`) of the real UTC
   day: one file `data/bulletin/writer/<UTC day>/journal-<WRITER_JOURNAL_VERSION>.sqlite3`, fixed cap
@@ -105,7 +105,11 @@ headline of the day, in this order; the first failing check names the drop reaso
 5. Numbers and names, the check of `parse_brief` (`grounding_error` in `signals_brief.py`) against
    the texts of that story: every number and every capitalised word or word with a digit must stand
    in the texts of the story's sources (the headline of the day: of all stories). Sentence
-   starters are exempt (`WRITER_STARTERS`). A name must match a whole word of the texts ("Meta"
+   starters are exempt (`WRITER_STARTERS`), and so are the common nouns of `HEADLINE_OPENERS`
+   ("Survey finds ..."), at any position like the starters: an article in another language cannot hold the English word. "AI"
+   (`SUBJECT_WORDS`) always counts as standing in the texts: it is the subject of every story and
+   other languages spell it differently (IA, KI, ИИ). Any other name of a story in another
+   language still needs the text ("Hanoi", "Italian" are dropped). A name must match a whole word of the texts ("Meta"
    does not pass on "metadata"); months and weekdays are names too and must stand in the texts of
    the story. Evidence is per story: a name or number found only in another story does not
    ground a sentence. Folding makes
@@ -114,13 +118,18 @@ headline of the day, in this order; the first failing check names the drop reaso
    "OpenAI" when the text has "ОпенАИ". Tests: `test_grounded_sentences_are_kept`,
    `test_invented_number_is_dropped`, `test_invented_name_is_dropped`, `test_grounding_is_per_story`,
    `test_names_match_whole_words_and_dates_need_the_text`,
-   `test_translation_case_grounds_names_by_transliteration`, `test_folding_unifies_accents_and_numbers`.
+   `test_translation_case_grounds_names_by_transliteration`, `test_folding_unifies_accents_and_numbers`,
+   `test_ai_is_grounded_in_a_foreign_text`, `test_ai_possessive_and_an_opener_inside_a_sentence_pass`,
+   `test_ai_inside_a_longer_name_is_not_the_subject_word`,
+   `test_headline_opener_nouns_are_not_names`,
+   `test_names_in_a_foreign_story_still_need_the_text`.
 
 What it cannot check: meaning (a true name and number in a false claim: "Mozilla said ..." passes if
 Mozilla and the numbers stand in the text), attribution ("Block says" versus a bare claim), causes
 and effects, tone, and harm framing (ER-6, ER-11 stay with the prompt and the human review of
 FR-022 on the first real days). Numbers spelled out in words ("twelve") are not checked. Quotes in
-straight single quotes are not checked (the prompt asks for double quotes). The never-list also
+straight single quotes are not checked (the prompt asks for double quotes). A name that starts with a lower-case letter and has no digit ("xAI", "iPhone") is not
+checked at all (no test). The never-list also
 drops true sentences ("third-party tools"). Names in non-Latin scripts other than Cyrillic (Chinese, Japanese, Arabic
 and so on) can be checked only when the text also spells them in Latin letters; otherwise the
 sentence is dropped. A Cyrillic transliteration that differs from the English spelling ("Yandeks")
@@ -207,6 +216,10 @@ the safe direction: the story falls back to its title.
 
 ## Decisions
 
+- decided 2026-11-15 (agent): "AI" and the nouns of `HEADLINE_OPENERS` pass the name check. In
+  2026-11-09..14 the check removed 17 of 18 stories in other languages, mostly for "AI" and the
+  first word of the headline ("Survey", "Study"), and days fell to 3 stories. A first word is not
+  exempt as such: a name there ("Hanoi", "SuperJob") must still stand in the text.
 - decided 2026-11-09 (agent): drop rather than translate a non-English title: a translation would
   be unchecked model text.
 - GDELT English rows have no language: `parse_gkg_line` uses `LANGUAGE_UNKNOWN` when the English

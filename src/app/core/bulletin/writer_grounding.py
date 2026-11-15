@@ -28,6 +28,12 @@ Those Their His Her He She They We What When Where Who How Why If So Then Now He
 Only Per Since Until While Within Without Between Among During Before Early Late Earlier Later
 Given Using Under Despite Although Because Instead Reportedly Officials Experts Users Companies
 People""".split())
+# Common nouns that open an English headline or sentence about a story in another language, where
+# the article text cannot hold the English word.
+HEADLINE_OPENERS = frozenset("""Survey Surveys Study Studies Report Reports Expert
+Court Judge Scientists Regulators Workers Students Teachers Schools Former""".split())
+# The subject of every story: other languages write it differently (IA, KI, ИИ).
+SUBJECT_WORDS = frozenset({"ai"})
 QUOTED = re.compile(r'"([^"]+)"')
 TOKEN = re.compile(r"\w+")
 THE_ADMINISTRATION = re.compile(r"\b[Tt]he Administration\b")
@@ -124,7 +130,8 @@ def _evidence_error(text: str, evidence: str, copy: bool) -> str | None:
     if code is None and copy and _copies(folded, proof):
         code = "too_close"
     return code or grounding_error(folded, set(proof.numbers), "",
-                                   NameRules(WRITER_STARTERS, canon_number, proof.words))
+                                   NameRules(WRITER_STARTERS | HEADLINE_OPENERS, canon_number,
+                                             proof.words | SUBJECT_WORDS))
 
 
 def sentence_error(text: str, evidence: str, *, copy: bool = False,
