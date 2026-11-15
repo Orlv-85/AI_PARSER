@@ -106,7 +106,7 @@ headline of the day, in this order; the first failing check names the drop reaso
    the texts of that story: every number and every capitalised word or word with a digit must stand
    in the texts of the story's sources (the headline of the day: of all stories). Sentence
    starters are exempt (`WRITER_STARTERS`), and so are the common nouns of `HEADLINE_OPENERS`
-   ("Survey finds ..."): an article in another language cannot hold the English word. "AI"
+   ("Survey finds ..."), at any position like the starters: an article in another language cannot hold the English word. "AI"
    (`SUBJECT_WORDS`) always counts as standing in the texts: it is the subject of every story and
    other languages spell it differently (IA, KI, ИИ). Any other name of a story in another
    language still needs the text ("Hanoi", "Italian" are dropped). A name must match a whole word of the texts ("Meta"
@@ -119,7 +119,8 @@ headline of the day, in this order; the first failing check names the drop reaso
    `test_invented_number_is_dropped`, `test_invented_name_is_dropped`, `test_grounding_is_per_story`,
    `test_names_match_whole_words_and_dates_need_the_text`,
    `test_translation_case_grounds_names_by_transliteration`, `test_folding_unifies_accents_and_numbers`,
-   `test_ai_is_grounded_in_a_foreign_text`, `test_headline_opener_nouns_are_not_names`,
+   `test_ai_is_grounded_in_a_foreign_text`, `test_ai_possessive_and_an_opener_inside_a_sentence_pass`,
+   `test_headline_opener_nouns_are_not_names`,
    `test_names_in_a_foreign_story_still_need_the_text`.
 
 What it cannot check: meaning (a true name and number in a false claim: "Mozilla said ..." passes if
