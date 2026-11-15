@@ -36,8 +36,10 @@ flowchart LR
   `bulletin_repeats` with the summary and stores it in `numbers["repeats"]`; digest candidates it
   drops still count in `assessed`. Without the key there
   is no call and no `repeats` entry. A provider fault keeps every candidate and the bulletin still goes out; so does a journal
-  that cannot be opened (`OSError`, `sqlite3.Error`, the cap's `ValueError`): the traceback is
-  logged as `bulletin_repeats_journal_failed` and the reason is `journal_unavailable`. A day
+  that cannot be opened (`OSError`, `sqlite3.Error`, any `ValueError` of the opener or the journal): the traceback is
+  logged as `bulletin_repeats_journal_failed` and the reason is `journal_unavailable`. This
+  covers the check only: a journal that still cannot be opened at the writer step stops the run
+  as before, and nothing is stored. A day
   whose status is not in `READY_STATUSES` (the builder skips it) gets no check. When every
   candidate is a repeat the day is skipped as `no_assessments` and no writer runs. A rerun with
   the same candidates and stored days sends the same body, which the journal replays free. `prepare_bulletin`
