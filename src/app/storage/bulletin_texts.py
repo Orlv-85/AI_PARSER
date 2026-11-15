@@ -7,7 +7,7 @@ from sqlalchemy import case, select
 from sqlalchemy.orm import Session
 
 from app.core.bulletin.builder import Bulletin
-from app.core.bulletin.writer import SourceText, all_stories
+from app.core.bulletin.writer import SourceText, packet_stories
 from app.core.canonicalize import canonical_url_hash
 from app.storage.models_sql import ArchiveDocument, ArchiveText, Article
 
@@ -29,7 +29,7 @@ def load_sources(session: Session, bulletin: Bulletin) -> dict[str, SourceText]:
     """`SourceText` per link url of the bulletin's stories; a link without a stored article has
     an empty title and summary (the writer then uses the story title)."""
     found: dict[str, SourceText] = {}
-    for story in all_stories(bulletin):
+    for story in packet_stories(bulletin):
         for link in story.links:
             url = link["url"]
             digest = canonical_url_hash(url)

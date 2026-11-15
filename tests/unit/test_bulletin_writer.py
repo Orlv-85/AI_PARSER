@@ -612,7 +612,7 @@ def test_no_stories_no_call():
 # prompt and request
 
 def test_prompt_pins_its_rules():
-    assert WRITER_VERSION == "bulletin-writer-6"
+    assert WRITER_VERSION == "bulletin-writer-7"
     assert writer_module.GLOSS_MAX_WORDS == 14
     assert WRITER_VERSION in WRITER_PROMPT
     for rule in ("untrusted", "no outside knowledge", "at most 8 words",
@@ -627,7 +627,8 @@ def test_prompt_pins_its_rules():
                  "plain fact in the source", "never \"X says\" for words X did not say",
                  "Never write \"the Administration\"", "Never invent a quote",
                  "Never add a fact", "Never present harm", "government", "citizens", "translate",
-                 "English", "No URLs"):
+                 "English", "No URLs", "reserve\": true", "write it exactly like the others",
+                 "must not be about a reserve story"):
         assert rule in WRITER_PROMPT, rule
 
 

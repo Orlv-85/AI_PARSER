@@ -14,6 +14,7 @@ FIRST_DAY = date(2022, 11, 30)  # Day 0 (FR-006)
 MIN_CONFIDENCE = 0.7  # world_change confidence needed to show a story (item 1 proposal)
 HARM_MIN = 0.7  # harm_to_people probability that makes a story count-only (ER-11)
 KEY_RESULTS_MAX = 4
+RESERVE_MAX = 4  # stories after Key results that the writer may promote (writer.md)
 MODEL_LAUNCHES_MAX = 2
 RUBRIC_MAX = 1
 COOPERATION_MAX = 2
@@ -104,9 +105,12 @@ class Bulletin:  # pylint: disable=too-many-instance-attributes
     headline_origin: str = "title"
     writer_version: str = ""
     writer_reason: str | None = None
+    reserve: list[Story] = field(default_factory=list)  # for the writer only, never stored
 
     def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        data = asdict(self)
+        del data["reserve"]
+        return data
 
 
 @dataclass(frozen=True)
@@ -241,7 +245,8 @@ def build_bulletin(data: DayInput, lib: PhraseLibrary) -> BuildResult:  # pylint
     harm = [e for e in events if e.harm]
     clean = [e for e in events if not e.harm]
     rubric_event, others, plain = _incidents(clean)
-    key_stories = [e.story() for e in _key_results(clean)]
+    picked = [e.story() for e in _key_results(clean)]
+    key_stories, reserve = picked[:KEY_RESULTS_MAX], picked[KEY_RESULTS_MAX:]
     rubric_story = rubric_event.story() if rubric_event else None
     coop_stories = [e.story() for e in clean if e.rep.world_change == "limit"][:COOPERATION_MAX]
     used = _add_reactions(key_stories, rubric_story, coop_stories, lib, data.day)
@@ -261,10 +266,11 @@ def build_bulletin(data: DayInput, lib: PhraseLibrary) -> BuildResult:  # pylint
         incident_story=plain.story() if plain else None,
         closing=_pick(lib["closings"], data.day, "closing"), items=data.items,
         full_report_url=f"/daily?date={data.day.isoformat()}", reactions_used=used,
-        phrases_version=lib["version"]), None)
+        phrases_version=lib["version"], reserve=reserve), None)
 
 
 def _key_results(events: list[_Event]) -> list[_Event]:
+    """Key results, then the reserve behind them: the same pool, order and caps."""
     picked: list[_Event] = []
     launches = 0
     for event in events:
@@ -275,7 +281,7 @@ def _key_results(events: list[_Event]) -> list[_Event]:
                 continue
             launches += 1
         picked.append(event)
-        if len(picked) == KEY_RESULTS_MAX:
+        if len(picked) == KEY_RESULTS_MAX + RESERVE_MAX:
             break
     return picked
 

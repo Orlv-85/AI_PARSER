@@ -109,6 +109,16 @@ flowchart LR
   counted in incidents only (only events that could be shown: answer not `none`, confidence at least
   `MIN_CONFIDENCE`; harm on any other story is not counted): never headline, rubric, section story, plain line or reaction. Tests:
   `test_harm_story_is_only_counted`.
+- Reserve (for the writer, `writer.md`): `Bulletin.reserve` holds the next `RESERVE_MAX` stories
+  after the Key results selection, from the same pool in the same rank order and under the same
+  rules (`added`/`changed`, harm left out, model releases still capped at `MODEL_LAUNCHES_MAX` over
+  Key results and reserve together). A story of Key results, the rubric, Cooperation or the incident
+  story is never in it; fewer eligible stories give a shorter or empty reserve. The reserve is not
+  stored and not shown: `as_dict` and `render_text` leave it out, and the headline, numbers line and
+  reactions ignore it. Tests: `test_reserve_follows_key_results_in_rank_order`,
+  `test_reserve_is_capped_and_can_be_short_or_empty`, `test_reserve_has_no_overlap_with_shown_stories`,
+  `test_reserve_obeys_the_model_launch_cap`, `test_reserve_is_not_in_the_object_or_the_text`,
+  `test_reserve_does_not_change_headline_or_reactions`.
 
 **Headline**
 - Of the shown stories, the highest confidence times outlet count (ties: section order, then rank)
@@ -192,6 +202,7 @@ flowchart LR
 
 ## Invariants
 
+- The reserve never reaches the stored payload or any rendered text.
 - No sentence in the bulletin that is not a fixed phrase or an article title.
 - Every story has at least one link of its day or of an assessed world candidate.
 - A harm story is never in a section, headline or reaction.
@@ -215,4 +226,4 @@ flowchart LR
 ## Tests
 
 `tests/unit/test_bulletin_builder.py`: phrases, caps, dedup, harm, headline, reactions, day status,
-switch, render, command.
+switch, render, command. `tests/unit/test_bulletin_reserve.py`: the reserve (builder and writer).
