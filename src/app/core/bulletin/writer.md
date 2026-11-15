@@ -49,8 +49,16 @@ flowchart LR
   `test_packet_sends_text_or_title_and_summary`, `test_story_text_limit_is_pinned`, `test_loader_prefers_source_page_text`,
   `test_loader_falls_back_to_summary`, `test_packet_handles_missing_and_empty_sources`,
   `test_packet_shares_budget_only_between_articles_with_text`.
+- Reserve (F11): after the shown stories the packet lists `Bulletin.reserve` (`builder.md`) with
+  the next ids (shown `s1..sN`, reserve `sN+1..`), each entry marked `"reserve": true`; their texts
+  are loaded like the others. The reserve is in the same single call. The headline of the day is
+  checked against the texts of the non-reserve stories only, so one that needs a name or number
+  found only in a reserve story is dropped. The check is of names and numbers, not of the topic: a
+  headline about a reserve story in common words passes (the prompt forbids it; no test). Tests: `test_packet_lists_reserve_after_shown_stories`,
+  `test_day_headline_grounded_only_in_a_reserve_story_is_dropped`,
+  `test_loader_loads_reserve_texts`.
 - One request per bulletin (FR-005): `WRITER_MODEL` (DeepSeek flash, prices of `BRIEF_PRICES`),
-  temperature 0, JSON object, at most `WRITER_MAX_OUTPUT` tokens. A day with no stories makes no
+  temperature 0, JSON object, at most `WRITER_MAX_OUTPUT` tokens (room for the shown stories and the reserve). A day with no stories makes no
   call. Tests: `test_request_body_is_one_json_call`, `test_no_stories_no_call`.
 - The prompt is `WRITER_PROMPT`, versioned by `WRITER_VERSION`; it states the voice rules of
   `specs/018-daily-inference/voice.md` and the editorial rules ER-1/2/3/6/8/9/11/12. It explicitly asks
@@ -61,7 +69,9 @@ flowchart LR
   trial stage, what a number counts). Attribute each statement to whoever made it in the source;
   an outlet's comparison, context or judgement stays the outlet's ("TechCrunch notes ..."), or
   has no speaker only when it is plain fact in the source. Never "X says" for words X did not say.
-  Changing the text changes the version (`bulletin-writer-6`).
+  Changing the text changes the version (`bulletin-writer-7`).
+  It tells the model that stories marked `"reserve": true` are written exactly like the others and
+  that the headline of the day must not be about a reserve story.
   Tests: `test_prompt_pins_its_rules`.
 - The call goes through the provider journal (`PilotJournal`, provider `deepseek`) of the real UTC
   day: one file `data/bulletin/writer/<UTC day>/journal-<WRITER_JOURNAL_VERSION>.sqlite3`, fixed cap
@@ -147,6 +157,20 @@ the safe direction: the story falls back to its title.
   `test_non_english_story_with_model_text_stays`,
   `test_unknown_or_english_language_story_falls_back_to_title`,
   `test_title_only_bulletin_removes_non_english_stories`, `test_removed_story_is_in_dropped`.
+- Promotion (F11), after the checks and the removal above. Key results is refilled up to the number
+  the builder gave it: the next reserve story in order is appended when it has a checked model
+  headline and at least one checked site sentence, and (a known non-English world story) is not
+  one that the removal above would remove. A reserve story that does not qualify is skipped. Other
+  sections are never refilled. Nothing is promoted when nothing was removed from Key results, and
+  none on a fallback (no usable answer); the result's `reserve` is always empty. The summary has
+  `reserve: {offered, promoted}` (`offered` the number of reserve stories sent, `promoted` their
+  packet ids); `stories_model` and `stories_title` count the final shown stories; `dropped` keeps
+  packet ids, reserve ones included. Tests: `test_removed_key_story_is_replaced_by_first_qualifying_reserve`,
+  `test_reserve_without_checked_text_is_skipped`, `test_non_english_reserve_needs_headline_and_telegram`,
+  `test_reserve_story_echoing_its_non_english_title_is_not_promoted`,
+  `test_no_promotion_when_nothing_was_removed`, `test_no_promotion_on_fallback`,
+  `test_other_sections_are_not_refilled`, `test_summary_reports_the_reserve`, `test_english_reserve_story_may_repeat_its_title`,
+  `test_output_budget_holds_twelve_stories`.
 - If the builder's day headline came from any known non-English world title, whether its story
   stays or is removed, it becomes absent (`None`, no cut
   marker), as when no builder title qualifies. A missing headline stays missing; a passing model
@@ -209,13 +233,20 @@ the safe direction: the story falls back to its title.
 - `--write` needs `DS_API_KEY` (exit 2 without); it prints the bulletin with model text and, on
   stderr, one JSON line of the writer summary; with `--json` the object gains a `writer` key
   (`version`, `model`, `reason`, `stories_model`, `stories_title`, `headline_origin`, `dropped`,
-  `cost_usd`). Storage is described in `src/app/storage/bulletin_store.md`. A skipped day makes no
+  `reserve`, `cost_usd`). Storage is described in `src/app/storage/bulletin_store.md`. A skipped day makes no
   call. Tests: `test_cli_write_needs_the_key`, `test_cli_write_prints_the_bulletin_and_summary`,
   `test_cli_write_json`, `test_cli_write_outage_falls_back`, `test_cli_write_can_store`,
   `test_cli_write_skipped_day_makes_no_call`.
 
 ## Decisions
 
+- decided 2026-11-15 (owner): names of countries, nationalities, months and weekdays in the text
+  of a story in another language stay under the name check ("Hanoi", "Italian", "Thursday" are
+  dropped when the article spells them differently). An unchecked country or date in a headline
+  is a distortion risk; the reserve keeps the volume instead. No code changed for this: it is the
+  existing rule (`test_names_in_a_foreign_story_still_need_the_text`,
+  `test_names_match_whole_words_and_dates_need_the_text`). To be reopened if too few stories
+  in other languages are published.
 - decided 2026-11-15 (agent): "AI" and the nouns of `HEADLINE_OPENERS` pass the name check. In
   2026-11-09..14 the check removed 17 of 18 stories in other languages, mostly for "AI" and the
   first word of the headline ("Survey", "Study"), and days fell to 3 stories. A first word is not
@@ -264,6 +295,16 @@ the safe direction: the story falls back to its title.
 - The journal is the world stream's shape: the day is the real UTC day and the cap is fixed
   (`WRITER_MAX_USD_PER_DAY`); lowering the cap by `--max-usd` is a run limit, not a new journal
   identity, because another cap value would open another file and add up to several caps.
+- decided 2026-11-15 (owner yes): reserve stories in the same call. Rebuilds of 2026-11-12/13 gave
+  7 and 8 stories, 4 and 5 were removed, 3 were published. `WRITER_MAX_OUTPUT` grew to 6144 for up to
+  4 more stories (12 stories about 3750 tokens); `WRITER_MAX_USD_PER_DAY` is unchanged.
+- decided 2026-11-15 (agent): a promoted story needs no day-headline cleanup: the builder headline
+  never comes from a reserve story and a model headline with a name or number only a reserve story
+  has is already dropped. Known gap, as before the reserve: a model day headline that paraphrases
+  a removed story (no run of `TITLE_RUN_WORDS` title words) stays, now above the story that took
+  its place.
+- decided 2026-11-15 (agent): only Key results is refilled; the other sections hold one or two
+  stories chosen by their own rule, and a reserve story has no section of its own.
 - Model `WRITER_MODEL` only: `PilotJournal` prices every answer at the flash rates, so another
   model would be billed wrongly in the journal. Pro needs per-model prices there first.
 - `Story.text_origin` is new beside `Story.origin`: `origin` (`digest`, `world`) says where the
@@ -282,6 +323,7 @@ the safe direction: the story falls back to its title.
 - Never more than `WRITER_MAX_USD_PER_DAY` committed per real UTC day.
 - No model sentence in a bulletin that did not pass every check of Grounding.
 - A failure of the model or the journal returns title-only eligible stories, never an exception.
+- The result bulletin never holds a reserve; reserve stories reach it only through promotion.
 - Fixed phrases and counts are unchanged; retained stories keep their links and section order.
 
 ## Code map
@@ -304,5 +346,6 @@ Versions: `WRITER_VERSION` (prompt and checks), `WRITER_JOURNAL_VERSION` (journa
 
 `tests/unit/test_bulletin_writer.py` on the fixtures in `tests/fixtures/bulletin_writer/` (a
 hand-written day: source texts and one model answer, marked as fixture, not a recording).
+`tests/unit/test_bulletin_reserve.py`: reserve packet, promotion and summary.
 `tests/unit/test_bulletin_writer_language.py`: known non-English title eligibility and fallbacks,
 using the same fake source texts and answer.

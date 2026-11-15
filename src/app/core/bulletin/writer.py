@@ -22,11 +22,12 @@ from app.core.bulletin.writer_grounding import TOKEN, fold, sentence_error
 from app.core.daily.provider_requests import DEEPSEEK_MODEL
 from app.core.daily.signals_brief import SUMMARY_MAX, cut, request_body
 
-WRITER_VERSION = "bulletin-writer-6"
+WRITER_VERSION = "bulletin-writer-7"
 WRITER_MODEL = DEEPSEEK_MODEL
 MODEL_NAMES = frozenset({DEEPSEEK_MODEL, "deepseek-v4.1-flash"})  # the answer may name the alias
-# 8 stories of 4 sentences, a Telegram note and a headline are about 2500 tokens.
-WRITER_MAX_OUTPUT = 4096
+# 8 stories of 4 sentences, a Telegram note and a headline are about 2500 tokens; the reserve
+# adds up to RESERVE_MAX more stories.
+WRITER_MAX_OUTPUT = 6144
 STORY_TEXT_MAX = 6000  # characters of original text sent per story
 ARTICLES_PER_STORY = 2
 SITE_SENTENCES_MAX = 6
@@ -51,6 +52,8 @@ WRITER_PROMPT = (
     "reactions and no framing sentences. Never write \"the Administration\". "
     "headline (of the day): at most 8 words, in the voice of an official notice about the most "
     "important story, no final period. "
+    "A story marked \"reserve\": true is a spare: write it exactly like the others, with its own "
+    "entry; the headline of the day must not be about a reserve story. "
     "Per story: headline: a plain statement of what happened, at most 12 words. "
     "site: a JSON array of 3 to 6 strings, one sentence per string, each complete and standing "
     "alone, leading with who acted. "
@@ -116,11 +119,17 @@ class PacketStory(TypedDict):
     area: str
     outlets: list[str]
     articles: list[PacketArticle]
+    reserve: NotRequired[bool]
 
 
 class WriterPacket(TypedDict):
     day: str
     stories: list[PacketStory]
+
+
+class ReserveSummary(TypedDict):
+    offered: int
+    promoted: list[str]
 
 
 class WriterSummary(TypedDict):
@@ -131,6 +140,7 @@ class WriterSummary(TypedDict):
     stories_title: int
     headline_origin: str
     dropped: list[str]
+    reserve: ReserveSummary
     cost_usd: NotRequired[float]
 
 
@@ -164,6 +174,11 @@ def all_stories(bulletin: Bulletin) -> list[Story]:
             *([bulletin.incident_story] if bulletin.incident_story else [])]
 
 
+def packet_stories(bulletin: Bulletin) -> list[Story]:
+    """The stories sent to the model: the shown ones, then the reserve (ids continue)."""
+    return [*all_stories(bulletin), *bulletin.reserve]
+
+
 def _article(link: dict[str, str], source: SourceText | None, title: str, budget: int
              ) -> PacketArticle:
     article: PacketArticle = {"outlet": link["outlet"],
@@ -178,13 +193,18 @@ def _article(link: dict[str, str], source: SourceText | None, title: str, budget
 def build_packet(bulletin: Bulletin, sources: Mapping[str, SourceText]) -> WriterPacket:
     """The model-visible JSON: stories with their articles; the packet is also the evidence."""
     stories: list[PacketStory] = []
-    for number, story in enumerate(all_stories(bulletin), start=1):
+    shown = len(all_stories(bulletin))
+    for number, story in enumerate(packet_stories(bulletin), start=1):
         links = story.links[:ARTICLES_PER_STORY]
         found = [sources.get(link["url"]) for link in links]
         budget = STORY_TEXT_MAX // max(1, sum(1 for s in found if s and s.text))
-        stories.append({"id": f"s{number}", "area": story.area, "outlets": story.outlets,
-                        "articles": [_article(link, source, story.title, budget)
-                                     for link, source in zip(links, found, strict=True)]})
+        entry: PacketStory = {
+            "id": f"s{number}", "area": story.area, "outlets": story.outlets,
+            "articles": [_article(link, source, story.title, budget)
+                         for link, source in zip(links, found, strict=True)]}
+        if number > shown:
+            entry["reserve"] = True
+        stories.append(entry)
     return {"day": bulletin.date, "stories": stories}
 
 
@@ -325,7 +345,8 @@ def parse_writer(data: object, packet: WriterPacket, dropped: list[str]
     and its reason is appended to `dropped`."""
     content = _answer(data)
     evidence = {s["id"]: _evidence(s) for s in packet["stories"]}
-    headline = _text(content["headline"], "\n".join(evidence.values()), "headline", dropped,
+    day_evidence = "\n".join(evidence[s["id"]] for s in packet["stories"] if not s.get("reserve"))
+    headline = _text(content["headline"], day_evidence, "headline", dropped,
                      _TextRule(HEADLINE_MIN_WORDS, HEADLINE_MAX_WORDS, min_chars=8))
     texts: dict[str, _StoryText] = {}
     for raw in content["stories"]:
@@ -340,7 +361,7 @@ def parse_writer(data: object, packet: WriterPacket, dropped: list[str]
 
 def _apply(bulletin: Bulletin, headline: str | None, texts: Mapping[str, _StoryText]) -> Bulletin:
     result = deepcopy(bulletin)
-    for number, story in enumerate(all_stories(result), start=1):
+    for number, story in enumerate(packet_stories(result), start=1):
         text = texts.get(f"s{number}")
         if text is None or not text.written:
             continue
@@ -353,13 +374,14 @@ def _apply(bulletin: Bulletin, headline: str | None, texts: Mapping[str, _StoryT
     return result
 
 
-def _summary(model: str, reason: str | None, bulletin: Bulletin, dropped: list[str]
-             ) -> WriterSummary:
+def _summary(model: str, reason: str | None, bulletin: Bulletin, dropped: list[str],
+             reserve: ReserveSummary) -> WriterSummary:
     stories = all_stories(bulletin)
     written = sum(1 for s in stories if s.text_origin == "model")
     return {"version": WRITER_VERSION, "model": model, "reason": reason,
             "stories_model": written, "stories_title": len(stories) - written,
-            "headline_origin": bulletin.headline_origin, "dropped": dropped}
+            "headline_origin": bulletin.headline_origin, "dropped": dropped,
+            "reserve": reserve}
 
 
 def _known_non_english(story: Story) -> bool:
@@ -401,19 +423,26 @@ def _title_run(text: str, title: str) -> bool:
                for i in range(len(text_words) - TITLE_RUN_WORDS + 1))
 
 
+def _clean_title_echoes(sid: str, story: Story, dropped: list[str]) -> None:
+    if story.gloss and _title_run(story.gloss, story.title):
+        story.gloss = None
+        dropped.append(f"{sid}:gloss:non_english_title")
+    if story.headline and _title_run(story.headline, story.title):
+        story.headline = None
+        dropped.append(f"{sid}:headline:non_english_title")
+
+
 def _check_non_english_text(bulletin: Bulletin, dropped: list[str]) -> None:
     foreign = []
     for number, story in enumerate(all_stories(bulletin), start=1):
-        if not _known_non_english(story):
-            continue
-        foreign.append(story)
-        if story.gloss and _title_run(story.gloss, story.title):
-            story.gloss = None
-            dropped.append(f"s{number}:gloss:non_english_title")
-        if story.headline and _title_run(story.headline, story.title):
-            story.headline = None
-            dropped.append(f"s{number}:headline:non_english_title")
+        if _known_non_english(story):
+            foreign.append(story)
+            _clean_title_echoes(f"s{number}", story, dropped)
     _clear_non_english_headline(bulletin, foreign, dropped)
+    first = len(all_stories(bulletin)) + 1
+    for number, story in enumerate(bulletin.reserve, start=first):
+        if _known_non_english(story):
+            _clean_title_echoes(f"s{number}", story, dropped)
 
 
 def _remove_non_english_stories(bulletin: Bulletin, dropped: list[str]) -> None:
@@ -431,12 +460,27 @@ def _remove_non_english_stories(bulletin: Bulletin, dropped: list[str]) -> None:
         bulletin.incident_story = None
 
 
+def _promote_reserve(bulletin: Bulletin, wanted: int, shown: int) -> list[str]:
+    """Refill Key results up to `wanted` from the reserve; returns the packet ids promoted."""
+    promoted: list[str] = []
+    for number, story in enumerate(bulletin.reserve, start=shown + 1):
+        if len(bulletin.key_results) >= wanted:
+            break
+        if story.headline and story.site_note and not _needs_english_text(story):
+            bulletin.key_results.append(story)
+            promoted.append(f"s{number}")
+    bulletin.reserve = []
+    return promoted
+
+
 def _fallback(bulletin: Bulletin, model: str, reason: str) -> WriterResult:
     kept = deepcopy(bulletin)
     kept.writer_version, kept.writer_reason = WRITER_VERSION, reason
+    kept.reserve = []
     dropped: list[str] = []
     _remove_non_english_stories(kept, dropped)
-    return WriterResult(kept, _summary(model, reason, kept, dropped))
+    return WriterResult(kept, _summary(
+        model, reason, kept, dropped, {"offered": len(bulletin.reserve), "promoted": []}))
 
 
 def write_bulletin(bulletin: Bulletin, sources: Mapping[str, SourceText], ask: Ask, *,
@@ -457,6 +501,10 @@ def write_bulletin(bulletin: Bulletin, sources: Mapping[str, SourceText], ask: A
     except WriterInvalid as error:
         return _fallback(bulletin, model, error.code)
     result = _apply(bulletin, headline, texts)
+    wanted, shown = len(result.key_results), len(all_stories(result))
     _remove_non_english_stories(result, dropped)
+    promoted = _promote_reserve(result, wanted, shown)
     result.writer_version = WRITER_VERSION
-    return WriterResult(result, _summary(model, None, result, dropped))
+    return WriterResult(result, _summary(
+        model, None, result, dropped,
+        {"offered": len(bulletin.reserve), "promoted": promoted}))
