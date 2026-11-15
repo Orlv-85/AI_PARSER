@@ -999,13 +999,6 @@ def test_headline_opener_nouns_are_not_names(opener):
                           FOREIGN_TEXT) is None
 
 
-@pytest.mark.parametrize("text", [
-    "SuperJob survey finds AI saves office time but leaves pay unchanged.",
-    "Hanoi job fair hears that AI saves office time for the workers.",
-    "The poll found that OpenAI saves working time in offices.",
-    "The poll found that xAI saves working time in offices.",
-    "The poll found that AI21 saves working time in offices.",
-])
 def test_ai_possessive_and_an_opener_inside_a_sentence_pass():
     assert sentence_error("The poll found that AI's use saves working time in offices.",
                           FOREIGN_TEXT) is None
@@ -1013,5 +1006,12 @@ def test_ai_possessive_and_an_opener_inside_a_sentence_pass():
                           FOREIGN_TEXT) is None
 
 
+@pytest.mark.parametrize("text", [
+    "SuperJob survey finds AI saves office time but leaves pay unchanged.",
+    "Hanoi job fair hears that AI saves office time for the workers.",
+    "The poll found that OpenAI saves working time in offices.",
+    "The poll found that xAI saves working time in offices.",
+    "The poll found that AI21 saves working time in offices.",
+])
 def test_names_in_a_foreign_story_still_need_the_text(text):
     assert sentence_error(text, FOREIGN_TEXT) == "unsupported_name"
