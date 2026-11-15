@@ -30,7 +30,7 @@ HELPERS = frozenset({
 })
 # Calculations a repository still imports (spec 019, T013); the list only shrinks.
 CALCULATION_EXCEPTIONS = {
-    "bulletin_texts.py": {"all_stories"},
+    "bulletin_texts.py": {"packet_stories"},
     "daily_signals.py": {"join", "name_tokens", "type_group"},
     "source_candidate_repo.py": {"group_candidate_overlaps"},
 }
