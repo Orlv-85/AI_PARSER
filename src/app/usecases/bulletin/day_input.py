@@ -10,7 +10,7 @@ from statistics import median
 from typing import Any
 from urllib.parse import urlparse
 
-from sqlalchemy import select
+from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
 from app.core.bulletin.builder import (
@@ -27,6 +27,7 @@ from app.core.daily.titles import digest_title
 from app.storage.bulletin_store import BulletinRepo
 from app.storage.models_sql import (
     Article,
+    BulletinRow,
     DailySignalReport,
     Source,
     WorldChangeAssessment,
@@ -127,6 +128,9 @@ def _bulletin_story_keys(payload: dict[str, Any]) -> tuple[set[str], set[str]]:
 
 def _recent_payloads(session: Session, day: date) -> list[tuple[date, Any]]:
     """Payloads of the ready stored bulletins of D-1 to D-REPEAT_DAYS."""
+    # `bulletin build` reads before it creates the table on a fresh database.
+    if not inspect(session.connection()).has_table(BulletinRow.__tablename__):
+        return []
     found = []
     for back in range(1, REPEAT_DAYS + 1):
         stored = day - timedelta(days=back)

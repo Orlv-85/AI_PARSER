@@ -87,7 +87,9 @@ flowchart LR
   `test_candidate_kept_when_stored_days_skipped_or_missing`,
   `test_candidate_kept_when_stored_payload_is_unreadable`,
   `test_unreadable_day_does_not_hide_other_days`, `test_candidate_not_compared_beyond_repeat_days`,
-  `test_candidate_not_shown_in_last_days_is_kept`.
+  `test_candidate_not_shown_in_last_days_is_kept`. A database without the bulletins table
+  (`bulletin build` creates it only when it stores) has no stored days:
+  `test_cli_build_creates_missing_table`.
 - One story per event: candidates with the same event key (a top story of the daily signals, else
   the title key of `cluster_key`) make one story; the best-confidence member leads (members that answered `none` only when no member has another
   answer), all outlets are linked. Digest articles are matched to a top story by URL, then by
