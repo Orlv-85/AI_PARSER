@@ -1,5 +1,6 @@
 """Daily orchestration; behavior and decisions: src/app/usecases/bulletin/daily.md."""
 from collections.abc import Callable
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 from datetime import date
 from logging import Logger
@@ -8,15 +9,16 @@ from typing import Any, cast
 from sqlalchemy.orm import Session
 
 from app.config.settings import Settings
-from app.core.bulletin.builder import Bulletin, build_bulletin
+from app.core.bulletin.builder import Bulletin, DayInput, build_bulletin
 from app.core.bulletin.phrases import PhraseLibrary, load_phrases
+from app.core.bulletin.repeats import RepeatsResult, check_repeats
 from app.core.bulletin.world_change import ASSESS_DEFAULT_MAX_USD, run_assessment
 from app.core.bulletin.writer import SourceText, write_bulletin
 from app.observability.logging import log_event
 from app.storage.bulletin_store import BulletinRepo
 from app.storage.bulletin_texts import load_sources
 from app.storage.world_change import WorldChangeRepo
-from app.usecases.bulletin.day_input import load_day_input
+from app.usecases.bulletin.day_input import load_day_input, published_stories
 from app.usecases.bulletin.writer_run import WRITER_MAX_USD_PER_DAY
 
 
@@ -58,12 +60,19 @@ def prepare_bulletin(session: Session, settings: Settings, logger: Logger, day: 
                      write: bool) -> PreparedBulletin:
     """Read and build once, optionally loading the writer's source texts."""
     data = load_day_input(session, day, include_world=settings.world_stream_in_bulletin)
+    return prepare_from_input(session, logger, day, data, write=write)
+
+
+def prepare_from_input(session: Session, logger: Logger, day: date, data: DayInput | None, *,
+                       write: bool) -> PreparedBulletin:
+    """Build from a loaded day input (None: no digest), optionally loading source texts."""
     library = load_phrases()
     if data is None:
         return PreparedBulletin(None, "no_digest", library, {"assessed": 0, "digest_articles": 0})
     result = build_bulletin(data, library)
-    numbers = {"assessed": sum(1 for c in data.candidates if c.origin == "digest"),
-               "digest_articles": data.digest_articles}
+    numbers: dict[str, Any] = {
+        "assessed": data.digest_left_out + sum(1 for c in data.candidates if c.origin == "digest"),
+        "digest_articles": data.digest_articles}
     log_event(logger, event="bulletin_assessed_share", date=day.isoformat(), **numbers)
     texts = load_sources(session, result.bulletin) if write and result.bulletin else {}
     return PreparedBulletin(result.bulletin, result.reason, library, numbers, texts)
@@ -108,14 +117,39 @@ def _daily_write(prepared: PreparedBulletin, env: BulletinEnv, today: date) -> d
     return dict(prepared.numbers["writer"])
 
 
+def _repeat_check(session: Session, env: BulletinEnv, day: date, today: date,
+                  data: DayInput) -> RepeatsResult:
+    """The repeat check on the writer's journal of the real day; the journal opens on a call."""
+    published = published_stories(session, day)
+    opener = cast(Callable[..., Any], env.writer_factory)
+    with ExitStack() as stack:
+        writers: list[Any] = []
+
+        def ask(body: dict[str, Any]) -> tuple[object, str | None]:
+            if not writers:
+                writers.append(stack.enter_context(
+                    opener(env.settings, today, max_usd=float(WRITER_MAX_USD_PER_DAY))))
+            answered: tuple[object, str | None] = writers[0].ask(body)
+            return answered
+
+        return check_repeats(data, published, ask)
+
+
 def run_daily(session: Session, env: BulletinEnv, day: date,
               today: Callable[[], date]) -> dict[str, Any]:
     """Assess, build, optionally write, store, and return the one command summary."""
     settings = env.settings
     assessment = _daily_assess(session, env, day)
-    prepared = prepare_bulletin(session, settings, env.logger, day,
-                                write=has_provider_key(settings, "ds_api_key"))
-    writer = _daily_write(prepared, env, today())
+    now = today()  # one real UTC day for the repeat check and the writer
+    keyed = has_provider_key(settings, "ds_api_key")
+    data = load_day_input(session, day, include_world=settings.world_stream_in_bulletin)
+    checked = _repeat_check(session, env, day, now, data) if keyed and data else None
+    prepared = prepare_from_input(session, env.logger, day, checked.data if checked else data,
+                                  write=keyed)
+    if checked:
+        prepared.numbers["repeats"] = checked.summary
+        log_event(env.logger, event="bulletin_repeats", date=day.isoformat(), **checked.summary)
+    writer = _daily_write(prepared, env, now)
     stored = BulletinRepo(session).save(day, bulletin=prepared.bulletin, reason=prepared.reason,
                                        numbers=prepared.numbers)
     session.commit()

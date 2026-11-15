@@ -14,6 +14,7 @@ Specs in `specs/` are the history of how a feature got there.
 | Daily AI Signals (006, 007) | [src/app/usecases/daily/signals.md](../src/app/usecases/daily/signals.md) | `src/app/usecases/daily/signals.py` |
 | World change questions (018 item 1) | [src/app/core/bulletin/world_change.md](../src/app/core/bulletin/world_change.md) | `src/app/core/bulletin/world_change.py` |
 | Bulletin builder (018 item 2) | [src/app/core/bulletin/builder.md](../src/app/core/bulletin/builder.md) | `src/app/core/bulletin/builder.py` |
+| Bulletin repeats (018) | [src/app/core/bulletin/repeats.md](../src/app/core/bulletin/repeats.md) | `src/app/core/bulletin/repeats.py` |
 | Bulletin writer (018 item 3) | [src/app/core/bulletin/writer.md](../src/app/core/bulletin/writer.md) | `src/app/core/bulletin/writer.py` |
 | Bulletin storage (018 item 4a) | [src/app/storage/bulletin_store.md](../src/app/storage/bulletin_store.md) | `src/app/storage/bulletin_store.py` |
 | Daily bulletin (018 item 4b) | [src/app/usecases/bulletin/daily.md](../src/app/usecases/bulletin/daily.md) | `src/app/usecases/bulletin/daily.py` |

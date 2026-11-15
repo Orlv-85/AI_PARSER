@@ -1,4 +1,4 @@
-# pylint: disable=redefined-outer-name,unused-argument
+# pylint: disable=redefined-outer-name,unused-argument,too-many-lines
 import ast
 import json
 import re
@@ -30,6 +30,7 @@ from app.core.bulletin.builder import (
 )
 from app.core.bulletin.phrases import PhraseError, load_phrases, validate_phrases
 from app.core.bulletin.render import render_text
+from app.core.bulletin.repeats import REPEAT_DAYS, PublishedStory
 from app.core.bulletin.world_change import WORLD_CHANGE_VERSION, WorldChange
 from app.core.canonicalize import canonical_url_hash
 from app.storage.digest_repo import NewsDigestRepo
@@ -43,7 +44,7 @@ from app.storage.models_sql import (
     WorldChangeAssessment,
 )
 from app.storage.world_change import WorldChangeRepo
-from app.usecases.bulletin.day_input import load_day_input, outlet_name
+from app.usecases.bulletin.day_input import load_day_input, outlet_name, published_stories
 
 DAY = date(2026, 10, 30)
 LIB = load_phrases()
@@ -798,7 +799,7 @@ def store_bulletin_payload(maker, payload, *, day=DAY - timedelta(days=1), statu
 @pytest.mark.parametrize("section", [
     "key_results", "rubric_story", "cooperation", "incident_story"])
 @pytest.mark.parametrize("origin", ["world", "digest"])
-def test_world_candidate_shown_yesterday_is_left_out(maker, section, origin):
+def test_candidate_shown_in_last_days_is_left_out(maker, section, origin):
     seed_day(maker)
     add_world(maker, gdelt_file="20261029120000")
     store_bulletin_payload(maker, stored_story_payload(
@@ -817,7 +818,7 @@ def test_world_candidate_shown_yesterday_is_left_out(maker, section, origin):
     ("A" * 60 + " first outlet", "A" * 60 + " second outlet"),
     ("Court rules on AI evidence (5 minute read)", "Court rules on AI evidence"),
 ])
-def test_world_candidate_syndicated_copy_shown_yesterday_is_left_out(
+def test_candidate_syndicated_copy_shown_in_last_days_is_left_out(
         maker, section, origin, title, stored_title):
     seed_day(maker)
     add_world(maker, title=title)
@@ -829,7 +830,7 @@ def test_world_candidate_syndicated_copy_shown_yesterday_is_left_out(
 
 
 @pytest.mark.parametrize("status", [None, "skipped"])
-def test_world_candidate_kept_when_yesterday_skipped_or_missing(maker, status):
+def test_candidate_kept_when_stored_days_skipped_or_missing(maker, status):
     seed_day(maker)
     add_world(maker)
     if status is not None:
@@ -849,7 +850,7 @@ def test_world_candidate_kept_when_yesterday_skipped_or_missing(maker, status):
     {"key_results": [{"links": [{"url": "https://news.example/ai-court"}]}],
      "cooperation": [], "rubric_story": None, "incident_story": None},
 ])
-def test_world_candidate_kept_when_yesterday_payload_is_unreadable(maker, payload):
+def test_candidate_kept_when_stored_payload_is_unreadable(maker, payload):
     seed_day(maker)
     add_world(maker)
     store_bulletin_payload(maker, payload)
@@ -859,16 +860,16 @@ def test_world_candidate_kept_when_yesterday_payload_is_unreadable(maker, payloa
         "https://news.example/ai-court"]
 
 
-@pytest.mark.parametrize("yesterday_status", [None, "skipped", "ready"])
-def test_world_candidates_not_compared_beyond_yesterday(maker, yesterday_status):
+@pytest.mark.parametrize("stored_status", [None, "skipped", "ready"])
+def test_candidate_not_compared_beyond_repeat_days(maker, stored_status):
     seed_day(maker)
     add_world(maker)
     store_bulletin_payload(maker, stored_story_payload(
         "key_results", title="Court rules on AI evidence", url="https://news.example/ai-court"),
-        day=DAY - timedelta(days=2))
-    if yesterday_status is not None:
+        day=DAY - timedelta(days=REPEAT_DAYS + 1))
+    if stored_status is not None:
         store_bulletin_payload(maker, build([cand(98, world_change="none")]).as_dict(),
-                               status=yesterday_status)
+                               status=stored_status)
     with maker() as session:
         loaded = load_day_input(session, DAY, include_world=True)
     assert [c.url for c in loaded.candidates if c.origin == "world"] == [
@@ -876,17 +877,51 @@ def test_world_candidates_not_compared_beyond_yesterday(maker, yesterday_status)
 
 
 @pytest.mark.parametrize("include_world", [False, True])
-def test_digest_candidates_ignore_yesterday(maker, include_world):
+def test_candidate_left_out_by_url_or_title_key_on_older_days(maker, include_world):
     seed_day(maker)
     store_bulletin_payload(maker, stored_story_payload(
-        "key_results", title="Title 1", url="https://t.com/0"))
+        "key_results", title="Unrelated", url="https://t.com/0"), day=DAY - timedelta(days=2))
+    store_bulletin_payload(maker, stored_story_payload(
+        "cooperation", title="TITLE: 1!", url="https://other.example/1"),
+        day=DAY - timedelta(days=REPEAT_DAYS))
     with maker() as session:
         loaded = load_day_input(session, DAY, include_world=include_world)
-    assert [c.url for c in loaded.candidates] == [f"https://t.com/{i}" for i in range(3)]
+    assert [c.url for c in loaded.candidates] == ["https://t.com/2"]
+    assert loaded.digest_left_out == 2
+
+
+def test_unreadable_day_does_not_hide_other_days(maker):
+    seed_day(maker)
+    store_bulletin_payload(maker, {"key_results": 7})
+    store_bulletin_payload(maker, "not an object", day=DAY - timedelta(days=2))
+    store_bulletin_payload(maker, stored_story_payload(
+        "key_results", title="Unrelated", url="https://t.com/0"), day=DAY - timedelta(days=3))
+    with maker() as session:
+        loaded = load_day_input(session, DAY, include_world=False)
+    assert [c.url for c in loaded.candidates] == ["https://t.com/1", "https://t.com/2"]
+
+
+def test_published_stories_of_last_days(maker):
+    seed_day(maker)
+    shown = stored_story_payload("key_results", title="Builder title", url="https://x.example/1")
+    shown["key_results"][0]["headline"] = "Shown headline"
+    store_bulletin_payload(maker, shown)
+    store_bulletin_payload(maker, stored_story_payload(
+        "incident_story", title="Incident title", url="https://x.example/2"),
+        day=DAY - timedelta(days=REPEAT_DAYS))
+    store_bulletin_payload(maker, shown, day=DAY - timedelta(days=2), status="skipped")
+    store_bulletin_payload(maker, {"key_results": 7}, day=DAY - timedelta(days=REPEAT_DAYS + 1))
+    store_bulletin_payload(maker, shown, day=DAY)
+    with maker() as session:
+        found = published_stories(session, DAY)
+    assert found == [
+        PublishedStory((DAY - timedelta(days=1)).isoformat(), "Shown headline", "Builder title"),
+        PublishedStory((DAY - timedelta(days=REPEAT_DAYS)).isoformat(), "Incident title",
+                       "Incident title")]
 
 
 @pytest.mark.parametrize("title", ["Different news story", "Court rules on AI evidence today"])
-def test_world_candidate_not_shown_yesterday_is_kept(maker, title):
+def test_candidate_not_shown_in_last_days_is_kept(maker, title):
     seed_day(maker)
     add_world(maker)
     store_bulletin_payload(maker, stored_story_payload(

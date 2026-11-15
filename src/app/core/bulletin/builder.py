@@ -56,6 +56,7 @@ class DayInput:  # pylint: disable=too-many-instance-attributes
     median_items: float | None
     candidates: tuple[Candidate, ...]
     digest_articles: int = 0
+    digest_left_out: int = 0  # digest candidates left out as shown in the last days
 
 
 @dataclass
