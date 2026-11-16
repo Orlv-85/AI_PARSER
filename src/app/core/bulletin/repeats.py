@@ -4,6 +4,7 @@ Pure core: the model call is the `ask` argument. Behavior, decisions and tests:
 src/app/core/bulletin/repeats.md.
 """
 import json
+import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
@@ -18,6 +19,8 @@ REPEATS_MAX_CANDIDATES = 40
 REPEATS_MAX_OUTPUT = 512
 TITLE_MAX = 200
 INVALID_ANSWER = "invalid_answer"
+REPEAT_MIN_WORD = 5  # characters of a word that a repeat pair must share
+WORD = re.compile(r"\w+")
 
 REPEATS_PROMPT = (
     f"Task: {REPEATS_VERSION}. You check the candidate stories of a daily AI news bulletin "
@@ -145,14 +148,28 @@ def _parse(data: object, candidates: set[str], published: set[str]) -> _Answer |
 
 def _summary(model: str, reason: str | None, counts: tuple[int, int]) -> dict[str, Any]:
     return {"version": REPEATS_VERSION, "model": model, "reason": reason,
-            "candidates": counts[0], "published": counts[1], "dropped": [], "merged": []}
+            "candidates": counts[0], "published": counts[1], "dropped": [], "merged": [],
+            "kept": []}
+
+
+def _words(*titles: str) -> set[str]:
+    return {w for t in titles for w in WORD.findall(t.casefold()) if len(w) >= REPEAT_MIN_WORD}
+
+
+def _shares_word(candidate: Candidate, story: PublishedStory) -> bool:
+    return bool(_words(candidate.title) & _words(story.shown, story.title))
 
 
 def _apply(data: DayInput, listed: Sequence[int], published: Sequence[PublishedStory],
            answer: _Answer, summary: dict[str, Any]) -> DayInput:
     by_id = {f"c{n}": i for n, i in enumerate(listed, 1)}
-    dropped = {by_id[cid]: published[int(pid[1:]) - 1] for cid, pid in answer.repeats.items()}
+    pairs = {by_id[cid]: published[int(pid[1:]) - 1] for cid, pid in answer.repeats.items()}
     candidates = list(data.candidates)
+    dropped = {i: story for i, story in pairs.items() if _shares_word(candidates[i], story)}
+    summary["kept"] = [
+        {"title": candidates[i].title, "published_day": story.day,
+         "published_title": story.shown, "reason": "no_shared_word"}
+        for i, story in pairs.items() if i not in dropped]
     for group in answer.groups:
         members = [by_id[cid] for cid in group if by_id[cid] not in dropped]
         if len(members) < 2:

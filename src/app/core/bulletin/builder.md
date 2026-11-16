@@ -81,7 +81,13 @@ flowchart LR
   origin. `DayInput.digest_left_out` counts the digest candidates left out, so the assessed share
   of `bulletin_assessed_share` still counts them. A missing or skipped day, or one with an unreadable payload, is ignored on its own; the
   other days still count. Older days are not checked. The model check for the same event under
-  other titles is in `repeats.md`. Tests: `test_candidate_shown_in_last_days_is_left_out`,
+  other titles is in `repeats.md`. Every candidate left out is recorded in `DayInput.told_before`
+  as a `ToldBefore` (`title`, `match` `url` when the link URL matched, else `title`, and
+  `published_day`, the latest stored day that had it), in candidate order; `numbers["told_before"]`
+  shows them (`usecases/bulletin/daily.md`). A title with no key characters (empty `cluster_key`)
+  never matches by title, whatever the stored story; the URL match still works. Tests:
+  `test_told_before_records_url_match`, `test_told_before_records_title_match`,
+  `test_empty_title_key_does_not_match`, `test_numbers_list_told_before`, `test_candidate_shown_in_last_days_is_left_out`,
   `test_candidate_syndicated_copy_shown_in_last_days_is_left_out`,
   `test_candidate_left_out_by_url_or_title_key_on_older_days`,
   `test_candidate_kept_when_stored_days_skipped_or_missing`,

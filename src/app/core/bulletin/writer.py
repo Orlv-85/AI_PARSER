@@ -460,6 +460,21 @@ def _remove_non_english_stories(bulletin: Bulletin, dropped: list[str]) -> None:
         bulletin.incident_story = None
 
 
+def _remove_and_recheck(result: Bulletin, headline: str | None, packet: WriterPacket,
+                        dropped: list[str]) -> None:
+    """Remove non-English stories; a model day headline must still stand on those that stay."""
+    shown = {id(s): f"s{n}" for n, s in enumerate(all_stories(result), start=1)}
+    _remove_non_english_stories(result, dropped)
+    kept_ids = {shown[id(s)] for s in all_stories(result)}
+    if len(kept_ids) == len(shown) or result.headline_origin != "model" or not headline:
+        return
+    evidence = "\n".join(_evidence(s) for s in packet["stories"] if s["id"] in kept_ids)
+    if sentence_error(headline, evidence, min_chars=8):
+        result.headline, result.headline_cut = None, False
+        result.headline_origin = "title"
+        dropped.append("headline:removed_story")
+
+
 def _promote_reserve(bulletin: Bulletin, wanted: int, shown: int) -> list[str]:
     """Refill Key results up to `wanted` from the reserve; returns the packet ids promoted."""
     promoted: list[str] = []
@@ -502,7 +517,7 @@ def write_bulletin(bulletin: Bulletin, sources: Mapping[str, SourceText], ask: A
         return _fallback(bulletin, model, error.code)
     result = _apply(bulletin, headline, texts)
     wanted, shown = len(result.key_results), len(all_stories(result))
-    _remove_non_english_stories(result, dropped)
+    _remove_and_recheck(result, headline, packet, dropped)
     promoted = _promote_reserve(result, wanted, shown)
     result.writer_version = WRITER_VERSION
     return WriterResult(result, _summary(

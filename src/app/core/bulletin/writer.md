@@ -171,6 +171,15 @@ the safe direction: the story falls back to its title.
   `test_no_promotion_when_nothing_was_removed`, `test_no_promotion_on_fallback`,
   `test_other_sections_are_not_refilled`, `test_summary_reports_the_reserve`, `test_english_reserve_story_may_repeat_its_title`,
   `test_output_budget_holds_twelve_stories`.
+- Day headline after a removal: when at least one shown story was removed and the day headline
+  came from the model, the raw model headline is checked again (`sentence_error`, names and
+  numbers, same minimum length) against the evidence of the shown stories that stay (not the
+  reserve, not the removed ones), before the promotion. If it fails, the day headline becomes
+  absent (`None`, no cut marker, origin `title`) and `dropped` gets `headline:removed_story`.
+  Nothing changes when no story was removed. Like the other checks this is of names and numbers,
+  not of topic: a headline about a removed story in common words still passes (no test).
+  Tests: `test_day_headline_of_a_removed_story_is_dropped`,
+  `test_day_headline_of_a_kept_story_survives_a_removal`.
 - If the builder's day headline came from any known non-English world title, whether its story
   stays or is removed, it becomes absent (`None`, no cut
   marker), as when no builder title qualifies. A missing headline stays missing; a passing model

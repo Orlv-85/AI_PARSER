@@ -46,7 +46,14 @@ flowchart LR
   Anything else, or a truncated or foreign-model answer, gives reason `invalid_answer` and nothing is
   dropped or merged. A provider reason from `ask` (cap, outage, failure) is recorded the same way.
   Tests: `test_invalid_answer_changes_nothing`, `test_provider_reason_keeps_everything`.
-- A candidate in `repeats` is removed from `DayInput.candidates`; a removed digest candidate adds to
+- A repeat pair from the model is applied only when the candidate title shares at least one word
+  with the published story's shown title or its original title. A word is a run of `\w`
+  characters, compared casefolded, of at least `REPEAT_MIN_WORD` characters. A pair without a
+  shared word is not applied: the candidate stays (`same_event` can still merge it) and is listed
+  in `kept`. True repeats across languages with no common word are kept too. Tests:
+  `test_repeat_without_a_shared_word_is_kept`, `test_repeat_with_a_shared_word_is_dropped`,
+  `test_shared_word_may_come_from_the_original_title`, `test_short_words_do_not_count_as_shared`.
+- A candidate in `repeats` that passes the check above is removed from `DayInput.candidates`; a removed digest candidate adds to
   `DayInput.digest_left_out`, so the assessed share still counts it. Tests: `test_repeat_is_dropped`.
 - Candidates of one group (those not removed) get the `event_key` of the best member (confidence,
   then listing order), so `build_bulletin` makes one story with all outlets. A group left with one
@@ -55,8 +62,9 @@ flowchart LR
   `test_dropped_member_is_not_merged`.
 - The summary (stored in `numbers["repeats"]`): `version`, `model`, `reason` (None when applied),
   `candidates` and `published` (counts listed), `dropped` (`title`, `published_day`,
-  `published_title`), `merged` (lists of titles). Tests: `test_repeat_is_dropped`,
-  `test_same_event_sets_one_event_key`.
+  `published_title`), `merged` (lists of titles), `kept` (repeat pairs not applied: `title`,
+  `published_day`, `published_title`, `reason` `no_shared_word`; `[]` when none). Tests: `test_repeat_is_dropped`,
+  `test_same_event_sets_one_event_key`, `test_repeat_without_a_shared_word_is_kept`.
 
 ## Decisions
 
@@ -64,6 +72,9 @@ flowchart LR
   must go out, so a bad answer costs only the check.
 - decided 2026-11-15 (agent): when unsure the model lists nothing; a missed repeat is cheaper than
   a lost story.
+- decided 2026-11-16 (agent): a cheap shared-word guard (night of 2026-11-15: the model paired a
+  Korean exam story with a smartglasses story and the story was lost); a true repeat with no
+  common word is kept, consistent with "a missed repeat is cheaper than a lost story".
 - decided 2026-11-15 (agent): the model sees titles only; an event is recognised from titles, and
   article text would raise the cost for little gain.
 - decided 2026-11-15 (agent): the published side shows the headline the readers saw, since that

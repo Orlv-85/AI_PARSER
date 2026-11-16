@@ -1,5 +1,6 @@
 # pylint: disable=redefined-outer-name,unused-argument
 import json
+import logging
 import sqlite3
 from contextlib import contextmanager
 from datetime import date
@@ -24,6 +25,7 @@ from app.storage.bulletin_store import BulletinRepo
 from app.storage.digest_repo import NewsDigestRepo
 from app.storage.models_sql import Article, Base, BulletinRow, DailySignalReport
 from app.storage.world_change import WorldChangeRepo
+from app.usecases.bulletin.daily import BulletinEnv, prepare_bulletin, write_prepared
 from app.usecases.bulletin.writer_run import WRITER_MAX_USD_PER_DAY
 
 DAY = date(2026, 10, 30)
@@ -40,7 +42,8 @@ def daily(monkeypatch):
     maker = sessionmaker(bind=engine, expire_on_commit=False)
     settings = Settings(_env_file=None, jev_api_key="fake-jev", ds_api_key="fake-ds")
     calls = SimpleNamespace(assess=[], writer=[], assessor_days=[], writer_days=[], repeats=[],
-                            open_errors=[], repeats_answer={"repeats": [], "same_event": []})
+                            open_errors=[], close_errors=[],
+                            repeats_answer={"repeats": [], "same_event": []})
 
     def assess(article):
         calls.assess.append(article.id)
@@ -74,6 +77,8 @@ def daily(monkeypatch):
         if calls.open_errors:
             raise calls.open_errors.pop(0)
         yield SimpleNamespace(ask=ask, cost_usd=lambda: 0.001)
+        if calls.close_errors:
+            raise calls.close_errors.pop(0)
 
     monkeypatch.setattr(cli_deps, "SessionLocal", maker)
     monkeypatch.setattr(cli_deps, "create_all", lambda: Base.metadata.create_all(engine))
@@ -136,7 +141,8 @@ def test_daily_assesses_builds_writes_and_stores(daily):
         assert story["text_origin"] == "model" and story["site_note"] == [NOTE]
         repeats = row.numbers.pop("repeats")
         assert repeats["reason"] == "nothing_to_compare" and repeats["candidates"] == 1
-        assert row.numbers == {"assessed": 1, "digest_articles": 1, "writer": summary["writer"]}
+        assert row.numbers == {"assessed": 1, "digest_articles": 1, "told_before": [],
+                                "writer": summary["writer"]}
         assert row.versions["writer"] == WRITER_VERSION
         assert session.scalar(select(func.count()).select_from(BulletinRow)) == 1
     _, repeated = run_day()
@@ -226,7 +232,7 @@ def test_daily_writer_uses_current_utc_day_after_assessment(daily, monkeypatch):
 
 
 def store_previous_day(daily):
-    payload = {"key_results": [{"title": "Old news", "headline": "Old headline",
+    payload = {"key_results": [{"title": "Old event changes everything", "headline": "Old headline",
                                 "links": [{"url": "https://old.example/x"}]}],
                "cooperation": [], "rubric_story": None, "incident_story": None}
     with daily.maker() as session:
@@ -282,6 +288,68 @@ def test_daily_repeat_journal_that_cannot_open_still_builds_and_stores(daily, er
         assert row.numbers["repeats"]["reason"] == "journal_unavailable"
     assert "bulletin_repeats_journal_failed" in result.stderr
 
+
+def test_write_prepared_survives_a_journal_that_cannot_open(daily, caplog):
+    seed(daily, answered=True)
+    daily.calls.open_errors.append(OSError("disk"))
+    logger = logging.getLogger("test_journal")
+    env = BulletinEnv(daily.settings, logger, writer_factory=cli_bulletin.open_writer)
+    with daily.maker() as session:
+        prepared = prepare_bulletin(session, daily.settings, logger, DAY, write=True)
+    write_prepared(prepared, env, TODAY)
+    assert prepared.numbers["writer"]["reason"] == "journal_unavailable"
+    assert prepared.numbers["writer"]["cost_usd"] == 0.0
+    assert prepared.bulletin is not None and prepared.bulletin.key_results
+    assert prepared.bulletin.writer_reason == "journal_unavailable"
+    assert not daily.calls.writer
+    assert "bulletin_writer_journal_failed" in caplog.text
+
+
+def test_run_daily_stores_the_day_when_the_writer_journal_fails(daily):
+    seed(daily)
+    daily.calls.open_errors.append(sqlite3.OperationalError("locked"))
+    result, summary = run_day()
+    assert summary["status"] == "ready" and summary["stored"] is True
+    assert summary["writer"]["reason"] == "journal_unavailable"
+    with daily.maker() as session:
+        row = BulletinRepo(session).get(DAY)
+        assert row.status == "ready" and row.payload["key_results"]
+        assert row.numbers["writer"]["reason"] == "journal_unavailable"
+    assert "bulletin_writer_journal_failed" in result.stderr
+
+
+def test_daily_writer_journal_that_fails_to_close_keeps_the_answer(daily):
+    seed(daily)
+    daily.calls.close_errors.append(sqlite3.OperationalError("disk full"))
+    result, summary = run_day()
+    assert summary["stored"] is True and summary["writer"]["reason"] is None
+    with daily.maker() as session:
+        row = BulletinRepo(session).get(DAY)
+        assert row.payload["key_results"][0]["text_origin"] == "model"
+    assert "bulletin_writer_journal_close_failed" in result.stderr
+
+
+def test_daily_repeat_journal_that_fails_to_close_still_stores(daily):
+    seed(daily, titles=("AI changes the work", "Same event again"))
+    store_previous_day(daily)
+    daily.calls.close_errors.append(OSError("disk"))
+    result, summary = run_day()
+    assert summary["stored"] is True and daily.calls.repeats
+    with daily.maker() as session:
+        assert BulletinRepo(session).get(DAY).numbers["repeats"]["reason"] is None
+    assert "bulletin_repeats_journal_close_failed" in result.stderr
+
+
+def test_write_prepared_bad_max_usd_is_not_a_journal_fault(daily, caplog):
+    seed(daily, answered=True)
+    logger = logging.getLogger("test_journal")
+    env = BulletinEnv(daily.settings, logger, writer_factory=cli_bulletin.open_writer)
+    with daily.maker() as session:
+        prepared = prepare_bulletin(session, daily.settings, logger, DAY, write=True)
+    with pytest.raises(ValueError):
+        write_prepared(prepared, env, TODAY, max_usd="ten")
+    assert not daily.calls.writer_days
+    assert "bulletin_writer_journal_failed" not in caplog.text
 
 def test_daily_makes_no_repeat_call_for_a_day_the_builder_skips(daily):
     seed(daily, status="failed", titles=("AI changes the work", "Same event again"))

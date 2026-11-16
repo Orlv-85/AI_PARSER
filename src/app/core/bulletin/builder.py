@@ -47,6 +47,14 @@ class Candidate:  # pylint: disable=too-many-instance-attributes
 
 
 @dataclass(frozen=True)
+class ToldBefore:
+    """A candidate left out because a stored bulletin of the last days had it."""
+    title: str
+    match: str  # "url" or "title"
+    published_day: str  # ISO day of the latest stored bulletin that had it
+
+
+@dataclass(frozen=True)
 class DayInput:  # pylint: disable=too-many-instance-attributes
     day: date
     status: str
@@ -58,6 +66,7 @@ class DayInput:  # pylint: disable=too-many-instance-attributes
     candidates: tuple[Candidate, ...]
     digest_articles: int = 0
     digest_left_out: int = 0  # digest candidates left out as shown in the last days
+    told_before: tuple[ToldBefore, ...] = ()  # every candidate left out that way
 
 
 @dataclass

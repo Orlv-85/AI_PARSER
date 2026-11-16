@@ -38,8 +38,7 @@ flowchart LR
   is no call and no `repeats` entry. A provider fault keeps every candidate and the bulletin still goes out; so does a journal
   that cannot be opened (`OSError`, `sqlite3.Error`, any `ValueError` of the opener or the journal): the traceback is
   logged as `bulletin_repeats_journal_failed` and the reason is `journal_unavailable`. This
-  covers the check only: a journal that still cannot be opened at the writer step stops the run
-  as before, and nothing is stored. A day
+  covers the check only; the writer step has its own rule below. A day
   whose status is not in `READY_STATUSES` (the builder skips it) gets no check. When every
   candidate is a repeat the day is skipped as `no_assessments` and no writer runs. A rerun with
   the same candidates and stored days sends the same body, which the journal replays free. `prepare_bulletin`
@@ -52,6 +51,24 @@ flowchart LR
   `test_daily_makes_no_repeat_call_for_a_day_the_builder_skips`,
   `test_daily_with_every_candidate_a_repeat_is_skipped`. The free replay of a rerun has no test
   here (it is the journal's rule, `provider_journal.md`).
+- A writer journal that cannot be opened at the writer step (same exceptions) does not lose the
+  day: the traceback is logged as `bulletin_writer_journal_failed`, `write_bulletin` runs with an
+  `ask` that answers `journal_unavailable` (the title fallback: known non-English world titles are
+  removed, the rest is title-only), `cost_usd` is `0.0`, the summary is kept in `numbers["writer"]`
+  and logged as `bulletin_writer`, and `run_daily` stores the bulletin. A journal (writer step or
+  repeat check) that fails to close after its answer keeps that answer: the traceback is logged as
+  `bulletin_writer_journal_close_failed` or `bulletin_repeats_journal_close_failed`. A fault inside
+  the writer itself is not caught, and an unreadable `max_usd` is a caller error raised before the
+  journal opens. Tests: `test_write_prepared_survives_a_journal_that_cannot_open`,
+  `test_run_daily_stores_the_day_when_the_writer_journal_fails`,
+  `test_daily_writer_journal_that_fails_to_close_keeps_the_answer`,
+  `test_daily_repeat_journal_that_fails_to_close_still_stores`,
+  `test_write_prepared_bad_max_usd_is_not_a_journal_fault`.
+- `numbers` of a built day hold `assessed`, `digest_articles` and `told_before`: one record
+  (`title`, `match` `url` or `title`, `published_day`) for every candidate the free repeat check
+  left out (`builder.md`), `[]` when none; the `no_digest` numbers have no `told_before`. The log
+  event `bulletin_assessed_share` carries the two counts only. Tests:
+  `test_numbers_list_told_before`.
 - Shared assessment retains the read-only, keyless dry-run behavior of `bulletin assess`.
   Tests: `test_daily_shared_assessment_dry_run_is_read_only`.
 - Without a nonblank Jev key, assessment is skipped with reason `missing_jev_key` in the log and
@@ -87,8 +104,10 @@ flowchart LR
   world night does not change the bulletin. Tests: `test_world_candidates_only_with_the_switch`.
 - The deploy sudoers sample allows exactly the timer installer's commands, including the bulletin
   units and enable command. Tests: `test_sudoers_sample_matches_the_sudo_calls_of_the_scripts`.
-- `bulletin_home_page` and `bulletin_post_channels` default off and have no consumer yet;
-  their environment names are `AINEWS_BULLETIN_HOME_PAGE` and `AINEWS_BULLETIN_POST_CHANNELS`.
+- `bulletin_home_page` and `bulletin_post_channels` default off; their environment names are
+  `AINEWS_BULLETIN_HOME_PAGE` and `AINEWS_BULLETIN_POST_CHANNELS`. `bulletin_home_page` is read by
+  `src/app/web/routes/pages.py` (`_home_response`): on, `/` serves the bulletin (`web/pages.md`).
+  `bulletin_post_channels` has no consumer yet (only `settings.py` mentions it).
   Tests: `test_bulletin_switches_default_off`, `test_bulletin_switches_read_environment`.
 
 ## Decisions

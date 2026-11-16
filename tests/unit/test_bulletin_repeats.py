@@ -20,7 +20,7 @@ from app.core.bulletin.writer import WRITER_MODEL
 DAY = date(2026, 11, 14)
 LIB = load_phrases()
 PUBLISHED = (PublishedStory(day="2026-11-13", shown="United bans AI agents from booking",
-                            title="United Airlines blocks AI agents from booking flights"),)
+                            title="United Airlines changes how AI agents book flights"),)
 
 
 def cand(n, **kw):
@@ -71,7 +71,7 @@ def test_repeat_is_dropped():
     assert [c.url for c in result.data.candidates] == ["https://o1.com/a1", "https://o3.com/a3"]
     assert result.summary == {
         "version": REPEATS_VERSION, "model": WRITER_MODEL, "reason": None, "candidates": 3,
-        "published": 1, "merged": [],
+        "published": 1, "merged": [], "kept": [],
         "dropped": [{"title": "Story 2 changes the work", "published_day": "2026-11-13",
                      "published_title": "United bans AI agents from booking"}]}
     assert len(asker.bodies) == 1
@@ -239,8 +239,8 @@ def test_request_holds_titles_but_no_article_text():
     assert packet["candidates"][0]["title"].endswith("...")
     assert packet["published"] == [{"id": "p1", "day": "2026-11-13",
                                     "title": "United bans AI agents from booking",
-                                    "original": "United Airlines blocks AI agents from booking "
-                                                "flights"}]
+                                    "original": "United Airlines changes how AI agents "
+                                                "book flights"}]
     assert "https://" not in json.dumps(packet) and result.summary["published"] == 1
 
 
@@ -258,3 +258,46 @@ def test_request_keeps_non_ascii_titles_unescaped():
     _, asker = run([cand(1, title="Zhipu releases GLM \u2014 \u6a21\u578b"), cand(2)],
                    {"repeats": [], "same_event": []})
     assert "\u6a21\u578b" in asker.bodies[0]["messages"][1]["content"]
+
+
+REAL_PUBLISHED = PublishedStory(
+    day="2026-11-14", shown="Google smartglasses from Gentle Monster and Warby Parker open for "
+    "preorder", title="Google pushes privacy angle as Gemini-powered smartglasses debut starting "
+    "at $395")
+PAIR = {"repeats": [{"candidate": "c1", "published": "p1"}], "same_event": []}
+
+
+def test_repeat_without_a_shared_word_is_kept():
+    korea = cand(1, title="South Korea probes top exam scorer after AI cheating confession")
+    result, _ = run([korea, cand(2)], PAIR, published=(REAL_PUBLISHED,))
+    assert [c.url for c in result.data.candidates] == ["https://o1.com/a1", "https://o2.com/a2"]
+    assert result.summary["dropped"] == []
+    assert result.summary["kept"] == [{
+        "title": korea.title, "published_day": "2026-11-14",
+        "published_title": REAL_PUBLISHED.shown, "reason": "no_shared_word"}]
+    assert result.data.digest_left_out == 0
+
+
+def test_repeat_with_a_shared_word_is_dropped():
+    wallet = PublishedStory(day="2026-11-14", shown="OpenAI launches ChatGPT Wallet",
+                            title="OpenAI launches ChatGPT Wallet")
+    result, _ = run([cand(1, title="ChatGPT Wallet lets agents buy things"), cand(2)], PAIR,
+                    published=(wallet,))
+    assert [c.url for c in result.data.candidates] == ["https://o2.com/a2"]
+    assert result.summary["kept"] == []
+    assert len(result.summary["dropped"]) == 1
+
+
+def test_shared_word_may_come_from_the_original_title():
+    published = PublishedStory(day="2026-11-14", shown="Banks get a new rulebook",
+                               title="Regulators publish Basel guidance")
+    result, _ = run([cand(1, title="BASEL guidance delayed again"), cand(2)], PAIR,
+                    published=(published,))
+    assert [c.url for c in result.data.candidates] == ["https://o2.com/a2"]
+    assert result.summary["kept"] == []
+
+
+def test_short_words_do_not_count_as_shared():
+    published = PublishedStory(day="2026-11-14", shown="AI deal signed", title="AI deal signed")
+    result, _ = run([cand(1, title="AI deal rejected"), cand(2)], PAIR, published=(published,))
+    assert len(result.data.candidates) == 2 and len(result.summary["kept"]) == 1
