@@ -47,7 +47,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-"app.core.bulletin" = ["phrases.json"]
+"app.core.bulletin" = ["phrases.json", "name_forms.json"]
 "app.web" = [
   "bulletin.html",
   "digest.html",

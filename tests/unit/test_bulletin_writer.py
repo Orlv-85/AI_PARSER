@@ -612,7 +612,7 @@ def test_no_stories_no_call():
 # prompt and request
 
 def test_prompt_pins_its_rules():
-    assert WRITER_VERSION == "bulletin-writer-7"
+    assert WRITER_VERSION == "bulletin-writer-8"
     assert writer_module.GLOSS_MAX_WORDS == 14
     assert WRITER_VERSION in WRITER_PROMPT
     for rule in ("untrusted", "no outside knowledge", "at most 8 words",
