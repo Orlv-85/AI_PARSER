@@ -262,6 +262,31 @@ def test_day_headline_grounded_only_in_a_reserve_story_is_dropped():
     assert any(d.startswith("headline:") for d in result.summary["dropped"])
 
 
+def test_day_headline_of_a_removed_story_is_dropped():
+    bulletin = day()
+    foreign(bulletin, bulletin.key_results[1])
+    def mutate(c):
+        c["headline"] = "Orbix presents cheaper language system"
+        c["stories"][1].update(headline=None)
+    result, _ = go(bulletin, mutate)
+    assert "s2:story:non_english_title" in result.summary["dropped"]
+    assert result.bulletin.headline is None
+    assert result.bulletin.headline_origin == "title"
+    assert "headline:removed_story" in result.summary["dropped"]
+
+
+def test_day_headline_of_a_kept_story_survives_a_removal():
+    bulletin = day()
+    foreign(bulletin, bulletin.key_results[1])
+    def mutate(c):
+        c["headline"] = "Zentra presents cheaper language system"
+        c["stories"][1].update(headline=None)
+    result, _ = go(bulletin, mutate)
+    assert result.bulletin.headline == "ZENTRA PRESENTS CHEAPER LANGUAGE SYSTEM"
+    assert result.bulletin.headline_origin == "model"
+    assert "headline:removed_story" not in result.summary["dropped"]
+
+
 def test_summary_reports_the_reserve():
     bulletin = day()
     foreign(bulletin, bulletin.key_results[0])

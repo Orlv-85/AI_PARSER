@@ -19,6 +19,7 @@ from app.core.bulletin.builder import (
     READY_STATUSES,
     Candidate,
     DayInput,
+    ToldBefore,
 )
 from app.core.bulletin.repeats import REPEAT_DAYS, PublishedStory
 from app.core.bulletin.world_change import WORLD_CHANGE_VERSION
@@ -140,17 +141,21 @@ def _recent_payloads(session: Session, day: date) -> list[tuple[date, Any]]:
     return found
 
 
-def _recent_story_keys(session: Session, day: date) -> tuple[set[str], set[str]]:
-    """Story URLs and title keys of the last days; an unreadable day is ignored on its own."""
-    urls: set[str] = set()
-    titles: set[str] = set()
-    for _stored, payload in _recent_payloads(session, day):
+def _recent_story_keys(session: Session, day: date) -> tuple[dict[str, str], dict[str, str]]:
+    """Story URLs and title keys of the last days with the latest day (ISO) that had each.
+
+    An unreadable day is ignored on its own; an empty title key is never stored."""
+    urls: dict[str, str] = {}
+    titles: dict[str, str] = {}
+    for stored, payload in _recent_payloads(session, day):  # newest day first
         try:
             day_urls, day_titles = _bulletin_story_keys(payload)
         except (AttributeError, KeyError, TypeError):
             continue
-        urls |= day_urls
-        titles |= day_titles
+        for url in day_urls:
+            urls.setdefault(url, stored.isoformat())
+        for key in day_titles - {""}:
+            titles.setdefault(key, stored.isoformat())
     return urls, titles
 
 
@@ -183,14 +188,30 @@ def _world_candidates(session: Session, day: date) -> list[Candidate]:
     return found
 
 
+def _told(candidate: Candidate, urls: dict[str, str], titles: dict[str, str]
+          ) -> ToldBefore | None:
+    if candidate.url in urls:
+        return ToldBefore(candidate.title, "url", urls[candidate.url])
+    key = cluster_key(candidate.title)
+    return ToldBefore(candidate.title, "title", titles[key]) if key in titles else None
+
+
 def _split_shown(session: Session, day: date, candidates: list[Candidate]
-                 ) -> tuple[list[Candidate], int]:
-    """Candidates not told in the last days, and how many digest candidates were left out."""
+                 ) -> tuple[list[Candidate], int, list[ToldBefore]]:
+    """Candidates not told in the last days, how many digest candidates were left out, and
+    one record per candidate left out (candidate order)."""
     urls, titles = _recent_story_keys(session, day)
-    kept = [c for c in candidates if c.url not in urls and cluster_key(c.title) not in titles]
+    kept: list[Candidate] = []
+    told: list[ToldBefore] = []
+    for candidate in candidates:
+        found = _told(candidate, urls, titles)
+        if found is None:
+            kept.append(candidate)
+        else:
+            told.append(found)
     left_out = sum(1 for c in candidates if c.origin == "digest") \
         - sum(1 for c in kept if c.origin == "digest")
-    return kept, left_out
+    return kept, left_out, told
 
 
 def load_day_input(session: Session, day: date, *, include_world: bool) -> DayInput | None:
@@ -205,7 +226,7 @@ def load_day_input(session: Session, day: date, *, include_world: bool) -> DayIn
     candidates = _digest_candidates(session, articles, payload)
     if include_world:
         candidates += _world_candidates(session, day)
-    candidates, digest_left_out = _split_shown(session, day, candidates)
+    candidates, digest_left_out, told = _split_shown(session, day, candidates)
     return DayInput(
         day=day, status=report.status if report else "missing",
         quiet=bool(payload.get("quiet")),
@@ -213,5 +234,6 @@ def load_day_input(session: Session, day: date, *, include_world: bool) -> DayIn
         model_releases=counts.get("model_release", 0),
         product_launches=counts.get("product_launch", 0),
         median_items=_median_items(session, day), candidates=tuple(candidates),
-        digest_articles=len(articles), digest_left_out=digest_left_out)
+        digest_articles=len(articles), digest_left_out=digest_left_out,
+        told_before=tuple(told))
 

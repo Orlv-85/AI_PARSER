@@ -2,7 +2,7 @@
 import sqlite3
 from collections.abc import Callable
 from contextlib import ExitStack
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import date
 from logging import Logger
 from typing import Any, cast
@@ -14,7 +14,7 @@ from app.core.bulletin.builder import READY_STATUSES, Bulletin, DayInput, build_
 from app.core.bulletin.phrases import PhraseLibrary, load_phrases
 from app.core.bulletin.repeats import RepeatsResult, check_repeats
 from app.core.bulletin.world_change import ASSESS_DEFAULT_MAX_USD, run_assessment
-from app.core.bulletin.writer import SourceText, write_bulletin
+from app.core.bulletin.writer import SourceText, WriterResult, write_bulletin
 from app.observability.logging import log_event
 from app.storage.bulletin_store import BulletinRepo
 from app.storage.bulletin_texts import load_sources
@@ -23,6 +23,7 @@ from app.usecases.bulletin.day_input import load_day_input, published_stories
 from app.usecases.bulletin.writer_run import WRITER_MAX_USD_PER_DAY
 
 JOURNAL_UNAVAILABLE = "journal_unavailable"
+JOURNAL_ERRORS = (OSError, sqlite3.Error, ValueError)  # a journal that cannot open or close
 
 
 @dataclass
@@ -73,10 +74,11 @@ def prepare_from_input(session: Session, logger: Logger, day: date, data: DayInp
     if data is None:
         return PreparedBulletin(None, "no_digest", library, {"assessed": 0, "digest_articles": 0})
     result = build_bulletin(data, library)
-    numbers: dict[str, Any] = {
+    counts = {
         "assessed": data.digest_left_out + sum(1 for c in data.candidates if c.origin == "digest"),
         "digest_articles": data.digest_articles}
-    log_event(logger, event="bulletin_assessed_share", date=day.isoformat(), **numbers)
+    log_event(logger, event="bulletin_assessed_share", date=day.isoformat(), **counts)
+    numbers: dict[str, Any] = {**counts, "told_before": [asdict(t) for t in data.told_before]}
     texts = load_sources(session, result.bulletin) if write and result.bulletin else {}
     return PreparedBulletin(result.bulletin, result.reason, library, numbers, texts)
 
@@ -87,13 +89,40 @@ def write_prepared(prepared: PreparedBulletin, env: BulletinEnv, today: date, *,
     if prepared.bulletin is None:
         return
     logger = env.logger
-    opener = cast(Callable[..., Any], env.writer_factory)
-    with opener(env.settings, today, max_usd=float(max_usd)) as writer:
-        written = write_bulletin(prepared.bulletin, prepared.texts, writer.ask)
-        written.summary["cost_usd"] = writer.cost_usd()
+    written = _write_with_journal(prepared.bulletin, prepared.texts, env, today, max_usd)
     prepared.bulletin = written.bulletin
     prepared.numbers["writer"] = written.summary
     log_event(logger, event="bulletin_writer", date=prepared.bulletin.date, **written.summary)
+
+
+def _write_with_journal(bulletin: Bulletin, texts: dict[str, SourceText], env: BulletinEnv,
+                        today: date, max_usd: str) -> WriterResult:
+    """The writer on the journal of the real day; a journal that cannot open gives title-only."""
+    opener = cast(Callable[..., Any], env.writer_factory)
+    limit = float(max_usd)  # a bad limit is a caller error, not a journal fault
+    with ExitStack() as stack:
+        try:
+            writer = stack.enter_context(opener(env.settings, today, max_usd=limit))
+        except JOURNAL_ERRORS:
+            # Without the journal the day still gets its bulletin, from titles only.
+            env.logger.exception("bulletin_writer_journal_failed")
+            written = write_bulletin(bulletin, texts,
+                                     lambda _body: (None, JOURNAL_UNAVAILABLE))
+            written.summary["cost_usd"] = 0.0
+            return written
+        written = write_bulletin(bulletin, texts, writer.ask)
+        written.summary["cost_usd"] = writer.cost_usd()
+        opened = stack.pop_all()
+    _close_journal(opened, env.logger, "bulletin_writer_journal_close_failed")
+    return written
+
+
+def _close_journal(opened: ExitStack, logger: Logger, event: str) -> None:
+    """Close a journal after its answer is in hand; a close fault must not lose the day."""
+    try:
+        opened.close()
+    except JOURNAL_ERRORS:
+        logger.exception(event)
 
 
 def has_provider_key(settings: Settings, name: str) -> bool:
@@ -133,14 +162,17 @@ def _repeat_check(session: Session, env: BulletinEnv, day: date, today: date,
                 try:
                     writers.append(stack.enter_context(
                         opener(env.settings, today, max_usd=float(WRITER_MAX_USD_PER_DAY))))
-                except (OSError, sqlite3.Error, ValueError):
+                except JOURNAL_ERRORS:
                     # The check is optional: the bulletin is built without it.
                     env.logger.exception("bulletin_repeats_journal_failed")
                     return None, JOURNAL_UNAVAILABLE
             answered: tuple[object, str | None] = writers[0].ask(body)
             return answered
 
-        return check_repeats(data, published, ask)
+        result = check_repeats(data, published, ask)
+        opened = stack.pop_all()
+    _close_journal(opened, env.logger, "bulletin_repeats_journal_close_failed")
+    return result
 
 
 def run_daily(session: Session, env: BulletinEnv, day: date,
