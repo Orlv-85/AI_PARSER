@@ -429,7 +429,7 @@ def test_headline_is_the_highest_scored_shown_story():
     assert bulletin.headline_cut is False
 
 
-def test_long_headline_is_cut_at_a_clause_boundary():
+def test_make_headline_cuts_at_a_clause_boundary():
     title = "AI makes junior patent attorneys instantly better, but seniors gain little"
     text, cut = make_headline(title)
     assert (text, cut) == ("AI MAKES JUNIOR PATENT ATTORNEYS INSTANTLY BETTER", True)
@@ -440,9 +440,21 @@ def test_long_headline_is_cut_at_a_clause_boundary():
     assert make_headline("One two three four five six seven eight") == (
         "ONE TWO THREE FOUR FIVE SIX SEVEN EIGHT", False)
     assert HEADLINE_MAX_WORDS == 8
-    bulletin = build([cand(1, title="Open model finds Firefox bugs: it needed twelve hours")])
-    assert bulletin.headline == "OPEN MODEL FINDS FIREFOX BUGS*"
-    assert bulletin.headline_cut is True
+
+
+def test_title_needing_a_cut_is_not_a_headline():
+    long_one = cand(1, confidence=0.99,
+                    title="Open model finds Firefox bugs: it needed twelve hours")
+    short = cand(2, confidence=0.8, title="Short title here")
+    assert build([long_one, short]).headline == "SHORT TITLE HERE"
+    alone = build([long_one])
+    assert alone.headline is None and alone.headline_cut is False
+    assert "* The rest of the headline" not in render_text(alone, LIB)
+
+
+def test_cut_headline_renders_the_footnote():
+    bulletin = build([cand(1, title="Short title here")])
+    bulletin.headline, bulletin.headline_cut = "OPEN MODEL FINDS FIREFOX BUGS*", True
     text = render_text(bulletin, LIB)
     assert text.rstrip().endswith("* The rest of the headline is in the full report.")
     assert "OPEN MODEL FINDS FIREFOX BUGS*" in text

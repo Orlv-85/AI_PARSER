@@ -217,13 +217,13 @@ def _numbers(data: DayInput, lib: PhraseLibrary) -> str:
     return _pick(numbers["items"], data.day, "items").format(items=data.items)
 
 
-def _headline(shown: list[Story], marker: str) -> tuple[str | None, bool]:
-    """Headline of the best scored story that has one; a cut one ends with the marker."""
+def _headline(shown: list[Story]) -> str | None:
+    """Headline of the best scored story whose whole title fits; one needing a cut is skipped."""
     for story in sorted(shown, key=lambda s: -(s.confidence * len(s.outlets))):
         made = make_headline(story.title)
-        if made:
-            return made[0] + (marker if made[1] else ""), made[1]
-    return None, False
+        if made and not made[1]:
+            return made[0]
+    return None
 
 
 def _byline(day: date, lib: PhraseLibrary) -> str:
@@ -259,13 +259,13 @@ def build_bulletin(data: DayInput, lib: PhraseLibrary) -> BuildResult:  # pylint
     rubric_story = rubric_event.story() if rubric_event else None
     coop_stories = [e.story() for e in clean if e.rep.world_change == "limit"][:COOPERATION_MAX]
     used = _add_reactions(key_stories, rubric_story, coop_stories, lib, data.day)
-    headline, cut = _headline([*key_stories, *([rubric_story] if rubric_story else []),
-                               *coop_stories], lib["cut"]["marker"])
+    headline = _headline([*key_stories, *([rubric_story] if rubric_story else []),
+                          *coop_stories])
     day_type = _day_type(data)
     return BuildResult(Bulletin(
         day_number=day_number(data.day), date=data.day.isoformat(),
         masthead=lib["labels"]["masthead"], byline=_byline(data.day, lib),
-        day_type=day_type, headline=headline, headline_cut=cut,
+        day_type=day_type, headline=headline, headline_cut=False,
         opening=_pick(lib["openings"][day_type], data.day, day_type).format(
             weekday=f"{data.day:%A}"),
         numbers=_numbers(data, lib), key_results=key_stories,
