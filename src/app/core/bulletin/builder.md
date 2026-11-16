@@ -128,13 +128,16 @@ flowchart LR
 
 **Headline**
 - Of the shown stories, the highest confidence times outlet count (ties: section order, then rank)
-  whose title can be made a headline: at most `HEADLINE_MAX_WORDS` words in capitals. A longer title
-  is cut at a clause boundary (after `:` or `;`, before a dash, or before "but", "while", "because",
-  "although"), at least `HEADLINE_MIN_WORDS` words kept, and carries the cut marker; the footnote
-  closes the bulletin (ER-8). A story with no such boundary is skipped; when none fits the bulletin
-  has no headline line. The headline may therefore not be the top story, and item 3 (the writer)
-  writes the real headlines. Tests: `test_headline_is_the_highest_scored_shown_story`,
-  `test_long_headline_is_cut_at_a_clause_boundary`, `test_headline_without_boundary_is_skipped`.
+  whose whole title fits a headline: at most `HEADLINE_MAX_WORDS` words in capitals. A longer title
+  is skipped, never cut; when none fits the bulletin has no headline line, so the builder's
+  `headline_cut` is always false. The headline may therefore not be the top story, and item 3 (the
+  writer) writes the real headlines. Tests: `test_headline_is_the_highest_scored_shown_story`,
+  `test_title_needing_a_cut_is_not_a_headline`, `test_headline_without_boundary_is_skipped`.
+- `make_headline` still cuts a longer title at a clause boundary (after `:` or `;`, before a dash,
+  or before "but", "while", "because", "although"), at least `HEADLINE_MIN_WORDS` words kept, and
+  says so; the writer uses it to recognise a title headline. A stored bulletin with
+  `headline_cut` (built before 2026-11-16) still renders the cut marker and the footnote (ER-8).
+  Tests: `test_make_headline_cuts_at_a_clause_boundary`, `test_cut_headline_renders_the_footnote`.
 
 **Fixed text** (no model call)
 - Opening by day type, numbers line, rubric name, reactions and closing come from
@@ -185,9 +188,10 @@ flowchart LR
   (decided 2026-11-01 (agent)).
 - A top-ranked non-AI incident supplies the "Among them" line when actor is `people` or
   `organisation` (decided 2026-11-01 (agent): the voice file says "caused by people").
-- Headline cut: never at a comma, because the part before a comma is often a verbless fragment
-  (decided 2026-11-01 (agent): the bulletin is on a preview page until the 14-day review; tuned
-  later).
+- No cut title headline (owner, 2026-11-16): a cut title read as a broken line on the home page
+  ("FACT CHECK TEAM*" on 2026-11-14); no day headline is better.
+- `make_headline` cut: never at a comma, because the part before a comma is often a verbless
+  fragment (decided 2026-11-01 (agent)).
 - Busy-day median over ready days only: partial and unavailable days have low item counts and made
   ordinary days read as busy (decided 2026-11-01 (agent)).
 - Reactions that claim an outcome ("Productivity grows.", "Capacity grows.", "Investment in the
