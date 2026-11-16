@@ -2,6 +2,7 @@
 module: src/app/core/bulletin/writer.py
 covers:
   - src/app/core/bulletin/writer*.py
+  - src/app/core/bulletin/name_forms.json
   - src/app/usecases/bulletin/writer_run.py
   - src/app/storage/bulletin_texts.py
 -->
@@ -69,7 +70,7 @@ flowchart LR
   trial stage, what a number counts). Attribute each statement to whoever made it in the source;
   an outlet's comparison, context or judgement stays the outlet's ("TechCrunch notes ..."), or
   has no speaker only when it is plain fact in the source. Never "X says" for words X did not say.
-  Changing the text changes the version (`bulletin-writer-7`).
+  Changing the text changes the version (`bulletin-writer-8`).
   It tells the model that stories marked `"reserve": true` are written exactly like the others and
   that the headline of the day must not be about a reserve story.
   Tests: `test_prompt_pins_its_rules`.
@@ -118,21 +119,44 @@ headline of the day, in this order; the first failing check names the drop reaso
    starters are exempt (`WRITER_STARTERS`), and so are the common nouns of `HEADLINE_OPENERS`
    ("Survey finds ..."), at any position like the starters: an article in another language cannot hold the English word. "AI"
    (`SUBJECT_WORDS`) always counts as standing in the texts: it is the subject of every story and
-   other languages spell it differently (IA, KI, ИИ). Any other name of a story in another
-   language still needs the text ("Hanoi", "Italian" are dropped). A name must match a whole word of the texts ("Meta"
+   other languages spell it differently (IA, KI, ИИ). A name also passes when it is a key of the
+   name-forms table (`name_forms.json`: English country, nationality, institution, month and
+   weekday words, one word each) and one of its forms (other languages, `NAME_FORMS_PATH`)
+   stands in the texts: "US" on "Stati Uniti", "European Parliament" on "Parlamento Europeo",
+   "November" on "ноября". A form matches the folded text at a word start; a form ending in `*`
+   is a prefix, any other must be a whole word or words ("inde" does not match "independent");
+   a `*` elsewhere is rejected; Arabic forms follow the same rules; only a Chinese or Japanese
+   form (no spaces between words) matches as a substring. A form that is also a common word of
+   another language is left out ("usa", the Spanish verb; "Đức" inside "đạo đức", ethics;
+   Vietnamese weekday ordinals; Chinese "周三" inside "每周三次"; Greek weekdays that are also
+   ordinals; "印度" inside Indonesia), so such a name needs another form. Keys
+   like "court", "council", "bank" ground the common noun too ("Совет" is also advice). Keys are
+   English words, not person or company names. A name with no table entry, or whose forms are all
+   absent, still needs the text ("Hong Kong" on "港科大" is dropped). A name also passes when two
+   adjacent accented Latin words of the texts joined spell it ("Hà Nội" grounds "Hanoi"); plain
+   Latin, Cyrillic and Greek words never join ("met a", "и ран" ground neither "Meta" nor "Iran"). The loader rejects a
+   key that is not one lower-case word, a duplicate key, an empty list and a form that is too
+   short, so a broken table fails the tests. A name must match a whole word of the texts ("Meta"
    does not pass on "metadata"); months and weekdays are names too and must stand in the texts of
    the story. Evidence is per story: a name or number found only in another story does not
    ground a sentence. Folding makes
    the comparison tolerant: accents are removed, decimal commas and thousand separators are
-   unified, Cyrillic is transliterated, so an English sentence about a Russian article can name
+   unified, Cyrillic and Greek are transliterated, so an English sentence about a Russian article can name
    "OpenAI" when the text has "ОпенАИ". Tests: `test_grounded_sentences_are_kept`,
    `test_invented_number_is_dropped`, `test_invented_name_is_dropped`, `test_grounding_is_per_story`,
    `test_names_match_whole_words_and_dates_need_the_text`,
    `test_translation_case_grounds_names_by_transliteration`, `test_folding_unifies_accents_and_numbers`,
    `test_ai_is_grounded_in_a_foreign_text`, `test_ai_possessive_and_an_opener_inside_a_sentence_pass`,
    `test_ai_inside_a_longer_name_is_not_the_subject_word`,
-   `test_headline_opener_nouns_are_not_names`,
-   `test_names_in_a_foreign_story_still_need_the_text`.
+   `test_headline_opener_nouns_are_not_names`, `test_new_openers_are_not_names`,
+   `test_names_in_a_foreign_story_still_need_the_text`, `test_translated_country_passes`,
+   `test_russian_and_greek_forms_pass`, `test_cjk_and_arabic_forms_pass`,
+   `test_month_form_passes`, `test_name_without_its_form_still_fails`,
+   `test_exact_form_is_a_whole_word`, `test_joined_words_ground_a_name`,
+   `test_greek_is_transliterated`, `test_name_forms_table_is_valid`,
+   `test_common_words_of_other_languages_ground_no_name`,
+   `test_inflected_and_vietnamese_forms_ground_a_name`, `test_duplicate_name_forms_key_is_rejected`,
+   `test_plain_latin_words_do_not_join_into_a_name`.
 
 What it cannot check: meaning (a true name and number in a false claim: "Mozilla said ..." passes if
 Mozilla and the numbers stand in the text), attribution ("Block says" versus a bare claim), causes
@@ -140,7 +164,7 @@ and effects, tone, and harm framing (ER-6, ER-11 stay with the prompt and the hu
 FR-022 on the first real days). Numbers spelled out in words ("twelve") are not checked. Quotes in
 straight single quotes are not checked (the prompt asks for double quotes). A name that starts with a lower-case letter and has no digit ("xAI", "iPhone") is not
 checked at all (no test). The never-list also
-drops true sentences ("third-party tools"). Names in non-Latin scripts other than Cyrillic (Chinese, Japanese, Arabic
+drops true sentences ("third-party tools"). Names in non-Latin scripts other than Cyrillic and Greek (Chinese, Japanese, Arabic
 and so on) can be checked only when the text also spells them in Latin letters; otherwise the
 sentence is dropped. A Cyrillic transliteration that differs from the English spelling ("Yandeks")
 drops the sentence. A first word that is a name and also a starter is not checked. False drops are
@@ -249,13 +273,18 @@ the safe direction: the story falls back to its title.
 
 ## Decisions
 
-- decided 2026-11-15 (owner): names of countries, nationalities, months and weekdays in the text
-  of a story in another language stay under the name check ("Hanoi", "Italian", "Thursday" are
-  dropped when the article spells them differently). An unchecked country or date in a headline
-  is a distortion risk; the reserve keeps the volume instead. No code changed for this: it is the
-  existing rule (`test_names_in_a_foreign_story_still_need_the_text`,
-  `test_names_match_whole_words_and_dates_need_the_text`). To be reopened if too few stories
-  in other languages are published.
+- decided 2026-11-16 (owner): teach the name check translations (the name-forms table) instead of
+  freeing names: on 2026-11-12..14, 17 of 22 headlines of stories in other languages failed on
+  "US", "Italian", "European Parliament", months and the like. A name still must stand in the
+  source in one of its forms; an unlisted name or a form absent from the texts is dropped, as
+  before. Supersedes the owner decision of 2026-11-15 that such names always need the English
+  spelling in the text.
+- decided 2026-11-16 (agent): two adjacent words of the texts joined ground a name ("Ha Noi",
+  "Hanoi"): spacing differs by language and costs no invention risk. Greek is transliterated by
+  `fold` like Cyrillic, after accents are removed, so "Kerameos" matches "Κεραμέως"; letters
+  that NFKD does not split (đ, ß, ł, ø) are folded too ("Đại học" is "Dai hoc"). Only accented
+  Latin words join: English "met a" or Russian "и ран" would ground "Meta" or "Iran". More openers
+  (Commentary, Critics, Analysts, Hundreds, Thousands, Dozens) join `HEADLINE_OPENERS`.
 - decided 2026-11-15 (agent): "AI" and the nouns of `HEADLINE_OPENERS` pass the name check. In
   2026-11-09..14 the check removed 17 of 18 stories in other languages, mostly for "AI" and the
   first word of the headline ("Survey", "Study"), and days fell to 3 stories. A first word is not
@@ -341,7 +370,8 @@ the safe direction: the story falls back to its title.
 | --- | --- |
 | `src/app/core/bulletin/writer.py` | constants, `WRITER_PROMPT`, `SourceText`, packet, `split_sentences`, `parse_writer`, `write_bulletin` |
 | `_remove_non_english_stories`, `_check_non_english_text`, `_clear_non_english_headline` | post-check foreign-title story eligibility, gloss and day-headline cleanup, including fallback |
-| `src/app/core/bulletin/writer_grounding.py` | folding, `sentence_error`: the checks of Grounding |
+| `src/app/core/bulletin/writer_grounding.py` | folding, name-forms loader, `sentence_error`: the checks of Grounding |
+| `src/app/core/bulletin/name_forms.json` | name-forms table: English name word to its forms in other languages |
 | `src/app/usecases/bulletin/writer_run.py` | `open_writer`: writer journal, client, `ask` |
 | `src/app/storage/bulletin_texts.py` | `load_sources`: archive text, summary and title per link |
 | `src/app/core/daily/signals_brief.py` | `grounding_error` (shared), `request_body`, `request_key`, `BRIEF_PRICES` |
@@ -355,6 +385,7 @@ Versions: `WRITER_VERSION` (prompt and checks), `WRITER_JOURNAL_VERSION` (journa
 
 `tests/unit/test_bulletin_writer.py` on the fixtures in `tests/fixtures/bulletin_writer/` (a
 hand-written day: source texts and one model answer, marked as fixture, not a recording).
+`tests/unit/test_bulletin_writer_names.py`: name check, name forms, Greek folding.
 `tests/unit/test_bulletin_reserve.py`: reserve packet, promotion and summary.
 `tests/unit/test_bulletin_writer_language.py`: known non-English title eligibility and fallbacks,
 using the same fake source texts and answer.

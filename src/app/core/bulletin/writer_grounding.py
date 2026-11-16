@@ -2,10 +2,12 @@
 
 Pure. Behavior, limits and tests: src/app/core/bulletin/writer.md ("Grounding").
 """
+import json
 import re
 import unicodedata
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 
 from app.core.bulletin.phrases import never_word
 from app.core.daily.signals_brief import (
@@ -31,7 +33,8 @@ People""".split())
 # Common nouns that open an English headline or sentence about a story in another language, where
 # the article text cannot hold the English word.
 HEADLINE_OPENERS = frozenset("""Survey Surveys Study Studies Report Reports Expert
-Court Judge Scientists Regulators Workers Students Teachers Schools Former""".split())
+Court Judge Scientists Regulators Workers Students Teachers Schools Former Commentary Critics
+Analysts Hundreds Thousands Dozens""".split())
 # The subject of every story: other languages write it differently (IA, KI, ИИ).
 SUBJECT_WORDS = frozenset({"ai"})
 QUOTED = re.compile(r'"([^"]+)"')
@@ -47,13 +50,82 @@ _CYRILLIC = {
     "ї": "yi", "є": "ye", "ґ": "g"}
 TRANSLIT = {ord(low): latin for low, latin in _CYRILLIC.items()}
 TRANSLIT.update({ord(low.upper()): latin.capitalize() for low, latin in _CYRILLIC.items()})
+# Latin letters that NFKD does not split into a base letter and an accent.
+TRANSLIT.update({ord(c): latin for c, latin in {"đ": "d", "Đ": "D", "ß": "ss", "ł": "l",
+                                                 "Ł": "L", "ø": "o", "Ø": "O"}.items()})
+_GREEK = {
+    "α": "a", "β": "v", "γ": "g", "δ": "d", "ε": "e", "ζ": "z", "η": "i", "θ": "th", "ι": "i",
+    "κ": "k", "λ": "l", "μ": "m", "ν": "n", "ξ": "x", "ο": "o", "π": "p", "ρ": "r", "σ": "s",
+    "ς": "s", "τ": "t", "υ": "y", "φ": "f", "χ": "ch", "ψ": "ps", "ω": "o"}
+GREEK = {ord(low): latin for low, latin in _GREEK.items()}
+GREEK.update({ord(low.upper()): latin.capitalize() for low, latin in _GREEK.items() if low != "ς"})
+
+NAME_FORMS_PATH = Path(__file__).with_name("name_forms.json")
+FORM_MIN_CHARS = 3  # a Latin form without `*`
+PREFIX_MIN_CHARS = 4  # a Latin form with `*`, before the star
+SCRIPT_FORM_MIN_CHARS = 2  # a form that stays non-Latin after folding (Chinese, Arabic)
+CYRILLIC_OR_GREEK = re.compile(r"[\u0370-\u03ff\u0400-\u04ff]")  # these fold to Latin
+CJK = re.compile(r"[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]")  # no spaces between words
 
 
 def fold(text: str) -> str:
-    """Normalised text with Cyrillic transliterated and accents removed; case is kept."""
-    value = norm(text).translate(TRANSLIT)
-    value = unicodedata.normalize("NFKD", value)
-    return "".join(c for c in value if not unicodedata.combining(c))
+    """Normalised text with Cyrillic and Greek transliterated and accents removed; case is kept."""
+    value = unicodedata.normalize("NFKD", norm(text).translate(TRANSLIT))
+    return "".join(c for c in value if not unicodedata.combining(c)).translate(GREEK)
+
+
+def _form_pattern(key: str, form: object) -> re.Pattern[str]:
+    """Pattern of one form of a name in the folded, casefolded evidence; ValueError if invalid."""
+    if not isinstance(form, str):
+        raise ValueError(f"name forms: {key!r}: form {form!r} is not a string")
+    folded = fold(form).casefold().strip()
+    stem = folded.removesuffix("*")
+    if "*" in stem:
+        raise ValueError(f"name forms: {key!r}: form {form!r} has a star before its end")
+    if CJK.search(stem):
+        if len(stem) < SCRIPT_FORM_MIN_CHARS:
+            raise ValueError(f"name forms: {key!r}: form {form!r} is too short")
+        return re.compile(re.escape(stem))
+    prefix = folded.endswith("*")
+    least = FORM_MIN_CHARS if stem.isascii() else SCRIPT_FORM_MIN_CHARS
+    if len(stem) < (PREFIX_MIN_CHARS if prefix else least):
+        raise ValueError(f"name forms: {key!r}: form {form!r} is too short")
+    body = r"\s+".join(re.escape(part) for part in stem.split())
+    return re.compile(rf"(?<!\w){body}" + ("" if prefix else r"(?!\w)"))
+
+
+def _unique_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    found: dict[str, object] = {}
+    for key, value in pairs:
+        if key in found:
+            raise ValueError(f"name forms: duplicate key {key!r}")
+        found[key] = value
+    return found
+
+
+@lru_cache(maxsize=4)
+def load_name_forms(path: Path) -> dict[str, tuple[re.Pattern[str], ...]]:
+    """The name-forms table: lower-case English name word -> patterns of its forms in other
+    languages. A malformed table raises ValueError (tests catch it, not production)."""
+    table = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_unique_keys)
+    for key, forms in table.items():
+        if key != key.casefold() or not key or len(key.split()) != 1:
+            raise ValueError(f"name forms: key {key!r} must be one lower-case word")
+        if not isinstance(forms, list) or not forms:
+            raise ValueError(f"name forms: {key!r} has no forms")
+    return {key: tuple(_form_pattern(key, form) for form in forms)
+            for key, forms in table.items()}
+
+
+def _name_words(raw: str, text: str) -> frozenset[str]:
+    """Table keys with a form in the folded `text`, and adjacent words of `raw` joined when they
+    are accented Latin ("Hà Nội" gives "hanoi"; "met a" and Russian "и ран" give nothing)."""
+    keys = (key for key, patterns in load_name_forms(NAME_FORMS_PATH).items()
+            if any(pattern.search(text) for pattern in patterns))
+    tokens = TOKEN.findall(raw)
+    joined = (fold(a + b).casefold() for a, b in zip(tokens, tokens[1:], strict=False)
+              if not (a + b).isascii() and not CYRILLIC_OR_GREEK.search(a + b))
+    return frozenset(keys) | frozenset(joined)
 
 
 def canon_number(value: str) -> str:
@@ -91,7 +163,7 @@ def _evidence(raw: str) -> _Evidence:
     text = folded.casefold()
     return _Evidence(
         numbers=frozenset(canon_number(n) for n in NUMBER.findall(folded)),
-        words=_words(text), text=text,
+        words=_words(text) | _name_words(raw, text), text=text,
         grams=_grams(TOKEN.findall(text)))
 
 
