@@ -53,7 +53,16 @@ flowchart LR
   in `kept`. True repeats across languages with no common word are kept too. Tests:
   `test_repeat_without_a_shared_word_is_kept`, `test_repeat_with_a_shared_word_is_dropped`,
   `test_shared_word_may_come_from_the_original_title`, `test_short_words_do_not_count_as_shared`.
-- A candidate in `repeats` that passes the check above is removed from `DayInput.candidates`; a removed digest candidate adds to
+- `repeats` is only for a candidate that tells the same event as a story in `published`; two of
+  today's candidates about one event go only in `same_event`. `REPEATS_PROMPT` says so
+  (`REPEATS_VERSION` `bulletin-repeats-2`). Code guard: a repeat pair is not applied when its
+  candidate is in a `same_event` group that has a member not listed in `repeats` (the model
+  contradicts itself: had the event been published, every member would be a repeat). Such a pair
+  is kept (`kept` reason `same_event_conflict`) and the group is merged as usual. When every
+  member of the group is listed in `repeats`, the pairs are applied. The shared-word check comes
+  first. Tests: `test_prompt_says_duplicates_of_today_are_not_repeats`,
+  `test_repeat_inside_a_partly_repeated_group_is_kept`, `test_fully_repeated_group_is_dropped`.
+- A candidate in `repeats` that passes the checks above is removed from `DayInput.candidates`; a removed digest candidate adds to
   `DayInput.digest_left_out`, so the assessed share still counts it. Tests: `test_repeat_is_dropped`.
 - Candidates of one group (those not removed) get the `event_key` of the best member (confidence,
   then listing order), so `build_bulletin` makes one story with all outlets. A group left with one
@@ -63,7 +72,7 @@ flowchart LR
 - The summary (stored in `numbers["repeats"]`): `version`, `model`, `reason` (None when applied),
   `candidates` and `published` (counts listed), `dropped` (`title`, `published_day`,
   `published_title`), `merged` (lists of titles), `kept` (repeat pairs not applied: `title`,
-  `published_day`, `published_title`, `reason` `no_shared_word`; `[]` when none). Tests: `test_repeat_is_dropped`,
+  `published_day`, `published_title`, `reason` `no_shared_word` or `same_event_conflict`; `[]` when none). Tests: `test_repeat_is_dropped`,
   `test_same_event_sets_one_event_key`, `test_repeat_without_a_shared_word_is_kept`.
 
 ## Decisions
@@ -79,6 +88,11 @@ flowchart LR
   article text would raise the cost for little gain.
 - decided 2026-11-15 (agent): the published side shows the headline the readers saw, since that
   is what a repeat has to be recognised against.
+- decided 2026-11-17 (agent): night of 2026-11-16 the model listed four of five same-story
+  candidates as repeats of an unrelated published story (same shape on 2026-11-15); the prompt
+  now separates the two lists and the code refuses a repeat inside a partly repeated group, since
+  a missed repeat is cheaper than a lost story. It also keeps a true repeat when the model forgets
+  one member of the group.
 
 ## Invariants
 

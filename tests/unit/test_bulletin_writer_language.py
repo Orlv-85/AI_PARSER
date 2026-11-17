@@ -4,7 +4,6 @@ from dataclasses import replace
 
 import pytest
 from test_bulletin_writer import (  # pylint: disable=import-error
-    LIB,
     RESPONSE,
     answer,
     bulletin,
@@ -107,15 +106,10 @@ def test_removed_story_is_in_dropped(index):
     assert result.summary["stories_model"] == len(writer_module.all_stories(base)) - 1
 
 
-@pytest.mark.parametrize("title", [
-    "Crosby bietet auf Weil Gotshal",
-    "Crosby bietet auf Weil Gotshal: die Kanzlei will weiter wachsen"])
 @pytest.mark.parametrize("day_headline", ["invalid", "model", "unrelated", "missing"])
-def test_day_headline_not_from_removed_story(title, day_headline):
+def test_day_headline_not_from_removed_story(day_headline):
     base = language_bulletin()
-    base.key_results[0].title = title
-    headline, cut = make_headline(title)
-    base.headline, base.headline_cut = headline + (LIB["cut"]["marker"] if cut else ""), cut
+    base.headline, base.headline_cut = make_headline(base.key_results[0].title)
     if day_headline == "unrelated":
         base.headline, base.headline_cut = "ANOTHER TITLE HERE", False
     if day_headline == "missing":
@@ -155,35 +149,10 @@ def test_removed_title_without_headline_boundary_keeps_other_day_headline():
     assert len(result.bulletin.key_results) == 2
 
 
-@pytest.mark.parametrize(("removed_title", "same_cut_prefix"), [
-    ("Crosby bietet auf Weil Gotshal", False),
-    ("Crosby bietet auf Weil Gotshal: die Kanzlei will weiter wachsen", False),
-    ("Crosby bietet auf Weil Gotshal", True)])
-def test_removed_title_prefix_does_not_clear_another_cut_headline(removed_title, same_cut_prefix):
+def test_day_headline_from_kept_non_english_story_is_cleared():
     base = language_bulletin()
-    base.key_results[0].title = removed_title
-    other = base.key_results[1]
-    other.title = "Crosby bietet auf Weil Gotshal Beratung: die Kanzlei will weiter wachsen"
-    if same_cut_prefix:
-        other.title = "Crosby bietet auf Weil Gotshal: die Kanzlei will weiter wachsen"
-    other.confidence = 1.0
-    headline, cut = make_headline(other.title)
-    assert cut
-    base.headline, base.headline_cut = headline + LIB["cut"]["marker"], cut
-    result = write_bulletin(base, {}, lambda body: (None, "provider_outage"))
-    assert result.bulletin.headline == base.headline
-    assert result.bulletin.headline_cut is True
-    assert len(result.bulletin.key_results) == 2
-
-
-@pytest.mark.parametrize("title", [
-    "Crosby bietet auf Weil Gotshal",
-    "Crosby bietet auf Weil Gotshal: die Kanzlei will weiter wachsen"])
-def test_day_headline_from_kept_non_english_story_is_cleared(title):
-    base = language_bulletin()
-    base.key_results[0].title = title
-    headline, cut = make_headline(title)
-    base.headline, base.headline_cut = headline + (LIB["cut"]["marker"] if cut else ""), cut
+    headline, _ = make_headline(base.key_results[0].title)
+    base.headline, base.headline_cut = headline, False
     result, _ = run(base=base, mutate=lambda c: c.update(headline="Anthropic invented everything"))
     assert result.bulletin.headline is None
     assert result.bulletin.headline_cut is False
@@ -191,7 +160,7 @@ def test_day_headline_from_kept_non_english_story_is_cleared(title):
     assert story(result, 0).headline == RESPONSE["stories"][0]["headline"]
     assert story(result, 0).telegram_note == RESPONSE["stories"][0]["telegram"]
     assert result.summary["dropped"] == ["headline:unsupported_name"]
-    assert base.headline == headline + (LIB["cut"]["marker"] if cut else "")
+    assert base.headline == headline
 
 
 @pytest.mark.parametrize(("title", "gloss"), [

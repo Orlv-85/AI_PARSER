@@ -195,3 +195,17 @@ def test_duplicate_name_forms_key_is_rejected(tmp_path):
     path.write_text('{"us": ["usa"], "us": ["eua"]}', encoding="utf-8")
     with pytest.raises(ValueError, match="name forms: duplicate key"):
         load_name_forms(path)
+
+
+@pytest.mark.parametrize(("name", "text"), [
+    ("xAI", "xAI releases a new model for office workers across the world."),
+    ("iPhone", "Apple ships an iPhone feature that saves office workers time."),
+])
+def test_camel_case_name_needs_the_text(name, text):
+    assert sentence_error(text, "Apple makes phones and models for offices.") == "unsupported_name"
+    assert sentence_error(text, f"Apple and {name} make phones and models for offices.") is None
+
+
+def test_lower_case_words_are_not_names():
+    text = "the poll found that offices save working time with new tools."
+    assert sentence_error(text, "Nothing here matches.") is None

@@ -395,11 +395,7 @@ def _needs_english_text(story: Story) -> bool:
 
 def _title_is_day_headline(story: Story, bulletin: Bulletin) -> bool:
     made = make_headline(story.title)
-    if made is None:
-        return False
-    return bulletin.headline == made[0] or bool(
-        made[1] and bulletin.headline_cut and bulletin.headline
-        and re.fullmatch(re.escape(made[0]) + r"\W+", bulletin.headline))
+    return made is not None and bulletin.headline == made[0]
 
 
 def _clear_non_english_headline(bulletin: Bulletin, stories: list[Story],
