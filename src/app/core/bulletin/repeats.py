@@ -9,7 +9,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
-from app.core.bulletin.builder import MIN_CONFIDENCE, Candidate, DayInput
+from app.core.bulletin.builder import Candidate, DayInput, showable
 from app.core.bulletin.writer import MODEL_NAMES, WRITER_MODEL
 from app.core.daily.signals_brief import cut, request_body
 
@@ -62,13 +62,9 @@ class _Answer:
     groups: list[list[str]]
 
 
-def _showable(candidate: Candidate) -> bool:
-    return candidate.world_change != "none" and candidate.confidence >= MIN_CONFIDENCE
-
-
 def _listed(data: DayInput) -> list[int]:
     """Indexes into `data.candidates` of the listed candidates: best confidence first."""
-    shown = [i for i, c in enumerate(data.candidates) if _showable(c)]
+    shown = [i for i, c in enumerate(data.candidates) if showable(c)]
     shown.sort(key=lambda i: -data.candidates[i].confidence)
     return shown[:REPEATS_MAX_CANDIDATES]
 

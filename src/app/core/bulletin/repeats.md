@@ -25,11 +25,12 @@ flowchart LR
   drop --> merge["same_event groups share one event key"]
 ```
 
-- Listed candidates are those that can be shown: `world_change` is not `none` and the confidence is
-  at least `MIN_CONFIDENCE`; at most `REPEATS_MAX_CANDIDATES` by confidence (stable on ties), ids
+- Listed candidates are those that can be shown (`showable` of `builder.py`: `world_change` is not
+  `none`, the confidence is at least `MIN_CONFIDENCE` and the `kind` is in `SHOWN_KINDS`); at most `REPEATS_MAX_CANDIDATES` by confidence (stable on ties), ids
   `c1..cN`, each with title and outlet. Published stories get ids `p1..pM`, each with day and the
   title shown (the headline when the writer made one, else the title). Titles are cut to
   `TITLE_MAX` characters. No article text is sent. Tests: `test_unshowable_candidates_are_not_listed`,
+  `test_repeat_check_lists_only_showable_kinds`,
   `test_listing_is_capped_by_confidence`, `test_request_holds_titles_but_no_article_text`.
 - No call without a listed candidate, and none when there is no published story and fewer than two
   candidates; the summary says why (`no_candidates`, `nothing_to_compare`). Tests:

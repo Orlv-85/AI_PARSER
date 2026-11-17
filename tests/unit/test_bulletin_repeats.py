@@ -188,6 +188,15 @@ def test_unshowable_candidates_are_not_listed():
     assert result.summary["candidates"] == 2
 
 
+def test_repeat_check_lists_only_showable_kinds():
+    candidates = [cand(1), cand(2, kind="opinion"), cand(3, kind="forecast"),
+                  cand(4, kind="explainer"), cand(5, kind="promotion"), cand(6)]
+    result, asker = run(candidates, {"repeats": [], "same_event": []})
+    assert [c["title"] for c in listing(asker)["candidates"]] == [
+        "Story 1 changes the work", "Story 6 changes the work"]
+    assert result.summary["candidates"] == 2
+
+
 def test_listing_is_capped_by_confidence():
     many = [cand(n, confidence=0.7 + n / 1000) for n in range(REPEATS_MAX_CANDIDATES + 5)]
     result, asker = run(many, {"repeats": [], "same_event": []})

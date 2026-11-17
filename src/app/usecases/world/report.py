@@ -64,7 +64,7 @@ def _assessed(session: Session, items: list[WorldCandidate]) -> list[tuple[World
 def _sample_row(item: WorldCandidate, answer: WorldChangeAssessment) -> dict[str, Any]:
     return {"title": item.title, "domain": item.source_domain,
             "world_change": answer.world_change, "area": answer.area, "actor": answer.actor,
-            "harm_to_people": answer.harm_to_people}
+            "harm_to_people": answer.harm_to_people, "kind": answer.kind}
 
 
 def build_report(session: Session, target: date, *,
@@ -93,6 +93,7 @@ def build_report(session: Session, target: date, *,
         "no_text_reasons": dict(reasons), "failed": states[STATE_FAILED],
         "assessed": len(assessed),
         "world_change": dict(Counter(answer.world_change for _item, answer in answered)),
+        "kind": dict(Counter(answer.kind for _item, answer in answered)),
         "cost": {day.isoformat(): read_journal_cost(journal_root, day)
                  for day in (target, next_day)},
         "sample": [_sample_row(item, answer) for item, answer in answered[:SAMPLE_SIZE]],

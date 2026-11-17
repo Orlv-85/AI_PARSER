@@ -1,5 +1,6 @@
 """Daily orchestration; behavior and decisions: src/app/usecases/bulletin/daily.md."""
 import sqlite3
+from collections import Counter
 from collections.abc import Callable
 from contextlib import ExitStack
 from dataclasses import asdict, dataclass, field
@@ -78,7 +79,9 @@ def prepare_from_input(session: Session, logger: Logger, day: date, data: DayInp
         "assessed": data.digest_left_out + sum(1 for c in data.candidates if c.origin == "digest"),
         "digest_articles": data.digest_articles}
     log_event(logger, event="bulletin_assessed_share", date=day.isoformat(), **counts)
-    numbers: dict[str, Any] = {**counts, "told_before": [asdict(t) for t in data.told_before]}
+    kinds = Counter(c.kind for c in data.candidates if c.world_change != "none")
+    numbers: dict[str, Any] = {**counts, "kinds": dict(kinds),
+                               "told_before": [asdict(t) for t in data.told_before]}
     texts = load_sources(session, result.bulletin) if write and result.bulletin else {}
     return PreparedBulletin(result.bulletin, result.reason, library, numbers, texts)
 

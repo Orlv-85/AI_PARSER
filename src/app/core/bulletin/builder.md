@@ -101,6 +101,16 @@ flowchart LR
   answer), all outlets are linked. Digest articles are matched to a top story by URL, then by
   canonical hash. Tests: `test_one_story_per_event_with_all_outlets`, `test_none_member_does_not_drop_the_event`,
   `test_story_key_matches_by_canonical_hash`.
+- A story is shown only when its representative `showable` (`builder.py`): `world_change` is not
+  `none`, the confidence is at least `MIN_CONFIDENCE` and its `kind` (`world_change.md`) is in
+  `SHOWN_KINDS` (`event`). The representative is the best-confidence showable member when there is
+  one (an event told by a news report and an opinion piece is led by the report); otherwise the
+  rule above picks it, and an event whose representative is an opinion, forecast, explainer or
+  promotion is left out like a `none` event: not in Key results, Cooperation, the rubric, the
+  incident count, the plain line or the reserve. `numbers["kinds"]` counts the kinds of the
+  candidates with an answer other than `none` (`usecases/bulletin/daily.md`). Tests:
+  `test_only_events_are_shown`, `test_event_member_represents_a_mixed_event`,
+  `test_showable_needs_an_event`, `test_loader_fills_kind_from_the_answer`.
 - A story is shown only at `world_change` confidence of at least `MIN_CONFIDENCE`. Stories are
   ranked by confidence, then outlet count. Tests: `test_below_threshold_is_not_shown`,
   `test_ranking_by_confidence_then_outlets`.
@@ -181,6 +191,9 @@ flowchart LR
   (`usecases/bulletin/day_input.py`) is the edge. A test pins that the core imports no I/O module.
 - Thresholds start at item 1's proposal (`MIN_CONFIDENCE` 0.7, `HARM_MIN` 0.7); they move after the
   FR-002 check and the first days.
+- Only `event` is shown: FR-022 review F6 found that 5 of 12 world stories were a concrete change;
+  the rest were opinion, forecast, explainer or vendor text (decided 2026-11-17 (owner); label
+  check 34/38). `SHOWN_KINDS` is the one place to widen it.
 - Counts of the numbers line are stories of the signals' `event_counts`, not articles, so one launch
   covered by five outlets is one new model (decided 2026-11-01 (agent)).
 - `ai_issue_with_fix` ("reminds humans to update their software") is in the library but never
@@ -199,7 +212,11 @@ flowchart LR
   a layoffs or outage story would get a false claim, and the voice file forbids reactions that imply
   a fact (decided 2026-11-01 (agent)).
 - A story's representative is chosen among members that did not answer `none`, so one strong
-  `none` outlet does not drop the event (decided 2026-11-01 (agent)).
+  `none` outlet does not drop the event (decided 2026-11-01 (agent)); likewise a showable member
+  leads before others, so an opinion piece on an event does not hide its news report (decided
+  2026-11-17 (agent), review of the kind change: outlets of one event often differ in kind).
+- `kind_confidence` is stored but not used: the label check gave no reason for a threshold
+  (decided 2026-11-17 (agent)).
 - The assessed share of the day's digest articles is logged (`bulletin_assessed_share`) and printed
   in `--json` (`assessed`, `digest_articles`); unassessed articles are not in the bulletin
   (decided 2026-11-01 (agent)).

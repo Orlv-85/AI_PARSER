@@ -1,7 +1,7 @@
 """World stream Jev screen and assessment (spec 018, item 5, step W5).
 
 Behavior in core/world/world.md. Step A asks `ai_relevant` on the title of one candidate per
-cluster; step B asks the four FR-001 questions for the top ranked candidates that have text.
+cluster; step B asks the five FR-001 questions for the top ranked candidates that have text.
 Lives outside core/world/ because it imports storage.
 """
 from collections.abc import Callable, Iterable

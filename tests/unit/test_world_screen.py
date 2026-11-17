@@ -51,6 +51,7 @@ ANSWER = {"answers": {
     "area": {"choice": "Work", "confidence": 0.8},
     "actor": {"choice": "organisation", "confidence": 0.7},
     "harm_to_people": {"noul": 0.05},
+    "kind": {"choice": "event", "confidence": 0.6},
 }, "usage": {"input_tokens": 1000}}
 
 
@@ -145,7 +146,7 @@ def test_screen_questions_shape_and_version():
 
 def test_screen_versions_leave_rubric_alone():
     assert rubric.RUBRIC_VERSION == "pilot-rubric-clarification-3"
-    assert WORLD_CHANGE_VERSION == "world-change-1"
+    assert WORLD_CHANGE_VERSION == "world-change-2"
     assert "ai_relevant" in rubric.QUESTIONS
     assert rubric.QUESTIONS["ai_relevant"] is not SCREEN_QUESTIONS["ai_relevant"]
 
@@ -344,7 +345,7 @@ def test_stage_b_only_for_top_n_with_text(session):
                      texts=lambda c: texts.get(c.title))
     assert [r["state"] for r in requests] == ["Title: Story B\nContent: text of B"]
     assert list(requests[0]["questions"]) == [
-        "world_change", "area", "actor", "harm_to_people"]
+        "world_change", "area", "actor", "harm_to_people", "kind"]
     assert row(session, "Story B").state == STATE_ASSESSED
     assert row(session, "Story C").state == STATE_TEXT_READY
     assert row(session, "Story D").state == STATE_TEXT_READY
@@ -425,7 +426,7 @@ def test_world_journal_is_separate_from_digest_cap(tmp_path, monkeypatch):
         assert bulletin.payment_journal.caps["jev"] == 50000
     files = sorted(str(p.relative_to(tmp_path)) for p in (tmp_path / "data").rglob("*.sqlite3"))
     assert files == [
-        "data/bulletin/2026-10-30/journal-world-change-1-50000.sqlite3",
+        "data/bulletin/2026-10-30/journal-world-change-2-50000.sqlite3",
         "data/world/2026-11-01/journal-world-stream-1.sqlite3"]
     with pytest.raises(ValueError, match="missing_provider_key"):
         with open_world_assessor(Settings(_env_file=None), getLogger("t"), TODAY):

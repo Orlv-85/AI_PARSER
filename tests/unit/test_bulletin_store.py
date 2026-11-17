@@ -34,7 +34,7 @@ from app.storage.world_change import WorldChangeRepo
 DAY = date(2026, 10, 30)
 PREVIOUS = "c9f3a7e15b28"
 HEAD = "d2a6f8b03c19"
-NUMBERS = {"assessed": 1, "digest_articles": 1, "told_before": []}
+NUMBERS = {"assessed": 1, "digest_articles": 1, "kinds": {"event": 1}, "told_before": []}
 
 
 @pytest.fixture

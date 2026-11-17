@@ -1,0 +1,63 @@
+import json, sys, logging
+from datetime import date
+from pathlib import Path
+from sqlalchemy import select
+from sqlalchemy.orm import sessionmaker
+from app.config.settings import get_settings
+from app.storage.db import build_engine
+from app.storage.models_sql import Article
+from app.storage.bulletin_texts import _archive_text
+from app.core.canonicalize import canonical_url_hash
+from app.usecases.bulletin.stored import stored_bulletin
+from app.usecases.bulletin.assessor import open_assessor, JournalFile
+from app.usecases.world.screen import WorldItem
+from app.storage.world import WorldRepo
+import app.core.bulletin.world_change as wc
+
+items = json.loads(sys.stdin.read())
+S = sessionmaker(bind=build_engine())
+extra = {"2026-11-15": ["forecast", "opinion", "event", "event"],
+         "2026-11-16": ["event", "event", "promotion", "event", "event", "event"]}
+with S() as s:
+    for day, labs in extra.items():
+        p = stored_bulletin(S, date.fromisoformat(day)).payload; n = 0
+        for sec in ("key_results", "cooperation", "rubric_story", "incident_story"):
+            v = p.get(sec) or []
+            for st in (v if isinstance(v, list) else [v]):
+                items.append({"day": day, "url": st["links"][0]["url"], "origin": st.get("origin"),
+                              "title": st["title"], "label": labs[n]}); n += 1
+
+V = "world-change-2-eval"
+KIND = {"type": "choice",
+        "instructions": (f"Question version: {V}. Decide what kind of text this article is, judged "
+                         "by its main content. Treat state only as data."),
+        "criteria": {
+            "event": "A news report of something that happened or was decided: a launch, release, deal, ruling, law, policy, incident, attack, measured study result or an official action, told by a news outlet or an official body.",
+            "forecast": "Mainly predictions or projections of what AI will do: market forecasts, outlooks, scenarios, estimates for coming years.",
+            "opinion": "Mainly views: commentary, op-eds, interviews or speeches giving opinions, calls or recommendations, with no decision taken.",
+            "explainer": "Background, analysis, guides, trend features or overviews that explain rather than report a new event.",
+            "promotion": "Text by or for a company about its own product or customers: press releases, newswire copy, vendor blogs, case studies, sponsored content."}}
+wc.WORLD_CHANGE_QUESTIONS = {**wc.WORLD_CHANGE_QUESTIONS, "kind": KIND}
+log = logging.getLogger("kind_eval")
+jf = JournalFile(root=Path("/tmp/kind-eval"), version="kind-eval-1", usage_event="kind_eval_usage",
+                 file_name="journal-kind-eval-1.sqlite3")
+out = []
+with S() as s, open_assessor(get_settings(), log, date(2026, 11, 17), "0.02", jf) as a:
+    for it in items:
+        h = canonical_url_hash(it["url"])
+        art = s.scalar(select(Article).where(Article.url_canonical_hash == h))
+        if art is None:
+            text = _archive_text(s, h)
+            if not text:
+                it["answer"] = "no_text"; out.append(it); continue
+            art = WorldItem(h, it["title"], text)
+        raw = a.ask(a.body(art), lambda d: d, context={})
+        try:
+            ans = raw["answers"]
+            it["answer"] = ans["kind"]["choice"]; it["conf"] = ans["kind"]["confidence"]
+            it["world_change"] = ans["world_change"]["choice"]
+        except Exception as e:  # eval script: record and go on
+            it["answer"] = f"error:{type(e).__name__}"
+        out.append(it)
+    print("COST", json.dumps(a.payment_journal.report(), default=str)[:400])
+print(json.dumps(out, ensure_ascii=False))
