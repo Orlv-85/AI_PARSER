@@ -13,6 +13,7 @@ from app.core.bulletin.phrases import PhraseLibrary
 FIRST_DAY = date(2022, 11, 30)  # Day 0 (FR-006)
 MIN_CONFIDENCE = 0.7  # world_change confidence needed to show a story (item 1 proposal)
 HARM_MIN = 0.7  # harm_to_people probability that makes a story count-only (ER-11)
+SHOWN_KINDS = frozenset({"event"})  # kinds of text a story may be (F6 of the FR-022 review)
 KEY_RESULTS_MAX = 4
 RESERVE_MAX = 4  # stories after Key results that the writer may promote (writer.md)
 MODEL_LAUNCHES_MAX = 2
@@ -44,6 +45,13 @@ class Candidate:  # pylint: disable=too-many-instance-attributes
     origin: str = "digest"
     article_id: int | None = None
     language: str = "unknown"
+    kind: str = "event"
+
+
+def showable(candidate: Candidate) -> bool:
+    """A candidate that can be shown: it changes something, is sure enough and is an event."""
+    return (candidate.world_change != "none" and candidate.confidence >= MIN_CONFIDENCE
+            and candidate.kind in SHOWN_KINDS)
 
 
 @dataclass(frozen=True)
@@ -189,9 +197,10 @@ def _events(candidates: tuple[Candidate, ...]) -> list[_Event]:
         groups.setdefault(item.event_key, []).append(item)
     events = []
     for members in groups.values():
-        rep = max([m for m in members if m.world_change != "none"] or members,
-                  key=lambda m: m.confidence)
-        if rep.world_change == "none" or rep.confidence < MIN_CONFIDENCE:
+        pool = ([m for m in members if showable(m)]
+                or [m for m in members if m.world_change != "none"] or members)
+        rep = max(pool, key=lambda m: m.confidence)
+        if not showable(rep):
             continue
         events.append(_Event(rep, members, any(m.harm >= HARM_MIN for m in members)))
     return sorted(events, key=lambda e: (-e.rep.confidence, -len(e.outlets)))

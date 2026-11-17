@@ -260,7 +260,7 @@ flowchart LR
   rank --> top["Top WORLD_TOP_N"]
   top --> txt{"State text_ready and text from the seam?"}
   txt -- no --> wait["Left as it is: skipped_no_text or awaiting_text"]
-  txt -- yes --> b["FR-001 four questions, stored by url_canonical_hash"]
+  txt -- yes --> b["FR-001 five questions, stored by url_canonical_hash"]
   b --> as["assessed"]
 ```
 
@@ -299,7 +299,7 @@ flowchart LR
   `first_seen_at`, then id). Tests: `test_rank_representative_prefers_assessed_then_text_ready_then_oldest`. The priority is stored
   in `priority` of the representative. Tests: `test_rank_orders_by_confidence_times_outlets`,
   `test_rank_assessed_keep_their_place`, `test_assessed_representative_priority_is_committed`.
-- Step B asks the four FR-001 questions of `world_change` (the same questions, validation and
+- Step B asks the five questions (FR-001 and `kind`) of `world_change` (the same questions, validation and
   storage as `bulletin assess`: `WorldChangeAssessor`, `WorldChangeRepo`, `WORLD_CHANGE_VERSION`),
   keyed by `url_canonical_hash` and with no `article_id`, only for top candidates in state
   `text_ready` for which the text seam returns text. The state is the title and that text. Tests:
@@ -521,14 +521,14 @@ flowchart LR
   (states `screened_in`, `text_ready`, `no_text`, `assessed`), `screened_out`, `text_ready`,
   `no_text`, `no_text_reasons` (by the issue after `text:` in `last_error`), `failed`,
   `assessed`, `world_change` (counts of the `world_change` answer of the assessed ones, version
-  `WORLD_CHANGE_VERSION`), `cost` and `sample`. Tests: `test_world_report_counts_the_window`,
+  `WORLD_CHANGE_VERSION`), `kind` (the same count over the `kind` answer), `cost` and `sample`. Tests: `test_world_report_counts_the_window`,
   `test_world_report_world_change_counts_and_sample`, `test_cli_world_report_prints_json`.
 - `cost` has the world journal of the real UTC day `D` and of `D+1` (the night run of day `D`
   falls on `D+1`): `calls`, `committed_usd` and `priced_usd` per day, or null when the file does
   not exist. The journal is opened read-only and never created. Tests:
   `test_world_report_cost_reads_journal_read_only`.
 - `sample` is up to 20 assessed stories, highest `priority` first, then id: title, domain and the
-  stored answers (`world_change`, `area`, `actor`, `harm_to_people`). Tests:
+  stored answers (`world_change`, `area`, `actor`, `harm_to_people`, `kind`). Tests:
   `test_world_report_world_change_counts_and_sample`.
 - The report is the input of `records/world-days-<date>.md`; the command writes no file. Tests:
   `test_world_report_writes_nothing`.

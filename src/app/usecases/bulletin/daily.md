@@ -64,11 +64,13 @@ flowchart LR
   `test_daily_writer_journal_that_fails_to_close_keeps_the_answer`,
   `test_daily_repeat_journal_that_fails_to_close_still_stores`,
   `test_write_prepared_bad_max_usd_is_not_a_journal_fault`.
-- `numbers` of a built day hold `assessed`, `digest_articles` and `told_before`: one record
+- `numbers` of a built day hold `assessed`, `digest_articles`, `kinds` (counts of `kind` over the
+  candidates whose answer is not `none`, so a reader of the stored row sees how many were left out
+  and why; `builder.md`) and `told_before`: one record
   (`title`, `match` `url` or `title`, `published_day`) for every candidate the free repeat check
   left out (`builder.md`), `[]` when none; the `no_digest` numbers have no `told_before`. The log
   event `bulletin_assessed_share` carries the two counts only. Tests:
-  `test_numbers_list_told_before`.
+  `test_numbers_list_told_before`, `test_numbers_count_kinds`.
 - Shared assessment retains the read-only, keyless dry-run behavior of `bulletin assess`.
   Tests: `test_daily_shared_assessment_dry_run_is_read_only`.
 - Without a nonblank Jev key, assessment is skipped with reason `missing_jev_key` in the log and

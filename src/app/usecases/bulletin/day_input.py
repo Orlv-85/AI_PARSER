@@ -110,7 +110,8 @@ def _digest_candidates(session: Session, articles: list[Article],
             world_change=answer.world_change, confidence=answer.world_change_confidence,
             area=answer.area, actor=answer.actor, harm=answer.harm_to_people,
             event_key=_event_key(stories, article),
-            event_type=str(types.get(article.url) or ""), article_id=article.id))
+            event_type=str(types.get(article.url) or ""), article_id=article.id,
+            kind=answer.kind))
     return found
 
 
@@ -184,7 +185,8 @@ def _world_candidates(session: Session, day: date) -> list[Candidate]:
             outlet=_outlet(item.source_domain, item.url),
             world_change=answer.world_change, confidence=answer.world_change_confidence,
             area=answer.area, actor=answer.actor, harm=answer.harm_to_people,
-            event_key=f"title:{cluster_key(item.title)}", origin="world", language=item.language))
+            event_key=f"title:{cluster_key(item.title)}", origin="world", language=item.language,
+            kind=answer.kind))
     return found
 
 

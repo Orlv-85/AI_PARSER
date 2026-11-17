@@ -567,6 +567,8 @@ class WorldChangeAssessment(Base):  # pylint: disable=too-many-instance-attribut
     actor: Mapped[str] = mapped_column(String(16))
     actor_confidence: Mapped[float] = mapped_column(Float)
     harm_to_people: Mapped[float] = mapped_column(Float)  # probability of harm
+    kind: Mapped[str | None] = mapped_column(String(16), nullable=True)  # NULL: world-change-1
+    kind_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     question_version: Mapped[str] = mapped_column(String(64))
     model: Mapped[str] = mapped_column(String(64))
     assessed_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_now)

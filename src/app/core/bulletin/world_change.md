@@ -8,8 +8,8 @@ covers:
 -->
 # World change questions (bulletin, item 1)
 
-For one article, four Jev questions say what AI changed in the world: `world_change`, `area`,
-`actor` and `harm_to_people`. The bulletin of spec 018 (`specs/018-daily-inference/spec.md`, FR-001)
+For one article, five Jev questions say what AI changed in the world and what kind of text it is:
+`world_change`, `area`, `actor`, `harm_to_people` and `kind`. The bulletin of spec 018 (`specs/018-daily-inference/spec.md`, FR-001)
 will pick its stories from these answers; this feature only asks, validates and stores them.
 The operator command is `ai-news bulletin assess`.
 The daily job reuses the assessment path (see `usecases/bulletin/daily.md`).
@@ -28,17 +28,25 @@ flowchart LR
 ```
 
 **Questions**
-- Four questions, one separate request per article: `world_change` (choice: `added`, `changed`,
+- Five questions (`WORLD_CHANGE_VERSION` `world-change-2`), one separate request per article: `world_change` (choice: `added`, `changed`,
   `issue`, `limit`, `none`), `area` (choice: the 13 areas of `specs/018-daily-inference/voice.md`),
   `actor` (choice:
   `ai_system`, `people`, `organisation`) and `harm_to_people` (noul: probability of real harm to
-  people). The shape is the one of `QUESTIONS` in `rubric.py`; the admission rubric and
+  people) and `kind` (choice: `event`, `forecast`, `opinion`, `explainer`, `promotion`; what the
+  article is, judged by its main content; the builder shows only `event`, see `builder.md`).
+  The answers keep `kind_confidence`. The shape is the one of `QUESTIONS` in `rubric.py`; the admission rubric and
   `RUBRIC_VERSION` are not touched. Tests: `test_questions_shape_and_version`,
-  `test_request_has_only_the_four_questions`.
+  `test_request_has_only_the_five_questions`, `test_kind_question_is_asked_and_parsed`.
 - The criteria carry the same definitions as the reference labelling prompt
   (`specs/018-daily-inference/records/prompt-item1-labels-2026-10-31.md`), so labels and Jev answer
   one question. Changing any question text changes `WORLD_CHANGE_VERSION`. Tests:
   `test_questions_shape_and_version`.
+- Answers of `world-change-1` are not read after the switch to version 2: the first night after
+  the deploy has fewer world candidates from the day before (they were assessed under version 1
+  and are not re-sent; the world report still counts them as `assessed` that night). Digest
+  articles are asked again under version 2 by the daily job, and a rerun of a past day asks its
+  digest articles once more under version 2 (a new journal file, about $0.015 a day): accepted.
+  No test.
 
 **Request**
 - The state is the text the daily enrichment sends: title and content, or title, summary and content
@@ -66,7 +74,8 @@ flowchart LR
 
 **Storage**
 - One row per article hash and question version (`world_change_assessments`); a second save of the
-  same pair changes nothing. `article_id` is nullable: articles are pruned, the hash stays. Tests:
+  same pair changes nothing. `kind` and `kind_confidence` are stored; rows of `world-change-1`
+  keep NULL in both columns. Tests: `test_storage_keeps_kind`, `test_kind_migration_adds_nullable_columns`. `article_id` is nullable: articles are pruned, the hash stays. Tests:
   `test_storage_is_idempotent_per_version`.
 - A newer `WORLD_CHANGE_VERSION` starts a new set of rows; old rows stay. Tests:
   `test_storage_is_idempotent_per_version`.
@@ -107,17 +116,21 @@ flowchart LR
 **Reuse by the world stream**
 - `WorldChangeAssessor.ask(body, parse, event)` is the one place that sends a request through the
   journal and turns journal stops and failures into `None` / `stopped`; `assess` is `ask` with the
-  four questions. `open_assessor` takes a `root`, a journal `version` and a `usage_event`, so the
+  five questions. `open_assessor` takes a `root`, a journal `version` and a `usage_event`, so the
   world stream (`core/world/world.md`, step W5) opens its own journal and its step B asks these
   same questions. The defaults keep `bulletin assess` as described above. Tests:
-  `test_request_has_only_the_four_questions`, `test_world_journal_is_separate_from_digest_cap`.
+  `test_request_has_only_the_five_questions`, `test_world_journal_is_separate_from_digest_cap`.
 
 ## Decisions
 
+- The fifth question `kind`: the FR-022 review (F6) found that 5 of 12 world stories were a
+  concrete change; opinion, forecast, explainer and promotion text is left out of the bulletin
+  (decided 2026-11-17 (owner): label check on 39 reviewed articles agreed on event vs not in 34 of
+  38, and no real event was called `promotion`; the question text is the one the check used).
 - Separate request, own question set: keeps the validated admission rubric and its version
   untouched (spec FR-001).
 - `harm_to_people` stores the probability, not yes/no: the bulletin decides the threshold (FR-003).
-- A bad answer in one of four questions drops the whole assessment: a half-answered row would let
+- A bad answer in one of five questions drops the whole assessment: a half-answered row would let
   the bulletin treat a missing `harm_to_people` as "no" (decided 2026-10-31 (agent)).
 - The state function repeats the daily rule instead of importing `JevRelevanceScorer.state`, which
   needs a scorer object; a test pins that both give the same text.
@@ -129,7 +142,7 @@ flowchart LR
 ## Invariants
 
 - `rubric.py` and `RUBRIC_VERSION` are unchanged by this feature.
-- No row without four valid answers; no request without a journal in the command.
+- No row without five valid answers; no request without a journal in the command.
 - `assess` does not raise for provider or parse errors.
 - Unique (`url_canonical_hash`, `question_version`).
 
@@ -150,6 +163,8 @@ flowchart LR
 - `src/app/storage/models_sql.py`: `WorldChangeAssessment`.
 - `src/app/storage/migrations/versions/b8e2d4f61a07_add_world_change_assessments.py`:
   creates the table only when missing; downgrade drops it.
+- `src/app/storage/migrations/versions/d7f3a9b25c61_add_world_change_kind.py`: adds the two
+  nullable `kind` columns when missing; downgrade drops them.
 - `src/app/cli/bulletin.py`: `bulletin assess`.
 - `specs/018-daily-inference/records/eval_world_change.py`: offline check against labels
   (FR-002); not product code.

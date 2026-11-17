@@ -141,7 +141,8 @@ def test_daily_assesses_builds_writes_and_stores(daily):
         assert story["text_origin"] == "model" and story["site_note"] == [NOTE]
         repeats = row.numbers.pop("repeats")
         assert repeats["reason"] == "nothing_to_compare" and repeats["candidates"] == 1
-        assert row.numbers == {"assessed": 1, "digest_articles": 1, "told_before": [],
+        assert row.numbers == {"assessed": 1, "digest_articles": 1, "kinds": {"event": 1},
+                               "told_before": [],
                                 "writer": summary["writer"]}
         assert row.versions["writer"] == WRITER_VERSION
         assert session.scalar(select(func.count()).select_from(BulletinRow)) == 1

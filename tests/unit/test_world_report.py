@@ -48,12 +48,13 @@ def session_fixture(engine):
         yield session
 
 
-def answer(item, change="changed", area="Work"):
+def answer(item, change="changed", area="Work", kind="event"):
     return WorldChangeAssessment(
         url_canonical_hash=item.url_canonical_hash, world_change=change,
         world_change_confidence=0.9, area=area, area_confidence=0.8, actor="organisation",
         actor_confidence=0.7, harm_to_people=0.05, question_version=WORLD_CHANGE_VERSION,
-        model="jev-m", assessed_at=datetime(2026, 11, 1, tzinfo=UTC))
+        kind=kind, kind_confidence=0.6, model="jev-m",
+        assessed_at=datetime(2026, 11, 1, tzinfo=UTC))
 
 
 def test_world_report_counts_the_window(session, tmp_path):
@@ -87,7 +88,8 @@ def test_world_report_world_change_counts_and_sample(session, tmp_path):
          cand(30, title="Other version story"))
     for n in range(1, 26):
         item = force(session, f"Assessed story {n:02d}", STATE_ASSESSED, 0.9, priority=float(n))
-        session.add(answer(item, change="changed" if n % 5 else "no_change"))
+        session.add(answer(item, change="changed" if n % 5 else "no_change",
+                           kind="event" if n % 2 else "opinion"))
     other = force(session, "Other version story", STATE_ASSESSED, 0.9, priority=99.0)
     stale = answer(other)
     stale.question_version = "world-change-0"
@@ -96,13 +98,14 @@ def test_world_report_world_change_counts_and_sample(session, tmp_path):
     report = build_report(session, DAY, journal_root=tmp_path / "data/world")
     assert report["assessed"] == 26
     assert report["world_change"] == {"changed": 20, "no_change": 5}
+    assert report["kind"] == {"event": 13, "opinion": 12}
     sample = report["sample"]
     assert len(sample) == 20
     assert [s["title"] for s in sample[:2]] == ["Assessed story 25", "Assessed story 24"]
     assert "Other version story" not in {s["title"] for s in sample}
     assert sample[0] == {
         "title": "Assessed story 25", "domain": "site25.example.org", "world_change": "no_change",
-        "area": "Work", "actor": "organisation", "harm_to_people": 0.05}
+        "area": "Work", "actor": "organisation", "harm_to_people": 0.05, "kind": "event"}
 
 
 def make_journal(root: Path, day: str, tokens: int):

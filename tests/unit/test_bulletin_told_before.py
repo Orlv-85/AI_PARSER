@@ -76,7 +76,7 @@ def test_numbers_list_told_before(session):
                     digest_articles=3, digest_left_out=1, told_before=told)
     prepared = prepare_from_input(session, logging.getLogger("t"), DAY, data, write=False)
     assert prepared.numbers == {
-        "assessed": 2, "digest_articles": 3, "told_before": [
+        "assessed": 2, "digest_articles": 3, "kinds": {"event": 1}, "told_before": [
             {"title": "Story 1 changes the work", "match": "url", "published_day": YESTERDAY}]}
     data = DayInput(day=DAY, status="ready", quiet=False, items=40, model_releases=0,
                     product_launches=0, median_items=None, candidates=(cand(2),))

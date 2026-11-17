@@ -71,6 +71,8 @@ class WorldChangeRepo:
             world_change_confidence=answer.world_change_confidence,
             area=answer.area, area_confidence=answer.area_confidence,
             actor=answer.actor, actor_confidence=answer.actor_confidence,
-            harm_to_people=answer.harm_to_people, question_version=version, model=model))
+            harm_to_people=answer.harm_to_people,
+            kind=answer.kind, kind_confidence=answer.kind_confidence,
+            question_version=version, model=model))
         self.session.flush()
         return True
