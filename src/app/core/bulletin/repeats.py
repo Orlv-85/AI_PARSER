@@ -14,7 +14,7 @@ from app.core.bulletin.writer import MODEL_NAMES, WRITER_MODEL
 from app.core.daily.signals_brief import cut, request_body
 
 REPEAT_DAYS = 3  # stored bulletins before the day that the checks compare with
-REPEATS_VERSION = "bulletin-repeats-1"
+REPEATS_VERSION = "bulletin-repeats-2"
 REPEATS_MAX_CANDIDATES = 40
 REPEATS_MAX_OUTPUT = 512
 TITLE_MAX = 200
@@ -29,6 +29,8 @@ REPEATS_PROMPT = (
     "A candidate is a repeat when it reports the same event as a published story and its title "
     "shows no new development: a decision, ruling, number or step that the published story did "
     "not have. A different outlet or different wording of the same event is still a repeat. "
+    "\"repeats\" is only for a candidate that tells the same event as a story in \"published\"; "
+    "two of today's candidates about one event go only in \"same_event\", never in \"repeats\". "
     "Also group candidates of today that report one and the same event. When you are unsure, do "
     "not list the candidate. Return one JSON object and nothing else: "
     '{"repeats":[{"candidate":"c3","published":"p2"}],"same_event":[["c1","c4"]]}. '
@@ -160,23 +162,41 @@ def _shares_word(candidate: Candidate, story: PublishedStory) -> bool:
     return bool(_words(candidate.title) & _words(story.shown, story.title))
 
 
+def _conflicted(answer: _Answer) -> set[str]:
+    """Candidate ids in a same_event group that has a member not listed in `repeats`."""
+    return {cid for group in answer.groups if any(m not in answer.repeats for m in group)
+            for cid in group}
+
+
+def _kept_reason(candidate: Candidate, story: PublishedStory, conflicted: bool) -> str:
+    return "same_event_conflict" if conflicted and _shares_word(candidate, story) \
+        else "no_shared_word"
+
+
+def _merge(candidates: list[Candidate], members: list[int], listed: Sequence[int]) -> None:
+    best = min(members, key=lambda i: (-candidates[i].confidence, listed.index(i)))
+    for i in members:
+        candidates[i] = replace(candidates[i], event_key=candidates[best].event_key)
+
+
 def _apply(data: DayInput, listed: Sequence[int], published: Sequence[PublishedStory],
            answer: _Answer, summary: dict[str, Any]) -> DayInput:
     by_id = {f"c{n}": i for n, i in enumerate(listed, 1)}
     pairs = {by_id[cid]: published[int(pid[1:]) - 1] for cid, pid in answer.repeats.items()}
     candidates = list(data.candidates)
-    dropped = {i: story for i, story in pairs.items() if _shares_word(candidates[i], story)}
+    conflicted = {by_id[cid] for cid in _conflicted(answer)}
+    dropped = {i: story for i, story in pairs.items()
+               if _shares_word(candidates[i], story) and i not in conflicted}
     summary["kept"] = [
         {"title": candidates[i].title, "published_day": story.day,
-         "published_title": story.shown, "reason": "no_shared_word"}
+         "published_title": story.shown,
+         "reason": _kept_reason(candidates[i], story, i in conflicted)}
         for i, story in pairs.items() if i not in dropped]
     for group in answer.groups:
         members = [by_id[cid] for cid in group if by_id[cid] not in dropped]
         if len(members) < 2:
             continue
-        best = min(members, key=lambda i: (-candidates[i].confidence, listed.index(i)))
-        for i in members:
-            candidates[i] = replace(candidates[i], event_key=candidates[best].event_key)
+        _merge(candidates, members, listed)
         summary["merged"].append([candidates[i].title for i in members])
     summary["dropped"] = [
         {"title": candidates[i].title, "published_day": story.day,

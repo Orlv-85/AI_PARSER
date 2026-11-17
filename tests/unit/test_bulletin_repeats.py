@@ -10,6 +10,7 @@ from app.core.bulletin.repeats import (
     REPEAT_DAYS,
     REPEATS_MAX_CANDIDATES,
     REPEATS_MAX_OUTPUT,
+    REPEATS_PROMPT,
     REPEATS_VERSION,
     TITLE_MAX,
     PublishedStory,
@@ -167,15 +168,10 @@ def test_same_event_builds_one_story_with_both_outlets():
 
 
 def test_dropped_member_is_not_merged():
-    drop_c1 = [{"candidate": "c1", "published": "p1"}]
-    result, _ = run(three(), {"repeats": drop_c1, "same_event": [["c1", "c2"]]})
-    assert [(c.url, c.event_key) for c in result.data.candidates] == [
-        ("https://o2.com/a2", "e2"), ("https://o3.com/a3", "e3")]
+    both = [{"candidate": "c1", "published": "p1"}, {"candidate": "c2", "published": "p1"}]
+    result, _ = run(three(), {"repeats": both, "same_event": [["c1", "c2"]]})
+    assert [(c.url, c.event_key) for c in result.data.candidates] == [("https://o3.com/a3", "e3")]
     assert result.summary["merged"] == []
-    result, _ = run(three(), {"repeats": drop_c1, "same_event": [["c3", "c1", "c2"]]})
-    assert [(c.url, c.event_key) for c in result.data.candidates] == [
-        ("https://o2.com/a2", "e2"), ("https://o3.com/a3", "e2")]
-    assert result.summary["merged"] == [["Story 3 changes the work", "Story 2 changes the work"]]
 
 
 def test_unshowable_candidates_are_not_listed():
@@ -301,3 +297,37 @@ def test_short_words_do_not_count_as_shared():
     published = PublishedStory(day="2026-11-14", shown="AI deal signed", title="AI deal signed")
     result, _ = run([cand(1, title="AI deal rejected"), cand(2)], PAIR, published=(published,))
     assert len(result.data.candidates) == 2 and len(result.summary["kept"]) == 1
+
+
+def test_prompt_says_duplicates_of_today_are_not_repeats():
+    assert REPEATS_VERSION == "bulletin-repeats-2"
+    assert REPEATS_VERSION in REPEATS_PROMPT
+    assert "only for a candidate that tells the same event as a story in" in REPEATS_PROMPT
+    assert "never in" in REPEATS_PROMPT and "same_event" in REPEATS_PROMPT
+
+
+def exam_group():
+    return [cand(n, title=f"Korean exam cheating story {n}") for n in range(1, 6)]
+
+
+def test_repeat_inside_a_partly_repeated_group_is_kept():
+    published = PublishedStory(day="2026-11-16", shown="Korean IT services face pricing pressure",
+                               title="Systematix says AI may deepen pricing pressure")
+    answer = {"repeats": [{"candidate": f"c{n}", "published": "p1"} for n in (2, 3, 4, 5)],
+              "same_event": [["c1", "c2", "c3", "c4", "c5"]]}
+    result, _ = run(exam_group(), answer, published=(published,))
+    assert len(result.data.candidates) == 5
+    assert {c.event_key for c in result.data.candidates} == {"e1"}
+    assert result.summary["dropped"] == []
+    assert [k["reason"] for k in result.summary["kept"]] == ["same_event_conflict"] * 4
+    assert len(result.summary["merged"][0]) == 5
+
+
+def test_fully_repeated_group_is_dropped():
+    published = PublishedStory(day="2026-11-16", shown="Korean exam cheating story",
+                               title="Korean exam cheating story")
+    answer = {"repeats": [{"candidate": f"c{n}", "published": "p1"} for n in (1, 2, 3)],
+              "same_event": [["c1", "c2", "c3"]]}
+    result, _ = run(exam_group()[:3], answer, published=(published,))
+    assert not result.data.candidates
+    assert len(result.summary["dropped"]) == 3 and result.summary["kept"] == []

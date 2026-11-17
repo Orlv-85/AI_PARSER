@@ -119,7 +119,12 @@ headline of the day, in this order; the first failing check names the drop reaso
    starters are exempt (`WRITER_STARTERS`), and so are the common nouns of `HEADLINE_OPENERS`
    ("Survey finds ..."), at any position like the starters: an article in another language cannot hold the English word. "AI"
    (`SUBJECT_WORDS`) always counts as standing in the texts: it is the subject of every story and
-   other languages spell it differently (IA, KI, ИИ). A name also passes when it is a key of the
+   other languages spell it differently (IA, KI, ИИ). A word that starts lower-case and has a
+   capital letter later ("xAI", "iPhone", "eBay", "macOS") is a name too: its stem (casefolded,
+   "'s" removed) must stand among the same evidence words, else `unsupported_name`; run after
+   `grounding_error`, in the writer's check only (the digest keeps the shared rule). Plain
+   lower-case words are not names. Tests: `test_camel_case_name_needs_the_text`,
+   `test_lower_case_words_are_not_names`. A name also passes when it is a key of the
    name-forms table (`name_forms.json`: English country, nationality, institution, month and
    weekday words, one word each) and one of its forms (other languages, `NAME_FORMS_PATH`)
    stands in the texts: "US" on "Stati Uniti", "European Parliament" on "Parlamento Europeo",
@@ -162,8 +167,7 @@ What it cannot check: meaning (a true name and number in a false claim: "Mozilla
 Mozilla and the numbers stand in the text), attribution ("Block says" versus a bare claim), causes
 and effects, tone, and harm framing (ER-6, ER-11 stay with the prompt and the human review of
 FR-022 on the first real days). Numbers spelled out in words ("twelve") are not checked. Quotes in
-straight single quotes are not checked (the prompt asks for double quotes). A name that starts with a lower-case letter and has no digit ("xAI", "iPhone") is not
-checked at all (no test). The never-list also
+straight single quotes are not checked (the prompt asks for double quotes). The never-list also
 drops true sentences ("third-party tools"). Names in non-Latin scripts other than Cyrillic and Greek (Chinese, Japanese, Arabic
 and so on) can be checked only when the text also spells them in Latin letters; otherwise the
 sentence is dropped. A Cyrillic transliteration that differs from the English spelling ("Yandeks")
@@ -208,9 +212,9 @@ the safe direction: the story falls back to its title.
   stays or is removed, it becomes absent (`None`, no cut
   marker), as when no builder title qualifies. A missing headline stays missing; a passing model
   day headline stays unless it repeats a run of `TITLE_RUN_WORDS` words of such a title, then it
-  becomes absent too (`headline:non_english_title`). A removed title that is only a prefix of another story's cut
-  headline does not clear that headline. Tests: `test_day_headline_not_from_removed_story`,
-  `test_removed_title_prefix_does_not_clear_another_cut_headline`,
+  becomes absent too (`headline:non_english_title`). The builder never cuts a title headline (`builder.md`), so
+  a title headline is recognised by equality with the headline made from the title. Tests:
+  `test_day_headline_not_from_removed_story`,
   `test_day_headline_from_kept_non_english_story_is_cleared`,
   `test_model_day_headline_echoing_non_english_title_is_cleared`.
 - After grounding, a known non-English world story's gloss is dropped when it repeats a run of

@@ -39,6 +39,7 @@ Analysts Hundreds Thousands Dozens""".split())
 SUBJECT_WORDS = frozenset({"ai"})
 QUOTED = re.compile(r'"([^"]+)"')
 TOKEN = re.compile(r"\w+")
+CAMEL_NAME = re.compile(r"[a-z]+[A-Z]")  # "xAI", "iPhone": a name that starts lower-case
 THE_ADMINISTRATION = re.compile(r"\b[Tt]he Administration\b")
 THOUSANDS = re.compile(r"\d{1,3}(?:[.,]\d{3})+")
 
@@ -194,6 +195,15 @@ def _form_error(text: str, min_chars: int, max_chars: int) -> str | None:
     return None
 
 
+def _camel_error(text: str, words: frozenset[str]) -> str | None:
+    """`unsupported_name` for a lower-case-first name ("xAI") that the evidence words lack;
+    `grounding_error` skips such words."""
+    for word in WORD.findall(text):
+        if CAMEL_NAME.match(word) and re.sub(r"'s$", "", word).casefold() not in words:
+            return "unsupported_name"
+    return None
+
+
 def _evidence_error(text: str, evidence: str, copy: bool) -> str | None:
     """Drop code of the checks against the evidence: quotes, copying (`copy`), numbers, names."""
     proof = _evidence(evidence)
@@ -201,9 +211,11 @@ def _evidence_error(text: str, evidence: str, copy: bool) -> str | None:
     code = _quote_error(folded, proof)
     if code is None and copy and _copies(folded, proof):
         code = "too_close"
-    return code or grounding_error(folded, set(proof.numbers), "",
-                                   NameRules(WRITER_STARTERS | HEADLINE_OPENERS, canon_number,
-                                             proof.words | SUBJECT_WORDS))
+    words = proof.words | SUBJECT_WORDS
+    return (code or grounding_error(
+        folded, set(proof.numbers), "",
+        NameRules(WRITER_STARTERS | HEADLINE_OPENERS, canon_number, words))
+        or _camel_error(folded, words))
 
 
 def sentence_error(text: str, evidence: str, *, copy: bool = False,
